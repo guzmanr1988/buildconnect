@@ -82,7 +82,7 @@ export default function RevenuePage() {
   }))
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Revenue" description="85/15 revenue model breakdown and analytics" />
 
       {/* Model Callout */}
@@ -170,25 +170,26 @@ export default function RevenuePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">
                     <span className="flex items-center gap-1">
                       Company
                       <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
                     </span>
                   </TableHead>
-                  <TableHead className="text-right">
+                  <TableHead className="font-semibold text-right">
                     <span className="flex items-center justify-end gap-1">
                       Total Revenue
                       <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
                     </span>
                   </TableHead>
-                  <TableHead className="text-right">App 15%</TableHead>
-                  <TableHead className="text-right">Vendor 85%</TableHead>
-                  <TableHead className="text-center">Closed Deals</TableHead>
-                  <TableHead className="text-center">Sub Status</TableHead>
+                  <TableHead className="font-semibold text-right">Platform 15%</TableHead>
+                  <TableHead className="font-semibold text-right">Vendor 85%</TableHead>
+                  <TableHead className="font-semibold text-center">Closed Deals</TableHead>
+                  <TableHead className="font-semibold text-center">Subscription</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -221,6 +222,7 @@ export default function RevenuePage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

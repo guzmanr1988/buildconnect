@@ -4,8 +4,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'roofing',
     name: 'Roofing',
-    badge: 'MOST POPULAR',
-    badgeColor: 'bg-amber-500 text-white',
+    badge: 'Popular',
+    badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
     tagline: 'Protect your home with premium roofing solutions',
     description: 'Complete residential roofing services — from full replacement to repairs and inspections.',
     features: ['Hurricane-Rated', 'Energy Efficient', '25-Year Warranty'],
@@ -50,8 +50,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'windows_doors',
     name: 'Impact Windows & Doors',
-    badge: 'CODE REQUIRED',
-    badgeColor: 'bg-destructive text-destructive-foreground',
+    badge: 'Hurricane Rated',
+    badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
     tagline: 'Hurricane protection with energy-saving impact glass',
     description: 'Florida building code compliant impact windows and doors for maximum protection.',
     features: ['Impact-Rated', 'UV Protection', 'Noise Reduction'],
@@ -185,8 +185,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'pergolas',
     name: 'Pergolas & Terraces',
-    badge: 'TRENDING',
-    badgeColor: 'bg-success text-success-foreground',
+    badge: 'Trending',
+    badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     tagline: 'Extend your living space outdoors',
     description: 'Custom outdoor structures for shade, style, and year-round entertainment.',
     features: ['Weather-Resistant', 'Motorized Options', 'Custom Sizes'],
@@ -231,8 +231,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'air_conditioning',
     name: 'Air Conditioning',
-    badge: 'ESSENTIAL',
-    badgeColor: 'bg-primary text-primary-foreground',
+    badge: 'Essential',
+    badgeColor: 'bg-primary/15 text-primary',
     tagline: 'Stay cool with efficient climate control',
     description: 'HVAC installation, replacement, and maintenance for South Florida homes.',
     features: ['Energy Star', 'Smart Thermostat', '10-Year Warranty'],
@@ -268,7 +268,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'kitchen',
     name: 'Kitchen Remodel',
-    badge: 'PHASE 2',
+    badge: 'Coming Soon',
     badgeColor: 'bg-muted text-muted-foreground',
     tagline: 'Transform your kitchen into the heart of your home',
     description: 'Full kitchen renovations from cabinets to countertops to appliances.',
@@ -280,7 +280,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'bathroom',
     name: 'Bathroom Remodel',
-    badge: 'PHASE 2',
+    badge: 'Coming Soon',
     badgeColor: 'bg-muted text-muted-foreground',
     tagline: 'Create your personal spa retreat',
     description: 'Modern bathroom renovations with premium fixtures and finishes.',
@@ -292,8 +292,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'wall_paneling',
     name: 'Wall Paneling & Design',
-    badge: 'NEW',
-    badgeColor: 'bg-primary text-primary-foreground',
+    badge: 'New',
+    badgeColor: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
     tagline: 'Elevate your interiors with designer wall treatments',
     description: 'Custom wall paneling, accent walls, and interior design treatments.',
     features: ['Designer Styles', 'Quick Install', 'Eco Materials'],

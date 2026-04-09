@@ -73,7 +73,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Settings" description="Configure platform behavior, revenue model, and feature flags" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

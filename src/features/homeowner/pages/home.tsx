@@ -1,52 +1,52 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Mail, Phone, Palette } from 'lucide-react'
+import { MapPin, Phone, Palette, ArrowRight, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
+import { AnimatePresence } from 'framer-motion'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import { ServiceCard } from '../components/service-card'
+import { InlineConfigurator } from '../components/inline-configurator'
 
 export function HomeownerHome() {
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const navigate = useNavigate()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const services = SERVICE_CATALOG.filter((s) => !s.phase2)
+  const activeServices = SERVICE_CATALOG.filter((s) => !s.phase2)
+  const comingSoon = SERVICE_CATALOG.filter((s) => s.phase2)
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Profile banner */}
+    <div className="flex flex-col gap-10">
+      {/* Welcome section — minimal, Apple-like */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-6 text-white shadow-lg"
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
       >
         <div className="flex items-center gap-4">
           <AvatarInitials
             initials={profile.initials}
-            color="rgba(255,255,255,0.2)"
+            color={profile.avatar_color}
             size="lg"
-            className="border-2 border-white/30"
+            className="shadow-sm"
           />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold font-heading truncate">
+          <div>
+            <p className="text-sm text-muted-foreground">Welcome back</p>
+            <h1 className="text-xl font-semibold font-heading text-foreground">
               {profile.name}
             </h1>
-            <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:gap-4">
-              <span className="flex items-center gap-1.5 text-sm text-white/80">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{profile.address}</span>
+            <div className="flex items-center gap-3 mt-0.5">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                {profile.address.split(',')[0]}
               </span>
-              <span className="hidden sm:flex items-center gap-1.5 text-sm text-white/80">
-                <Mail className="h-3.5 w-3.5 shrink-0" />
-                {profile.email}
-              </span>
-              <span className="hidden sm:flex items-center gap-1.5 text-sm text-white/80">
-                <Phone className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                <Phone className="h-3 w-3" />
                 {profile.phone}
               </span>
             </div>
@@ -56,44 +56,69 @@ export function HomeownerHome() {
 
       {/* Section heading */}
       <div>
-        <h2 className="text-lg font-semibold font-heading text-foreground">
-          Choose a Service
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Select a service to configure and find the perfect contractor.
-        </p>
+        <motion.h2
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="text-2xl sm:text-3xl font-bold font-heading text-foreground tracking-tight"
+        >
+          What would you like to build?
+        </motion.h2>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className="mt-2 text-[15px] text-muted-foreground"
+        >
+          Choose a service and we'll match you with top-rated contractors in your area.
+        </motion.p>
       </div>
 
-      {/* Service grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {services.map((service, i) => (
+      {/* Service grid — always 4 columns on desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {activeServices.map((service, i) => (
           <motion.div
             key={service.id}
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: i * 0.05 }}
+            transition={{ duration: 0.35, delay: 0.08 + i * 0.04 }}
           >
             <ServiceCard
               service={service}
               isExpanded={expandedId === service.id}
-              onToggle={() =>
-                setExpandedId(expandedId === service.id ? null : service.id)
-              }
+              onToggle={() => setExpandedId(expandedId === service.id ? null : service.id)}
             />
           </motion.div>
         ))}
       </div>
 
-      {/* Phase 2 services - muted */}
-      {SERVICE_CATALOG.filter((s) => s.phase2).length > 0 && (
-        <>
-          <div className="mt-2">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Coming Soon
-            </h3>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SERVICE_CATALOG.filter((s) => s.phase2).map((service) => (
+      {/* Configurator — renders below the grid when a card is selected */}
+      <AnimatePresence>
+        {expandedId && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="-mt-6"
+          >
+            <InlineConfigurator service={activeServices.find((s) => s.id === expandedId)!} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Coming Soon */}
+      {comingSoon.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+            Coming Soon
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {comingSoon.map((service) => (
               <ServiceCard
                 key={service.id}
                 service={service}
@@ -102,36 +127,36 @@ export function HomeownerHome() {
               />
             ))}
           </div>
-        </>
+        </motion.div>
       )}
 
-      {/* 3D Design Lab CTA */}
-      <motion.div
+      {/* 3D Design Lab CTA — clean, Apple-esque */}
+      <motion.button
+        type="button"
+        onClick={() => navigate('/home/design-lab')}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.4 }}
-        className="overflow-hidden rounded-xl bg-gradient-to-r from-primary/90 via-primary to-primary/80 p-6 text-white shadow-lg"
+        transition={{ delay: 0.4 }}
+        className="group flex items-center gap-5 rounded-2xl border bg-card p-6 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
       >
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Palette className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold font-heading">3D Design Lab</h3>
-              <p className="text-sm text-white/80">
-                Visualize your project in 3D before committing
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => navigate('/home/design-lab')}
-            className="bg-white text-primary hover:bg-white/90 font-medium shadow-md min-h-[44px] px-6"
-          >
-            Open Design Lab
-          </Button>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 to-purple-600 shadow-sm transition-transform duration-300 group-hover:scale-105 shrink-0">
+          <Palette className="h-7 w-7 text-white" strokeWidth={1.8} />
         </div>
-      </motion.div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h3 className="text-[16px] font-semibold font-heading text-foreground">3D Design Lab</h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-[2px] text-[10px] font-medium text-violet-600 dark:text-violet-400">
+              <Sparkles className="h-2.5 w-2.5" /> Beta
+            </span>
+          </div>
+          <p className="text-[13px] text-muted-foreground">
+            Visualize materials, colors, and styles before you commit
+          </p>
+        </div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/8 text-primary transition-all duration-300 group-hover:bg-primary/15 shrink-0">
+          <ArrowRight className="h-4 w-4" />
+        </div>
+      </motion.button>
     </div>
   )
 }

@@ -140,7 +140,7 @@ export default function BankingPage() {
   })
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Banking & Payouts" description="Manage platform finances, deposits, and vendor payouts" />
 
       <Tabs defaultValue="overview">
@@ -245,14 +245,15 @@ export default function BankingPage() {
                 {MOCK_BANK_ACCOUNTS.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No bank accounts linked yet.</p>
                 ) : (
+                  <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Bank</TableHead>
-                        <TableHead>Account Holder</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Last 4</TableHead>
-                        <TableHead>Linked</TableHead>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold">Bank</TableHead>
+                        <TableHead className="font-semibold">Account Holder</TableHead>
+                        <TableHead className="font-semibold">Type</TableHead>
+                        <TableHead className="font-semibold">Last 4</TableHead>
+                        <TableHead className="font-semibold">Linked</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -273,6 +274,7 @@ export default function BankingPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -410,13 +412,14 @@ export default function BankingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Note</TableHead>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">Reference</TableHead>
+                      <TableHead className="font-semibold text-right">Amount</TableHead>
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Note</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -436,6 +439,7 @@ export default function BankingPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -510,14 +514,15 @@ export default function BankingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Memo</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Status</TableHead>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">Vendor</TableHead>
+                      <TableHead className="font-semibold text-right">Amount</TableHead>
+                      <TableHead className="font-semibold">Memo</TableHead>
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -551,6 +556,7 @@ export default function BankingPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -567,17 +573,18 @@ export default function BankingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Detail</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Status</TableHead>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">ID</TableHead>
+                      <TableHead className="font-semibold">Type</TableHead>
+                      <TableHead className="font-semibold">Company</TableHead>
+                      <TableHead className="font-semibold">Detail</TableHead>
+                      <TableHead className="font-semibold">Customer</TableHead>
+                      <TableHead className="font-semibold text-right">Amount</TableHead>
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -625,6 +632,7 @@ export default function BankingPage() {
                       ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </motion.div>

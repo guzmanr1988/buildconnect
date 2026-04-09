@@ -112,7 +112,7 @@ export default function OverviewPage() {
   const platformPct = 15
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Admin Overview" description="Platform performance at a glance" />
 
       {/* KPI Row */}
@@ -250,15 +250,16 @@ export default function OverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Detail</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Company</TableHead>
+                  <TableHead className="font-semibold">Detail</TableHead>
+                  <TableHead className="font-semibold text-right">Amount</TableHead>
+                  <TableHead className="font-semibold">Date</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -280,6 +281,7 @@ export default function OverviewPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

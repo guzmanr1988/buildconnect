@@ -97,7 +97,7 @@ export default function BugsPage() {
   const resolvedCount = bugs.filter((b) => b.status === 'resolved').length
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Bug Tracker" description="Report and manage platform issues">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-400">

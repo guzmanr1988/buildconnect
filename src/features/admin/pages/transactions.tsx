@@ -77,7 +77,7 @@ export default function TransactionsPage() {
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Transactions" description={`${MOCK_TRANSACTIONS.length} total transactions`}>
         <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-sm">
           <Filter className="h-4 w-4 text-muted-foreground" />
@@ -116,16 +116,17 @@ export default function TransactionsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Detail</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">ID</TableHead>
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Company</TableHead>
+                  <TableHead className="font-semibold">Detail</TableHead>
+                  <TableHead className="font-semibold text-right">Amount</TableHead>
+                  <TableHead className="font-semibold">Date</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -168,6 +169,7 @@ export default function TransactionsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

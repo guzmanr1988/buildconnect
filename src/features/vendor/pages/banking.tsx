@@ -140,7 +140,7 @@ export default function VendorBanking() {
                     <TableHead className="font-semibold hidden md:table-cell">Project</TableHead>
                     <TableHead className="font-semibold text-right">Sale Total</TableHead>
                     <TableHead className="font-semibold text-right">Your 85%</TableHead>
-                    <TableHead className="font-semibold text-right">BC 15%</TableHead>
+                    <TableHead className="font-semibold text-right">Platform 15%</TableHead>
                     <TableHead className="font-semibold hidden sm:table-cell">Close Date</TableHead>
                     <TableHead className="font-semibold text-center">Status</TableHead>
                     <TableHead className="font-semibold text-center">Action</TableHead>

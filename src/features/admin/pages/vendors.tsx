@@ -67,7 +67,7 @@ export default function VendorsPage() {
   }, [])
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title="Vendor Management" description={`${MOCK_VENDORS.length} registered vendors`}>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-sm">
@@ -164,7 +164,7 @@ export default function VendorsPage() {
                 </div>
 
                 {/* Lead Accordion */}
-                <Accordion className="mt-auto">
+                <Accordion type="single" collapsible className="mt-auto">
                   <AccordionItem value="leads">
                     <AccordionTrigger className="text-sm">
                       <div className="flex items-center gap-2">
