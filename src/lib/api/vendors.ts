@@ -1,0 +1,33 @@
+import { supabase } from '@/lib/supabase'
+import type { Vendor } from '@/types'
+
+export async function getVendors() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'vendor')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as Vendor[]
+}
+
+export async function getVendorProfile(id: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as Vendor
+}
+
+export async function updateVendor(id: string, updates: Partial<Vendor>) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Vendor
+}

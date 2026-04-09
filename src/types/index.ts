@@ -1,0 +1,175 @@
+export type UserRole = 'homeowner' | 'vendor' | 'admin'
+
+export type LeadStatus = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
+
+export type TransactionType = 'commission' | 'membership' | 'payout'
+
+export type TransactionStatus = 'pending' | 'closed' | 'paid'
+
+export type BugPriority = 'high' | 'medium' | 'low'
+
+export type BugStatus = 'open' | 'in_progress' | 'resolved'
+
+export type ServiceCategory =
+  | 'roofing'
+  | 'windows_doors'
+  | 'pool'
+  | 'driveways'
+  | 'pergolas'
+  | 'air_conditioning'
+  | 'kitchen'
+  | 'bathroom'
+  | 'wall_paneling'
+  | 'garage'
+
+export type CatalogUnit = 'per_sq_ft' | 'per_unit' | 'per_linear_ft' | 'flat_rate'
+
+export interface Profile {
+  id: string
+  email: string
+  name: string
+  role: UserRole
+  phone: string
+  address: string
+  company?: string
+  avatar_color: string
+  initials: string
+  status: 'active' | 'pending' | 'suspended'
+  created_at: string
+}
+
+export interface Lead {
+  id: string
+  homeowner_id: string
+  vendor_id: string
+  project: string
+  value: number
+  status: LeadStatus
+  slot: string
+  permit_choice: boolean
+  service_category: ServiceCategory
+  pack_items: Record<string, string[]>
+  sq_ft: number
+  financing: boolean
+  address: string
+  phone: string
+  email: string
+  homeowner_name: string
+  received_at: string
+}
+
+export interface ClosedSale {
+  id: string
+  lead_id: string
+  vendor_id: string
+  homeowner_id: string
+  sale_amount: number
+  vendor_share: number
+  commission: number
+  commission_paid: boolean
+  commission_paid_at?: string
+  closed_at: string
+  homeowner_name: string
+  project: string
+}
+
+export interface CatalogItem {
+  id: string
+  vendor_id: string
+  category: ServiceCategory
+  name: string
+  description: string
+  unit: CatalogUnit
+  price: number
+  active: boolean
+  multiplier: number
+}
+
+export interface Message {
+  id: string
+  lead_id: string
+  sender_id: string
+  content: string
+  message_type: 'text' | 'quote'
+  quote_data?: QuoteData
+  created_at: string
+}
+
+export interface QuoteData {
+  items: { name: string; price: number }[]
+  total: number
+  monthly_estimate?: number
+}
+
+export interface Transaction {
+  id: string
+  type: TransactionType
+  vendor_id: string
+  company: string
+  detail: string
+  customer?: string
+  amount: number
+  date: string
+  status: TransactionStatus
+}
+
+export interface BankAccount {
+  id: string
+  vendor_id: string
+  bank_name: string
+  account_holder: string
+  routing_last4: string
+  account_last4: string
+  account_type: 'checking' | 'savings'
+  linked_at: string
+}
+
+export interface AppSettings {
+  revenue_share_pct: number
+  subscription_fee: number
+  payout_day: number
+  maintenance_mode: boolean
+  ar_mode: boolean
+  phase2_enabled: boolean
+  financing_enabled: boolean
+}
+
+export interface Bug {
+  id: string
+  reporter_id: string
+  description: string
+  priority: BugPriority
+  status: BugStatus
+  created_at: string
+}
+
+export interface Vendor extends Profile {
+  company: string
+  service_categories: ServiceCategory[]
+  rating: number
+  response_time: string
+  verified: boolean
+  financing_available: boolean
+  total_reviews: number
+}
+
+export interface ServiceConfig {
+  id: ServiceCategory
+  name: string
+  badge?: string
+  badgeColor?: string
+  tagline: string
+  description: string
+  features: string[]
+  stat: { label: string; value: string }
+  optionGroups: OptionGroup[]
+  phase2?: boolean
+}
+
+export interface OptionGroup {
+  id: string
+  label: string
+  required: boolean
+  type: 'single' | 'multi'
+  options: { id: string; label: string; description?: string }[]
+}
