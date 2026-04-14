@@ -52,18 +52,18 @@ export function VendorComparePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
             >
-              <Card className={cn('relative h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5')}>
+              <Card className={cn('relative h-full overflow-visible transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5', (isBestPrice || isHighestRated) && 'mt-3')}>
                 {/* Highlight badges */}
                 {(isBestPrice || isHighestRated) && (
-                  <div className="absolute -top-2.5 left-4 flex gap-1.5">
+                  <div className="absolute -top-3 left-4 flex gap-1.5 z-10">
                     {isHighestRated && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
                         <Award className="h-3 w-3" />
                         Highest Rated
                       </span>
                     )}
                     {isBestPrice && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
                         <TrendingUp className="h-3 w-3" />
                         Best Price
                       </span>
@@ -146,7 +146,14 @@ export function VendorComparePage() {
                   <Button
                     size="lg"
                     className="mt-auto w-full h-11 text-sm font-medium"
-                    onClick={() => navigate('/home/booking')}
+                    onClick={() => {
+                      localStorage.setItem('buildconnect-selected-contractor', JSON.stringify({
+                        name: vendor.name,
+                        company: vendor.company,
+                        rating: vendor.rating,
+                      }))
+                      navigate('/home/booking')
+                    }}
                   >
                     Book Site Visit
                   </Button>
