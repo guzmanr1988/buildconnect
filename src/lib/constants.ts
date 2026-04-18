@@ -521,6 +521,61 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
       },
     ],
   },
+  {
+    id: 'house_painting',
+    name: 'House Painting',
+    tagline: 'Fresh coat, new look',
+    description: 'Professional interior and exterior painting — pick your colors, we handle the rest.',
+    features: ['Interior', 'Exterior', 'Color Consultation'],
+    stat: { label: 'Homes Painted', value: '940' },
+    optionGroups: [
+      {
+        id: 'height',
+        label: 'How tall is the house?',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'one_story', label: 'One story' },
+          { id: 'two_story', label: 'Two story' },
+        ],
+      },
+      {
+        id: 'scope',
+        label: 'Inside, outside, or both?',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'exterior_only', label: 'Exterior only' },
+          { id: 'interior_only', label: 'Interior only' },
+          { id: 'both', label: 'Both inside and outside' },
+        ],
+      },
+      {
+        id: 'rooms',
+        label: 'How many rooms?',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'one_room', label: '1 room' },
+          { id: 'two_to_three', label: '2–3 rooms' },
+          { id: 'four_to_five', label: '4–5 rooms' },
+          { id: 'whole_interior', label: 'Whole interior' },
+        ],
+      },
+      {
+        id: 'colors',
+        label: 'Colors',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'single_color', label: 'Single color, whole house' },
+          { id: 'two_tone', label: 'Two-tone (body + trim)' },
+          { id: 'multi_color', label: 'Multi-color (body, trim, accents)' },
+          { id: 'custom_palette', label: 'Custom palette — work with a color pro' },
+        ],
+      },
+    ],
+  },
 ]
 
 export const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, XCircle, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -27,6 +27,7 @@ const SERVICE_ICONS: Record<string, React.ElementType> = {
   bathroom: Bath,
   wall_paneling: PanelTop,
   garage: Hammer,
+  house_painting: PaintRoller,
 }
 
 const ICON_GRADIENTS: Record<string, string> = {
@@ -40,6 +41,7 @@ const ICON_GRADIENTS: Record<string, string> = {
   bathroom: 'from-teal-400 to-cyan-600',
   wall_paneling: 'from-purple-400 to-violet-500',
   garage: 'from-slate-400 to-slate-600',
+  house_painting: 'from-rose-400 to-pink-500',
 }
 
 export function CartPage() {
@@ -55,7 +57,7 @@ export function CartPage() {
   const serviceAbbrev: Record<string, string> = {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
     pergolas: 'Pergolas', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
-    wall_paneling: 'Wall Paneling', garage: 'Interior Remodel',
+    wall_paneling: 'Wall Paneling', garage: 'Interior Remodel', house_painting: 'Painting',
   }
   const autoProjectName = profile
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`

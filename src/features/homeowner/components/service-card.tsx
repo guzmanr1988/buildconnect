@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer } from 'lucide-react'
+import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller } from 'lucide-react'
 import type { ServiceConfig, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +13,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   bathroom: Bath,
   wall_paneling: PanelTop,
   garage: Hammer,
+  house_painting: PaintRoller,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
@@ -26,6 +27,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   bathroom: 'from-teal-400 to-cyan-600',
   wall_paneling: 'from-purple-400 to-violet-500',
   garage: 'from-slate-400 to-slate-600',
+  house_painting: 'from-rose-400 to-pink-500',
 }
 
 interface ServiceCardProps {
