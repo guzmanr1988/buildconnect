@@ -87,7 +87,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
       </p>
 
       {/* Features — quiet dot-separated text */}
-      <div className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground/60 mt-4 mb-4">
+      <div className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground mt-4 mb-4">
         {service.features.slice(0, 3).map((feature, i) => (
           <span key={feature} className="flex items-center gap-1">
             {i > 0 && <span className="text-border">·</span>}

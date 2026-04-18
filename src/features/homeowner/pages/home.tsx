@@ -80,7 +80,7 @@ export function HomeownerHome() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
         >
-          <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Upcoming
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -154,7 +154,7 @@ export function HomeownerHome() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Coming Soon
           </p>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -176,7 +176,7 @@ export function HomeownerHome() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.55 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
           How it works
         </p>
         <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -202,7 +202,7 @@ export function HomeownerHome() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
           Frequently asked
         </p>
         <div className="rounded-2xl border bg-card overflow-hidden">
