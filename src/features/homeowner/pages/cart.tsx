@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse, XCircle, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, XCircle, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -26,7 +26,7 @@ const SERVICE_ICONS: Record<string, React.ElementType> = {
   kitchen: UtensilsCrossed,
   bathroom: Bath,
   wall_paneling: PanelTop,
-  garage: Warehouse,
+  garage: Hammer,
 }
 
 const ICON_GRADIENTS: Record<string, string> = {
@@ -55,7 +55,7 @@ export function CartPage() {
   const serviceAbbrev: Record<string, string> = {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
     pergolas: 'Pergolas', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
-    wall_paneling: 'Wall Paneling', garage: 'Garage',
+    wall_paneling: 'Wall Paneling', garage: 'Interior Remodel',
   }
   const autoProjectName = profile
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`

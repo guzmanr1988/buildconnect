@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse, FileText, X } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, FileText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -25,7 +25,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   kitchen: UtensilsCrossed,
   bathroom: Bath,
   wall_paneling: PanelTop,
-  garage: Warehouse,
+  garage: Hammer,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {

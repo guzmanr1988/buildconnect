@@ -442,11 +442,11 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   },
   {
     id: 'garage',
-    name: 'Garage Addition',
-    tagline: 'Add value with a custom garage build',
-    description: 'New garage construction with smart storage and premium finishes.',
-    features: ['Smart Door', 'Epoxy Floors', 'Climate Control'],
-    stat: { label: 'Garages Built', value: '287' },
+    name: 'Interior Remodel',
+    tagline: 'Refresh any room from studs to finish',
+    description: 'Drywall, flooring, lighting, and interior finish work — transform any room without a whole-house teardown.',
+    features: ['Drywall', 'Recessed Lighting', 'Flooring'],
+    stat: { label: 'Rooms Finished', value: '287' },
     optionGroups: [
       {
         id: 'size',

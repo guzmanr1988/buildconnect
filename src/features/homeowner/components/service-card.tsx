@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse } from 'lucide-react'
+import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer } from 'lucide-react'
 import type { ServiceConfig, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -12,7 +12,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   kitchen: UtensilsCrossed,
   bathroom: Bath,
   wall_paneling: PanelTop,
-  garage: Warehouse,
+  garage: Hammer,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
