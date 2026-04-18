@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Phone, Palette, ArrowRight, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -6,18 +5,16 @@ import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
-import { AnimatePresence } from 'framer-motion'
-import { SERVICE_CATALOG } from '@/lib/constants'
+import { useCatalogStore } from '@/stores/catalog-store'
 import { ServiceCard } from '../components/service-card'
-import { InlineConfigurator } from '../components/inline-configurator'
 
 export function HomeownerHome() {
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const navigate = useNavigate()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const activeServices = SERVICE_CATALOG.filter((s) => !s.phase2)
-  const comingSoon = SERVICE_CATALOG.filter((s) => s.phase2)
+  const services = useCatalogStore((s) => s.services)
+  const activeServices = services.filter((s) => !s.phase2)
+  const comingSoon = services.filter((s) => s.phase2)
 
   return (
     <div className="flex flex-col gap-10">
@@ -75,7 +72,7 @@ export function HomeownerHome() {
       </div>
 
       {/* Service grid — always 4 columns on desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {activeServices.map((service, i) => (
           <motion.div
             key={service.id}
@@ -85,27 +82,12 @@ export function HomeownerHome() {
           >
             <ServiceCard
               service={service}
-              isExpanded={expandedId === service.id}
-              onToggle={() => setExpandedId(expandedId === service.id ? null : service.id)}
+              isExpanded={false}
+              onToggle={() => navigate(`/home/service/${service.id}`)}
             />
           </motion.div>
         ))}
       </div>
-
-      {/* Configurator — renders below the grid when a card is selected */}
-      <AnimatePresence>
-        {expandedId && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="-mt-6"
-          >
-            <InlineConfigurator service={activeServices.find((s) => s.id === expandedId)!} />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Coming Soon */}
       {comingSoon.length > 0 && (
@@ -117,7 +99,7 @@ export function HomeownerHome() {
           <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
             Coming Soon
           </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {comingSoon.map((service) => (
               <ServiceCard
                 key={service.id}

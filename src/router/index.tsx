@@ -16,6 +16,8 @@ import { AppointmentStatusPage } from '@/features/homeowner/pages/appointment-st
 import { DesignLabPage } from '@/features/homeowner/pages/design-lab'
 import { HomeownerMessagesPage } from '@/features/homeowner/pages/messages'
 import { HomeownerProfilePage } from '@/features/homeowner/pages/profile'
+import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
+import { CartPage } from '@/features/homeowner/pages/cart'
 
 // Vendor (default exports)
 import VendorDashboard from '@/features/vendor/pages/dashboard'
@@ -34,6 +36,13 @@ import TransactionsPage from '@/features/admin/pages/transactions'
 import BankingPage from '@/features/admin/pages/banking'
 import SettingsPage from '@/features/admin/pages/settings'
 import BugsPage from '@/features/admin/pages/bugs'
+import ProductsAdminPage from '@/features/admin/pages/products'
+import UsersPage from '@/features/admin/pages/users'
+import HomeownersPage from '@/features/admin/pages/homeowners'
+import AdminProfilePage from '@/features/admin/pages/profile'
+import WorkflowPage from '@/features/admin/pages/workflow'
+import ReportsPage from '@/features/admin/pages/reports'
+import AdminMessagesPage from '@/features/admin/pages/messages'
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
@@ -45,11 +54,13 @@ export const router = createBrowserRouter([
     element: <HomeownerLayout />,
     children: [
       { index: true, element: <HomeownerHome /> },
+      { path: 'service/:serviceId', element: <ServiceDetailPage /> },
+      { path: 'cart', element: <CartPage /> },
       { path: 'vendor-compare', element: <VendorComparePage /> },
       { path: 'booking', element: <BookingCalendarPage /> },
       { path: 'booking/confirmed', element: <BookingConfirmationPage /> },
       { path: 'appointments/:id', element: <AppointmentStatusPage /> },
-      { path: 'design-lab', element: <DesignLabPage /> },
+      // Design Lab removed per Bode's request
       { path: 'messages', element: <HomeownerMessagesPage /> },
       { path: 'profile', element: <HomeownerProfilePage /> },
     ],
@@ -76,10 +87,17 @@ export const router = createBrowserRouter([
       { index: true, element: <OverviewPage /> },
       { path: 'revenue', element: <RevenuePage /> },
       { path: 'vendors', element: <VendorsPage /> },
+      { path: 'messages', element: <AdminMessagesPage /> },
       { path: 'transactions', element: <TransactionsPage /> },
+      { path: 'reports', element: <ReportsPage /> },
       { path: 'banking', element: <BankingPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'bugs', element: <BugsPage /> },
+      { path: 'workflow', element: <WorkflowPage /> },
+      { path: 'products', element: <ProductsAdminPage /> },
+      { path: 'users', element: <UsersPage /> },
+      { path: 'homeowners', element: <HomeownersPage /> },
+      { path: 'profile', element: <AdminProfilePage /> },
     ],
   },
 ])

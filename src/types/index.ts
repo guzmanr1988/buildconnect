@@ -151,6 +151,7 @@ export interface Vendor extends Profile {
   verified: boolean
   financing_available: boolean
   total_reviews: number
+  commission_pct: number
 }
 
 export interface ServiceConfig {
@@ -166,10 +167,17 @@ export interface ServiceConfig {
   phase2?: boolean
 }
 
+export interface ServiceOption {
+  id: string
+  label: string
+  description?: string
+  subGroups?: OptionGroup[]
+}
+
 export interface OptionGroup {
   id: string
   label: string
   required: boolean
   type: 'single' | 'multi'
-  options: { id: string; label: string; description?: string }[]
+  options: ServiceOption[]
 }

@@ -1,326 +1,212 @@
-import { useState, useMemo } from 'react'
+import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Plus, Pencil, Check, X, ChevronsUpDown, Package } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Package, Check, DollarSign } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
-import { EmptyState } from '@/components/shared/empty-state'
-import { SERVICE_CATALOG } from '@/lib/constants'
-import { MOCK_CATALOG } from '@/lib/mock-data'
+import { useCatalogStore } from '@/stores/catalog-store'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { cn } from '@/lib/utils'
-import type { CatalogItem, CatalogUnit, ServiceCategory } from '@/types'
-
-const VENDOR_ID = 'v-1'
-
-const UNIT_LABELS: Record<CatalogUnit, string> = {
-  per_sq_ft: '/ sq ft',
-  per_unit: '/ unit',
-  per_linear_ft: '/ lin ft',
-  flat_rate: 'flat rate',
-}
-
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n)
-}
 
 export default function VendorCatalog() {
-  const [items, setItems] = useState<CatalogItem[]>(() => MOCK_CATALOG.filter((c) => c.vendor_id === VENDOR_ID))
-  const [search, setSearch] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editPrice, setEditPrice] = useState('')
-  const [openSections, setOpenSections] = useState<string[]>([])
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const [addCategory, setAddCategory] = useState<ServiceCategory | ''>('')
+  const adminServices = useCatalogStore((s) => s.services)
+  const {
+    services: vendorServices,
+    initFromAdmin,
+    toggleService,
+    toggleOption,
+    setPrice,
+    isServiceEnabled,
+    isOptionEnabled,
+    getPrice,
+  } = useVendorCatalogStore()
 
-  // New item form state
-  const [newName, setNewName] = useState('')
-  const [newDescription, setNewDescription] = useState('')
-  const [newUnit, setNewUnit] = useState<CatalogUnit>('per_sq_ft')
-  const [newPrice, setNewPrice] = useState('')
-
-  const categories = SERVICE_CATALOG.map((s) => ({ id: s.id, name: s.name }))
-
-  const filteredItems = useMemo(() => {
-    if (!search.trim()) return items
-    const q = search.toLowerCase()
-    return items.filter(
-      (i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)
-    )
-  }, [items, search])
-
-  const itemsByCategory = useMemo(() => {
-    const map: Record<string, CatalogItem[]> = {}
-    for (const cat of categories) {
-      map[cat.id] = filteredItems.filter((i) => i.category === cat.id)
+  // Sync with admin catalog on mount
+  useEffect(() => {
+    if (adminServices.length > 0) {
+      initFromAdmin(adminServices)
     }
-    return map
-  }, [filteredItems, categories])
+  }, [adminServices.length])
 
-  const toggleAll = (expand: boolean) => {
-    setOpenSections(expand ? categories.map((c) => c.id) : [])
-  }
-
-  const startEdit = (item: CatalogItem) => {
-    setEditingId(item.id)
-    setEditPrice(item.price.toString())
-  }
-
-  const saveEdit = (id: string) => {
-    const price = parseFloat(editPrice)
-    if (!isNaN(price) && price >= 0) {
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, price } : i)))
-    }
-    setEditingId(null)
-  }
-
-  const toggleActive = (id: string) => {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, active: !i.active } : i)))
-  }
-
-  const openAddDialog = (categoryId: ServiceCategory) => {
-    setAddCategory(categoryId)
-    setNewName('')
-    setNewDescription('')
-    setNewUnit('per_sq_ft')
-    setNewPrice('')
-    setAddDialogOpen(true)
-  }
-
-  const addItem = () => {
-    if (!addCategory || !newName.trim() || !newPrice.trim()) return
-    const price = parseFloat(newPrice)
-    if (isNaN(price)) return
-
-    const newItem: CatalogItem = {
-      id: `ci-new-${Date.now()}`,
-      vendor_id: VENDOR_ID,
-      category: addCategory as ServiceCategory,
-      name: newName.trim(),
-      description: newDescription.trim(),
-      unit: newUnit,
-      price,
-      active: true,
-      multiplier: 1.0,
-    }
-    setItems((prev) => [...prev, newItem])
-    setAddDialogOpen(false)
-  }
+  const enabledCount = vendorServices.filter((s) => s.enabled).length
 
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.04 } },
   }
-  const item_ = {
+  const item = {
     hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
+    show: { opacity: 1, y: 0, transition: { duration: 0.15, ease: 'easeOut' } },
   }
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      <PageHeader title="Products & Pricing" description="Manage your catalog items and pricing">
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => toggleAll(true)}>
-            <ChevronsUpDown className="h-3.5 w-3.5 mr-1" /> Expand All
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => toggleAll(false)}>
-            Collapse All
-          </Button>
-        </div>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 overflow-x-hidden">
+      <PageHeader title="Products & Pricing" description="Select the services you offer and set your pricing">
+        <Badge variant="outline" className="text-xs gap-1">
+          <Package className="h-3 w-3" />
+          {enabledCount} services active
+        </Badge>
       </PageHeader>
 
-      {/* Search */}
-      <motion.div variants={item_}>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search items by name, description, or category..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </motion.div>
+      <div className="flex flex-col gap-4">
+        {adminServices.filter(s => !s.phase2).map((service) => {
+          const enabled = isServiceEnabled(service.id)
+          const optionCount = service.optionGroups.reduce((sum, g) => {
+            return sum + g.options.filter(o => isOptionEnabled(service.id, g.id, o.id)).length
+          }, 0)
 
-      {/* Category Accordions */}
-      <motion.div variants={item_}>
-        <Accordion type="multiple" value={openSections} onValueChange={setOpenSections}>
-          {categories.map((cat) => {
-            const catItems = itemsByCategory[cat.id] || []
-            return (
-              <AccordionItem key={cat.id} value={cat.id} className="border rounded-xl mb-3 px-1 overflow-hidden">
-                <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                  <div className="flex items-center gap-3">
-                    <span className="font-heading font-semibold">{cat.name}</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {catItems.length} {catItems.length === 1 ? 'item' : 'items'}
-                    </Badge>
+          return (
+            <motion.div key={service.id} variants={item}>
+              <Card className={cn('rounded-xl shadow-sm transition', enabled && 'border-primary/30')}>
+                {/* Service header with toggle */}
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CardTitle className="text-base font-heading">{service.name}</CardTitle>
+                      {enabled && (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={() => toggleService(service.id)}
+                    />
                   </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-2 pb-4">
-                  {catItems.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-muted-foreground mb-3">No items in this category</p>
-                      <Button size="sm" variant="outline" onClick={() => openAddDialog(cat.id as ServiceCategory)}>
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="overflow-x-auto rounded-lg border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/50">
-                              <TableHead className="font-semibold">Name</TableHead>
-                              <TableHead className="font-semibold hidden sm:table-cell">Description</TableHead>
-                              <TableHead className="font-semibold">Unit</TableHead>
-                              <TableHead className="font-semibold text-right">Price</TableHead>
-                              <TableHead className="font-semibold text-center">Active</TableHead>
-                              <TableHead className="font-semibold text-center w-20">Edit</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {catItems.map((ci) => (
-                              <TableRow key={ci.id} className={cn(!ci.active && 'opacity-50')}>
-                                <TableCell className="font-medium">{ci.name}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm hidden sm:table-cell">{ci.description}</TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                    {UNIT_LABELS[ci.unit]}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {editingId === ci.id ? (
-                                    <div className="flex items-center gap-1 justify-end">
-                                      <span className="text-sm text-muted-foreground">$</span>
-                                      <Input
-                                        type="number"
-                                        value={editPrice}
-                                        onChange={(e) => setEditPrice(e.target.value)}
-                                        className="w-24 h-8 text-right text-sm"
-                                        step="0.01"
-                                        min="0"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') saveEdit(ci.id)
-                                          if (e.key === 'Escape') setEditingId(null)
-                                        }}
-                                      />
-                                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEdit(ci.id)}>
-                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                      </Button>
-                                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                                        <X className="h-3.5 w-3.5 text-destructive" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <span className="font-semibold">{fmt(ci.price)}</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Switch
-                                    checked={ci.active}
-                                    onCheckedChange={() => toggleActive(ci.id)}
-                                    className="mx-auto"
-                                  />
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {editingId !== ci.id && (
-                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(ci)}>
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => openAddDialog(cat.id as ServiceCategory)} className="ml-1">
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
-                      </Button>
-                    </div>
+                  <p className="text-xs text-muted-foreground mt-1">{service.tagline}</p>
+                  {enabled && optionCount > 0 && (
+                    <p className="text-[10px] text-primary font-medium mt-1">{optionCount} items selected</p>
                   )}
-                </AccordionContent>
-              </AccordionItem>
-            )
-          })}
-        </Accordion>
-      </motion.div>
+                </CardHeader>
 
-      {/* Add Item Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Add Catalog Item</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Input
-                value={categories.find((c) => c.id === addCategory)?.name || ''}
-                disabled
-                className="bg-muted"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Item Name</Label>
-              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Architectural Shingle" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="e.g. GAF Timberline HDZ" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Unit</Label>
-                <Select value={newUnit} onValueChange={(v) => setNewUnit(v as CatalogUnit)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="per_sq_ft">Per sq ft</SelectItem>
-                    <SelectItem value="per_unit">Per unit</SelectItem>
-                    <SelectItem value="per_linear_ft">Per linear ft</SelectItem>
-                    <SelectItem value="flat_rate">Flat rate</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Price ($)</Label>
-                <Input
-                  type="number"
-                  value={newPrice}
-                  onChange={(e) => setNewPrice(e.target.value)}
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={addItem} disabled={!newName.trim() || !newPrice.trim()}>
-              <Plus className="h-4 w-4 mr-1" /> Add Item
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Option groups - only show when enabled */}
+                {enabled && (
+                  <CardContent className="space-y-4 pt-0">
+                    {service.optionGroups.map((group) => (
+                      <div key={group.id} className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {group.label}
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {group.options.map((option) => {
+                            const optEnabled = isOptionEnabled(service.id, group.id, option.id)
+                            const price = getPrice(service.id, option.id)
+
+                            return (
+                              <div
+                                key={option.id}
+                                className={cn(
+                                  'flex items-center justify-between gap-3 rounded-lg border p-2.5 transition',
+                                  optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
+                                )}
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleOption(service.id, group.id, option.id)}
+                                    className={cn(
+                                      'flex h-5 w-5 items-center justify-center rounded border shrink-0 transition',
+                                      optEnabled
+                                        ? 'bg-primary border-primary text-white'
+                                        : 'border-muted-foreground/30'
+                                    )}
+                                  >
+                                    {optEnabled && <Check className="h-3 w-3" />}
+                                  </button>
+                                  <span className={cn(
+                                    'text-sm truncate',
+                                    optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
+                                  )}>
+                                    {option.label}
+                                  </span>
+                                </div>
+                                {optEnabled && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <DollarSign className="h-3 w-3 text-muted-foreground" />
+                                    <Input
+                                      type="number"
+                                      value={price || ''}
+                                      onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
+                                      placeholder="0"
+                                      className="h-7 w-20 text-xs text-right"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Sub-groups for options that have them */}
+                        {group.options.filter(o => o.subGroups && o.subGroups.length > 0 && isOptionEnabled(service.id, group.id, o.id)).map((option) => (
+                          option.subGroups?.map((subGroup) => (
+                            <div key={subGroup.id} className="ml-4 mt-2 space-y-1.5">
+                              <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                                {subGroup.label}
+                              </p>
+                              {subGroup.options.map((subOpt) => {
+                                const subEnabled = isOptionEnabled(service.id, subGroup.id, subOpt.id)
+                                const subPrice = getPrice(service.id, subOpt.id)
+
+                                return (
+                                  <div
+                                    key={subOpt.id}
+                                    className={cn(
+                                      'flex items-center justify-between gap-3 rounded-lg border p-2 transition',
+                                      subEnabled ? 'border-primary/20 bg-primary/5' : 'border-border/50'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOption(service.id, subGroup.id, subOpt.id)}
+                                        className={cn(
+                                          'flex h-4 w-4 items-center justify-center rounded border shrink-0 transition',
+                                          subEnabled
+                                            ? 'bg-primary border-primary text-white'
+                                            : 'border-muted-foreground/30'
+                                        )}
+                                      >
+                                        {subEnabled && <Check className="h-2.5 w-2.5" />}
+                                      </button>
+                                      <span className={cn(
+                                        'text-xs truncate',
+                                        subEnabled ? 'font-medium' : 'text-muted-foreground'
+                                      )}>
+                                        {subOpt.label}
+                                      </span>
+                                    </div>
+                                    {subEnabled && (
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <span className="text-[10px] text-muted-foreground">$</span>
+                                        <Input
+                                          type="number"
+                                          value={subPrice || ''}
+                                          onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
+                                          placeholder="0"
+                                          className="h-6 w-16 text-[11px] text-right"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ))
+                        ))}
+                      </div>
+                    ))}
+                  </CardContent>
+                )}
+              </Card>
+            </motion.div>
+          )
+        })}
+      </div>
     </motion.div>
   )
 }

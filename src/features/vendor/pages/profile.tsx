@@ -9,13 +9,17 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { SERVICE_CATALOG } from '@/lib/constants'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
 const VENDOR_ID = 'v-1'
 
 export default function VendorProfile() {
+  const navigate = useNavigate()
+  const logout = useAuthStore((s) => s.logout)
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
 
   const serviceNames = vendor.service_categories
@@ -202,7 +206,7 @@ export default function VendorProfile() {
                   Member since {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </p>
               </div>
-              <Button variant="destructive" size="sm">
+              <Button variant="destructive" size="sm" onClick={() => { logout(); navigate('/login') }}>
                 <LogOut className="h-3.5 w-3.5 mr-1.5" /> Logout
               </Button>
             </div>

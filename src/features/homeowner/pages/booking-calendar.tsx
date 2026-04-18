@@ -207,7 +207,13 @@ export function BookingCalendarPage() {
                   <Button
                     size="lg"
                     className="mt-2 h-11 w-full text-sm font-medium"
-                    onClick={() => navigate('/home/booking/confirmed')}
+                    onClick={() => {
+                      localStorage.setItem('buildconnect-selected-booking', JSON.stringify({
+                        date: formatDate(selectedDate),
+                        time: formatTime(selectedTime),
+                      }))
+                      navigate('/home/booking/confirmed')
+                    }}
                   >
                     Confirm Booking
                   </Button>

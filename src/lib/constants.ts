@@ -12,18 +12,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     stat: { label: 'Projects Completed', value: '2,847' },
     optionGroups: [
       {
-        id: 'material',
-        label: 'Roofing Material',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan' },
-          { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan' },
-          { id: 'metal', label: 'Standing Seam Metal', description: 'Maximum durability, 50+ years' },
-          { id: 'terracotta', label: 'Terracotta Clay', description: 'Premium Mediterranean style' },
-        ],
-      },
-      {
         id: 'service_type',
         label: 'Service Type',
         required: true,
@@ -35,6 +23,19 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
+        id: 'material',
+        label: 'Roofing Material',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan' },
+          { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan' },
+          { id: 'metal', label: 'Standing Seam Metal', description: 'Maximum durability, 50+ years' },
+          { id: 'terracotta', label: 'Terracotta Clay', description: 'Premium Mediterranean style' },
+          { id: 'flat_roof', label: 'Flat Roof', description: 'Commercial-style flat roofing system' },
+        ],
+      },
+      {
         id: 'addons',
         label: 'Add-Ons',
         required: false,
@@ -43,6 +44,9 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'gutters', label: 'Gutter Installation' },
           { id: 'insulation', label: 'Attic Insulation' },
           { id: 'solar_prep', label: 'Solar Panel Prep' },
+          { id: 'soffit_wood', label: 'Soffit Wood' },
+          { id: 'fascia_wood', label: 'Fascia Wood' },
+          { id: 'extra_plywood', label: 'Extra Sheet Plywood' },
         ],
       },
     ],
@@ -58,37 +62,116 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     stat: { label: 'Windows Installed', value: '18,420' },
     optionGroups: [
       {
-        id: 'glass_type',
-        label: 'Glass Type',
+        id: 'products',
+        label: 'Products',
         required: true,
         type: 'single',
         options: [
-          { id: 'standard', label: 'Standard Impact' },
-          { id: 'impact_plus', label: 'Impact + Solar Control' },
+          { id: 'windows', label: 'Windows', subGroups: [
+            { id: 'window_sizes', label: 'Window Sizes', required: false, type: 'multi' as const, options: [
+              { id: '18x38', label: '18×38' },
+              { id: '26x25', label: '26×25' }, { id: '26x38', label: '26×38' }, { id: '26x50', label: '26×50' }, { id: '26x62', label: '26×62' }, { id: '26x73', label: '26×73' },
+              { id: '36x25', label: '36×25' }, { id: '36x38', label: '36×38' }, { id: '36x50', label: '36×50' }, { id: '36x62', label: '36×62' }, { id: '36x72', label: '36×72' },
+              { id: '52x25', label: '52×25' }, { id: '52x38', label: '52×38' }, { id: '52x50', label: '52×50' }, { id: '52x62', label: '52×62' }, { id: '52x72', label: '52×72' },
+              { id: '73x25', label: '73×25' }, { id: '73x38', label: '73×38' }, { id: '73x50', label: '73×50' }, { id: '73x62', label: '73×62' }, { id: '73x73', label: '73×73' },
+              { id: '110x25', label: '110×25' }, { id: '110x38', label: '110×38' }, { id: '110x50', label: '110×50' }, { id: '110x62', label: '110×62' }, { id: '110x72', label: '110×72' },
+            ]},
+            { id: 'window_types', label: 'Window Types', required: false, type: 'single' as const, options: [
+              { id: 'single_hung', label: 'Single Hung' }, { id: 'casement', label: 'Casement' }, { id: 'awning', label: 'Awning' }, { id: 'rolling', label: 'Rolling' }, { id: 'picture', label: 'Picture' },
+            ]},
+            { id: 'frame_colors', label: 'Frame Colors', required: false, type: 'single' as const, options: [
+              { id: 'white', label: 'White' }, { id: 'bronze', label: 'Bronze' }, { id: 'black', label: 'Black' },
+            ]},
+            { id: 'glass_colors', label: 'Glass Colors', required: false, type: 'single' as const, options: [
+              { id: 'grey_white', label: 'Grey-White', description: 'Dark Grey Tinted Glass' }, { id: 'clear_white', label: 'Clear-White', description: 'Light grey tinted' }, { id: 'clear', label: 'Clear' }, { id: 'gray', label: 'Gray', description: 'Tint color grey' }, { id: 'green', label: 'Green', description: 'Low-E Color only' },
+            ]},
+            { id: 'glass_types', label: 'Glass Types', required: false, type: 'single' as const, options: [
+              { id: 'impact_glass', label: 'Impact Glass' }, { id: 'low_e', label: 'Low-E Glass' },
+            ]},
+          ]},
+          { id: 'doors', label: 'Doors', subGroups: [
+            { id: 'door_sizes', label: 'Door Sizes', required: false, type: 'multi' as const, options: [
+              { id: '27x80', label: '27×80' }, { id: '27x96', label: '27×96' }, { id: '34x80', label: '34×80' }, { id: '34x96', label: '34×96' }, { id: '39x80', label: '39×80' }, { id: '39x96', label: '39×96' },
+              { id: '60x80', label: '60×80' }, { id: '60x96', label: '60×96' }, { id: '72x80', label: '72×80' }, { id: '72x96', label: '72×96' }, { id: '96x80', label: '96×80' }, { id: '96x96', label: '96×96' },
+              { id: '110x80', label: '110×80' }, { id: '110x96', label: '110×96' }, { id: '120x80', label: '120×80' }, { id: '120x96', label: '120×96' }, { id: '144x80', label: '144×80' }, { id: '144x96', label: '144×96' },
+            ]},
+            { id: 'door_types', label: 'Door Types', required: false, type: 'single' as const, options: [
+              { id: 'entry', label: 'Entry Door' }, { id: 'french', label: 'French Door' }, { id: 'sliding_glass', label: 'Sliding Glass' }, { id: 'impact_door', label: 'Impact Door' }, { id: 'patio', label: 'Patio Door' }, { id: 'pivot', label: 'Pivot Door' },
+            ]},
+            { id: 'door_frame_colors', label: 'Frame Colors', required: false, type: 'single' as const, options: [
+              { id: 'white', label: 'White' }, { id: 'bronze', label: 'Bronze' }, { id: 'black', label: 'Black' },
+            ]},
+            { id: 'door_glass_colors', label: 'Glass Colors', required: false, type: 'single' as const, options: [
+              { id: 'grey_white', label: 'Grey-White' }, { id: 'clear_white', label: 'Clear-White' }, { id: 'clear', label: 'Clear' }, { id: 'gray', label: 'Gray' }, { id: 'green', label: 'Green' },
+            ]},
+            { id: 'door_glass_types', label: 'Glass Types', required: false, type: 'single' as const, options: [
+              { id: 'impact_glass', label: 'Impact Glass' }, { id: 'low_e', label: 'Low-E Glass' },
+            ]},
+          ]},
+          { id: 'garage_doors', label: 'Garage Doors' },
         ],
       },
       {
-        id: 'products',
-        label: 'Product Types',
-        required: true,
-        type: 'multi',
+        id: 'garage_door_type',
+        label: 'Garage Door Type',
+        required: false,
+        type: 'single',
         options: [
-          { id: 'single_hung', label: 'Single-Hung Windows' },
-          { id: 'casement', label: 'Casement Windows' },
-          { id: 'sliding', label: 'Sliding Glass Doors' },
-          { id: 'french', label: 'French Doors' },
-          { id: 'entry', label: 'Entry Doors' },
+          { id: 'single_garage', label: 'Single Garage Door' },
+          { id: 'double_garage', label: 'Double Garage Door' },
+        ],
+      },
+      {
+        id: 'garage_door_size',
+        label: 'Garage Door Size',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'gd_4_panels', label: '4 Panels' },
+          { id: 'gd_5_panels', label: '5 Panels' },
+        ],
+      },
+      {
+        id: 'garage_door_color',
+        label: 'Garage Door Color',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'gd_bronze', label: 'Bronze' },
+          { id: 'gd_white', label: 'White' },
+          { id: 'gd_black', label: 'Black' },
+        ],
+      },
+      {
+        id: 'garage_door_glass',
+        label: 'Garage Door Glass Color',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'gd_grey_white', label: 'Grey-White' },
+          { id: 'gd_clear_white', label: 'Clear-White' },
+          { id: 'gd_grey', label: 'Grey' },
+          { id: 'gd_clear', label: 'Clear' },
         ],
       },
       {
         id: 'scope',
-        label: 'Scope',
+        label: 'Preferences',
         required: true,
         type: 'single',
         options: [
-          { id: 'full', label: 'Full Home' },
-          { id: 'partial', label: 'Partial (Select Rooms)' },
-          { id: 'single', label: 'Single Window/Door' },
+          { id: 'permit', label: 'Permit' },
+          { id: 'no_permit', label: 'No Permit' },
+        ],
+      },
+      {
+        id: 'payment',
+        label: 'Payment Method',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'financed', label: 'Financed' },
+          { id: 'cash', label: 'Cash' },
         ],
       },
     ],
@@ -102,26 +185,30 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     stat: { label: 'Pools Built', value: '1,203' },
     optionGroups: [
       {
-        id: 'model',
-        label: 'Pool Model',
+        id: 'pool_size',
+        label: 'Pool Size',
         required: true,
         type: 'single',
         options: [
-          { id: '12x24', label: '12×24 Classic' },
-          { id: '14x28', label: '14×28 Freeform' },
-          { id: '16x32', label: '16×32 Resort' },
+          { id: '10x20', label: '10×20' },
+          { id: '12x24', label: '12×24' },
+          { id: '15x30', label: '15×30' },
+          { id: '20x40', label: '20×40' },
+          { id: 'custom', label: 'Custom Size' },
         ],
       },
       {
-        id: 'paver',
-        label: 'Paver Finish',
+        id: 'pool_floor',
+        label: 'Pool Floor',
         required: true,
         type: 'single',
         options: [
           { id: 'travertine', label: 'Travertine' },
-          { id: 'marble', label: 'Marble' },
-          { id: 'concrete', label: 'Stamped Concrete' },
-          { id: 'slate', label: 'Natural Slate' },
+          { id: 'pavers', label: 'Pavers' },
+          { id: 'stamped_concrete', label: 'Stamped Concrete' },
+          { id: 'cement_floor', label: 'Cement Floor' },
+          { id: 'artificial_turf', label: 'Artificial Turf' },
+          { id: 'na', label: 'N/A' },
         ],
       },
       {
@@ -131,9 +218,36 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         type: 'multi',
         options: [
           { id: 'spa', label: 'Attached Spa' },
-          { id: 'waterfall', label: 'Waterfall Feature' },
+          { id: 'beach', label: 'Beach' },
+          { id: 'waterfall', label: 'Water Feature' },
           { id: 'led', label: 'LED Lighting' },
+          { id: 'bubbler', label: 'Bubbler' },
           { id: 'heater', label: 'Pool Heater' },
+        ],
+      },
+      {
+        id: 'spa_size',
+        label: 'Spa Size',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'spa_7x7', label: '7×7' },
+          { id: 'spa_10x10', label: '10×10' },
+          { id: 'spa_12x7', label: '12×7' },
+          { id: 'spa_15x7', label: '15×7' },
+          { id: 'spa_custom', label: 'Custom Size' },
+        ],
+      },
+      {
+        id: 'beach_size',
+        label: 'Beach Size',
+        required: false,
+        type: 'single',
+        options: [
+          { id: 'beach_7x7', label: '7×7' },
+          { id: 'beach_12x7', label: '12×7' },
+          { id: 'beach_15x7', label: '15×7' },
+          { id: 'beach_custom', label: 'Custom Size' },
         ],
       },
     ],
@@ -147,6 +261,17 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     stat: { label: 'Driveways Paved', value: '956' },
     optionGroups: [
       {
+        id: 'scope',
+        label: 'Scope',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'full', label: 'Full Driveway' },
+          { id: 'overlay', label: 'Overlay' },
+          { id: 'repair', label: 'Repair Only' },
+        ],
+      },
+      {
         id: 'surface',
         label: 'Surface Material',
         required: true,
@@ -156,17 +281,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'stamped', label: 'Stamped Concrete' },
           { id: 'asphalt', label: 'Asphalt' },
           { id: 'stone', label: 'Natural Stone' },
-        ],
-      },
-      {
-        id: 'scope',
-        label: 'Scope',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'full', label: 'Full Driveway' },
-          { id: 'overlay', label: 'Overlay' },
-          { id: 'repair', label: 'Repair Only' },
         ],
       },
       {

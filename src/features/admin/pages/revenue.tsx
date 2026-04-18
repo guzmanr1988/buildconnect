@@ -48,7 +48,7 @@ export default function RevenuePage() {
   const vendorBreakdown = useMemo(() => {
     const map = new Map<
       string,
-      { company: string; totalRevenue: number; appShare: number; vendorShare: number; deals: number; subActive: boolean }
+      { company: string; totalRevenue: number; appShare: number; vendorShare: number; deals: number; subActive: boolean; commissionPct: number }
     >()
 
     for (const vendor of MOCK_VENDORS) {
@@ -59,6 +59,7 @@ export default function RevenuePage() {
         vendorShare: 0,
         deals: 0,
         subActive: vendor.status === 'active',
+        commissionPct: vendor.commission_pct,
       })
     }
 
@@ -83,7 +84,7 @@ export default function RevenuePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Revenue" description="85/15 revenue model breakdown and analytics" />
+      <PageHeader title="Revenue" description="Per-vendor commission model breakdown and analytics" />
 
       {/* Model Callout */}
       <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
@@ -91,13 +92,13 @@ export default function RevenuePage() {
           <CardContent className="p-5">
             <div className="flex flex-wrap items-center justify-center gap-3 text-sm font-medium">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">85%</span>
-                <span className="text-foreground">Vendor</span>
+                <span className="inline-flex h-8 px-2 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">Custom %</span>
+                <span className="text-foreground">Vendor Share</span>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">15%</span>
-                <span className="text-foreground">BuildConnect</span>
+                <span className="inline-flex h-8 px-2 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">Per Vendor</span>
+                <span className="text-foreground">BuildConnect Fee</span>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground hidden sm:block" />
               <div className="flex items-center gap-2">
@@ -156,6 +157,21 @@ export default function RevenuePage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            {/* Total Revenue Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t">
+              <div className="rounded-lg bg-muted/50 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Total Revenue (All Vendors)</p>
+                <p className="text-xl font-bold font-heading">${vendorBreakdown.reduce((s, v) => s + v.totalRevenue, 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Total Platform Commission</p>
+                <p className="text-xl font-bold font-heading text-amber-600 dark:text-amber-400">${vendorBreakdown.reduce((s, v) => s + v.appShare, 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Total Vendor Earnings</p>
+                <p className="text-xl font-bold font-heading text-blue-600 dark:text-blue-400">${vendorBreakdown.reduce((s, v) => s + v.vendorShare, 0).toLocaleString()}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </motion.div>
@@ -186,8 +202,9 @@ export default function RevenuePage() {
                       <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
                     </span>
                   </TableHead>
-                  <TableHead className="font-semibold text-right">Platform 15%</TableHead>
-                  <TableHead className="font-semibold text-right">Vendor 85%</TableHead>
+                  <TableHead className="font-semibold text-right">Platform Fee</TableHead>
+                  <TableHead className="font-semibold text-right">Vendor Share</TableHead>
+                  <TableHead className="font-semibold text-center">Fee %</TableHead>
                   <TableHead className="font-semibold text-center">Closed Deals</TableHead>
                   <TableHead className="font-semibold text-center">Subscription</TableHead>
                 </TableRow>
@@ -206,6 +223,11 @@ export default function RevenuePage() {
                       ${v.vendorShare.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-center">{v.deals}</TableCell>
+                    <TableCell className="text-center">
+                      <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                        {v.commissionPct}%
+                      </span>
+                    </TableCell>
                     <TableCell className="text-center">
                       <span
                         className={cn(

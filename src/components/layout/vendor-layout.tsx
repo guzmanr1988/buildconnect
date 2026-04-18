@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Bell, Menu, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,11 +14,12 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/vendor', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/vendor/leads', icon: Inbox, label: 'Lead Inbox' },
+  { to: '/vendor/leads', icon: Inbox, label: 'Projects' },
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
   { to: '/vendor/messages', icon: MessageCircle, label: 'Messages' },
+  { to: '/vendor/profile', icon: User, label: 'Profile' },
 ]
 
 function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
@@ -46,6 +48,7 @@ export function VendorLayout() {
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
   const { sidebarCollapsed, toggleSidebarCollapsed } = useUIStore()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,36 +65,22 @@ export function VendorLayout() {
             </Button>
           </div>
           <SidebarNav collapsed={sidebarCollapsed} />
-          <div className="absolute bottom-4 left-0 right-0 px-3">
-            <NavLink to="/vendor/profile">
-              {({ isActive }) => (
-                <div className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  sidebarCollapsed && 'justify-center px-2'
-                )}>
-                  <User className="h-4.5 w-4.5 shrink-0" />
-                  {!sidebarCollapsed && <span>Profile</span>}
-                </div>
-              )}
-            </NavLink>
-          </div>
         </aside>
       )}
 
       {/* Main area */}
       <div className={cn(!isMobile && (sidebarCollapsed ? 'ml-[4.5rem]' : 'ml-64'), 'transition-all duration-200')}>
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
+        <header className="sticky top-0 z-20 flex h-12 sm:h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
           <div className="flex items-center gap-3">
             {isMobile && (
-              <Sheet>
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0 pt-4">
-                  <div className="px-4 mb-4"><Logo /></div>
-                  <SidebarNav collapsed={false} />
+                <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
+                  <div className="px-3 mb-3"><Logo /></div>
+                  <SidebarNav collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
                 </SheetContent>
               </Sheet>
             )}
@@ -108,7 +97,7 @@ export function VendorLayout() {
         </header>
 
         {/* Content */}
-        <main className="p-4 sm:p-6">
+        <main className="p-3 sm:p-6 w-full overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

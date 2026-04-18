@@ -9,9 +9,15 @@ import {
   Link2,
   Plus,
   Send,
+  Users,
+  RefreshCw,
+  Calendar,
+  Pencil,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -117,6 +123,12 @@ const disbursementHistory = [
   { id: 'dis-2', vendor: 'Apex Roofing & Solar', amount: 24225, memo: 'Monthly payout - pending', date: '2026-04-15', status: 'pending' as const },
 ]
 
+// Mock salary history
+const salaryHistory = [
+  { id: 'sal-1', employee: 'Jonathan Bode', role: 'CEO', amount: 8500, period: 'March 2026', date: '2026-03-30', status: 'paid' as const },
+  { id: 'sal-2', employee: 'Jonathan Bode', role: 'CEO', amount: 8500, period: 'April 2026', date: '2026-04-30', status: 'pending' as const },
+]
+
 export default function BankingPage() {
   const [bankForm, setBankForm] = useState({
     bankName: '',
@@ -139,33 +151,74 @@ export default function BankingPage() {
     memo: '',
   })
 
+  const [salaryForm, setSalaryForm] = useState({
+    employeeName: '',
+    role: '',
+    amount: '',
+    period: '',
+  })
+
+  const [autoPayments, setAutoPayments] = useState([
+    { id: 'ap-1', name: 'Vendor Payouts', description: 'Automatic monthly vendor payouts on the 15th', frequency: 'Monthly', day: 15, enabled: true, type: 'vendor' as const, totalPaid: 34425 },
+    { id: 'ap-2', name: 'Salary — Jonathan Bode', description: 'CEO monthly salary payout', frequency: 'Monthly', day: 30, amount: 8500, enabled: true, type: 'salary' as const, totalPaid: 8500 },
+    { id: 'ap-3', name: 'Membership Collection', description: 'Auto-collect vendor subscription fees on the 1st', frequency: 'Monthly', day: 1, enabled: false, type: 'collection' as const, totalPaid: 140 },
+  ])
+
+  const [editingAP, setEditingAP] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', description: '', frequency: '', day: '', amount: '' })
+
+  const toggleAutoPay = (id: string) => {
+    setAutoPayments((prev) =>
+      prev.map((ap) => (ap.id === id ? { ...ap, enabled: !ap.enabled } : ap))
+    )
+  }
+
+  const startEditAP = (ap: typeof autoPayments[0]) => {
+    setEditForm({ name: ap.name, description: ap.description, frequency: ap.frequency, day: String(ap.day), amount: ap.amount ? String(ap.amount) : '' })
+    setEditingAP(ap.id)
+  }
+
+  const saveEditAP = () => {
+    if (!editingAP) return
+    setAutoPayments((prev) => prev.map((ap) =>
+      ap.id === editingAP ? { ...ap, name: editForm.name, description: editForm.description, frequency: editForm.frequency, day: Number(editForm.day), amount: editForm.amount ? Number(editForm.amount) : undefined } : ap
+    ))
+    setEditingAP(null)
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Banking & Payouts" description="Manage platform finances, deposits, and vendor payouts" />
 
       <Tabs defaultValue="overview">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="overview" className="gap-1.5">
-            <Landmark className="h-3.5 w-3.5" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="link-bank" className="gap-1.5">
-            <Link2 className="h-3.5 w-3.5" />
-            Link Bank
-          </TabsTrigger>
-          <TabsTrigger value="deposits" className="gap-1.5">
-            <ArrowDownToLine className="h-3.5 w-3.5" />
-            Deposits
-          </TabsTrigger>
-          <TabsTrigger value="disbursements" className="gap-1.5">
-            <ArrowUpFromLine className="h-3.5 w-3.5" />
-            Disbursements
-          </TabsTrigger>
-          <TabsTrigger value="ledger" className="gap-1.5">
-            <BookOpen className="h-3.5 w-3.5" />
-            Ledger
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
+          <TabsList className="w-max sm:w-auto h-auto p-1 gap-1">
+            <TabsTrigger value="overview" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <Landmark className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="link-bank" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <Link2 className="h-4 w-4" />
+              Bank
+            </TabsTrigger>
+            <TabsTrigger value="deposits" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <ArrowDownToLine className="h-4 w-4" />
+              Deposits
+            </TabsTrigger>
+            <TabsTrigger value="disbursements" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <ArrowUpFromLine className="h-4 w-4" />
+              Payouts
+            </TabsTrigger>
+            <TabsTrigger value="ledger" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <BookOpen className="h-4 w-4" />
+              Ledger
+            </TabsTrigger>
+            <TabsTrigger value="autopay" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
+              <RefreshCw className="h-4 w-4" />
+              Auto Pay
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Overview Tab ── */}
         <TabsContent value="overview" className="space-y-6 mt-6">
@@ -560,84 +613,408 @@ export default function BankingPage() {
               </CardContent>
             </Card>
           </motion.div>
-        </TabsContent>
 
-        {/* ── Ledger Tab ── */}
-        <TabsContent value="ledger" className="mt-6">
-          <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
+          {/* Salary Payouts */}
+          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
+            <Card className="rounded-xl shadow-sm hover:shadow-md transition max-w-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  Salary Payout
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Employee Name</Label>
+                    <Input
+                      placeholder="Full name"
+                      value={salaryForm.employeeName}
+                      onChange={(e) => setSalaryForm((p) => ({ ...p, employeeName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role / Title</Label>
+                    <Input
+                      placeholder="e.g. CEO, Manager"
+                      value={salaryForm.role}
+                      onChange={(e) => setSalaryForm((p) => ({ ...p, role: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Amount</Label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={salaryForm.amount}
+                      onChange={(e) => setSalaryForm((p) => ({ ...p, amount: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pay Period</Label>
+                    <Input
+                      placeholder="e.g. April 2026"
+                      value={salaryForm.period}
+                      onChange={(e) => setSalaryForm((p) => ({ ...p, period: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <Button className="w-full gap-2">
+                  <Send className="h-4 w-4" />
+                  Send Salary Payout
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible">
             <Card className="rounded-xl shadow-sm hover:shadow-md transition">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  Full Transaction Ledger
+                  <Users className="h-4 w-4 text-primary" />
+                  Salary Payout History
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">ID</TableHead>
-                      <TableHead className="font-semibold">Type</TableHead>
-                      <TableHead className="font-semibold">Company</TableHead>
-                      <TableHead className="font-semibold">Detail</TableHead>
-                      <TableHead className="font-semibold">Customer</TableHead>
-                      <TableHead className="font-semibold text-right">Amount</TableHead>
-                      <TableHead className="font-semibold">Date</TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[...MOCK_TRANSACTIONS]
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .map((tx) => (
-                        <TableRow key={tx.id}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
-                          <TableCell>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                TYPE_CONFIG[tx.type].className
-                              )}
-                            >
-                              {TYPE_CONFIG[tx.type].label}
-                            </span>
-                          </TableCell>
-                          <TableCell className="font-medium">{tx.company}</TableCell>
-                          <TableCell className="text-muted-foreground max-w-[160px] truncate">
-                            {tx.detail}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{tx.customer || '--'}</TableCell>
-                          <TableCell className="text-right font-semibold">
-                            ${tx.amount.toLocaleString()}
-                          </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold">Employee</TableHead>
+                        <TableHead className="font-semibold">Role</TableHead>
+                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                        <TableHead className="font-semibold">Period</TableHead>
+                        <TableHead className="font-semibold">Date</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {salaryHistory.map((sal) => (
+                        <TableRow key={sal.id}>
+                          <TableCell className="font-medium">{sal.employee}</TableCell>
+                          <TableCell className="text-muted-foreground">{sal.role}</TableCell>
+                          <TableCell className="text-right font-semibold">${sal.amount.toLocaleString()}</TableCell>
+                          <TableCell className="text-muted-foreground">{sal.period}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            {new Date(tx.date).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
+                            {new Date(sal.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </TableCell>
                           <TableCell>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                STATUS_CONFIG[tx.status].className
-                              )}
-                            >
-                              {STATUS_CONFIG[tx.status].label}
+                            <span className={cn(
+                              'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                              sal.status === 'paid'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                            )}>
+                              {sal.status === 'paid' ? 'Paid' : 'Pending'}
                             </span>
                           </TableCell>
                         </TableRow>
                       ))}
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         </TabsContent>
+
+        {/* ── Ledger Tab ── */}
+        <TabsContent value="ledger" className="space-y-6 mt-6">
+          {(() => {
+            // Group transactions by month
+            const sorted = [...MOCK_TRANSACTIONS].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            const byMonth = new Map<string, typeof MOCK_TRANSACTIONS>()
+            for (const tx of sorted) {
+              const d = new Date(tx.date)
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+              if (!byMonth.has(key)) byMonth.set(key, [])
+              byMonth.get(key)!.push(tx)
+            }
+
+            return Array.from(byMonth.entries()).map(([monthKey, txs], idx) => {
+              const monthDate = new Date(monthKey + '-01')
+              const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+              const monthTotal = txs.reduce((s, t) => s + t.amount, 0)
+              const commTotal = txs.filter((t) => t.type === 'commission').reduce((s, t) => s + t.amount, 0)
+              const memTotal = txs.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0)
+              const payTotal = txs.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0)
+
+              return (
+                <motion.div key={monthKey} custom={idx} variants={fadeUp} initial="hidden" animate="visible">
+                  <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-primary" />
+                          <span>{monthLabel}</span>
+                          <span className="text-sm font-normal text-muted-foreground">({txs.length} transactions)</span>
+                        </div>
+                        <span className="text-lg font-bold">${monthTotal.toLocaleString()}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Month summary */}
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        {commTotal > 0 && (
+                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 p-2 text-center">
+                            <p className="text-[10px] text-muted-foreground">Commissions</p>
+                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">${commTotal.toLocaleString()}</p>
+                          </div>
+                        )}
+                        {memTotal > 0 && (
+                          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-2 text-center">
+                            <p className="text-[10px] text-muted-foreground">Memberships</p>
+                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">${memTotal.toLocaleString()}</p>
+                          </div>
+                        )}
+                        {payTotal > 0 && (
+                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-2 text-center">
+                            <p className="text-[10px] text-muted-foreground">Payouts</p>
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">${payTotal.toLocaleString()}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="font-semibold">ID</TableHead>
+                              <TableHead className="font-semibold">Type</TableHead>
+                              <TableHead className="font-semibold">Company</TableHead>
+                              <TableHead className="font-semibold">Detail</TableHead>
+                              <TableHead className="font-semibold text-right">Amount</TableHead>
+                              <TableHead className="font-semibold">Date</TableHead>
+                              <TableHead className="font-semibold">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {txs.map((tx) => (
+                              <TableRow key={tx.id}>
+                                <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
+                                <TableCell>
+                                  <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', TYPE_CONFIG[tx.type].className)}>
+                                    {TYPE_CONFIG[tx.type].label}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="font-medium">{tx.company}</TableCell>
+                                <TableCell className="text-muted-foreground max-w-[160px] truncate">{tx.detail}</TableCell>
+                                <TableCell className="text-right font-semibold">${tx.amount.toLocaleString()}</TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </TableCell>
+                                <TableCell>
+                                  <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_CONFIG[tx.status].className)}>
+                                    {STATUS_CONFIG[tx.status].label}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="bg-muted/30 border-t-2">
+                              <TableCell colSpan={4} className="font-semibold text-right">Month Total</TableCell>
+                              <TableCell className="text-right font-bold text-base">${monthTotal.toLocaleString()}</TableCell>
+                              <TableCell colSpan={2} />
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })
+          })()}
+        </TabsContent>
+
+        {/* ── Auto Pay Tab ── */}
+        <TabsContent value="autopay" className="space-y-6 mt-6">
+          <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
+            <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-primary" />
+                  Automatic Payments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Schedule recurring payments and toggle them on or off. Enabled payments will process automatically on their scheduled day.
+                </p>
+                <div className="space-y-3">
+                  {autoPayments.map((ap) => (
+                    <div
+                      key={ap.id}
+                      className={cn(
+                        'rounded-xl border p-4 flex items-center gap-4 transition',
+                        ap.enabled
+                          ? 'bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-800/40'
+                          : 'bg-muted/30 border-border'
+                      )}
+                    >
+                      <div className={cn(
+                        'rounded-full p-2',
+                        ap.enabled ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-muted'
+                      )}>
+                        {ap.type === 'vendor' ? (
+                          <ArrowUpFromLine className={cn('h-4 w-4', ap.enabled ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        ) : ap.type === 'salary' ? (
+                          <Users className={cn('h-4 w-4', ap.enabled ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        ) : (
+                          <DollarSign className={cn('h-4 w-4', ap.enabled ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{ap.name}</p>
+                          <span className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                            ap.enabled
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                              : 'bg-muted text-muted-foreground'
+                          )}>
+                            {ap.enabled ? 'Active' : 'Disabled'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{ap.description}</p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {ap.frequency} · Day {ap.day}
+                          </span>
+                          {ap.amount && (
+                            <span className="text-xs font-medium text-foreground">${ap.amount.toLocaleString()}</span>
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Total Paid: ${ap.totalPaid.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center gap-2 shrink-0">
+                        <Switch
+                          checked={ap.enabled}
+                          onCheckedChange={() => toggleAutoPay(ap.id)}
+                        />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEditAP(ap)}>
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Add New Auto Payment */}
+          <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
+            <Card className="rounded-xl shadow-sm hover:shadow-md transition max-w-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-primary" />
+                  Add Automatic Payment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Payment Name</Label>
+                  <Input placeholder="e.g. Monthly Vendor Payout" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vendor">Vendor Payout</SelectItem>
+                      <SelectItem value="salary">Salary Payout</SelectItem>
+                      <SelectItem value="collection">Fee Collection</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Frequency</Label>
+                    <Select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="biweekly">Bi-Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Day of Month</Label>
+                    <Input type="number" min={1} max={28} placeholder="1-28" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount (optional — leave blank for variable)</Label>
+                  <Input type="number" placeholder="0.00" />
+                </div>
+                <Button className="w-full gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Auto Payment
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
       </Tabs>
+
+      {/* Edit Auto Payment Dialog */}
+      <Dialog open={!!editingAP} onOpenChange={(open) => !open && setEditingAP(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-primary" />
+              Edit Auto Payment
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Payment Name</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select value={editForm.frequency} onValueChange={(val) => setEditForm((p) => ({ ...p, frequency: val }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Weekly">Weekly</SelectItem>
+                    <SelectItem value="Bi-Weekly">Bi-Weekly</SelectItem>
+                    <SelectItem value="Monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Day</Label>
+                <Input type="number" min={1} max={28} value={editForm.day} onChange={(e) => setEditForm((p) => ({ ...p, day: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (leave blank for variable)</Label>
+              <Input type="number" placeholder="0.00" value={editForm.amount} onChange={(e) => setEditForm((p) => ({ ...p, amount: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEditingAP(null)}>Cancel</Button>
+            <Button onClick={saveEditAP}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

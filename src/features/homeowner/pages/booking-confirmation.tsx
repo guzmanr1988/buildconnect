@@ -1,11 +1,60 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, FileText, ArrowRight, Home } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { useCartStore } from '@/stores/cart-store'
+import { useProjectsStore } from '@/stores/projects-store'
 
 export function BookingConfirmationPage() {
   const navigate = useNavigate()
+  const removeItem = useCartStore((s) => s.removeItem)
+  const sendProject = useProjectsStore((s) => s.sendProject)
+  const [details, setDetails] = useState<{ service: string; vendor: string; date: string; time: string }>({
+    service: 'Full Roof Replacement',
+    vendor: 'Apex Roofing & Solar',
+    date: 'April 14, 2026',
+    time: '9:00 AM',
+  })
+
+  useEffect(() => {
+    const pendingItemStr = localStorage.getItem('buildconnect-pending-item')
+    const contractorStr = localStorage.getItem('buildconnect-selected-contractor')
+    const bookingStr = localStorage.getItem('buildconnect-selected-booking')
+
+    if (pendingItemStr && contractorStr && bookingStr) {
+      try {
+        const pendingItem = JSON.parse(pendingItemStr)
+        const contractor = JSON.parse(contractorStr)
+        const booking = JSON.parse(bookingStr)
+        const homeownerStr = localStorage.getItem('buildconnect-homeowner-info')
+        const homeowner = homeownerStr ? JSON.parse(homeownerStr) : undefined
+
+        setDetails({
+          service: pendingItem.serviceName,
+          vendor: contractor.company,
+          date: booking.date,
+          time: booking.time,
+        })
+
+        // Get ID document
+        const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
+
+        // Move item from cart to sent projects
+        sendProject(pendingItem, contractor, booking, homeowner, idDoc)
+        removeItem(pendingItem.id)
+
+        // Clean up
+        localStorage.removeItem('buildconnect-pending-item')
+        localStorage.removeItem('buildconnect-selected-contractor')
+        localStorage.removeItem('buildconnect-selected-booking')
+        localStorage.removeItem('buildconnect-homeowner-info')
+      } catch {
+        // Silently handle corrupted localStorage
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
@@ -37,19 +86,19 @@ export function BookingConfirmationPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Service</span>
-              <span className="font-medium text-foreground">Full Roof Replacement</span>
+              <span className="font-medium text-foreground">{details.service}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Vendor</span>
-              <span className="font-medium text-foreground">Apex Roofing & Solar</span>
+              <span className="font-medium text-foreground">{details.vendor}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Date</span>
-              <span className="font-medium text-foreground">April 14, 2026</span>
+              <span className="font-medium text-foreground">{details.date}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Time</span>
-              <span className="font-medium text-foreground">9:00 AM</span>
+              <span className="font-medium text-foreground">{details.time}</span>
             </div>
           </CardContent>
         </Card>
@@ -66,7 +115,7 @@ export function BookingConfirmationPage() {
           </div>
           <p className="text-sm text-foreground text-left">
             <span className="font-medium">Project Pack</span>{' '}
-            <span className="text-muted-foreground">has been sent to Apex Roofing & Solar with your project details.</span>
+            <span className="text-muted-foreground">has been sent to {details.vendor} with your project details.</span>
           </p>
         </motion.div>
 
@@ -84,10 +133,10 @@ export function BookingConfirmationPage() {
           <Button
             size="lg"
             className="flex-1 h-11 gap-2 text-sm"
-            onClick={() => navigate('/home')}
+            onClick={() => navigate('/home/cart')}
           >
             <Home className="h-4 w-4" />
-            Back to Home
+            View Cart
           </Button>
         </div>
       </motion.div>

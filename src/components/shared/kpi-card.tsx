@@ -16,20 +16,20 @@ interface KpiCardProps {
 export function KpiCard({ title, value, change, trend, icon: Icon, iconColor, className }: KpiCardProps) {
   return (
     <Card className={cn('relative overflow-hidden transition-shadow hover:shadow-md', className)}>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold tracking-tight font-heading">{value}</p>
+      <CardContent className="p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="space-y-0.5 min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground truncate">{title}</p>
+            <p className="text-2xl font-medium tracking-tight font-heading text-foreground">{value}</p>
             {change && (
-              <div className={cn('flex items-center gap-1 text-xs font-medium', trend === 'up' ? 'text-success' : 'text-destructive')}>
-                {trend === 'up' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              <div className={cn('flex items-center gap-1 text-[10px] font-medium', trend === 'up' ? 'text-success' : 'text-destructive')}>
+                {trend === 'up' ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                 {change}
               </div>
             )}
           </div>
-          <div className={cn('rounded-xl p-2.5', iconColor || 'bg-primary/10')}>
-            <Icon className={cn('h-5 w-5', iconColor ? 'text-white' : 'text-primary')} />
+          <div className={cn('rounded-lg p-2 shrink-0', iconColor || 'bg-primary/10')}>
+            <Icon className={cn('h-4 w-4', iconColor ? 'text-white' : 'text-primary')} />
           </div>
         </div>
       </CardContent>

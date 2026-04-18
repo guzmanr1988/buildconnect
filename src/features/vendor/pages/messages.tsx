@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_MESSAGES, MOCK_LEADS, MOCK_HOMEOWNERS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { cn } from '@/lib/utils'
 import type { Message, Lead } from '@/types'
 
@@ -39,6 +40,11 @@ const QUICK_REPLIES = [
 export default function VendorMessages() {
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
 
+  // Admin messages from shared store — single hook call to avoid hook count issues
+  const adminStore = useAdminMessagesStore()
+  const adminMessages = useMemo(() => adminStore.messages.filter((m) => m.vendorId === VENDOR_ID), [adminStore.messages])
+  const addAdminMessage = adminStore.addMessage
+
   // Get all leads for this vendor that have messages
   const vendorLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
   const leadIds = useMemo(() => new Set(vendorLeads.map((l) => l.id)), [vendorLeads])
@@ -52,7 +58,9 @@ export default function VendorMessages() {
       .filter(Boolean)
   }, [relevantMessages, vendorLeads])
 
-  const [activeLead, setActiveLead] = useState<Lead | null>(threadLeads[0] || null)
+  // "admin" is a special thread ID for admin conversations
+  const [activeThread, setActiveThread] = useState<string>('admin')
+  const activeLead = activeThread !== 'admin' ? (threadLeads.find((l) => l.id === activeThread) || null) : null
   const [messages, setMessages] = useState<Message[]>(relevantMessages)
   const [input, setInput] = useState('')
   const [quoteOpen, setQuoteOpen] = useState(false)
@@ -60,18 +68,33 @@ export default function VendorMessages() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const activeMessages = useMemo(
-    () => (activeLead ? messages.filter((m) => m.lead_id === activeLead.id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : []),
-    [messages, activeLead]
+    () => {
+      if (activeThread === 'admin') return [] // Admin messages handled separately
+      return activeLead ? messages.filter((m) => m.lead_id === activeLead.id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : []
+    },
+    [messages, activeLead, activeThread]
   )
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [activeMessages.length])
+  }, [activeMessages.length, adminMessages.length, activeThread])
 
   const sendMessage = (text: string) => {
-    if (!text.trim() || !activeLead) return
+    if (!text.trim()) return
+    if (activeThread === 'admin') {
+      addAdminMessage({
+        vendorId: VENDOR_ID,
+        senderId: VENDOR_ID,
+        senderName: vendor.name,
+        content: text.trim(),
+        isAdmin: false,
+      })
+      setInput('')
+      return
+    }
+    if (!activeLead) return
     const newMsg: Message = {
       id: `m-new-${Date.now()}`,
       lead_id: activeLead.id,
@@ -132,49 +155,145 @@ export default function VendorMessages() {
             <CardTitle className="text-sm font-heading">Conversations</CardTitle>
           </CardHeader>
           <CardContent className="p-2">
-            {threadLeads.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6">No conversations yet</p>
-            ) : (
-              <div className="space-y-1">
-                {threadLeads.map((lead) => {
-                  const lastMsg = messages
-                    .filter((m) => m.lead_id === lead.id)
-                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-                  const isActive = activeLead?.id === lead.id
-                  return (
-                    <button
-                      key={lead.id}
-                      onClick={() => setActiveLead(lead)}
-                      className={cn(
-                        'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-muted/80',
-                        isActive && 'bg-muted'
-                      )}
-                    >
-                      <AvatarInitials
-                        initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
-                        color="#64748b"
-                        size="sm"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{lead.homeowner_name}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {lastMsg?.message_type === 'quote' ? 'Quote sent' : lastMsg?.content || 'No messages'}
-                        </p>
-                      </div>
-                      {lastMsg && (
-                        <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastMsg.created_at)}</span>
-                      )}
-                    </button>
-                  )
-                })}
+            <div className="space-y-1">
+              {/* Admin Section */}
+              <div className="px-3 pt-2 pb-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Platform</p>
               </div>
-            )}
+              {(() => {
+                const lastAdminMsg = adminMessages.length > 0 ? adminMessages[adminMessages.length - 1] : null
+                return (
+                  <button
+                    onClick={() => setActiveThread('admin')}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-muted/80',
+                      activeThread === 'admin' && 'bg-muted'
+                    )}
+                  >
+                    <AvatarInitials initials="BC" color="#1e40af" size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">BuildConnect Admin</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {lastAdminMsg ? (lastAdminMsg.isAdmin ? `Admin: ${lastAdminMsg.content}` : lastAdminMsg.content) : 'No messages yet'}
+                      </p>
+                    </div>
+                    {lastAdminMsg && (
+                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastAdminMsg.timestamp)}</span>
+                    )}
+                  </button>
+                )
+              })()}
+
+              {/* Homeowner Section */}
+              {threadLeads.length > 0 && (
+                <>
+                  <div className="border-t my-2" />
+                  <div className="px-3 pt-1 pb-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Homeowners</p>
+                  </div>
+                </>
+              )}
+              {threadLeads.map((lead) => {
+                const lastMsg = messages
+                  .filter((m) => m.lead_id === lead.id)
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                const isActive = activeThread === lead.id
+                return (
+                  <button
+                    key={lead.id}
+                    onClick={() => setActiveThread(lead.id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-muted/80',
+                      isActive && 'bg-muted'
+                    )}
+                  >
+                    <AvatarInitials
+                      initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                      color="#64748b"
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{lead.homeowner_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {lastMsg?.message_type === 'quote' ? 'Quote sent' : lastMsg?.content || 'No messages'}
+                      </p>
+                    </div>
+                    {lastMsg && (
+                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastMsg.created_at)}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
 
         {/* Chat Area */}
         <Card className="rounded-xl shadow-sm flex flex-col">
-          {activeLead ? (
+          {activeThread === 'admin' ? (
+            <>
+              {/* Admin Chat Header */}
+              <div className="flex items-center gap-3 p-4 border-b">
+                <AvatarInitials initials="BC" color="#1e40af" size="sm" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">BuildConnect Admin</p>
+                  <p className="text-xs text-muted-foreground">Platform Administration</p>
+                </div>
+              </div>
+
+              {/* Admin Messages */}
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: '420px' }}>
+                {adminMessages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                    <p className="text-sm text-muted-foreground">No messages from admin yet</p>
+                  </div>
+                ) : (
+                  [...adminMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((msg) => {
+                    const fromVendor = !msg.isAdmin
+                    return (
+                      <div key={msg.id} className={cn('flex', fromVendor ? 'justify-end' : 'justify-start')}>
+                        <div
+                          className={cn(
+                            'max-w-[80%] rounded-2xl px-4 py-2.5',
+                            fromVendor
+                              ? 'bg-primary text-primary-foreground rounded-br-md'
+                              : 'bg-muted rounded-bl-md'
+                          )}
+                        >
+                          <p className="text-sm">{msg.content}</p>
+                          <p className={cn('text-[10px] mt-1', fromVendor ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                            {fmtTime(msg.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Input */}
+              <div className="p-4 border-t">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    sendMessage(input)
+                  }}
+                  className="flex gap-2"
+                >
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Reply to admin..."
+                    className="flex-1"
+                  />
+                  <Button type="submit" size="icon" disabled={!input.trim()}>
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </div>
+            </>
+          ) : activeLead ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center gap-3 p-4 border-b">

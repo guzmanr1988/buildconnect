@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   DollarSign,
@@ -11,28 +12,23 @@ import {
   Layers,
   Banknote,
   ArrowUpRight,
+  Home,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
 import { KpiCard } from '@/components/shared/kpi-card'
 import {
   MOCK_VENDORS,
+  MOCK_HOMEOWNERS,
   MOCK_CLOSED_SALES,
   MOCK_TRANSACTIONS,
   MOCK_SETTINGS,
 } from '@/lib/mock-data'
-import type { AppSettings, TransactionType, TransactionStatus } from '@/types'
+import type { AppSettings } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -47,54 +43,10 @@ const totalGMV = MOCK_CLOSED_SALES.reduce((s, c) => s + c.sale_amount, 0)
 const appRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
 const subscriptionRevenue = MOCK_VENDORS.length * MOCK_SETTINGS.subscription_fee
 const activeVendors = MOCK_VENDORS.filter((v) => v.status === 'active').length
-
-function txTypeBadge(type: TransactionType) {
-  const map: Record<TransactionType, { label: string; className: string }> = {
-    commission: {
-      label: 'Commission',
-      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-    },
-    membership: {
-      label: 'Membership',
-      className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    },
-    payout: {
-      label: 'Payout',
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    },
-  }
-  const cfg = map[type]
-  return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', cfg.className)}>
-      {cfg.label}
-    </span>
-  )
-}
-
-function txStatusBadge(status: TransactionStatus) {
-  const map: Record<TransactionStatus, { label: string; className: string }> = {
-    paid: {
-      label: 'Paid',
-      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-    },
-    closed: {
-      label: 'Closed',
-      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-    },
-    pending: {
-      label: 'Pending',
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    },
-  }
-  const cfg = map[status]
-  return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', cfg.className)}>
-      {cfg.label}
-    </span>
-  )
-}
+const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').length
 
 export default function OverviewPage() {
+  const navigate = useNavigate()
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
 
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
@@ -104,10 +56,6 @@ export default function OverviewPage() {
     { key: 'financing_enabled', label: 'Financing Options', icon: Banknote },
   ]
 
-  const recentTransactions = [...MOCK_TRANSACTIONS]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5)
-
   const vendorPct = 85
   const platformPct = 15
 
@@ -116,7 +64,7 @@ export default function OverviewPage() {
       <PageHeader title="Admin Overview" description="Platform performance at a glance" />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="kpi-grid grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
         {[
           {
             title: 'Total GMV',
@@ -149,9 +97,27 @@ export default function OverviewPage() {
             trend: 'up' as const,
             icon: Users,
             iconColor: 'bg-violet-500',
+            link: '/admin/vendors',
+          },
+          {
+            title: 'Active Homeowners',
+            value: activeHomeowners.toString(),
+            change: `${MOCK_HOMEOWNERS.length} total`,
+            trend: 'up' as const,
+            icon: Home,
+            iconColor: 'bg-cyan-500',
+            link: '/admin/homeowners',
           },
         ].map((kpi, i) => (
-          <motion.div key={kpi.title} custom={i} variants={fadeUp} initial="hidden" animate="visible">
+          <motion.div
+            key={kpi.title}
+            custom={i}
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            onClick={kpi.link ? () => navigate(kpi.link!) : undefined}
+            className={kpi.link ? 'cursor-pointer' : ''}
+          >
             <KpiCard {...kpi} />
           </motion.div>
         ))}
@@ -240,47 +206,68 @@ export default function OverviewPage() {
         </motion.div>
       </div>
 
-      {/* Recent Transactions */}
+      {/* Transaction Totals */}
       <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible">
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ArrowUpRight className="h-4 w-4 text-primary" />
-              Recent Transactions
+              Transactions
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold">Type</TableHead>
-                  <TableHead className="font-semibold">Company</TableHead>
-                  <TableHead className="font-semibold">Detail</TableHead>
-                  <TableHead className="font-semibold text-right">Amount</TableHead>
-                  <TableHead className="font-semibold">Date</TableHead>
-                  <TableHead className="font-semibold">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentTransactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>{txTypeBadge(tx.type)}</TableCell>
-                    <TableCell className="font-medium">{tx.company}</TableCell>
-                    <TableCell className="text-muted-foreground">{tx.detail}</TableCell>
-                    <TableCell className="text-right font-medium">${tx.amount.toLocaleString()}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(tx.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </TableCell>
-                    <TableCell>{txStatusBadge(tx.status)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-3">
+              {[
+                {
+                  label: 'Paid Commissions',
+                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
+                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').length,
+                  color: 'text-emerald-600 dark:text-emerald-400',
+                  bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40',
+                  icon: CheckCircle2,
+                  iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+                },
+                {
+                  label: 'Pending Commissions',
+                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').reduce((s, t) => s + t.amount, 0),
+                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').length,
+                  color: 'text-amber-600 dark:text-amber-400',
+                  bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
+                  icon: Clock,
+                  iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+                },
+                {
+                  label: 'Memberships',
+                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0),
+                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'membership').length,
+                  color: 'text-blue-600 dark:text-blue-400',
+                  bg: 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/40',
+                  icon: CreditCard,
+                  iconBg: 'bg-blue-100 dark:bg-blue-900/40',
+                },
+                {
+                  label: 'Payouts',
+                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0),
+                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').length,
+                  color: 'text-amber-600 dark:text-amber-400',
+                  bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
+                  icon: Banknote,
+                  iconBg: 'bg-amber-100 dark:bg-amber-900/40',
+                },
+              ].map((cat) => (
+                <div key={cat.label} className={cn('rounded-lg border px-4 py-3 flex items-center gap-3', cat.bg)}>
+                  <div className={cn('rounded-full p-1.5', cat.iconBg)}>
+                    <cat.icon className={cn('h-4 w-4', cat.color)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-muted-foreground">{cat.label}</p>
+                    <p className={cn('text-lg font-bold font-heading leading-tight', cat.color)}>
+                      ${cat.total.toLocaleString()}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{cat.count} txns</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

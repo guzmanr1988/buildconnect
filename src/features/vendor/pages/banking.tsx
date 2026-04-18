@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   DollarSign, Wallet, Building2, AlertTriangle, CreditCard,
-  CheckCircle2, Clock, Landmark, Plus, ShieldCheck,
+  CheckCircle2, Clock, Landmark, Plus, ShieldCheck, CreditCard as CreditCardIcon, Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ import {
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { MOCK_CLOSED_SALES, MOCK_BANK_ACCOUNTS } from '@/lib/mock-data'
+import { MOCK_CLOSED_SALES, MOCK_BANK_ACCOUNTS, MOCK_VENDORS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import type { ClosedSale, BankAccount } from '@/types'
 
@@ -38,14 +38,29 @@ function fmtDate(iso: string) {
 }
 
 export default function VendorBanking() {
+  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  const commPct = vendor.commission_pct
+  const vendorPct = 100 - commPct
   const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
-  const bankAccount = MOCK_BANK_ACCOUNTS.find((b) => b.vendor_id === VENDOR_ID)
+  const mockAccount = MOCK_BANK_ACCOUNTS.find((b) => b.vendor_id === VENDOR_ID)
+  const [bankAccounts, setBankAccounts] = useState<(BankAccount & { purpose?: string })[]>(
+    mockAccount ? [{ ...mockAccount, purpose: 'both' }] : []
+  )
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
   const [payStep, setPayStep] = useState<1 | 2>(1)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [paidSales, setPaidSales] = useState<Set<string>>(new Set())
+
+  // Cards
+  const [cards, setCards] = useState<{ id: string; name: string; last4: string; type: 'debit' | 'credit'; expiry: string }[]>([])
+  const [addCardOpen, setAddCardOpen] = useState(false)
+  const [cardName, setCardName] = useState('')
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvv, setCardCvv] = useState('')
+  const [cardType, setCardType] = useState<'debit' | 'credit'>('debit')
 
   // Bank linking form
   const [bankName, setBankName] = useState('')
@@ -97,10 +112,10 @@ export default function VendorBanking() {
           <KpiCard title="Total Sales" value={fmt(totalSales)} icon={DollarSign} iconColor="bg-primary" />
         </motion.div>
         <motion.div variants={item}>
-          <KpiCard title="Your Earnings (85%)" value={fmt(totalEarnings)} icon={Wallet} iconColor="bg-emerald-500" />
+          <KpiCard title={`Your Earnings (${vendorPct}%)`} value={fmt(totalEarnings)} icon={Wallet} iconColor="bg-emerald-500" />
         </motion.div>
         <motion.div variants={item}>
-          <KpiCard title="Commission Due (15%)" value={fmt(unpaidCommission)} icon={Building2} iconColor="bg-amber-500" />
+          <KpiCard title={`Commission Due (${commPct}%)`} value={fmt(unpaidCommission)} icon={Building2} iconColor="bg-amber-500" />
         </motion.div>
         <motion.div variants={item}>
           <KpiCard title="Paid to BuildConnect" value={fmt(paidCommission)} icon={CheckCircle2} iconColor="bg-slate-500" />
@@ -139,8 +154,8 @@ export default function VendorBanking() {
                     <TableHead className="font-semibold">Homeowner</TableHead>
                     <TableHead className="font-semibold hidden md:table-cell">Project</TableHead>
                     <TableHead className="font-semibold text-right">Sale Total</TableHead>
-                    <TableHead className="font-semibold text-right">Your 85%</TableHead>
-                    <TableHead className="font-semibold text-right">Platform 15%</TableHead>
+                    <TableHead className="font-semibold text-right">Your {vendorPct}%</TableHead>
+                    <TableHead className="font-semibold text-right">Platform {commPct}%</TableHead>
                     <TableHead className="font-semibold hidden sm:table-cell">Close Date</TableHead>
                     <TableHead className="font-semibold text-center">Status</TableHead>
                     <TableHead className="font-semibold text-center">Action</TableHead>
@@ -186,46 +201,191 @@ export default function VendorBanking() {
         </Card>
       </motion.div>
 
-      {/* Bank Account Section */}
+      {/* Bank Accounts Section */}
       <motion.div variants={item}>
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="font-heading">Bank Account</CardTitle>
-              {bankAccount && (
-                <Badge variant="outline" className="text-xs">
-                  <ShieldCheck className="h-3 w-3 mr-1" /> Linked
-                </Badge>
-              )}
+              <CardTitle className="font-heading">Bank Accounts</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setLinkDialogOpen(true)} className="text-xs gap-1">
+                <Plus className="h-3 w-3" /> Add Account
+              </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            {bankAccount ? (
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
-                <div className="rounded-xl bg-primary/10 p-3">
-                  <Landmark className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold">{bankAccount.bank_name}</p>
-                  <p className="text-sm text-muted-foreground">{bankAccount.account_holder}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {bankAccount.account_type === 'checking' ? 'Checking' : 'Savings'} ****{bankAccount.account_last4}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm">Edit</Button>
-              </div>
-            ) : (
+          <CardContent className="space-y-3">
+            {bankAccounts.length === 0 ? (
               <div className="text-center py-6">
                 <Landmark className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">No bank account linked yet</p>
+                <p className="text-sm text-muted-foreground mb-3">No bank accounts linked yet</p>
                 <Button onClick={() => setLinkDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-1" /> Link Account
                 </Button>
               </div>
+            ) : (
+              bankAccounts.map((account, idx) => (
+                <div key={account.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
+                  <div className="rounded-xl bg-primary/10 p-3 shrink-0">
+                    <Landmark className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{account.bank_name}</p>
+                      <Badge variant="outline" className="text-[10px]">
+                        <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Linked
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{account.account_holder}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {account.account_type === 'checking' ? 'Checking' : 'Savings'} ****{account.account_last4}
+                    </p>
+                    <div className="mt-2">
+                      <Select
+                        value={account.purpose || 'both'}
+                        onValueChange={(v) => {
+                          setBankAccounts((prev) => prev.map((a, i) => i === idx ? { ...a, purpose: v } : a))
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[11px] w-auto min-w-[160px]">
+                          <SelectValue placeholder="Select purpose" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="subscription" className="text-xs">Subscription Payments</SelectItem>
+                          <SelectItem value="commission" className="text-xs">Commission Payments</SelectItem>
+                          <SelectItem value="both" className="text-xs">All Payments</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-destructive hover:text-destructive shrink-0"
+                    onClick={() => setBankAccounts((prev) => prev.filter((_, i) => i !== idx))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))
             )}
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Debit/Credit Card Section */}
+      <motion.div variants={item}>
+        <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="font-heading">Debit / Credit Cards</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setAddCardOpen(true)} className="text-xs gap-1">
+                <Plus className="h-3 w-3" /> Add Card
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {cards.length === 0 ? (
+              <div className="text-center py-6">
+                <CreditCardIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">No cards added yet</p>
+                <Button variant="outline" onClick={() => setAddCardOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Add Card
+                </Button>
+              </div>
+            ) : (
+              cards.map((card) => (
+                <div key={card.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
+                  <div className="rounded-xl bg-violet-500/10 p-3 shrink-0">
+                    <CreditCardIcon className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm">{card.name}</p>
+                      <Badge variant="secondary" className="text-[10px] capitalize">{card.type}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">**** **** **** {card.last4}</p>
+                    <p className="text-xs text-muted-foreground">Exp: {card.expiry}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-destructive hover:text-destructive shrink-0"
+                    onClick={() => setCards((prev) => prev.filter((c) => c.id !== card.id))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))
+            )}
+            <p className="text-[11px] text-muted-foreground leading-relaxed pt-2 border-t border-border/50">
+              A processing fee of 3% per transaction will be applied to all payments made via debit or credit card. Bank account (ACH) transfers are fee-free.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Add Card Dialog */}
+      <Dialog open={addCardOpen} onOpenChange={setAddCardOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Add Debit / Credit Card</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Cardholder Name</Label>
+              <Input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="Name on card" />
+            </div>
+            <div className="space-y-2">
+              <Label>Card Number</Label>
+              <Input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" maxLength={19} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label>Expiry</Label>
+                <Input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/YY" maxLength={5} />
+              </div>
+              <div className="space-y-2">
+                <Label>CVV</Label>
+                <Input value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" maxLength={4} type="password" />
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={cardType} onValueChange={(v) => setCardType(v as 'debit' | 'credit')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debit">Debit</SelectItem>
+                    <SelectItem value="credit">Credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              A 3% processing fee applies to all card transactions.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddCardOpen(false)}>Cancel</Button>
+            <Button disabled={!cardName || !cardNumber || !cardExpiry || !cardCvv} onClick={() => {
+              setCards((prev) => [...prev, {
+                id: crypto.randomUUID(),
+                name: cardName,
+                last4: cardNumber.replace(/\s/g, '').slice(-4),
+                type: cardType,
+                expiry: cardExpiry,
+              }])
+              setCardName('')
+              setCardNumber('')
+              setCardExpiry('')
+              setCardCvv('')
+              setCardType('debit')
+              setAddCardOpen(false)
+            }}>
+              <CreditCardIcon className="h-4 w-4 mr-1" /> Add Card
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Pay Commission Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
@@ -271,9 +431,9 @@ export default function VendorBanking() {
                   </div>
                   <p className="text-lg font-bold font-heading">{fmt(payingSale.commission)}</p>
                   <p className="text-sm text-muted-foreground mt-1">will be sent to BuildConnect</p>
-                  {bankAccount && (
+                  {bankAccounts.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      From {bankAccount.bank_name} ****{bankAccount.account_last4}
+                      From {bankAccounts.find(a => a.purpose === 'commission' || a.purpose === 'both')?.bank_name || bankAccounts[0].bank_name} ****{bankAccounts.find(a => a.purpose === 'commission' || a.purpose === 'both')?.account_last4 || bankAccounts[0].account_last4}
                     </p>
                   )}
                 </div>
@@ -329,7 +489,25 @@ export default function VendorBanking() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-            <Button disabled={!bankName || !accountHolder || !routingNum || !accountNum} onClick={() => setLinkDialogOpen(false)}>
+            <Button disabled={!bankName || !accountHolder || !routingNum || !accountNum} onClick={() => {
+              setBankAccounts((prev) => [...prev, {
+                id: crypto.randomUUID(),
+                vendor_id: VENDOR_ID,
+                bank_name: bankName,
+                account_holder: accountHolder,
+                routing_last4: routingNum.slice(-4),
+                account_last4: accountNum.slice(-4),
+                account_type: accountType,
+                linked_at: new Date().toISOString(),
+                purpose: 'both',
+              }])
+              setBankName('')
+              setAccountHolder('')
+              setRoutingNum('')
+              setAccountNum('')
+              setAccountType('checking')
+              setLinkDialogOpen(false)
+            }}>
               <Landmark className="h-4 w-4 mr-1" /> Link Account
             </Button>
           </DialogFooter>

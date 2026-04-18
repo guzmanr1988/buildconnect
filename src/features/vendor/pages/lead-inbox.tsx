@@ -1,25 +1,37 @@
 import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  Inbox, MapPin, Phone, Mail, Ruler, FileCheck, CreditCard,
-  CalendarClock, Check, X, RotateCcw, Clock,
+  Package, ChevronDown, ChevronUp, User, MapPin, Calendar,
+  Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse,
+  Download, X, ZoomIn,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
-import { StatusBadge } from '@/components/shared/status-badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { StatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_LEADS, MOCK_AVAILABLE_SLOTS } from '@/lib/mock-data'
+import { MOCK_LEADS } from '@/lib/mock-data'
+import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
 
 const VENDOR_ID = 'v-1'
+
+const SERVICE_ICONS: Record<string, React.ElementType> = {
+  roofing: Home,
+  windows_doors: Wind,
+  pool: Droplets,
+  driveways: Car,
+  pergolas: Tent,
+  air_conditioning: Thermometer,
+  kitchen: UtensilsCrossed,
+  bathroom: Bath,
+  wall_paneling: PanelTop,
+  garage: Warehouse,
+}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -29,24 +41,44 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
 export default function LeadInbox() {
-  const leads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
-  const [selected, setSelected] = useState<Lead | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [rescheduleOpen, setRescheduleOpen] = useState(false)
-  const [rescheduleDate, setRescheduleDate] = useState('')
-  const [rescheduleTime, setRescheduleTime] = useState('')
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const mockLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
 
-  const openLead = (lead: Lead) => {
-    setSelected(lead)
-    setSheetOpen(true)
+  const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
+  const homeownerLeads: Lead[] = useMemo(() => sentProjects.map((p) => ({
+    id: `L-${p.id.slice(0, 4).toUpperCase()}`,
+    homeowner_id: 'ho-current',
+    vendor_id: VENDOR_ID,
+    homeowner_name: p.homeowner?.name || 'New Customer',
+    project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+    status: (statusMap[p.status] || 'pending') as Lead['status'],
+    value: 0,
+    address: p.homeowner?.address || 'Pending site visit',
+    phone: p.homeowner?.phone || '—',
+    email: p.homeowner?.email || '—',
+    sq_ft: 0,
+    service_category: p.item.serviceId as any,
+    permit_choice: Object.values(p.item.selections).flat().includes('permit'),
+    financing: Object.values(p.item.selections).flat().includes('financed'),
+    pack_items: p.item.selections,
+    slot: p.sentAt,
+    received_at: p.sentAt,
+  })), [sentProjects])
+
+  const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
+
+  function downloadIdDocument(dataUrl: string, customerName: string) {
+    const ext = dataUrl.startsWith('data:image/png') ? 'png' : 'jpg'
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = `${customerName.replace(/\s+/g, '_')}_ID.${ext}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
-
-  const selectedSlot = MOCK_AVAILABLE_SLOTS.find((s) => s.date === rescheduleDate)
 
   const container = {
     hidden: { opacity: 0 },
@@ -57,211 +89,340 @@ export default function LeadInbox() {
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
   }
 
+
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      <PageHeader title="Lead Inbox" description={`${leads.length} leads assigned to you`}>
-        <Badge variant="secondary" className="text-xs">{leads.filter((l) => l.status === 'pending').length} pending</Badge>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 overflow-x-hidden max-w-full">
+      <PageHeader title="Projects" description={`${leads.length} customer projects`}>
+        <Badge variant="secondary" className="text-xs">{leads.filter((l) => l.status === 'confirmed').length} active</Badge>
       </PageHeader>
 
       {leads.length === 0 ? (
-        <EmptyState icon={Inbox} title="No leads yet" description="New leads from homeowner requests will appear here." />
+        <EmptyState icon={Package} title="No projects yet" description="Customer projects will appear here once leads are confirmed." />
       ) : (
-        <div className="grid gap-3">
-          {leads.map((lead) => (
-            <motion.div key={lead.id} variants={item}>
-              <Card
-                className="rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group"
-                onClick={() => openLead(lead)}
-              >
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <AvatarInitials
-                        initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
-                        color="#64748b"
-                        size="md"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">
-                          {lead.homeowner_name}
-                        </p>
-                        <p className="text-sm text-muted-foreground truncate mt-0.5">{lead.project}</p>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+        <div className="grid gap-4">
+          {leads.map((lead) => {
+            const isExpanded = expandedId === lead.id
+            const packEntries = Object.entries(lead.pack_items)
+
+            return (
+              <motion.div key={lead.id} variants={item}>
+                <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+                  {/* Header - always visible */}
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => setExpandedId(isExpanded ? null : lead.id)}
+                  >
+                    <CardContent className="p-4 sm:p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <AvatarInitials
+                            initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                            color="#64748b"
+                            size="md"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
+                            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 break-words">{lead.project}</p>
+                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                              <StatusBadge status={lead.status} />
+                              <span className="text-xs text-muted-foreground">{fmtDate(lead.received_at)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-bold">{fmt(lead.value)}</span>
-                          <StatusBadge status={lead.status} />
+                          {isExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
+                    </CardContent>
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-4 sm:px-5 pb-5 space-y-4 border-t overflow-hidden">
+                      {/* Customer details */}
+                      <div className="flex flex-wrap gap-4 pt-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>{lead.address}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5" />
+                          <span>{lead.phone}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{lead.sq_ft.toLocaleString()} sq ft</span>
+                        </div>
+                      </div>
+
+                      {/* Project items with selections */}
+                      <Card className="rounded-lg border bg-muted/30">
+                        <CardContent className="p-3 space-y-3">
+                          <h4 className="text-sm font-semibold text-foreground">Project Details</h4>
+                          {packEntries.map(([category, selections]) => (
+                            <div key={category} className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-medium text-muted-foreground capitalize min-w-[70px]">
+                                {category.replace(/_/g, ' ')}:
+                              </span>
+                              {selections.map((selection) => (
+                                <Badge key={selection} variant="secondary" className="text-xs capitalize">
+                                  {selection.replace(/_/g, ' ')}
+                                </Badge>
+                              ))}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+
+                      {/* Window & Door Configurator with Pricing */}
+                      {(() => {
+                        const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                        if (!sp) return null
+                        return (
+                          <>
+                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
+                                <div className="flex flex-col gap-1">
+                                  {sp.item.windowSelections.map((w) => (
+                                    <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-base font-semibold text-foreground">
+                                          {w.size.replace('x', '" × ')}"
+                                        </span>
+                                        <span className="text-sm font-bold text-primary">×{w.quantity}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <Badge variant="secondary" className="text-[10px]">{w.type}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{w.frameColor}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{w.glassColor}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{w.glassType}</Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="pt-2 border-t flex items-center justify-between">
+                                  <span className="text-sm font-medium text-muted-foreground">Total Windows</span>
+                                  <span className="text-lg font-bold text-primary">
+                                    {sp.item.windowSelections.reduce((sum, w) => sum + w.quantity, 0)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
+                                <div className="flex flex-col gap-1">
+                                  {sp.item.doorSelections.map((d) => (
+                                    <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-base font-semibold text-foreground">
+                                          {d.size.replace('x', '" × ')}"
+                                        </span>
+                                        <span className="text-sm font-bold text-primary">×{d.quantity}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <Badge variant="secondary" className="text-[10px]">{d.type}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{d.frameColor}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{d.glassColor}</Badge>
+                                        <Badge variant="outline" className="text-[10px]">{d.glassType}</Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="pt-2 border-t flex items-center justify-between">
+                                  <span className="text-sm font-medium text-muted-foreground">Total Doors</span>
+                                  <span className="text-lg font-bold text-primary">
+                                    {sp.item.doorSelections.reduce((sum, d) => sum + d.quantity, 0)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            {/* Garage Door */}
+                            {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Garage Door</h4>
+                                <div className="rounded-lg bg-primary/5 px-3 py-2.5">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      {sp.item.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                                    </Badge>
+                                    {sp.item.garageDoorSelection.type === 'double_garage' && sp.item.garageDoorSelection.size && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {sp.item.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
+                                      </Badge>
+                                    )}
+                                    {sp.item.garageDoorSelection.color && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {sp.item.garageDoorSelection.color.charAt(0).toUpperCase() + sp.item.garageDoorSelection.color.slice(1)}
+                                      </Badge>
+                                    )}
+                                    {sp.item.garageDoorSelection.glass && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        Glass: {sp.item.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Metal Roof Selection */}
+                            {sp.item.metalRoofSelection && sp.item.metalRoofSelection.color && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Standing Seam Metal</h4>
+                                <div className="rounded-lg bg-primary/5 px-3 py-2.5">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Color: {sp.item.metalRoofSelection.color.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                                    </Badge>
+                                    {sp.item.metalRoofSelection.roofSize && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {Number(sp.item.metalRoofSelection.roofSize).toLocaleString()} Sq Ft
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Pool Add-on Quantities */}
+                            {sp.item.addonQuantities && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Add-on Details</h4>
+                                <div className="flex flex-col gap-2">
+                                  {sp.item.addonQuantities.ledCount > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">LED Lighting</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.ledCount}</span>
+                                    </div>
+                                  )}
+                                  {sp.item.addonQuantities.bubblerCount > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Bubbler</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.bubblerCount}</span>
+                                    </div>
+                                  )}
+                                  {sp.item.addonQuantities.laminarJets > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Laminar Jets</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.laminarJets}</span>
+                                    </div>
+                                  )}
+                                  {sp.item.addonQuantities.waterfalls > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Waterfalls</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.waterfalls}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+
+                      {/* Permit & Financing info */}
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={lead.permit_choice ? 'default' : 'secondary'} className="text-xs">
+                          Permit: {lead.permit_choice ? 'Yes' : 'No'}
+                        </Badge>
+                        <Badge variant={lead.financing ? 'default' : 'secondary'} className="text-xs">
+                          Financing: {lead.financing ? 'Requested' : 'Not needed'}
+                        </Badge>
+                      </div>
+
+                      {/* Customer photos, notes, ID */}
+                      {(() => {
+                        const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                        if (!sp) return null
+                        return (
+                          <>
+                            {sp.idDocument && lead.status === 'confirmed' && (
+                              <div className="rounded-lg border bg-muted/30 p-3">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Customer ID</p>
+                                <div className="flex items-end gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setIdPreview({ dataUrl: sp.idDocument!, name: lead.homeowner_name }) }}
+                                    className="relative group w-20 h-14 rounded-lg overflow-hidden border cursor-pointer"
+                                  >
+                                    <img src={sp.idDocument} alt="Customer ID" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                      <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                  </button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs gap-1.5"
+                                    onClick={(e) => { e.stopPropagation(); downloadIdDocument(sp.idDocument!, lead.homeowner_name) }}
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {sp.item.itemNotes && (
+                              <div className="rounded-lg border bg-muted/30 p-3">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">Customer Notes</p>
+                                <p className="text-xs text-foreground">{sp.item.itemNotes}</p>
+                              </div>
+                            )}
+                            {sp.item.itemPhotos && sp.item.itemPhotos.length > 0 && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Project Photos</p>
+                                <div className="flex gap-2 flex-wrap">
+                                  {sp.item.itemPhotos.map((photo: string, idx: number) => (
+                                    <div key={idx} className="w-14 h-14 rounded-lg overflow-hidden border">
+                                      <img src={photo} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-muted-foreground">{fmtDate(lead.received_at)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{lead.id}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  )}
+                </Card>
+              </motion.div>
+            )
+          })}
         </div>
       )}
-
-      {/* Lead Detail Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selected && (
-            <div className="space-y-6">
-              <SheetHeader>
-                <SheetTitle className="font-heading">{selected.project}</SheetTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <StatusBadge status={selected.status} />
-                  <span className="text-sm text-muted-foreground">{selected.id}</span>
-                </div>
-              </SheetHeader>
-
-              {/* Customer Info */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Customer Info</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2.5 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span>{selected.address}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4 shrink-0" />
-                    <span>{selected.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4 shrink-0" />
-                    <span>{selected.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Ruler className="h-4 w-4 shrink-0" />
-                    <span>{selected.sq_ft.toLocaleString()} sq ft</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Project Pack */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Project Pack</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <FileCheck className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>Permit: {selected.permit_choice ? 'Yes (vendor handles)' : 'No'}</span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1.5">Service Selections</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(selected.pack_items).map(([key, values]) =>
-                        values.map((v) => (
-                          <Badge key={`${key}-${v}`} variant="secondary" className="text-xs capitalize">
-                            {v.replace(/_/g, ' ')}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Appointment */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Appointment</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-medium">{fmtDateTime(selected.slot)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Value */}
-              <div className="flex items-center justify-between px-1">
-                <span className="text-sm text-muted-foreground">Estimated Value</span>
-                <span className="text-lg font-bold font-heading">{fmt(selected.value)}</span>
-              </div>
-
-              <Separator />
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" size="lg">
-                  <Check className="h-4 w-4 mr-1.5" /> Confirm
-                </Button>
-                <Button variant="destructive" className="flex-1" size="lg">
-                  <X className="h-4 w-4 mr-1.5" /> Reject
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  size="lg"
-                  onClick={() => setRescheduleOpen(true)}
-                >
-                  <RotateCcw className="h-4 w-4 mr-1.5" /> Reschedule
-                </Button>
-              </div>
+      {/* ID Document Preview Dialog */}
+      <Dialog open={!!idPreview} onOpenChange={(open) => !open && setIdPreview(null)}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <p className="text-sm font-semibold text-foreground">Customer ID — {idPreview?.name}</p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => idPreview && downloadIdDocument(idPreview.dataUrl, idPreview.name)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </Button>
+            </div>
+          </div>
+          {idPreview && (
+            <div className="px-4 pb-4">
+              <img
+                src={idPreview.dataUrl}
+                alt="Customer ID Full Size"
+                className="w-full rounded-lg border object-contain max-h-[70vh]"
+              />
             </div>
           )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Reschedule Dialog */}
-      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Reschedule Appointment</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Date</label>
-              <Select value={rescheduleDate} onValueChange={(v) => { setRescheduleDate(v); setRescheduleTime('') }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a date" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOCK_AVAILABLE_SLOTS.map((slot) => (
-                    <SelectItem key={slot.date} value={slot.date}>
-                      {new Date(slot.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {rescheduleDate && selectedSlot && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Time</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {selectedSlot.times.map((t) => (
-                    <Button
-                      key={t}
-                      variant={rescheduleTime === t ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setRescheduleTime(t)}
-                      className="text-xs"
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      {t}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancel</Button>
-            <Button disabled={!rescheduleDate || !rescheduleTime} onClick={() => setRescheduleOpen(false)}>
-              Confirm Reschedule
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </motion.div>

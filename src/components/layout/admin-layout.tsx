@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -11,12 +12,19 @@ import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
 const navItems = [
+  { to: '/admin/profile', icon: User, label: 'Profile' },
   { to: '/admin', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
+  { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/vendors', icon: Users, label: 'Vendors' },
+  { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+  { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
+  { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/admin/transactions', icon: Receipt, label: 'Transactions' },
+  { to: '/admin/reports', icon: FileText, label: 'Reports' },
   { to: '/admin/banking', icon: Landmark, label: 'Banking' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
+  { to: '/admin/workflow', icon: GitBranch, label: 'Workflow' },
+  { to: '/admin/products', icon: Package, label: 'Products' },
   { to: '/admin/bugs', icon: Bug, label: 'Bug Tracker' },
 ]
 
@@ -24,7 +32,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
       {navItems.map(({ to, icon: Icon, label }) => (
-        <NavLink key={to} to={to} end={to === '/admin'} onClick={onNavigate}>
+        <NavLink key={to} to={to} end={to === '/admin'} onClick={() => onNavigate?.()}>
           {({ isActive }) => (
             <div className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
@@ -44,6 +52,7 @@ export function AdminLayout() {
   const isMobile = useMobile()
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,13 +70,13 @@ export function AdminLayout() {
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
           <div className="flex items-center gap-3">
             {isMobile && (
-              <Sheet>
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0 pt-4">
-                  <div className="px-4 mb-4"><Logo /></div>
-                  <SidebarNav />
+                <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
+                  <div className="px-3 mb-3"><Logo /></div>
+                  <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
                 </SheetContent>
               </Sheet>
             )}

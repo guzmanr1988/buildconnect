@@ -120,7 +120,7 @@ export function VendorComparePage() {
 
                   {/* Pricing */}
                   <div className="rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Estimated Range</p>
+                    <p className="text-xs text-muted-foreground mb-1">Estimated Price</p>
                     <p className="text-lg font-bold font-heading text-foreground">
                       {pricing.low} <span className="text-muted-foreground font-normal text-sm">-</span> {pricing.high}
                     </p>
