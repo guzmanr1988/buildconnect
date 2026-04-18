@@ -3,6 +3,7 @@ import { HomeownerLayout } from '@/components/layout/homeowner-layout'
 import { VendorLayout } from '@/components/layout/vendor-layout'
 import { AdminLayout } from '@/components/layout/admin-layout'
 import { RequireAuth } from '@/router/require-auth'
+import { RootLayout } from '@/router/root-layout'
 
 // Auth
 import { LoginPage } from '@/features/auth/pages/login'
@@ -45,58 +46,68 @@ import ReportsPage from '@/features/admin/pages/reports'
 import AdminMessagesPage from '@/features/admin/pages/messages'
 
 export const router = createBrowserRouter([
-  { path: '/', element: <Navigate to="/login" replace /> },
-  { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
-
   {
-    path: '/home',
-    element: <HomeownerLayout />,
+    element: <RootLayout />,
     children: [
-      { index: true, element: <HomeownerHome /> },
-      { path: 'service/:serviceId', element: <ServiceDetailPage /> },
-      { path: 'cart', element: <CartPage /> },
-      { path: 'vendor-compare', element: <VendorComparePage /> },
-      { path: 'booking', element: <BookingCalendarPage /> },
-      { path: 'booking/confirmed', element: <BookingConfirmationPage /> },
-      { path: 'appointments/:id', element: <AppointmentStatusPage /> },
-      { path: 'messages', element: <HomeownerMessagesPage /> },
-      { path: 'profile', element: <HomeownerProfilePage /> },
-    ],
-  },
+      { path: '/', element: <Navigate to="/login" replace /> },
+      { path: '/login', element: <LoginPage />, handle: { title: 'Sign in' } },
+      { path: '/register', element: <RegisterPage />, handle: { title: 'Create account' } },
 
-  {
-    path: '/vendor',
-    element: <RequireAuth><VendorLayout /></RequireAuth>,
-    children: [
-      { index: true, element: <VendorDashboard /> },
-      { path: 'leads', element: <LeadInbox /> },
-      { path: 'calendar', element: <VendorCalendar /> },
-      { path: 'catalog', element: <VendorCatalog /> },
-      { path: 'banking', element: <VendorBanking /> },
-      { path: 'messages', element: <VendorMessages /> },
-      { path: 'profile', element: <VendorProfile /> },
-    ],
-  },
+      {
+        path: '/home',
+        element: <HomeownerLayout />,
+        handle: { title: 'Home' },
+        children: [
+          { index: true, element: <HomeownerHome /> },
+          // service-detail sets a dynamic title (service name) via useDocumentTitle
+          { path: 'service/:serviceId', element: <ServiceDetailPage /> },
+          { path: 'cart', element: <CartPage />, handle: { title: 'Cart' } },
+          { path: 'vendor-compare', element: <VendorComparePage />, handle: { title: 'Compare contractors' } },
+          { path: 'booking', element: <BookingCalendarPage />, handle: { title: 'Book a site visit' } },
+          { path: 'booking/confirmed', element: <BookingConfirmationPage />, handle: { title: 'Booking confirmed' } },
+          // appointment-status may set a dynamic title later; falls back to static here
+          { path: 'appointments/:id', element: <AppointmentStatusPage />, handle: { title: 'Appointment' } },
+          { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
+          { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
+        ],
+      },
 
-  {
-    path: '/admin',
-    element: <RequireAuth><AdminLayout /></RequireAuth>,
-    children: [
-      { index: true, element: <OverviewPage /> },
-      { path: 'revenue', element: <RevenuePage /> },
-      { path: 'vendors', element: <VendorsPage /> },
-      { path: 'messages', element: <AdminMessagesPage /> },
-      { path: 'transactions', element: <TransactionsPage /> },
-      { path: 'reports', element: <ReportsPage /> },
-      { path: 'banking', element: <BankingPage /> },
-      { path: 'settings', element: <SettingsPage /> },
-      { path: 'bugs', element: <BugsPage /> },
-      { path: 'workflow', element: <WorkflowPage /> },
-      { path: 'products', element: <ProductsAdminPage /> },
-      { path: 'users', element: <UsersPage /> },
-      { path: 'homeowners', element: <HomeownersPage /> },
-      { path: 'profile', element: <AdminProfilePage /> },
+      {
+        path: '/vendor',
+        element: <RequireAuth><VendorLayout /></RequireAuth>,
+        handle: { title: 'Vendor · Dashboard' },
+        children: [
+          { index: true, element: <VendorDashboard /> },
+          { path: 'leads', element: <LeadInbox />, handle: { title: 'Vendor · Leads' } },
+          { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
+          { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
+          { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
+          { path: 'messages', element: <VendorMessages />, handle: { title: 'Vendor · Messages' } },
+          { path: 'profile', element: <VendorProfile />, handle: { title: 'Vendor · Profile' } },
+        ],
+      },
+
+      {
+        path: '/admin',
+        element: <RequireAuth><AdminLayout /></RequireAuth>,
+        handle: { title: 'Admin · Overview' },
+        children: [
+          { index: true, element: <OverviewPage /> },
+          { path: 'revenue', element: <RevenuePage />, handle: { title: 'Admin · Revenue' } },
+          { path: 'vendors', element: <VendorsPage />, handle: { title: 'Admin · Vendors' } },
+          { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
+          { path: 'transactions', element: <TransactionsPage />, handle: { title: 'Admin · Transactions' } },
+          { path: 'reports', element: <ReportsPage />, handle: { title: 'Admin · Reports' } },
+          { path: 'banking', element: <BankingPage />, handle: { title: 'Admin · Banking' } },
+          { path: 'settings', element: <SettingsPage />, handle: { title: 'Admin · Settings' } },
+          { path: 'bugs', element: <BugsPage />, handle: { title: 'Admin · Bug tracker' } },
+          { path: 'workflow', element: <WorkflowPage />, handle: { title: 'Admin · Workflow' } },
+          { path: 'products', element: <ProductsAdminPage />, handle: { title: 'Admin · Products' } },
+          { path: 'users', element: <UsersPage />, handle: { title: 'Admin · Users' } },
+          { path: 'homeowners', element: <HomeownersPage />, handle: { title: 'Admin · Homeowners' } },
+          { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
+        ],
+      },
     ],
   },
 ])

@@ -15,6 +15,7 @@ import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+import { useDocumentTitle } from '@/hooks/use-document-title'
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -150,6 +151,8 @@ export function ServiceDetailPage() {
 
   const services = useCatalogStore((s) => s.services)
   const service = services.find((s) => s.id === serviceId)
+
+  useDocumentTitle(service?.name)
 
   if (!service) {
     return (
