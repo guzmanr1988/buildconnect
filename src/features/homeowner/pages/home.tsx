@@ -62,7 +62,7 @@ export function HomeownerHome() {
             <div className="flex items-center gap-3 mt-0.5">
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                {profile.address.split(',')[0]}
+                {profile.address?.split(',')[0]?.trim() || 'Address not set'}
               </span>
               <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3" />

@@ -1,18 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Building2, Home, Wrench, Shield, ArrowRight, Star, Users, Zap } from 'lucide-react'
+import { Eye, EyeOff, Building2, ArrowRight, Star, Users, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
-import { MOCK_HOMEOWNERS, MOCK_VENDORS, MOCK_ADMIN } from '@/lib/mock-data'
-import { cn } from '@/lib/utils'
+import { signIn } from '@/lib/auth'
 
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email address'),
@@ -27,52 +25,39 @@ const stats = [
   { icon: Zap, label: 'Projects Delivered', value: '12K+' },
 ]
 
-const demoAccounts = [
-  { role: 'homeowner' as const, label: 'Homeowner', desc: 'Browse & book services', icon: Home, gradient: 'from-blue-500 to-blue-600' },
-  { role: 'vendor' as const, label: 'Vendor', desc: 'Manage leads & sales', icon: Wrench, gradient: 'from-amber-500 to-orange-500' },
-  { role: 'admin' as const, label: 'Admin', desc: 'Platform overview', icon: Shield, gradient: 'from-emerald-500 to-emerald-600' },
-]
-
 export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
-  const { setSession, setProfile } = useAuthStore()
+  const profile = useAuthStore((s) => s.profile)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   })
 
-  function performLogin(profile: typeof MOCK_HOMEOWNERS[0]) {
-    setIsLoading(true)
-    setTimeout(() => {
-      setSession({
-        access_token: `mock-token-${profile.id}`,
-        user: { id: profile.id, email: profile.email },
-      })
-      setProfile(profile)
+  useEffect(() => {
+    if (isAuthenticated && profile) {
       const dest = profile.role === 'admin' ? '/admin' : profile.role === 'vendor' ? '/vendor' : '/home'
-      navigate(dest)
+      navigate(dest, { replace: true })
+    }
+  }, [isAuthenticated, profile, navigate])
+
+  async function onSubmit(data: LoginFormData) {
+    setIsLoading(true)
+    try {
+      await signIn(data.email, data.password)
+      // AuthBootstrap's onAuthStateChange listener hydrates the store;
+      // the useEffect above then navigates based on role.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid email or password'
+      toast.error(message)
       setIsLoading(false)
-    }, 400)
-  }
-
-  function onSubmit(data: LoginFormData) {
-    const allUsers = [...MOCK_HOMEOWNERS, ...MOCK_VENDORS, MOCK_ADMIN]
-    const found = allUsers.find((u) => u.email === data.email)
-    if (found) performLogin(found)
-  }
-
-  function demoLogin(role: 'homeowner' | 'vendor' | 'admin') {
-    const profile = role === 'homeowner' ? MOCK_HOMEOWNERS[0] : role === 'vendor' ? MOCK_VENDORS[0] : MOCK_ADMIN
-    setValue('email', profile.email)
-    setValue('password', 'demo1234')
-    performLogin(profile)
+    }
   }
 
   return (
@@ -261,45 +246,6 @@ export function LoginPage() {
               )}
             </Button>
           </form>
-
-          {/* Demo section */}
-          <div className="mt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Separator className="flex-1" />
-              <span className="text-xs text-muted-foreground whitespace-nowrap">Try a demo</span>
-              <Separator className="flex-1" />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {demoAccounts.map((demo, i) => (
-                <motion.div
-                  key={demo.role}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.4 + i * 0.08 }}
-                >
-                  <Card
-                    className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/20 active:scale-[0.99]"
-                    onClick={() => !isLoading && demoLogin(demo.role)}
-                  >
-                    <CardContent className="flex items-center gap-4 p-3.5">
-                      <div className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shrink-0',
-                        demo.gradient
-                      )}>
-                        <demo.icon className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{demo.label}</p>
-                        <p className="text-xs text-muted-foreground">{demo.desc}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </div>
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}

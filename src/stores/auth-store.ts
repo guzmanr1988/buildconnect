@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { supabase } from '@/lib/supabase'
 import type { Profile, UserRole } from '@/types'
 
 interface AuthState {
@@ -23,8 +24,14 @@ export const useAuthStore = create<AuthState>()(
         set({ session, isAuthenticated: !!session }),
       setProfile: (profile) =>
         set({ profile, role: profile?.role ?? null }),
-      logout: () =>
-        set({ session: null, profile: null, isAuthenticated: false, role: null }),
+      logout: () => {
+        // Fire-and-forget supabase sign-out; the onAuthStateChange listener in
+        // AuthBootstrap will also clear state on SIGNED_OUT (idempotent).
+        supabase.auth.signOut().catch((err) => {
+          console.error('[auth-store] supabase signOut failed:', err)
+        })
+        set({ session: null, profile: null, isAuthenticated: false, role: null })
+      },
     }),
     { name: 'buildconnect-auth' }
   )

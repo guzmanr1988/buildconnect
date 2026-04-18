@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { Home, Wrench, Eye, EyeOff, Building2, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/stores/auth-store'
+import { signUp } from '@/lib/auth'
+import { updateVendor } from '@/lib/api/vendors'
 import type { UserRole } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +50,8 @@ export function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
-  const { setSession, setProfile } = useAuthStore()
+  const profile = useAuthStore((s) => s.profile)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   const {
     register,
@@ -57,39 +61,44 @@ export function RegisterPage() {
     resolver: zodResolver(registerSchema),
   })
 
-  function onSubmit(data: RegisterFormData) {
+  useEffect(() => {
+    if (isAuthenticated && profile) {
+      navigate(profile.role === 'vendor' ? '/vendor' : '/home', { replace: true })
+    }
+  }, [isAuthenticated, profile, navigate])
+
+  async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
     setIsLoading(true)
-    setTimeout(() => {
-      const initials = data.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-
-      const profile = {
-        id: `new-${Date.now()}`,
-        email: data.email,
+    try {
+      const result = await signUp(data.email, data.password, {
         name: data.name,
         role: selectedRole,
         phone: data.phone,
         address: data.address,
         company: data.company,
-        avatar_color: selectedRole === 'homeowner' ? '#3b82f6' : '#f59e0b',
-        initials,
-        status: 'active' as const,
-        created_at: new Date().toISOString(),
-      }
-
-      setSession({
-        access_token: `mock-token-${profile.id}`,
-        user: { id: profile.id, email: profile.email },
       })
-      setProfile(profile)
-      navigate(selectedRole === 'vendor' ? '/vendor' : '/home')
+
+      // handle_new_user trigger inserts id/email/name/role/initials on auth.users INSERT.
+      // Phone/address/company come from the form — patch them onto the new profile row.
+      const userId = result.user?.id
+      if (userId) {
+        try {
+          await updateVendor(userId, {
+            phone: data.phone,
+            address: data.address,
+            ...(data.company ? { company: data.company } : {}),
+          })
+        } catch (err) {
+          console.error('[register] profile patch failed:', err)
+        }
+      }
+      // AuthBootstrap hydrates the store via onAuthStateChange; useEffect navigates.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Registration failed'
+      toast.error(message)
       setIsLoading(false)
-    }, 400)
+    }
   }
 
   return (

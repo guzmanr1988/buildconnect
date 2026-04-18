@@ -55,7 +55,7 @@ export const router = createBrowserRouter([
 
       {
         path: '/home',
-        element: <HomeownerLayout />,
+        element: <RequireAuth><HomeownerLayout /></RequireAuth>,
         handle: { title: 'Home' },
         children: [
           { index: true, element: <HomeownerHome /> },
