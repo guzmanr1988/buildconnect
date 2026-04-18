@@ -29,10 +29,20 @@ export function AuthBootstrap() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
-      if (event === 'SIGNED_OUT' || !session) {
-        useAuthStore.getState().logout()
+      // IMPORTANT: the listener only clears *local* store state on sign-out —
+      // it must NOT call store.logout() here, because store.logout() calls
+      // supabase.auth.signOut() which re-fires SIGNED_OUT, creating an infinite
+      // loop that freezes the main thread (crashed iOS Safari and headless
+      // Chromium post-AuthBootstrap 1459789).
+      if (event === 'SIGNED_OUT') {
+        const store = useAuthStore.getState()
+        store.setSession(null)
+        store.setProfile(null)
         return
       }
+      // INITIAL_SESSION with null session arrives on every page load for
+      // unauthenticated users — treat as a no-op, not a sign-out.
+      if (!session) return
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         hydrate(session.user.id, session.user.email ?? '', session.access_token)
       }
