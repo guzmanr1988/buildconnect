@@ -100,8 +100,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
       {!isPhase2 && (
         <div className="flex items-center gap-2 pt-3 border-t border-border/40">
           <span className={cn(
-            'text-[12px] font-medium transition-colors duration-200',
-            isExpanded ? 'text-primary' : 'text-primary/70 group-hover:text-primary'
+            'text-[12px] font-medium transition-colors duration-200 text-primary'
           )}>
             {isExpanded ? 'Selected' : 'Get started'}
           </span>
