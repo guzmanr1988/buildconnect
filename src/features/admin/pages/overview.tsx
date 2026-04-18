@@ -163,7 +163,7 @@ export default function OverviewPage() {
                 <span className="text-muted-foreground">
                   Total GMV <span className="font-semibold text-foreground">${totalGMV.toLocaleString()}</span>
                   {' '}&middot;{' '}
-                  Platform Earnings <span className="font-semibold text-amber-600 dark:text-amber-400">${appRevenue.toLocaleString()}</span>
+                  Platform Earnings <span className="font-semibold text-amber-700 dark:text-amber-400">${appRevenue.toLocaleString()}</span>
                 </span>
               </div>
             </CardContent>
@@ -222,7 +222,7 @@ export default function OverviewPage() {
                   label: 'Paid Commissions',
                   total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
                   count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').length,
-                  color: 'text-emerald-600 dark:text-emerald-400',
+                  color: 'text-emerald-700 dark:text-emerald-400',
                   bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40',
                   icon: CheckCircle2,
                   iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
@@ -231,7 +231,7 @@ export default function OverviewPage() {
                   label: 'Pending Commissions',
                   total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').reduce((s, t) => s + t.amount, 0),
                   count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').length,
-                  color: 'text-amber-600 dark:text-amber-400',
+                  color: 'text-amber-700 dark:text-amber-400',
                   bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
                   icon: Clock,
                   iconBg: 'bg-amber-100 dark:bg-amber-900/40',
@@ -249,7 +249,7 @@ export default function OverviewPage() {
                   label: 'Payouts',
                   total: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0),
                   count: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').length,
-                  color: 'text-amber-600 dark:text-amber-400',
+                  color: 'text-amber-700 dark:text-amber-400',
                   bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
                   icon: Banknote,
                   iconBg: 'bg-amber-100 dark:bg-amber-900/40',

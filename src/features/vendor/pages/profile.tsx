@@ -152,7 +152,7 @@ export default function VendorProfile() {
               {/* Response Time */}
               <div className="flex items-center gap-4">
                 <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-3">
-                  <Clock className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  <Clock className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-heading">{vendor.response_time}</p>

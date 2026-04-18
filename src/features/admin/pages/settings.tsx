@@ -420,7 +420,7 @@ export default function SettingsPage() {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400"
+              className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400"
             >
               <CheckCircle className="h-4 w-4" />
               All settings saved successfully

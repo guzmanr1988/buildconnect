@@ -184,7 +184,7 @@ export default function BugsPage() {
                           bug.priority === 'high'
                             ? 'text-red-600 dark:text-red-400'
                             : bug.priority === 'medium'
-                            ? 'text-amber-600 dark:text-amber-400'
+                            ? 'text-amber-700 dark:text-amber-400'
                             : 'text-blue-600 dark:text-blue-400'
                         )}
                       />

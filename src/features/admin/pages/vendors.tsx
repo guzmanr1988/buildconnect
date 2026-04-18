@@ -223,7 +223,7 @@ export default function VendorsPage() {
 
                 {/* Commission % */}
                 <div className="flex items-center gap-2 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3">
-                  <Percent className="h-4 w-4 text-amber-600 shrink-0" />
+                  <Percent className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                   <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Commission Fee</span>
                   <div className="ml-auto flex items-center gap-1.5">
                     <Input

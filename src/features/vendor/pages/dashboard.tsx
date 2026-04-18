@@ -426,11 +426,11 @@ export default function VendorDashboard() {
                                 <span className="text-muted-foreground">Sale Total</span>
                                 <span className="font-bold">${sp.saleAmount.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-emerald-600">
+                              <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                                 <span>Your Share ({100 - vendor.commission_pct}%)</span>
                                 <span className="font-bold">${Math.round(sp.saleAmount * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-amber-600">
+                              <div className="flex justify-between text-amber-700 dark:text-amber-400">
                                 <span>Commission ({vendor.commission_pct}%)</span>
                                 <span className="font-bold">${Math.round(sp.saleAmount * (vendor.commission_pct / 100)).toLocaleString()}</span>
                               </div>
@@ -646,12 +646,12 @@ export default function VendorDashboard() {
                   <span className="font-bold">${Number(saleAmount).toLocaleString()}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
-                  <span className="text-emerald-600 font-medium">Vendor Share ({100 - vendor.commission_pct}%)</span>
-                  <span className="font-bold text-emerald-600">${Math.round(Number(saleAmount) * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">Vendor Share ({100 - vendor.commission_pct}%)</span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">${Math.round(Number(saleAmount) * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-amber-600 font-medium">BuildConnect ({vendor.commission_pct}%)</span>
-                  <span className="font-bold text-amber-600">${Math.round(Number(saleAmount) * (vendor.commission_pct / 100)).toLocaleString()}</span>
+                  <span className="text-amber-700 dark:text-amber-400 font-medium">BuildConnect ({vendor.commission_pct}%)</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-400">${Math.round(Number(saleAmount) * (vendor.commission_pct / 100)).toLocaleString()}</span>
                 </div>
               </div>
             )}

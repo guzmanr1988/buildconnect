@@ -507,7 +507,7 @@ export default function ProductsAdminPage() {
                                   {group.type}
                                 </Badge>
                                 {group.required && (
-                                  <Badge variant="secondary" className="text-xs bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                                     Required
                                   </Badge>
                                 )}
@@ -585,7 +585,7 @@ export default function ProductsAdminPage() {
                                                 {subGroup.options.length} items
                                               </Badge>
                                               {subGroup.required && (
-                                                <Badge variant="secondary" className="text-[11px] bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                                <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                                                   Required
                                                 </Badge>
                                               )}
@@ -726,7 +726,7 @@ export default function ProductsAdminPage() {
                 <Label htmlFor="svc-badge-color">Badge Color Classes</Label>
                 <Input
                   id="svc-badge-color"
-                  placeholder="bg-amber-500/15 text-amber-600"
+                  placeholder="bg-amber-500/15 text-amber-700 dark:text-amber-400"
                   value={serviceForm.badgeColor}
                   onChange={(e) => setServiceForm((f) => ({ ...f, badgeColor: e.target.value }))}
                 />

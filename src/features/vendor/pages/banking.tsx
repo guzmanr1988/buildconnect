@@ -126,7 +126,7 @@ export default function VendorBanking() {
       {hasUnpaid && (
         <motion.div variants={item}>
           <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
                 Unpaid commission: {fmt(unpaidCommission)}
@@ -170,8 +170,8 @@ export default function VendorBanking() {
                         <TableCell className="font-medium">{sale.homeowner_name}</TableCell>
                         <TableCell className="text-muted-foreground text-sm hidden md:table-cell">{sale.project}</TableCell>
                         <TableCell className="text-right font-semibold">{fmt(sale.sale_amount)}</TableCell>
-                        <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-medium">{fmt(sale.vendor_share)}</TableCell>
-                        <TableCell className="text-right text-amber-600 dark:text-amber-400 font-medium">{fmt(sale.commission)}</TableCell>
+                        <TableCell className="text-right text-emerald-700 dark:text-emerald-400 font-medium">{fmt(sale.vendor_share)}</TableCell>
+                        <TableCell className="text-right text-amber-700 dark:text-amber-400 font-medium">{fmt(sale.commission)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">{fmtDate(sale.closed_at)}</TableCell>
                         <TableCell className="text-center">
                           {isPaid ? (
@@ -420,14 +420,14 @@ export default function VendorBanking() {
                     <Separator />
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Commission (15%)</span>
-                      <span className="font-bold text-amber-600 dark:text-amber-400">{fmt(payingSale.commission)}</span>
+                      <span className="font-bold text-amber-700 dark:text-amber-400">{fmt(payingSale.commission)}</span>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="text-center py-4">
                   <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-4 inline-block mb-3">
-                    <CreditCard className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                    <CreditCard className="h-8 w-8 text-amber-700 dark:text-amber-400" />
                   </div>
                   <p className="text-lg font-bold font-heading">{fmt(payingSale.commission)}</p>
                   <p className="text-sm text-muted-foreground mt-1">will be sent to BuildConnect</p>

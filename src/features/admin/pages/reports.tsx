@@ -105,8 +105,8 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: 'Gross Merchandise Value', value: fmt(data.totalGMV), color: 'text-foreground' },
-                { label: 'Total Revenue', value: fmt(data.totalRevenue), color: 'text-emerald-600 dark:text-emerald-400' },
-                { label: 'Total Payouts', value: fmt(data.totalPayouts), color: 'text-amber-600 dark:text-amber-400' },
+                { label: 'Total Revenue', value: fmt(data.totalRevenue), color: 'text-emerald-700 dark:text-emerald-400' },
+                { label: 'Total Payouts', value: fmt(data.totalPayouts), color: 'text-amber-700 dark:text-amber-400' },
                 { label: 'Net Income', value: fmt(data.netIncome), color: 'text-primary' },
               ].map((item) => (
                 <div key={item.label} className="text-center">
@@ -124,7 +124,7 @@ export default function ReportsPage() {
         <Card className="rounded-xl shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <DollarSign className="h-4 w-4 text-emerald-600" />
+              <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
               Revenue Breakdown
             </CardTitle>
           </CardHeader>
@@ -141,17 +141,17 @@ export default function ReportsPage() {
                 <TableBody>
                   <TableRow>
                     <TableCell className="font-medium">Commission Revenue</TableCell>
-                    <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmt(data.totalCommissionRevenue)}</TableCell>
+                    <TableCell className="text-right font-semibold text-emerald-700 dark:text-emerald-400">{fmt(data.totalCommissionRevenue)}</TableCell>
                     <TableCell className="text-right text-muted-foreground">{data.totalRevenue > 0 ? ((data.totalCommissionRevenue / data.totalRevenue) * 100).toFixed(1) : 0}%</TableCell>
                   </TableRow>
                   <TableRow className="text-sm">
                     <TableCell className="pl-8 text-muted-foreground">— Collected</TableCell>
-                    <TableCell className="text-right text-emerald-600 dark:text-emerald-400">{fmt(data.commissionPaid)}</TableCell>
+                    <TableCell className="text-right text-emerald-700 dark:text-emerald-400">{fmt(data.commissionPaid)}</TableCell>
                     <TableCell />
                   </TableRow>
                   <TableRow className="text-sm">
                     <TableCell className="pl-8 text-muted-foreground">— Pending (Accounts Receivable)</TableCell>
-                    <TableCell className="text-right text-amber-600 dark:text-amber-400">{fmt(data.commissionPending)}</TableCell>
+                    <TableCell className="text-right text-amber-700 dark:text-amber-400">{fmt(data.commissionPending)}</TableCell>
                     <TableCell />
                   </TableRow>
                   <TableRow>
@@ -176,7 +176,7 @@ export default function ReportsPage() {
         <Card className="rounded-xl shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <ArrowDownToLine className="h-4 w-4 text-amber-600" />
+              <ArrowDownToLine className="h-4 w-4 text-amber-700 dark:text-amber-400" />
               Expenses & Payouts
             </CardTitle>
           </CardHeader>
@@ -192,7 +192,7 @@ export default function ReportsPage() {
                 <TableBody>
                   <TableRow>
                     <TableCell className="font-medium">Vendor Payouts</TableCell>
-                    <TableCell className="text-right font-semibold text-amber-600 dark:text-amber-400">{fmt(data.totalPayouts)}</TableCell>
+                    <TableCell className="text-right font-semibold text-amber-700 dark:text-amber-400">{fmt(data.totalPayouts)}</TableCell>
                   </TableRow>
                   <TableRow className="bg-muted/30 border-t-2">
                     <TableCell className="font-bold">Total Expenses</TableCell>
@@ -249,7 +249,7 @@ export default function ReportsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">{fmt(v.gmv)}</TableCell>
-                      <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">{fmt(v.commission)}</TableCell>
+                      <TableCell className="text-right font-medium text-emerald-700 dark:text-emerald-400">{fmt(v.commission)}</TableCell>
                       <TableCell className="text-right font-medium text-blue-600 dark:text-blue-400">{fmt(v.membership)}</TableCell>
                       <TableCell className="text-right font-semibold">{fmt(v.commission + v.membership)}</TableCell>
                     </TableRow>
@@ -257,7 +257,7 @@ export default function ReportsPage() {
                   <TableRow className="bg-muted/30 border-t-2">
                     <TableCell colSpan={2} className="font-bold">Totals</TableCell>
                     <TableCell className="text-right font-bold">{fmt(data.totalGMV)}</TableCell>
-                    <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">{fmt(data.totalCommissionRevenue)}</TableCell>
+                    <TableCell className="text-right font-bold text-emerald-700 dark:text-emerald-400">{fmt(data.totalCommissionRevenue)}</TableCell>
                     <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">{fmt(data.totalMembershipRevenue)}</TableCell>
                     <TableCell className="text-right font-bold text-lg">{fmt(data.totalRevenue)}</TableCell>
                   </TableRow>

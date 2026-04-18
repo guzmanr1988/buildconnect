@@ -165,7 +165,7 @@ export default function RevenuePage() {
               </div>
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-center">
                 <p className="text-xs text-muted-foreground mb-1">Total Platform Commission</p>
-                <p className="text-xl font-bold font-heading text-amber-600 dark:text-amber-400">${vendorBreakdown.reduce((s, v) => s + v.appShare, 0).toLocaleString()}</p>
+                <p className="text-xl font-bold font-heading text-amber-700 dark:text-amber-400">${vendorBreakdown.reduce((s, v) => s + v.appShare, 0).toLocaleString()}</p>
               </div>
               <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-center">
                 <p className="text-xs text-muted-foreground mb-1">Total Vendor Earnings</p>
@@ -216,7 +216,7 @@ export default function RevenuePage() {
                     <TableCell className="text-right font-semibold">
                       ${v.totalRevenue.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                    <TableCell className="text-right text-amber-700 dark:text-amber-400">
                       ${v.appShare.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right text-blue-600 dark:text-blue-400">

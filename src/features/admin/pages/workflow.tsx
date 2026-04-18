@@ -197,11 +197,11 @@ export default function WorkflowPage() {
                             <span className="text-muted-foreground">Total</span>
                             <span className="font-bold">${lead.saleAmount.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-emerald-600">
+                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                             <span>Vendor (85%)</span>
                             <span className="font-bold">${Math.round(lead.saleAmount * 0.85).toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-amber-600">
+                          <div className="flex justify-between text-amber-700 dark:text-amber-400">
                             <span>BuildConnect (15%)</span>
                             <span className="font-bold">${Math.round(lead.saleAmount * 0.15).toLocaleString()}</span>
                           </div>
@@ -330,11 +330,11 @@ export default function WorkflowPage() {
                             <span className="text-muted-foreground">Sale Total</span>
                             <span className="font-bold">${selectedItem.saleAmount.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-emerald-600">
+                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                             <span>Vendor (85%)</span>
                             <span className="font-bold">${Math.round(selectedItem.saleAmount * 0.85).toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-amber-600">
+                          <div className="flex justify-between text-amber-700 dark:text-amber-400">
                             <span>BuildConnect (15%)</span>
                             <span className="font-bold">${Math.round(selectedItem.saleAmount * 0.15).toLocaleString()}</span>
                           </div>
