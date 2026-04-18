@@ -112,8 +112,9 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0.002 247);
 
-  /* Success — Emerald */
-  --success: oklch(0.625 0.175 155);
+  /* Success — Emerald (b-005 PR-12e: darkened light-mode L from 0.625 → 0.495 to
+     clear WCAG AA 4.5:1 for text-success against bg-background / bg-card). */
+  --success: oklch(0.495 0.175 155);
   --success-foreground: oklch(0.985 0.002 247);
 
   /* Warning — Amber */
