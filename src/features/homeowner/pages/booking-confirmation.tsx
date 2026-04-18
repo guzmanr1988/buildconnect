@@ -7,16 +7,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 
+type BookingDetails = { service: string; vendor: string; date: string; time: string }
+
 export function BookingConfirmationPage() {
   const navigate = useNavigate()
   const removeItem = useCartStore((s) => s.removeItem)
   const sendProject = useProjectsStore((s) => s.sendProject)
-  const [details, setDetails] = useState<{ service: string; vendor: string; date: string; time: string }>({
-    service: 'Full Roof Replacement',
-    vendor: 'Apex Roofing & Solar',
-    date: 'April 14, 2026',
-    time: '9:00 AM',
-  })
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const [details, setDetails] = useState<BookingDetails | null>(null)
 
   useEffect(() => {
     const pendingItemStr = localStorage.getItem('buildconnect-pending-item')
@@ -38,23 +36,50 @@ export function BookingConfirmationPage() {
           time: booking.time,
         })
 
-        // Get ID document
         const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
-
-        // Move item from cart to sent projects
         sendProject(pendingItem, contractor, booking, homeowner, idDoc)
         removeItem(pendingItem.id)
 
-        // Clean up
         localStorage.removeItem('buildconnect-pending-item')
         localStorage.removeItem('buildconnect-selected-contractor')
         localStorage.removeItem('buildconnect-selected-booking')
         localStorage.removeItem('buildconnect-homeowner-info')
+        return
       } catch {
-        // Silently handle corrupted localStorage
+        // Fall through to store fallback on corrupted localStorage
       }
     }
+
+    // Post-navigation refresh or deep-link — pull the most recent sent project.
+    const latest = sentProjects[sentProjects.length - 1]
+    if (latest) {
+      setDetails({
+        service: latest.item.serviceName,
+        vendor: latest.contractor.company,
+        date: latest.booking.date,
+        time: latest.booking.time,
+      })
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!details) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+          <Home className="h-10 w-10 text-muted-foreground/60" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold font-heading text-foreground">
+          No booking in progress
+        </h1>
+        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+          Pick a service and walk through the booking flow to land back here with a confirmed appointment.
+        </p>
+        <Button size="lg" onClick={() => navigate('/home')} className="h-11 px-6">
+          Browse services
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">

@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
 
 export function HomeownerHome() {
@@ -15,6 +16,12 @@ export function HomeownerHome() {
   const services = useCatalogStore((s) => s.services)
   const activeServices = services.filter((s) => !s.phase2)
   const comingSoon = services.filter((s) => s.phase2)
+
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const upcoming = [...sentProjects]
+    .filter((p) => p.status !== 'declined')
+    .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+    .slice(0, 3)
 
   return (
     <div className="flex flex-col gap-10">
@@ -50,6 +57,42 @@ export function HomeownerHome() {
           </div>
         </div>
       </motion.div>
+
+      {/* Upcoming — only renders when the homeowner has sent at least one project */}
+      {upcoming.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+        >
+          <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-4">
+            Upcoming
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {upcoming.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <CalendarDays className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
+                    {p.item.serviceName}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground truncate">
+                    {p.contractor.company} · {p.booking.date} · {p.booking.time}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Section heading */}
       <div>
