@@ -165,6 +165,17 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
+        id: 'install_preference',
+        label: 'Installation',
+        required: true,
+        type: 'single',
+        revealsOn: { group: 'scope' },
+        options: [
+          { id: 'install', label: 'Install' },
+          { id: 'no_install', label: 'No Install' },
+        ],
+      },
+      {
         id: 'payment',
         label: 'Payment Method',
         required: true,

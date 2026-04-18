@@ -181,4 +181,8 @@ export interface OptionGroup {
   required: boolean
   type: 'single' | 'multi'
   options: ServiceOption[]
+  // Only render + count-toward-progress once the referenced group has at least
+  // one selection. Used for conditional-reveal patterns like "pick permit/no-permit
+  // first, then install/no-install reveals regardless of which was picked."
+  revealsOn?: { group: string }
 }

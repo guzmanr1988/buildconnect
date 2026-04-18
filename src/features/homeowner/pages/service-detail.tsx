@@ -168,7 +168,12 @@ export function ServiceDetailPage() {
   const Icon = SERVICE_ICONS[service.id as ServiceCategory] || Home
   const iconGradient = ICON_GRADIENTS[service.id as ServiceCategory] || 'from-blue-400 to-blue-600'
 
-  const requiredGroups = service.optionGroups.filter((g) => g.required)
+  // A revealsOn group stays hidden (and does not count toward required progress)
+  // until the referenced gate-group has at least one selection.
+  const isRevealed = (g: OptionGroup) =>
+    !g.revealsOn || (selections[g.revealsOn.group]?.length ?? 0) > 0
+
+  const requiredGroups = service.optionGroups.filter((g) => g.required && isRevealed(g))
   const completedRequired = requiredGroups.filter(
     (g) => (selections[g.id]?.length ?? 0) > 0
   ).length
@@ -314,6 +319,9 @@ export function ServiceDetailPage() {
         {/* Option groups */}
         <div className="flex flex-col gap-6">
           {service.optionGroups.filter((group) => {
+            // Generic conditional reveal — e.g., windows_doors install_preference
+            // waits on `scope` (Permit/No Permit) being answered first.
+            if (!isRevealed(group)) return false
             // Hide spa_size unless Attached Spa is selected and it's the active menu
             if (group.id === 'spa_size') {
               if (!(selections['addons'] ?? []).includes('spa')) return false
