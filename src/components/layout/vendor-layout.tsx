@@ -60,7 +60,14 @@ export function VendorLayout() {
         )}>
           <div className="flex h-16 items-center justify-between border-b px-4">
             <Logo collapsed={sidebarCollapsed} />
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSidebarCollapsed}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={toggleSidebarCollapsed}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={!sidebarCollapsed}
+            >
               {sidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </Button>
           </div>
@@ -76,7 +83,7 @@ export function VendorLayout() {
             {isMobile && (
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
                   <div className="px-3 mb-3"><Logo /></div>
@@ -87,7 +94,7 @@ export function VendorLayout() {
             {isMobile && <Logo />}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative rounded-full">
+            <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="Notifications">
               <Bell className="h-4 w-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent" />
             </Button>

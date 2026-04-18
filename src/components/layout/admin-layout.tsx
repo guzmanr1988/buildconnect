@@ -72,7 +72,7 @@ export function AdminLayout() {
             {isMobile && (
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
                   <div className="px-3 mb-3"><Logo /></div>

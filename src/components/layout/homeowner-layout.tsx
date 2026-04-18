@@ -53,7 +53,16 @@ export function HomeownerLayout() {
             <div className="flex items-center gap-2">
               <Popover open={notifOpen} onOpenChange={setNotifOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative rounded-full">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative rounded-full"
+                    aria-label={
+                      approvedProjects.length > 0
+                        ? `Notifications, ${approvedProjects.length} new`
+                        : 'Notifications'
+                    }
+                  >
                     <Bell className="h-4 w-4" />
                     {approvedProjects.length > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
@@ -106,7 +115,16 @@ export function HomeownerLayout() {
             <div className="flex items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative rounded-full h-8 w-8">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative rounded-full h-8 w-8"
+                    aria-label={
+                      approvedProjects.length > 0
+                        ? `Notifications, ${approvedProjects.length} new`
+                        : 'Notifications'
+                    }
+                  >
                     <Bell className="h-4 w-4" />
                     {approvedProjects.length > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
