@@ -144,12 +144,12 @@ export function BookingConfirmationPage() {
           </p>
         </motion.div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-3 sm:flex-row">
+        {/* Actions — side-by-side, big-CTA sizing matching Add to Project elsewhere */}
+        <div className="flex gap-3">
           <Button
             variant="outline"
             size="lg"
-            className="flex-1 h-11 gap-2 text-sm"
+            className="flex-1 h-12 gap-2 text-sm font-semibold rounded-xl"
             onClick={() => navigate('/home/appointments/L-0001')}
           >
             View Status
@@ -157,7 +157,7 @@ export function BookingConfirmationPage() {
           </Button>
           <Button
             size="lg"
-            className="flex-1 h-11 gap-2 text-sm"
+            className="flex-1 h-12 gap-2 text-sm font-semibold rounded-xl"
             onClick={() => navigate('/home/cart')}
           >
             <Home className="h-4 w-4" />
