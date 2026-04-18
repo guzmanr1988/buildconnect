@@ -38,9 +38,16 @@ begin
 end;
 $$;
 
--- Auto-create profile on new auth user signup
+-- Auto-create profile on new auth user signup.
+-- SET search_path = public is required because SECURITY DEFINER functions get
+-- a minimal search_path that excludes public by default, which would make
+-- `profiles`, the `user_role` cast, and `generate_initials` unresolvable.
 create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   insert into profiles (id, email, name, role, initials)
   values (

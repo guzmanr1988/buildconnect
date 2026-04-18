@@ -1,8 +1,15 @@
 -- BuildConnect 2026 — Row Level Security Policies
 
--- Helper: get current user's role
+-- Helper: get current user's role.
+-- SET search_path = public for the same reason as handle_new_user — SECURITY
+-- DEFINER functions would otherwise fail to resolve `profiles` and `user_role`.
 create or replace function auth_role()
-returns user_role language sql stable security definer as $$
+returns user_role
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select role from profiles where id = auth.uid()
 $$;
 
