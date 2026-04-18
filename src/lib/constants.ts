@@ -185,6 +185,16 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     stat: { label: 'Pools Built', value: '1,203' },
     optionGroups: [
       {
+        id: 'project_type',
+        label: 'Is this a new pool or a remodel?',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'new_pool', label: 'New Pool' },
+          { id: 'remodel', label: 'Remodel' },
+        ],
+      },
+      {
         id: 'pool_size',
         label: 'Pool Size',
         required: true,
