@@ -152,13 +152,13 @@ export default function VendorCalendar() {
           <CardContent className="p-4">
             {/* Month navigation */}
             <div className="flex items-center justify-between mb-4">
-              <Button variant="ghost" size="icon" onClick={prevMonth} className="h-8 w-8">
+              <Button variant="ghost" size="icon" onClick={prevMonth} className="h-8 w-8" aria-label="Previous month">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-base font-bold font-heading">
                 {MONTH_NAMES[currentMonth]} {currentYear}
               </h2>
-              <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8">
+              <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8" aria-label="Next month">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

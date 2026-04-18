@@ -69,6 +69,7 @@ export function BookingCalendarPage() {
                   size="icon-sm"
                   onClick={() => setCurrentMonth((m) => Math.max(0, m - 1))}
                   disabled={currentMonth === 0}
+                  aria-label="Previous month"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -77,6 +78,7 @@ export function BookingCalendarPage() {
                   size="icon-sm"
                   onClick={() => setCurrentMonth((m) => Math.min(11, m + 1))}
                   disabled={currentMonth === 11}
+                  aria-label="Next month"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
