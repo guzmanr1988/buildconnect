@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   MapPin,
   Calendar,
@@ -30,9 +32,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -92,17 +103,65 @@ const statusColorMap: Record<string, string> = {
 }
 
 export default function HomeownersPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
+  const [suspendTarget, setSuspendTarget] = useState<{ id: string; name: string } | null>(null)
+
+  // Merge the static MOCK_HOMEOWNERS with any admin-moderation overrides so
+  // suspend/reactivate reflects in the list + counts immediately. Subscribe
+  // to the overrides MAP (not the selector fn) — zustand keeps function
+  // identities stable across state updates, so a useMemo keyed on the
+  // selector fn would never re-run; keying on the overrides object does.
+  // When Tranche 2 wires lib/api/vendors.updateVendor to Supabase, this
+  // layer becomes a read from profiles-by-role; the UX layer is unchanged.
+  const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
+  const suspendHomeowner = useAdminModerationStore((s) => s.suspendHomeowner)
+  const reactivateHomeowner = useAdminModerationStore((s) => s.reactivateHomeowner)
+
+  const homeowners = useMemo(
+    () =>
+      HOMEOWNERS.map((h) => ({
+        ...h,
+        status: homeownerStatusOverrides[h.id] ?? h.status,
+      })),
+    [homeownerStatusOverrides]
+  )
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
-    if (!q) return HOMEOWNERS
-    return HOMEOWNERS.filter(
-      (h) =>
-        h.name.toLowerCase().includes(q) ||
-        h.email.toLowerCase().includes(q)
+    if (!q) return homeowners
+    return homeowners.filter(
+      (h) => h.name.toLowerCase().includes(q) || h.email.toLowerCase().includes(q)
     )
-  }, [search])
+  }, [search, homeowners])
+
+  const handleMessage = (homeowner: { id: string; name: string }) => {
+    navigate('/admin/messages', { state: { homeownerId: homeowner.id, homeownerName: homeowner.name } })
+  }
+
+  const handleEmail = (homeowner: { email: string }) => {
+    window.location.href = `mailto:${homeowner.email}`
+  }
+
+  const handleSuspend = (homeowner: { id: string; name: string }) => {
+    setSuspendTarget({ id: homeowner.id, name: homeowner.name })
+  }
+
+  const confirmSuspend = () => {
+    if (!suspendTarget) return
+    suspendHomeowner(suspendTarget.id)
+    const name = suspendTarget.name
+    const id = suspendTarget.id
+    toast.success(`${name} suspended`, {
+      action: { label: 'Undo', onClick: () => reactivateHomeowner(id) },
+    })
+    setSuspendTarget(null)
+  }
+
+  const handleReactivate = (homeowner: { id: string; name: string }) => {
+    reactivateHomeowner(homeowner.id)
+    toast.success(`${homeowner.name} reactivated`)
+  }
 
   return (
     <div className="space-y-6">
@@ -114,17 +173,17 @@ export default function HomeownersPage() {
           <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-sm">
             <Users className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">
-              {HOMEOWNERS.filter((h) => h.status === 'active').length} Active
+              {homeowners.filter((h) => h.status === 'active').length} Active
             </span>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 text-sm">
             <span className="font-medium text-amber-800 dark:text-amber-400">
-              {HOMEOWNERS.filter((h) => h.status === 'pending').length} Pending
+              {homeowners.filter((h) => h.status === 'pending').length} Pending
             </span>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-3 py-1.5 text-sm">
             <span className="font-medium text-red-800 dark:text-red-400">
-              {HOMEOWNERS.filter((h) => h.status === 'suspended').length} Suspended
+              {homeowners.filter((h) => h.status === 'suspended').length} Suspended
             </span>
           </div>
         </div>
@@ -228,21 +287,44 @@ export default function HomeownersPage() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-2 mb-4">
-                    <Button variant="outline" size="sm" className="flex-1 gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                      aria-label={`Message ${homeowner.name}`}
+                      onClick={() => handleMessage(homeowner)}
+                    >
                       <MessageSquare className="h-3.5 w-3.5" />
                       Message
                     </Button>
-                    <Button variant="outline" size="sm" className="gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      aria-label={`Email ${homeowner.name}`}
+                      onClick={() => handleEmail(homeowner)}
+                    >
                       <Mail className="h-3.5 w-3.5" />
                       Email
                     </Button>
                     {homeowner.status !== 'suspended' ? (
-                      <Button variant="destructive" size="sm" className="gap-1.5">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="gap-1.5"
+                        aria-label={`Suspend ${homeowner.name}`}
+                        onClick={() => handleSuspend(homeowner)}
+                      >
                         <Ban className="h-3.5 w-3.5" />
                         Suspend
                       </Button>
                     ) : (
-                      <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        aria-label={`Reactivate ${homeowner.name}`}
+                        onClick={() => handleReactivate(homeowner)}
+                      >
                         Reactivate
                       </Button>
                     )}
@@ -335,6 +417,26 @@ export default function HomeownersPage() {
           </p>
         </div>
       )}
+
+      {/* Suspend confirmation */}
+      <Dialog open={!!suspendTarget} onOpenChange={(open) => !open && setSuspendTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Suspend {suspendTarget?.name}?</DialogTitle>
+            <DialogDescription>
+              Suspended homeowners cannot book new projects or message contractors. You can reactivate them at any time from this page.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmSuspend}>
+              Suspend
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
