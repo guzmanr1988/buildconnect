@@ -3,7 +3,8 @@
 create type lead_status as enum ('pending', 'confirmed', 'rejected', 'rescheduled', 'completed');
 create type service_category as enum (
   'roofing', 'windows_doors', 'pool', 'driveways', 'pergolas',
-  'air_conditioning', 'kitchen', 'bathroom', 'wall_paneling', 'garage'
+  'air_conditioning', 'kitchen', 'bathroom', 'wall_paneling', 'garage',
+  'house_painting'
 );
 
 -- Auto-generate lead IDs in L-XXXX format
