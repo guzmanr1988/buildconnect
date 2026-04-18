@@ -102,7 +102,7 @@
 
   /* Muted */
   --muted: oklch(0.955 0.008 250);
-  --muted-foreground: oklch(0.485 0.018 255);
+  --muted-foreground: oklch(0.425 0.018 255); /* b-005: darkened from 0.485 to hit WCAG AA 4.5:1 on light bg */
 
   /* Accent — Warm Amber */
   --accent: oklch(0.795 0.155 75);
