@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -47,47 +47,105 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
 export function ServiceDetailPage() {
   const { serviceId } = useParams<{ serviceId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  // Check for edit mode data
-  const [editData] = useState(() => {
-    const str = localStorage.getItem('buildconnect-edit-item')
-    if (str) {
-      try {
-        const item = JSON.parse(str)
-        if (item.serviceId === serviceId) {
-          localStorage.removeItem('buildconnect-edit-item')
-          return item
-        }
-      } catch { /* ignore */ }
-    }
-    return null
-  })
+  // Edit payload travels on the router's location.state — tied to the
+  // navigation, not to a component mount instance. This survives React's
+  // double-mount pattern (StrictMode dev + some prod reconciler paths that
+  // mount the routed element twice) without a localStorage race. The
+  // earlier localStorage-based hand-off broke because the first mount's
+  // cleanup removed the key before the second mount's initializer could
+  // read it, leaving the visible render with empty state.
+  const editData = (location.state && typeof location.state === 'object' && 'editItem' in location.state
+    ? (location.state as { editItem: Record<string, unknown> }).editItem
+    : null) as Record<string, unknown> | null
+  const editItemForService = editData && editData.serviceId === serviceId ? editData : null
 
-  const [selections, setSelections] = useState<Record<string, string[]>>(editData?.selections || {})
+  const [selections, setSelections] = useState<Record<string, string[]>>(
+    (editItemForService?.selections as Record<string, string[]>) || {}
+  )
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
   const [activeAddonMenu, setActiveAddonMenu] = useState<string | null>(null)
-  const [laminarJets, setLaminarJets] = useState(editData?.addonQuantities?.laminarJets || 0)
-  const [waterfalls, setWaterfalls] = useState(editData?.addonQuantities?.waterfalls || 0)
-  const [ledCount, setLedCount] = useState(editData?.addonQuantities?.ledCount || 0)
-  const [bubblerCount, setBubblerCount] = useState(editData?.addonQuantities?.bubblerCount || 0)
-  const [windowSelections, setWindowSelections] = useState<WindowSelection[]>(editData?.windowSelections || [])
-  const [windowConfigOpen, setWindowConfigOpen] = useState(!editData?.windowSelections?.length)
+  const editAddons = editItemForService?.addonQuantities as { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number } | undefined
+  const [laminarJets, setLaminarJets] = useState(editAddons?.laminarJets || 0)
+  const [waterfalls, setWaterfalls] = useState(editAddons?.waterfalls || 0)
+  const [ledCount, setLedCount] = useState(editAddons?.ledCount || 0)
+  const [bubblerCount, setBubblerCount] = useState(editAddons?.bubblerCount || 0)
+  const [windowSelections, setWindowSelections] = useState<WindowSelection[]>(
+    (editItemForService?.windowSelections as WindowSelection[]) || []
+  )
+  const [windowConfigOpen, setWindowConfigOpen] = useState(
+    !(editItemForService?.windowSelections as WindowSelection[] | undefined)?.length
+  )
   const windowTotal = windowSelections.reduce((sum, s) => sum + s.quantity, 0)
-  const [doorSelections, setDoorSelections] = useState<DoorSelection[]>(editData?.doorSelections || [])
-  const [doorConfigOpen, setDoorConfigOpen] = useState(!editData?.doorSelections?.length)
+  const [doorSelections, setDoorSelections] = useState<DoorSelection[]>(
+    (editItemForService?.doorSelections as DoorSelection[]) || []
+  )
+  const [doorConfigOpen, setDoorConfigOpen] = useState(
+    !(editItemForService?.doorSelections as DoorSelection[] | undefined)?.length
+  )
   const doorTotal = doorSelections.reduce((sum, s) => sum + s.quantity, 0)
-  const [garageDoorSelection, setGarageDoorSelection] = useState<GarageDoorSelection>(editData?.garageDoorSelection || { type: '', size: '', color: '', glass: '' })
-  const [garageDoorConfigOpen, setGarageDoorConfigOpen] = useState(!editData?.garageDoorSelection?.type)
-  const [metalRoofSelection, setMetalRoofSelection] = useState<MetalRoofSelection>(editData?.metalRoofSelection || { color: '', roofSize: '' })
-  const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(!editData?.metalRoofSelection?.color)
+  const [garageDoorSelection, setGarageDoorSelection] = useState<GarageDoorSelection>(
+    (editItemForService?.garageDoorSelection as GarageDoorSelection) || { type: '', size: '', color: '', glass: '' }
+  )
+  const [garageDoorConfigOpen, setGarageDoorConfigOpen] = useState(
+    !(editItemForService?.garageDoorSelection as GarageDoorSelection | undefined)?.type
+  )
+  const [metalRoofSelection, setMetalRoofSelection] = useState<MetalRoofSelection>(
+    (editItemForService?.metalRoofSelection as MetalRoofSelection) || { color: '', roofSize: '' }
+  )
+  const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(
+    !(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
+  )
+  const [editingItemId, setEditingItemId] = useState<string | null>(
+    (editItemForService?.id as string) || null
+  )
+
   const addItem = useCartStore((s) => s.addItem)
   const updateItem = useCartStore((s) => s.updateItem)
   const removeItem = useCartStore((s) => s.removeItem)
   const cartItems = useCartStore((s) => s.items)
   const cartCount = cartItems.length
-  const alreadyInCart = cartItems.some((i) => i.serviceId === serviceId) && !editData
-  const [editingItemId, setEditingItemId] = useState<string | null>(editData?.id || null)
+  const alreadyInCart = cartItems.some((i) => i.serviceId === serviceId) && !editItemForService
+
+  // Legacy localStorage-based trigger: some older callers may still set
+  // 'buildconnect-edit-item' instead of using the location.state channel.
+  // Mirror that into editing state on mount if location.state did not
+  // provide one. Pattern mirrors the location.state hydration above; the
+  // key is removed once consumed.
+  useEffect(() => {
+    if (editItemForService) return // already hydrated from location.state
+    const str = localStorage.getItem('buildconnect-edit-item')
+    if (!str) return
+    let legacy: Record<string, unknown>
+    try {
+      legacy = JSON.parse(str)
+    } catch {
+      return
+    }
+    if (legacy.serviceId !== serviceId) return
+    if (legacy.selections && typeof legacy.selections === 'object') {
+      setSelections(legacy.selections as Record<string, string[]>)
+    }
+    const la = legacy.addonQuantities as { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number } | undefined
+    if (la) {
+      setLaminarJets(la.laminarJets || 0)
+      setWaterfalls(la.waterfalls || 0)
+      setLedCount(la.ledCount || 0)
+      setBubblerCount(la.bubblerCount || 0)
+    }
+    const ws = legacy.windowSelections as WindowSelection[] | undefined
+    if (ws?.length) { setWindowSelections(ws); setWindowConfigOpen(false) }
+    const ds = legacy.doorSelections as DoorSelection[] | undefined
+    if (ds?.length) { setDoorSelections(ds); setDoorConfigOpen(false) }
+    const gs = legacy.garageDoorSelection as GarageDoorSelection | undefined
+    if (gs?.type) { setGarageDoorSelection(gs); setGarageDoorConfigOpen(false) }
+    const ms = legacy.metalRoofSelection as MetalRoofSelection | undefined
+    if (ms?.color) { setMetalRoofSelection(ms); setMetalRoofConfigOpen(false) }
+    if (typeof legacy.id === 'string') setEditingItemId(legacy.id)
+    localStorage.removeItem('buildconnect-edit-item')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)

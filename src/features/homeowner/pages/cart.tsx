@@ -415,8 +415,7 @@ export function CartPage() {
                   size="default"
                   className="flex-1 h-10 gap-2 rounded-xl text-sm font-semibold"
                   onClick={() => {
-                    localStorage.setItem('buildconnect-edit-item', JSON.stringify(item))
-                    navigate(`/home/service/${item.serviceId}`)
+                    navigate(`/home/service/${item.serviceId}`, { state: { editItem: item } })
                   }}
                 >
                   <Pencil className="h-4 w-4" />
