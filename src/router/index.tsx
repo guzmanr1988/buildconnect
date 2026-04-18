@@ -13,7 +13,6 @@ import { VendorComparePage } from '@/features/homeowner/pages/vendor-compare'
 import { BookingCalendarPage } from '@/features/homeowner/pages/booking-calendar'
 import { BookingConfirmationPage } from '@/features/homeowner/pages/booking-confirmation'
 import { AppointmentStatusPage } from '@/features/homeowner/pages/appointment-status'
-import { DesignLabPage } from '@/features/homeowner/pages/design-lab'
 import { HomeownerMessagesPage } from '@/features/homeowner/pages/messages'
 import { HomeownerProfilePage } from '@/features/homeowner/pages/profile'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
@@ -60,7 +59,6 @@ export const router = createBrowserRouter([
       { path: 'booking', element: <BookingCalendarPage /> },
       { path: 'booking/confirmed', element: <BookingConfirmationPage /> },
       { path: 'appointments/:id', element: <AppointmentStatusPage /> },
-      // Design Lab removed per Bode's request
       { path: 'messages', element: <HomeownerMessagesPage /> },
       { path: 'profile', element: <HomeownerProfilePage /> },
     ],
