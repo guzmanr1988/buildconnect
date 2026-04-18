@@ -14,6 +14,7 @@ import { DoorConfigurator, type DoorSelection } from '../components/door-configu
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
 import { AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -577,8 +578,15 @@ export function ServiceDetailPage() {
                 removeItem(editingItemId)
                 addItem(itemData)
                 setEditingItemId(null)
+                toast.success(`${service.name} updated`)
               } else {
                 addItem(itemData)
+                toast.success(`${service.name} added to your project`, {
+                  action: {
+                    label: 'View cart',
+                    onClick: () => navigate('/home/cart'),
+                  },
+                })
               }
               setAdded(true)
             }}
