@@ -170,7 +170,7 @@
 
   /* Muted */
   --muted: oklch(0.225 0.025 258);
-  --muted-foreground: oklch(0.585 0.018 255);
+  --muted-foreground: oklch(0.695 0.018 255); /* b-005: brightened from 0.585 to hit WCAG AA 4.5:1 on dark bg */
 
   /* Accent — Warmer amber on dark */
   --accent: oklch(0.755 0.145 75);
