@@ -1,6 +1,7 @@
-import { useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
@@ -53,6 +54,18 @@ export function AppointmentStatusPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Button
+        asChild
+        variant="ghost"
+        size="sm"
+        className="self-start -ml-2 h-9 gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Link to="/home">
+          <ChevronLeft className="h-4 w-4" />
+          Back to Home
+        </Link>
+      </Button>
+
       <div>
         <h1 className="text-2xl font-bold font-heading text-foreground">
           Appointment Status
