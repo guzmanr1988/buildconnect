@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -44,14 +45,33 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  asChild,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & { asChild?: boolean; children?: React.ReactNode }) {
+  // Translate Radix-style `asChild` to Base-UI's `render` prop. Without this
+  // Base-UI renders its own <button> wrapping the supplied child (e.g. a Link),
+  // producing a nested-interactive pattern that trips axe nested-interactive
+  // (b-006 / b-016 on /home/appointments after fe76cfa back-to-home shipped).
+  if (asChild && React.isValidElement(children)) {
+    return (
+      <ButtonPrimitive
+        data-slot="button"
+        className={cn(buttonVariants({ variant, size, className }))}
+        render={children}
+        {...props}
+      />
+    )
+  }
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {children}
+    </ButtonPrimitive>
   )
 }
 
