@@ -21,6 +21,13 @@ create policy "Homeowners can view vendor profiles"
 create policy "Users can update own profile"
   on profiles for update using (id = auth.uid());
 
+-- Needed so the handle_new_user trigger (migration 001) can insert the profile
+-- row after an auth.users INSERT. INSERTs into profiles are only reachable via
+-- that trigger; application code has no direct write path.
+create policy "handle_new_user can insert profile"
+  on profiles for insert
+  with check (true);
+
 -- ─── LEADS ───
 alter table leads enable row level security;
 
