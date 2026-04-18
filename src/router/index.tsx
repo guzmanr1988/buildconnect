@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { HomeownerLayout } from '@/components/layout/homeowner-layout'
 import { VendorLayout } from '@/components/layout/vendor-layout'
 import { AdminLayout } from '@/components/layout/admin-layout'
+import { RequireAuth } from '@/router/require-auth'
 
 // Auth
 import { LoginPage } from '@/features/auth/pages/login'
@@ -66,7 +67,7 @@ export const router = createBrowserRouter([
 
   {
     path: '/vendor',
-    element: <VendorLayout />,
+    element: <RequireAuth><VendorLayout /></RequireAuth>,
     children: [
       { index: true, element: <VendorDashboard /> },
       { path: 'leads', element: <LeadInbox /> },
@@ -80,7 +81,7 @@ export const router = createBrowserRouter([
 
   {
     path: '/admin',
-    element: <AdminLayout />,
+    element: <RequireAuth><AdminLayout /></RequireAuth>,
     children: [
       { index: true, element: <OverviewPage /> },
       { path: 'revenue', element: <RevenuePage /> },
