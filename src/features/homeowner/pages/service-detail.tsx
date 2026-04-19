@@ -413,6 +413,17 @@ export function ServiceDetailPage() {
                             {doorTotal}
                           </span>
                         )}
+                        {/* Install pills derive their count from the Products selection — no separate stepper. */}
+                        {serviceId === 'windows_doors' && option.id === 'install_windows' && windowTotal > 0 && (
+                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
+                            {windowTotal}
+                          </span>
+                        )}
+                        {serviceId === 'windows_doors' && option.id === 'install_doors' && doorTotal > 0 && (
+                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
+                            {doorTotal}
+                          </span>
+                        )}
                         {serviceId === 'windows_doors' && option.id === 'garage_doors' && garageDoorSelection.type && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {garageDoorSelection.type === 'single_garage' ? 'S' : 'D'}
@@ -454,58 +465,6 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
-                {/* Quantity steppers for requiresQuantity options (install_windows, install_doors) */}
-                {group.options.some((o) => getOptionMetadata(o.id).requiresQuantity && selected.includes(o.id)) && (
-                  <div className="mt-3 flex flex-wrap gap-3 rounded-lg bg-muted/40 p-3">
-                    {group.options.map((option) => {
-                      const meta = getOptionMetadata(option.id)
-                      if (!meta.requiresQuantity || !selected.includes(option.id)) return null
-                      const min = meta.quantityRange?.min ?? 1
-                      const max = meta.quantityRange?.max ?? 99
-                      const qty = selectionQuantities[option.id] ?? min
-                      const set = (next: number) => {
-                        const clamped = Math.max(min, Math.min(max, next))
-                        setSelectionQuantities((prev) => ({ ...prev, [option.id]: clamped }))
-                      }
-                      return (
-                        <div key={`qty-${option.id}`} className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-foreground whitespace-nowrap">
-                            {option.label}: how many?
-                          </span>
-                          <div className="inline-flex items-center rounded-lg border border-border bg-background">
-                            <button
-                              type="button"
-                              aria-label={`Decrease ${option.label} quantity`}
-                              onClick={() => set(qty - 1)}
-                              disabled={qty <= min}
-                              className="h-8 w-8 rounded-l-lg text-sm font-bold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              –
-                            </button>
-                            <input
-                              type="number"
-                              aria-label={`${option.label} quantity`}
-                              min={min}
-                              max={max}
-                              value={qty}
-                              onChange={(e) => set(parseInt(e.target.value, 10) || min)}
-                              className="h-8 w-12 border-x border-border bg-background text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <button
-                              type="button"
-                              aria-label={`Increase ${option.label} quantity`}
-                              onClick={() => set(qty + 1)}
-                              disabled={qty >= max}
-                              className="h-8 w-8 rounded-r-lg text-sm font-bold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
                 {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
@@ -694,12 +653,19 @@ export function ServiceDetailPage() {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
                 : undefined
-              // Prune selectionQuantities to only options still selected + flagged requiresQuantity,
-              // so stale stepper state from deselected options doesn't persist into cart/pricing.
+              // Derive requiresQuantity counts. install_windows / install_doors
+              // are pure-derived from the Products windowTotal / doorTotal
+              // (no user stepper). Any other requiresQuantity option falls back
+              // to selectionQuantities state as before.
               const prunedQuantities: Record<string, number> = {}
               for (const [gid, optIds] of Object.entries(selections)) {
                 for (const oid of optIds) {
-                  if (getOptionMetadata(oid).requiresQuantity && selectionQuantities[oid] !== undefined) {
+                  if (!getOptionMetadata(oid).requiresQuantity) continue
+                  if (serviceId === 'windows_doors' && oid === 'install_windows') {
+                    prunedQuantities[oid] = windowTotal
+                  } else if (serviceId === 'windows_doors' && oid === 'install_doors') {
+                    prunedQuantities[oid] = doorTotal
+                  } else if (selectionQuantities[oid] !== undefined) {
                     prunedQuantities[oid] = selectionQuantities[oid]
                   }
                 }
