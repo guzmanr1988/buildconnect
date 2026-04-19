@@ -96,10 +96,11 @@ export default function VendorDashboard() {
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Section collapse state
-  const [newOpen, setNewOpen] = useState(false)
-  const [confirmedOpen, setConfirmedOpen] = useState(false)
-  const [soldOpen, setSoldOpen] = useState(false)
-  const [archivedOpen, setArchivedOpen] = useState(false)
+  // Single-open accordion: at most one lead-status tile open at a time
+  // (kratos msg 1776576047204). Null = all closed.
+  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'archived'
+  const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
+  const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
   const selectedSlot = MOCK_AVAILABLE_SLOTS.find((s) => s.date === rescheduleDate)
 
@@ -159,6 +160,7 @@ export default function VendorDashboard() {
     icon: Icon,
     open,
     onToggle,
+    children,
   }: {
     title: string
     count: number
@@ -166,44 +168,49 @@ export default function VendorDashboard() {
     icon: React.ElementType
     open: boolean
     onToggle: () => void
+    children?: React.ReactNode
   }) {
     return (
       <Card
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onToggle()
-          }
-        }}
         className={cn(
-          'relative overflow-hidden transition-all cursor-pointer select-none',
-          'hover:shadow-md hover:-translate-y-0.5',
+          'overflow-hidden transition-all',
           open && 'ring-2 ring-primary/40 shadow-md'
         )}
       >
-        <CardContent className="p-3.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="space-y-0.5 min-w-0">
-              <p className="text-[11px] font-medium text-muted-foreground truncate">{title}</p>
-              <p className="text-2xl font-medium tracking-tight font-heading text-foreground">{count}</p>
-              <p className="text-[10px] font-medium text-muted-foreground">
-                {open ? 'Hide list' : 'Tap to expand'}
-              </p>
+        {/* Summary row — click/keyboard target only on the header, so the expanded
+            content inside can receive its own clicks without toggling collapse. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          onClick={onToggle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onToggle()
+            }
+          }}
+          className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none hover:bg-muted/30"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={cn('rounded-md p-1.5 shrink-0', color)}>
+              <Icon className="h-3.5 w-3.5 text-white" />
             </div>
-            <div className={cn('rounded-lg p-2 shrink-0', color)}>
-              <Icon className="h-4 w-4 text-white" />
-            </div>
+            <p className="text-sm font-medium text-foreground truncate">{title}</p>
+            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">{count}</Badge>
           </div>
           {open ? (
-            <ChevronUp className="absolute bottom-2 right-2 h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
           ) : (
-            <ChevronDown className="absolute bottom-2 right-2 h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
-        </CardContent>
+        </div>
+        {/* Expanded content — renders inline under the summary row, inside the same Card. */}
+        {open && children && (
+          <div className="border-t border-border/40 bg-muted/10 p-3">
+            {children}
+          </div>
+        )}
       </Card>
     )
   }
@@ -256,49 +263,17 @@ export default function VendorDashboard() {
         </motion.div>
       </div>
 
-      {/* Lead Status Tiles — vertical stack of full-width cards per Rod spec (kratos msg 1776575789350). */}
-      <motion.div variants={item} className="flex flex-col gap-2 sm:gap-3">
+      {/* Lead Status Tiles — vertical accordion. Each tile owns its own expand
+          content inline beneath its summary row (kratos msg 1776576002292). */}
+      <motion.div variants={item} className="flex flex-col gap-2">
         <LeadStatusTile
           title="New Leads"
           count={newLeads.length}
           color="bg-amber-500"
           icon={Inbox}
-          open={newOpen}
-          onToggle={() => setNewOpen(!newOpen)}
-        />
-        <LeadStatusTile
-          title="Confirmed Leads"
-          count={confirmedLeads.length}
-          color="bg-emerald-500"
-          icon={CalendarCheck}
-          open={confirmedOpen}
-          onToggle={() => setConfirmedOpen(!confirmedOpen)}
-        />
-        <LeadStatusTile
-          title="Sold Leads"
-          count={soldLeads.length}
-          color="bg-primary"
-          icon={Handshake}
-          open={soldOpen}
-          onToggle={() => setSoldOpen(!soldOpen)}
-        />
-        <LeadStatusTile
-          title="Archived Leads"
-          count={archivedLeads.length}
-          color="bg-slate-500"
-          icon={Archive}
-          open={archivedOpen}
-          onToggle={() => setArchivedOpen(!archivedOpen)}
-        />
-      </motion.div>
-
-      {/* Expanded lists — each active tile contributes its list below the grid. */}
-      {newOpen && (
-        <motion.div variants={item}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
-            <Inbox className="h-3.5 w-3.5" />
-            New Leads ({newLeads.length})
-          </h3>
+          open={openTile === 'new'}
+          onToggle={() => toggleTile('new')}
+        >
           <div className="grid gap-3">
             {newLeads.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
@@ -306,15 +281,15 @@ export default function VendorDashboard() {
               newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
-        </motion.div>
-      )}
-
-      {confirmedOpen && (
-        <motion.div variants={item}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
-            <CalendarCheck className="h-3.5 w-3.5" />
-            Confirmed Leads ({confirmedLeads.length})
-          </h3>
+        </LeadStatusTile>
+        <LeadStatusTile
+          title="Confirmed Leads"
+          count={confirmedLeads.length}
+          color="bg-emerald-500"
+          icon={CalendarCheck}
+          open={openTile === 'confirmed'}
+          onToggle={() => toggleTile('confirmed')}
+        >
           <div className="grid gap-3">
             {confirmedLeads.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No confirmed leads yet.</p>
@@ -322,15 +297,15 @@ export default function VendorDashboard() {
               confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
-        </motion.div>
-      )}
-
-      {soldOpen && (
-        <motion.div variants={item}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
-            <Handshake className="h-3.5 w-3.5" />
-            Sold Leads ({soldLeads.length})
-          </h3>
+        </LeadStatusTile>
+        <LeadStatusTile
+          title="Sold Leads"
+          count={soldLeads.length}
+          color="bg-primary"
+          icon={Handshake}
+          open={openTile === 'sold'}
+          onToggle={() => toggleTile('sold')}
+        >
           <div className="grid gap-3">
             {soldLeads.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No sold leads yet.</p>
@@ -338,15 +313,15 @@ export default function VendorDashboard() {
               soldLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
-        </motion.div>
-      )}
-
-      {archivedOpen && (
-        <motion.div variants={item}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
-            <Archive className="h-3.5 w-3.5" />
-            Archived Leads ({archivedLeads.length})
-          </h3>
+        </LeadStatusTile>
+        <LeadStatusTile
+          title="Archived Leads"
+          count={archivedLeads.length}
+          color="bg-slate-500"
+          icon={Archive}
+          open={openTile === 'archived'}
+          onToggle={() => toggleTile('archived')}
+        >
           <div className="grid gap-3">
             {archivedLeads.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No archived leads.</p>
@@ -354,8 +329,8 @@ export default function VendorDashboard() {
               archivedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
-        </motion.div>
-      )}
+        </LeadStatusTile>
+      </motion.div>
 
       {/* Lead Detail Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
