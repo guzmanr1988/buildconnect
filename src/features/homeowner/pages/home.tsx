@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, Hammer, CheckCircle2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -8,6 +8,17 @@ import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
+
+// Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
+// COMPLETED. Time-based heuristic since sentProject has no projectCompletedAt
+// flag and /home reads local zustand not Supabase closed_sales.
+//
+// TODO: swap to closed_sales.commission_paid check when the homeowner
+// booking-insert path ships (Signal #12 transition). At that point the
+// homeowner's sentProject will have a bridge to the Supabase closed_sales
+// row and we can use the semantically-stronger "money flowed = project
+// really done" boundary kratos approved (msg 1776615690852).
+const ACTIVE_TO_COMPLETED_DAYS = 30
 
 export function HomeownerHome() {
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
@@ -18,10 +29,34 @@ export function HomeownerHome() {
   const comingSoon = services.filter((s) => s.phase2)
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const upcoming = [...sentProjects]
-    .filter((p) => p.status !== 'declined')
-    .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
-    .slice(0, 3)
+
+  const sortByRecent = <T extends { sentAt: string }>(list: T[]) =>
+    [...list].sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+
+  // UPCOMING: vendor hasn't sold yet, project still pre-close.
+  // Includes pending + approved (vendor confirmed visit). Excludes declined + sold.
+  const upcoming = sortByRecent(
+    sentProjects.filter((p) => p.status === 'pending' || p.status === 'approved')
+  ).slice(0, 3)
+
+  // ACTIVE: sold, in motion — sold within the last ACTIVE_TO_COMPLETED_DAYS.
+  const activeCutoff = Date.now() - ACTIVE_TO_COMPLETED_DAYS * 24 * 60 * 60 * 1000
+  const activeProjects = sortByRecent(
+    sentProjects.filter((p) => {
+      if (p.status !== 'sold') return false
+      if (!p.soldAt) return true // sold without a date → assume active
+      return new Date(p.soldAt).getTime() >= activeCutoff
+    })
+  )
+
+  // COMPLETED: sold more than ACTIVE_TO_COMPLETED_DAYS ago, presumed done.
+  const completedProjects = sortByRecent(
+    sentProjects.filter((p) => {
+      if (p.status !== 'sold') return false
+      if (!p.soldAt) return false // no date → stays in active
+      return new Date(p.soldAt).getTime() < activeCutoff
+    })
+  )
 
   const howItWorks = [
     { n: 1, t: 'Tell us about your project', d: 'Pick a service and answer a few questions about what you need.' },
@@ -73,7 +108,7 @@ export function HomeownerHome() {
         </div>
       </motion.div>
 
-      {/* Upcoming — only renders when the homeowner has sent at least one project */}
+      {/* Upcoming */}
       {upcoming.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -100,6 +135,78 @@ export function HomeownerHome() {
                   </p>
                   <p className="text-[12px] text-muted-foreground truncate">
                     {p.contractor.company} · {p.booking.date} · {p.booking.time}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Active Projects — vendor has marked sold, project in motion */}
+      {activeProjects.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.09 }}
+        >
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+            Active Projects
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeProjects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Hammer className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
+                    {p.item.serviceName}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground truncate">
+                    {p.contractor.company} · In progress · Sold {p.soldAt ? new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Completed Projects — sold more than 30 days ago, presumed finished */}
+      {completedProjects.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.10 }}
+        >
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+            Completed Projects
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {completedProjects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
+                    {p.item.serviceName}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground truncate">
+                    {p.contractor.company} · Completed {p.soldAt ? new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
