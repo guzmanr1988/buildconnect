@@ -9,6 +9,9 @@ import { RootLayout } from '@/router/root-layout'
 import { LoginPage } from '@/features/auth/pages/login'
 import { RegisterPage } from '@/features/auth/pages/register'
 
+// Misc
+import { NotFoundPage } from '@/features/misc/pages/not-found'
+
 // Homeowner (named exports)
 import { HomeownerHome } from '@/features/homeowner/pages/home'
 import { VendorComparePage } from '@/features/homeowner/pages/vendor-compare'
@@ -108,6 +111,9 @@ export const router = createBrowserRouter([
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
         ],
       },
+
+      // Catchall — branded 404 for any unmatched path (b-002 fix).
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])
