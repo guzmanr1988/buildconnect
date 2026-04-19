@@ -165,14 +165,24 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
-        id: 'install_preference',
+        id: 'installation',
         label: 'Installation',
         required: true,
         type: 'single',
-        revealsOn: { group: 'scope' },
         options: [
           { id: 'install', label: 'Install' },
           { id: 'no_install', label: 'No Install' },
+        ],
+      },
+      {
+        id: 'install_products',
+        label: 'Install for',
+        required: true,
+        type: 'multi',
+        revealsOn: { group: 'installation', equals: 'install' },
+        options: [
+          { id: 'install_windows', label: 'Install Windows' },
+          { id: 'install_doors', label: 'Install Doors' },
         ],
       },
       {

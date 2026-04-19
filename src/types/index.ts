@@ -181,8 +181,9 @@ export interface OptionGroup {
   required: boolean
   type: 'single' | 'multi'
   options: ServiceOption[]
-  // Only render + count-toward-progress once the referenced group has at least
-  // one selection. Used for conditional-reveal patterns like "pick permit/no-permit
-  // first, then install/no-install reveals regardless of which was picked."
-  revealsOn?: { group: string }
+  // Only render + count-toward-progress once the referenced group has a matching
+  // selection. With `equals`, reveal only when the referenced group contains that
+  // specific option id (useful for "Install → sub-group reveals; No Install → stays
+  // hidden"). Without `equals`, any selection in the gate-group triggers reveal.
+  revealsOn?: { group: string; equals?: string }
 }

@@ -169,9 +169,15 @@ export function ServiceDetailPage() {
   const iconGradient = ICON_GRADIENTS[service.id as ServiceCategory] || 'from-blue-400 to-blue-600'
 
   // A revealsOn group stays hidden (and does not count toward required progress)
-  // until the referenced gate-group has at least one selection.
-  const isRevealed = (g: OptionGroup) =>
-    !g.revealsOn || (selections[g.revealsOn.group]?.length ?? 0) > 0
+  // until the referenced gate-group has a matching selection. With `equals`, the
+  // gate must contain that specific option id; without, any selection triggers.
+  const isRevealed = (g: OptionGroup) => {
+    if (!g.revealsOn) return true
+    const selected = selections[g.revealsOn.group] ?? []
+    if (selected.length === 0) return false
+    if (g.revealsOn.equals) return selected.includes(g.revealsOn.equals)
+    return true
+  }
 
   const requiredGroups = service.optionGroups.filter((g) => g.required && isRevealed(g))
   const completedRequired = requiredGroups.filter(
