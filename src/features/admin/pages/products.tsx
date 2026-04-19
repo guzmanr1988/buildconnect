@@ -588,12 +588,12 @@ export default function ProductsAdminPage() {
                             <div className="pl-6 space-y-1">
                               {group.options.map((opt) => (
                                 <div key={opt.id} className="space-y-1">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted/50 transition-colors group/opt">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt">
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                      <GripVertical className="h-3 w-3 text-muted-foreground/40" />
+                                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
                                       <span>{opt.label}</span>
                                       {opt.description && (
-                                        <span className="text-xs text-muted-foreground hidden sm:inline">
+                                        <span className="text-sm text-muted-foreground hidden sm:inline">
                                           -- {opt.description}
                                         </span>
                                       )}
@@ -637,7 +637,7 @@ export default function ProductsAdminPage() {
                                             >
                                               <ChevronRight className={cn('h-3 w-3 text-muted-foreground transition-transform', openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && 'rotate-90')} />
                                               <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
-                                              <span className="text-xs font-medium">{subGroup.label}</span>
+                                              <span className="text-sm font-medium">{subGroup.label}</span>
                                               <Badge variant="outline" className="text-[11px]">
                                                 {subGroup.options.length} items
                                               </Badge>
@@ -662,13 +662,13 @@ export default function ProductsAdminPage() {
                                             {subGroup.options.map((subOpt) => (
                                               <div
                                                 key={subOpt.id}
-                                                className="flex items-center justify-between rounded-md px-2 py-1 text-xs hover:bg-muted/50 transition-colors group/subopt"
+                                                className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt"
                                               >
                                                 <div className="flex items-center gap-2">
-                                                  <GripVertical className="h-2.5 w-2.5 text-muted-foreground/40" />
+                                                  <GripVertical className="h-3 w-3 text-muted-foreground/40" />
                                                   <span>{subOpt.label}</span>
                                                   {subOpt.description && (
-                                                    <span className="text-muted-foreground hidden sm:inline">
+                                                    <span className="text-xs text-muted-foreground hidden sm:inline">
                                                       -- {subOpt.description}
                                                     </span>
                                                   )}
@@ -676,10 +676,10 @@ export default function ProductsAdminPage() {
                                                 <Button
                                                   variant="ghost"
                                                   size="icon"
-                                                  className="h-5 w-5 sm:opacity-0 sm:group-hover/subopt:opacity-100 text-destructive hover:text-destructive transition-opacity"
+                                                  className="h-6 w-6 sm:opacity-0 sm:group-hover/subopt:opacity-100 text-destructive hover:text-destructive transition-opacity"
                                                   onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
                                                 >
-                                                  <Trash2 className="h-2.5 w-2.5" />
+                                                  <Trash2 className="h-3 w-3" />
                                                 </Button>
                                               </div>
                                             ))}
