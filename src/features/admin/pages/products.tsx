@@ -473,34 +473,34 @@ export default function ProductsAdminPage() {
             <AccordionItem value={service.id} className="border-0">
               <Card className="rounded-xl shadow-sm hover:shadow-md transition overflow-hidden">
                 <CardHeader className="pb-0">
-                  <div className="flex items-center justify-between">
-                    <AccordionTrigger className="hover:no-underline py-0 flex-1 [&[data-state=open]>svg]:hidden">
-                      <div className="flex items-center gap-3">
-                        <Package className="h-5 w-5 text-primary shrink-0" />
-                        <div className="text-left">
-                          <CardTitle className="text-base">{service.name}</CardTitle>
-                          <p className="text-xs text-muted-foreground font-normal mt-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <AccordionTrigger className="hover:no-underline py-0 flex-1 min-w-0 [&[data-state=open]>svg]:hidden">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
+                        <div className="text-left min-w-0 flex-1">
+                          <CardTitle className="text-sm sm:text-base truncate">{service.name}</CardTitle>
+                          <p className="text-[11px] sm:text-xs text-muted-foreground font-normal mt-0.5 line-clamp-2 sm:line-clamp-none">
                             {service.tagline}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 ml-2">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 shrink-0 max-w-[40%] sm:max-w-none justify-end">
                           {service.badge && (
-                            <Badge variant="secondary" className={cn('text-xs', service.badgeColor)}>
+                            <Badge variant="secondary" className={cn('text-[10px] sm:text-xs whitespace-nowrap', service.badgeColor)}>
                               {service.badge}
                             </Badge>
                           )}
                           {service.phase2 && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-[10px] sm:text-xs whitespace-nowrap">
                               Phase 2
                             </Badge>
                           )}
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs whitespace-nowrap">
                             {service.optionGroups.length} group{service.optionGroups.length !== 1 && 's'}
                           </Badge>
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <div className="flex items-center gap-1 ml-4 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditService(service)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -518,10 +518,9 @@ export default function ProductsAdminPage() {
 
                 <AccordionContent>
                   <CardContent className="pt-4 space-y-4">
-                    {/* Service details */}
+                    {/* Service details — tagline is shown in header, not duplicated here. Expanded body shows features + stat only. */}
                     <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
-                      <p className="text-muted-foreground">{service.description}</p>
-                      <div className="flex flex-wrap gap-2 pt-1">
+                      <div className="flex flex-wrap gap-2">
                         {service.features.map((f) => (
                           <Badge key={f} variant="secondary" className="text-xs">
                             {f}
