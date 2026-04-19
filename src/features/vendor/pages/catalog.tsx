@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,16 +24,14 @@ export default function VendorCatalog() {
     getPrice,
   } = useVendorCatalogStore()
 
-  // Collapse state is per-service, session-scoped (no persist — if vendor
-  // refreshes, everything starts expanded again, which matches the "just
-  // activated" default). Tracking COLLAPSED (not expanded) so a newly
-  // activated service naturally renders expanded without a state write.
-  const [collapsedServices, setCollapsedServices] = useState<Set<string>>(new Set())
-  // Track services that were just toggled on so we always render them
-  // expanded on activation even if they had been collapsed previously.
-  const prevEnabledRef = useRef<Set<string>>(new Set())
-  const toggleCollapsed = (id: string) => {
-    setCollapsedServices((prev) => {
+  // Expand state is per-service, session-scoped (no persist — if vendor
+  // refreshes, everything starts collapsed again). Tracking EXPANDED (flipped
+  // from the prior COLLAPSED semantic per Rod directive: active tiles stay
+  // collapsed unless the user explicitly taps to open). A service must be
+  // BOTH enabled AND in the expanded set to render its panel.
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => {
+    setExpandedServices((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -48,19 +46,22 @@ export default function VendorCatalog() {
     }
   }, [adminServices.length])
 
-  // When a service is newly activated, ensure it renders expanded even if it
-  // had been collapsed during a prior active session.
+  // When a service is deactivated, remove it from the expanded set so
+  // re-activating later starts cleanly collapsed (per Rod directive: active
+  // tiles default collapsed, expansion is explicit-tap-driven only).
   useEffect(() => {
     const currentlyEnabled = new Set(vendorServices.filter((s) => s.enabled).map((s) => s.id))
-    const newlyEnabled = Array.from(currentlyEnabled).filter((id) => !prevEnabledRef.current.has(id))
-    if (newlyEnabled.length > 0) {
-      setCollapsedServices((prev) => {
-        const next = new Set(prev)
-        for (const id of newlyEnabled) next.delete(id)
-        return next
-      })
-    }
-    prevEnabledRef.current = currentlyEnabled
+    setExpandedServices((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const id of prev) {
+        if (!currentlyEnabled.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
   }, [vendorServices])
 
   const enabledCount = vendorServices.filter((s) => s.enabled).length
@@ -90,8 +91,10 @@ export default function VendorCatalog() {
             return sum + g.options.filter(o => isOptionEnabled(service.id, g.id, o.id)).length
           }, 0)
 
-          const collapsed = enabled && collapsedServices.has(service.id)
-          const expanded = enabled && !collapsed
+          // Default state when enabled = collapsed. Only expanded if user
+          // has explicitly tapped the header (tracked in expandedServices).
+          const expanded = enabled && expandedServices.has(service.id)
+          const collapsed = enabled && !expanded
 
           return (
             <motion.div key={service.id} variants={item}>
@@ -99,7 +102,7 @@ export default function VendorCatalog() {
                 {/* Service header — clickable to toggle collapse when service is enabled. */}
                 <CardHeader
                   className={cn('pb-2', enabled && 'cursor-pointer select-none')}
-                  onClick={() => { if (enabled) toggleCollapsed(service.id) }}
+                  onClick={() => { if (enabled) toggleExpanded(service.id) }}
                   role={enabled ? 'button' : undefined}
                   tabIndex={enabled ? 0 : undefined}
                   aria-expanded={enabled ? expanded : undefined}
@@ -108,7 +111,7 @@ export default function VendorCatalog() {
                     if (!enabled) return
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
-                      toggleCollapsed(service.id)
+                      toggleExpanded(service.id)
                     }
                   }}
                 >
