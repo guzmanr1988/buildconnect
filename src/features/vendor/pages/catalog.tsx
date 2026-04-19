@@ -190,6 +190,7 @@ export default function VendorCatalog() {
                                   <div className="flex items-center gap-1 shrink-0">
                                     <DollarSign className="h-3 w-3 text-muted-foreground" />
                                     <Input
+                                      aria-label={`Price for ${option.label}`}
                                       type="number"
                                       value={price || ''}
                                       onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
@@ -246,6 +247,7 @@ export default function VendorCatalog() {
                                       <div className="flex items-center gap-1 shrink-0">
                                         <span className="text-[10px] text-muted-foreground">$</span>
                                         <Input
+                                          aria-label={`Price for ${subOpt.label}`}
                                           type="number"
                                           value={subPrice || ''}
                                           onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
