@@ -87,21 +87,21 @@ export default function SettingsPage() {
                   <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                   Company Name
                 </Label>
-                <Input value={ext.companyName} onChange={(e) => setExt((p) => ({ ...p, companyName: e.target.value }))} />
+                <Input aria-label="Company Name" value={ext.companyName} onChange={(e) => setExt((p) => ({ ...p, companyName: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                   Contact Email
                 </Label>
-                <Input type="email" value={ext.contactEmail} onChange={(e) => setExt((p) => ({ ...p, contactEmail: e.target.value }))} />
+                <Input aria-label="Contact Email" type="email" value={ext.contactEmail} onChange={(e) => setExt((p) => ({ ...p, contactEmail: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                   Support Phone
                 </Label>
-                <Input value={ext.supportPhone} onChange={(e) => setExt((p) => ({ ...p, supportPhone: e.target.value }))} />
+                <Input aria-label="Support Phone" value={ext.supportPhone} onChange={(e) => setExt((p) => ({ ...p, supportPhone: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
@@ -137,6 +137,7 @@ export default function SettingsPage() {
                   Default Commission % (new vendors)
                 </Label>
                 <Input
+                  aria-label="Default Commission percent for new vendors"
                   type="number" min={1} max={50}
                   value={ext.defaultCommission}
                   onChange={(e) => setExt((p) => ({ ...p, defaultCommission: Number(e.target.value) }))}
@@ -149,6 +150,7 @@ export default function SettingsPage() {
                   Subscription Fee $/mo
                 </Label>
                 <Input
+                  aria-label="Subscription Fee dollars per month"
                   type="number" min={0}
                   value={settings.subscription_fee}
                   onChange={(e) => setSettings((p) => ({ ...p, subscription_fee: Number(e.target.value) }))}
@@ -160,6 +162,7 @@ export default function SettingsPage() {
                   Minimum Payout Threshold
                 </Label>
                 <Input
+                  aria-label="Minimum Payout Threshold"
                   type="number" min={0}
                   value={ext.minPayoutThreshold}
                   onChange={(e) => setExt((p) => ({ ...p, minPayoutThreshold: Number(e.target.value) }))}
@@ -172,6 +175,7 @@ export default function SettingsPage() {
                   Payout Day (1-28)
                 </Label>
                 <Input
+                  aria-label="Payout Day of the month (1 to 28)"
                   type="number" min={1} max={28}
                   value={settings.payout_day}
                   onChange={(e) => setSettings((p) => ({ ...p, payout_day: Number(e.target.value) }))}
@@ -194,6 +198,7 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Lead Expiry Time (hours)</Label>
                 <Input
+                  aria-label="Lead Expiry Time in hours"
                   type="number" min={1} max={168}
                   value={ext.leadExpiryHours}
                   onChange={(e) => setExt((p) => ({ ...p, leadExpiryHours: Number(e.target.value) }))}
@@ -203,6 +208,7 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Vendor Response Time Limit (hours)</Label>
                 <Input
+                  aria-label="Vendor Response Time Limit in hours"
                   type="number" min={1} max={72}
                   value={ext.vendorResponseLimit}
                   onChange={(e) => setExt((p) => ({ ...p, vendorResponseLimit: Number(e.target.value) }))}
@@ -247,7 +253,7 @@ export default function SettingsPage() {
                       <p className="text-sm font-medium">{n.label}</p>
                       <p className="text-xs text-muted-foreground">{n.desc}</p>
                     </div>
-                    <Switch checked={ext[n.key]} onCheckedChange={(val) => setExt((p) => ({ ...p, [n.key]: val }))} />
+                    <Switch aria-label={n.label} checked={ext[n.key]} onCheckedChange={(val) => setExt((p) => ({ ...p, [n.key]: val }))} />
                   </div>
                 ))}
               </div>
@@ -264,7 +270,7 @@ export default function SettingsPage() {
                       <p className="text-sm font-medium">{n.label}</p>
                       <p className="text-xs text-muted-foreground">{n.desc}</p>
                     </div>
-                    <Switch checked={ext[n.key]} onCheckedChange={(val) => setExt((p) => ({ ...p, [n.key]: val }))} />
+                    <Switch aria-label={n.label} checked={ext[n.key]} onCheckedChange={(val) => setExt((p) => ({ ...p, [n.key]: val }))} />
                   </div>
                 ))}
               </div>
@@ -287,7 +293,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium">Two-Factor Authentication</p>
                   <p className="text-xs text-muted-foreground">Require 2FA for all admin accounts</p>
                 </div>
-                <Switch checked={ext.twoFactorEnabled} onCheckedChange={(val) => setExt((p) => ({ ...p, twoFactorEnabled: val }))} />
+                <Switch aria-label="Two-Factor Authentication" checked={ext.twoFactorEnabled} onCheckedChange={(val) => setExt((p) => ({ ...p, twoFactorEnabled: val }))} />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
@@ -295,6 +301,7 @@ export default function SettingsPage() {
                   Session Timeout (minutes)
                 </Label>
                 <Input
+                  aria-label="Session Timeout in minutes"
                   type="number" min={5} max={480}
                   value={ext.sessionTimeout}
                   onChange={(e) => setExt((p) => ({ ...p, sessionTimeout: Number(e.target.value) }))}
@@ -307,6 +314,7 @@ export default function SettingsPage() {
                   Minimum Password Length
                 </Label>
                 <Input
+                  aria-label="Minimum Password Length"
                   type="number" min={6} max={32}
                   value={ext.minPasswordLength}
                   onChange={(e) => setExt((p) => ({ ...p, minPasswordLength: Number(e.target.value) }))}
@@ -317,7 +325,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium">Require Special Characters</p>
                   <p className="text-xs text-muted-foreground">Passwords must include !@#$%^&*</p>
                 </div>
-                <Switch checked={ext.requireSpecialChars} onCheckedChange={(val) => setExt((p) => ({ ...p, requireSpecialChars: val }))} />
+                <Switch aria-label="Require Special Characters in passwords" checked={ext.requireSpecialChars} onCheckedChange={(val) => setExt((p) => ({ ...p, requireSpecialChars: val }))} />
               </div>
             </CardContent>
           </Card>
