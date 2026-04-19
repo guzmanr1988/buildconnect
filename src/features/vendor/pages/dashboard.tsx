@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
@@ -16,11 +17,11 @@ import { KpiCard } from '@/components/shared/kpi-card'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS, MOCK_LEADS, MOCK_CLOSED_SALES, MOCK_AVAILABLE_SLOTS } from '@/lib/mock-data'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
-import type { Lead } from '@/types'
-
-const VENDOR_ID = 'v-1'
+import type { Lead, Vendor } from '@/types'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -35,13 +36,70 @@ function fmtDateTime(iso: string) {
 }
 
 export default function VendorDashboard() {
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  const navigate = useNavigate()
+  const profile = useAuthStore((s) => s.profile)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const updateProjectStatus = useProjectsStore((s) => s.updateStatus)
   const updateProjectBooking = useProjectsStore((s) => s.updateBooking)
   const markProjectSold = useProjectsStore((s) => s.markSold)
-  const mockLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
-  const closedSales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
+
+  // Auth guard — redirect unauth'd or non-vendor roles to /login.
+  useEffect(() => {
+    if (profile !== null && profile.role !== 'vendor') {
+      navigate('/login', { replace: true })
+    }
+  }, [profile, navigate])
+
+  // Resolve which MOCK_VENDORS fixture (if any) this authed vendor maps to.
+  // The 3 featured demo vendors (apex-demo / shield-demo / paradise-demo
+  // seeded by scripts/seed-vendor-prices.mjs) have their Supabase UUIDs in
+  // DEMO_VENDOR_UUID_BY_MOCK_ID — reverse-lookup gives the mock-id ('v-1' /
+  // 'v-2' / 'v-3') for fixture display. Any other vendor account (e.g. the
+  // original vendor@buildc.net demo) resolves to null → display the authed
+  // profile directly with zero mock-lead fixtures.
+  const mockVendorId = useMemo(() => {
+    if (!profile) return null
+    const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(([, uuid]) => uuid === profile.id)
+    return entry ? entry[0] : null
+  }, [profile])
+
+  // VENDOR_ID for filtering mock-data queries: the mock-id when mapped; the
+  // real profile.id otherwise (in which case the filters return empty because
+  // no MOCK_LEADS row has that vendor_id).
+  const VENDOR_ID = mockVendorId ?? profile?.id ?? ''
+
+  // Vendor display-data: from MOCK_VENDORS fixture when mapped, synthesized
+  // from profile when not.
+  const vendor: Vendor | null = useMemo(() => {
+    if (mockVendorId) {
+      const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
+      if (m) return m
+    }
+    if (!profile) return null
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      role: 'vendor',
+      phone: profile.phone ?? '',
+      address: profile.address ?? '',
+      company: profile.company ?? profile.name,
+      avatar_color: profile.avatar_color ?? '#3b82f6',
+      initials: profile.initials ?? profile.name.slice(0, 2).toUpperCase(),
+      status: profile.status ?? 'active',
+      created_at: profile.created_at ?? new Date().toISOString(),
+      service_categories: [],
+      rating: 0,
+      response_time: '—',
+      verified: false,
+      financing_available: false,
+      total_reviews: 0,
+      commission_pct: 15,
+    }
+  }, [mockVendorId, profile])
+
+  const mockLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [VENDOR_ID])
+  const closedSales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [VENDOR_ID])
 
   // Convert sent projects from homeowner side into lead-like objects
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
@@ -64,7 +122,7 @@ export default function VendorDashboard() {
     pack_items: p.item.selections,
     slot: p.sentAt,
     received_at: p.sentAt,
-  })), [sentProjects])
+  })), [sentProjects, VENDOR_ID])
 
   // Per-lead status overrides — applied on top of homeowner-leads + mock-leads
   // so that vendor actions (Confirm / Reject / Reschedule / Mark-as-Sold) move
@@ -227,6 +285,19 @@ export default function VendorDashboard() {
           </div>
         )}
       </Card>
+    )
+  }
+
+  // Render an empty shell while auth hydrates (useEffect will redirect if the
+  // profile resolves to a non-vendor role). Prevents a flash of "vendor.X" on
+  // a null vendor before the auth guard fires.
+  if (!vendor) {
+    return (
+      <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
+        <Card className="rounded-xl shadow-sm">
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading vendor dashboard…</CardContent>
+        </Card>
+      </motion.div>
     )
   }
 
