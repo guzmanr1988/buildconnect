@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Package, Check, DollarSign } from 'lucide-react'
+import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,12 +24,44 @@ export default function VendorCatalog() {
     getPrice,
   } = useVendorCatalogStore()
 
+  // Collapse state is per-service, session-scoped (no persist — if vendor
+  // refreshes, everything starts expanded again, which matches the "just
+  // activated" default). Tracking COLLAPSED (not expanded) so a newly
+  // activated service naturally renders expanded without a state write.
+  const [collapsedServices, setCollapsedServices] = useState<Set<string>>(new Set())
+  // Track services that were just toggled on so we always render them
+  // expanded on activation even if they had been collapsed previously.
+  const prevEnabledRef = useRef<Set<string>>(new Set())
+  const toggleCollapsed = (id: string) => {
+    setCollapsedServices((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   // Sync with admin catalog on mount
   useEffect(() => {
     if (adminServices.length > 0) {
       initFromAdmin(adminServices)
     }
   }, [adminServices.length])
+
+  // When a service is newly activated, ensure it renders expanded even if it
+  // had been collapsed during a prior active session.
+  useEffect(() => {
+    const currentlyEnabled = new Set(vendorServices.filter((s) => s.enabled).map((s) => s.id))
+    const newlyEnabled = Array.from(currentlyEnabled).filter((id) => !prevEnabledRef.current.has(id))
+    if (newlyEnabled.length > 0) {
+      setCollapsedServices((prev) => {
+        const next = new Set(prev)
+        for (const id of newlyEnabled) next.delete(id)
+        return next
+      })
+    }
+    prevEnabledRef.current = currentlyEnabled
+  }, [vendorServices])
 
   const enabledCount = vendorServices.filter((s) => s.enabled).length
 
@@ -58,13 +90,39 @@ export default function VendorCatalog() {
             return sum + g.options.filter(o => isOptionEnabled(service.id, g.id, o.id)).length
           }, 0)
 
+          const collapsed = enabled && collapsedServices.has(service.id)
+          const expanded = enabled && !collapsed
+
           return (
             <motion.div key={service.id} variants={item}>
               <Card className={cn('rounded-xl shadow-sm transition', enabled && 'border-primary/30')}>
-                {/* Service header with toggle */}
-                <CardHeader className="pb-2">
+                {/* Service header — clickable to toggle collapse when service is enabled. */}
+                <CardHeader
+                  className={cn('pb-2', enabled && 'cursor-pointer select-none')}
+                  onClick={() => { if (enabled) toggleCollapsed(service.id) }}
+                  role={enabled ? 'button' : undefined}
+                  tabIndex={enabled ? 0 : undefined}
+                  aria-expanded={enabled ? expanded : undefined}
+                  aria-controls={enabled ? `vendor-service-panel-${service.id}` : undefined}
+                  onKeyDown={(e) => {
+                    if (!enabled) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      toggleCollapsed(service.id)
+                    }
+                  }}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
+                      {enabled && (
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
+                            collapsed && '-rotate-90'
+                          )}
+                          aria-hidden="true"
+                        />
+                      )}
                       <CardTitle className="text-base font-heading">{service.name}</CardTitle>
                       {enabled && (
                         <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
@@ -72,10 +130,14 @@ export default function VendorCatalog() {
                         </Badge>
                       )}
                     </div>
-                    <Switch
-                      checked={enabled}
-                      onCheckedChange={() => toggleService(service.id)}
-                    />
+                    {/* Switch must not bubble its click up to the header's toggle-collapse handler. */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={() => toggleService(service.id)}
+                        aria-label={`${enabled ? 'Deactivate' : 'Activate'} ${service.name}`}
+                      />
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{service.tagline}</p>
                   {enabled && optionCount > 0 && (
@@ -83,9 +145,9 @@ export default function VendorCatalog() {
                   )}
                 </CardHeader>
 
-                {/* Option groups - only show when enabled */}
-                {enabled && (
-                  <CardContent className="space-y-4 pt-0">
+                {/* Option groups — only rendered when service is enabled AND panel is expanded. */}
+                {expanded && (
+                  <CardContent id={`vendor-service-panel-${service.id}`} className="space-y-4 pt-0">
                     {service.optionGroups.map((group) => (
                       <div key={group.id} className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
