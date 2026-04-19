@@ -152,7 +152,7 @@ export default function VendorDashboard() {
     )
   }
 
-  function SectionHeader({
+  function LeadStatusTile({
     title,
     count,
     color,
@@ -168,24 +168,43 @@ export default function VendorDashboard() {
     onToggle: () => void
   }) {
     return (
-      <button
-        type="button"
+      <Card
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
         onClick={onToggle}
-        className="flex items-center justify-between w-full py-3 group"
-      >
-        <div className="flex items-center gap-3">
-          <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', color)}>
-            <Icon className="h-4 w-4 text-white" />
-          </div>
-          <h2 className="text-base sm:text-lg font-semibold font-heading text-foreground">{title}</h2>
-          <Badge variant="secondary" className="text-xs">{count}</Badge>
-        </div>
-        {open ? (
-          <ChevronUp className="h-5 w-5 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+        className={cn(
+          'relative overflow-hidden transition-all cursor-pointer select-none',
+          'hover:shadow-md hover:-translate-y-0.5',
+          open && 'ring-2 ring-primary/40 shadow-md'
         )}
-      </button>
+      >
+        <CardContent className="p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-[11px] font-medium text-muted-foreground truncate">{title}</p>
+              <p className="text-2xl font-medium tracking-tight font-heading text-foreground">{count}</p>
+              <p className="text-[10px] font-medium text-muted-foreground">
+                {open ? 'Hide list' : 'Tap to expand'}
+              </p>
+            </div>
+            <div className={cn('rounded-lg p-2 shrink-0', color)}>
+              <Icon className="h-4 w-4 text-white" />
+            </div>
+          </div>
+          {open ? (
+            <ChevronUp className="absolute bottom-2 right-2 h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="absolute bottom-2 right-2 h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </CardContent>
+      </Card>
     )
   }
 
@@ -237,9 +256,9 @@ export default function VendorDashboard() {
         </motion.div>
       </div>
 
-      {/* New Leads */}
-      <motion.div variants={item}>
-        <SectionHeader
+      {/* Lead Status Tiles — 2x2 grid mirroring KPI card shape. */}
+      <motion.div variants={item} className="grid grid-cols-2 gap-2 sm:gap-4">
+        <LeadStatusTile
           title="New Leads"
           count={newLeads.length}
           color="bg-amber-500"
@@ -247,20 +266,7 @@ export default function VendorDashboard() {
           open={newOpen}
           onToggle={() => setNewOpen(!newOpen)}
         />
-        {newOpen && (
-          <div className="grid gap-3 mt-2">
-            {newLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
-            ) : (
-              newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        )}
-      </motion.div>
-
-      {/* Confirmed Leads */}
-      <motion.div variants={item}>
-        <SectionHeader
+        <LeadStatusTile
           title="Confirmed Leads"
           count={confirmedLeads.length}
           color="bg-emerald-500"
@@ -268,20 +274,7 @@ export default function VendorDashboard() {
           open={confirmedOpen}
           onToggle={() => setConfirmedOpen(!confirmedOpen)}
         />
-        {confirmedOpen && (
-          <div className="grid gap-3 mt-2">
-            {confirmedLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No confirmed leads yet.</p>
-            ) : (
-              confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        )}
-      </motion.div>
-
-      {/* Sold Leads */}
-      <motion.div variants={item}>
-        <SectionHeader
+        <LeadStatusTile
           title="Sold Leads"
           count={soldLeads.length}
           color="bg-primary"
@@ -289,20 +282,7 @@ export default function VendorDashboard() {
           open={soldOpen}
           onToggle={() => setSoldOpen(!soldOpen)}
         />
-        {soldOpen && (
-          <div className="grid gap-3 mt-2">
-            {soldLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No sold leads yet.</p>
-            ) : (
-              soldLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        )}
-      </motion.div>
-
-      {/* Archived Leads */}
-      <motion.div variants={item}>
-        <SectionHeader
+        <LeadStatusTile
           title="Archived Leads"
           count={archivedLeads.length}
           color="bg-slate-500"
@@ -310,16 +290,72 @@ export default function VendorDashboard() {
           open={archivedOpen}
           onToggle={() => setArchivedOpen(!archivedOpen)}
         />
-        {archivedOpen && (
-          <div className="grid gap-3 mt-2">
+      </motion.div>
+
+      {/* Expanded lists — each active tile contributes its list below the grid. */}
+      {newOpen && (
+        <motion.div variants={item}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
+            <Inbox className="h-3.5 w-3.5" />
+            New Leads ({newLeads.length})
+          </h3>
+          <div className="grid gap-3">
+            {newLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
+            ) : (
+              newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {confirmedOpen && (
+        <motion.div variants={item}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
+            <CalendarCheck className="h-3.5 w-3.5" />
+            Confirmed Leads ({confirmedLeads.length})
+          </h3>
+          <div className="grid gap-3">
+            {confirmedLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No confirmed leads yet.</p>
+            ) : (
+              confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {soldOpen && (
+        <motion.div variants={item}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
+            <Handshake className="h-3.5 w-3.5" />
+            Sold Leads ({soldLeads.length})
+          </h3>
+          <div className="grid gap-3">
+            {soldLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No sold leads yet.</p>
+            ) : (
+              soldLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {archivedOpen && (
+        <motion.div variants={item}>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mt-4 mb-2">
+            <Archive className="h-3.5 w-3.5" />
+            Archived Leads ({archivedLeads.length})
+          </h3>
+          <div className="grid gap-3">
             {archivedLeads.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No archived leads.</p>
             ) : (
               archivedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
-        )}
-      </motion.div>
+        </motion.div>
+      )}
 
       {/* Lead Detail Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
