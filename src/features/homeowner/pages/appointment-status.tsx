@@ -147,7 +147,7 @@ export function AppointmentStatusPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
-                Lead Details
+                Homeowner Info
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
