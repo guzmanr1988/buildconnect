@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getProfile } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
+import { useCatalogStore } from '@/stores/catalog-store'
 
 export function AuthBootstrap() {
   useEffect(() => {
@@ -14,6 +15,10 @@ export function AuthBootstrap() {
         const store = useAuthStore.getState()
         store.setSession({ access_token, user: { id: userId, email } })
         store.setProfile(profile)
+        // Catalog is authed-read-only — pull fresh data now that the session is live.
+        // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
+        // fallback and sets lastFetchError for surfaces that care).
+        useCatalogStore.getState().hydrateFromServer()
       } catch (err) {
         console.error('[AuthBootstrap] getProfile failed:', err)
       }
@@ -35,6 +40,9 @@ export function AuthBootstrap() {
       // post-AuthBootstrap 1459789).
       if (event === 'SIGNED_OUT') {
         useAuthStore.getState().clearLocalSession()
+        // Reset catalog to bundled fallback so a subsequent unauthed load
+        // doesn't show stale server data from the previous session.
+        useCatalogStore.getState().resetToBundled()
         return
       }
       // INITIAL_SESSION with null session arrives on every page load for

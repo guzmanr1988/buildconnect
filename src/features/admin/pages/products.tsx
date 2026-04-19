@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus,
   Pencil,
@@ -11,6 +11,7 @@ import {
   ListChecks,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -119,7 +120,15 @@ export default function ProductsAdminPage() {
     removeSubGroup,
     addSubOption,
     removeSubOption,
+    hydrateFromServer,
   } = useCatalogStore()
+
+  // Trigger server hydration on mount so admin sees fresh data from Supabase,
+  // not just whatever's cached in localStorage. SWR pattern: bundled/cached
+  // state renders immediately; server fetch overwrites in the background.
+  useEffect(() => {
+    hydrateFromServer()
+  }, [hydrateFromServer])
 
   // --- Service dialog ---
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false)
@@ -192,48 +201,56 @@ export default function ProductsAdminPage() {
     setServiceDialogOpen(true)
   }
 
-  function handleSaveService() {
+  async function handleSaveService() {
     const features = serviceForm.features
       .split(',')
       .map((f) => f.trim())
       .filter(Boolean)
 
-    if (editingService) {
-      updateService(editingService.id, {
-        name: serviceForm.name,
-        tagline: serviceForm.tagline,
-        description: serviceForm.description,
-        badge: serviceForm.badge || undefined,
-        badgeColor: serviceForm.badgeColor || undefined,
-        phase2: serviceForm.phase2 || undefined,
-        features,
-        stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
-      })
-    } else {
-      const newService: ServiceConfig = {
-        id: serviceForm.id as ServiceCategory,
-        name: serviceForm.name,
-        tagline: serviceForm.tagline,
-        description: serviceForm.description,
-        badge: serviceForm.badge || undefined,
-        badgeColor: serviceForm.badgeColor || undefined,
-        phase2: serviceForm.phase2 || undefined,
-        features,
-        stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
-        optionGroups: [],
+    try {
+      if (editingService) {
+        await updateService(editingService.id, {
+          name: serviceForm.name,
+          tagline: serviceForm.tagline,
+          description: serviceForm.description,
+          badge: serviceForm.badge || undefined,
+          badgeColor: serviceForm.badgeColor || undefined,
+          phase2: serviceForm.phase2 || undefined,
+          features,
+          stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
+        })
+      } else {
+        const newService: ServiceConfig = {
+          id: serviceForm.id as ServiceCategory,
+          name: serviceForm.name,
+          tagline: serviceForm.tagline,
+          description: serviceForm.description,
+          badge: serviceForm.badge || undefined,
+          badgeColor: serviceForm.badgeColor || undefined,
+          phase2: serviceForm.phase2 || undefined,
+          features,
+          stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
+          optionGroups: [],
+        }
+        await addService(newService)
       }
-      addService(newService)
+      setServiceDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
     }
-    setServiceDialogOpen(false)
   }
 
   function confirmDeleteService(s: ServiceConfig) {
     setDeleteTarget({
       type: 'service',
       label: s.name,
-      onConfirm: () => {
-        removeService(s.id)
-        setDeleteDialogOpen(false)
+      onConfirm: async () => {
+        try {
+          await removeService(s.id)
+          setDeleteDialogOpen(false)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        }
       },
     })
     setDeleteDialogOpen(true)
@@ -255,33 +272,41 @@ export default function ProductsAdminPage() {
     setGroupDialogOpen(true)
   }
 
-  function handleSaveGroup() {
-    if (editingGroup) {
-      updateOptionGroup(groupContext, editingGroup.id, {
-        label: groupForm.label,
-        required: groupForm.required,
-        type: groupForm.type,
-      })
-    } else {
-      const newGroup: OptionGroup = {
-        id: groupForm.id,
-        label: groupForm.label,
-        required: groupForm.required,
-        type: groupForm.type,
-        options: [],
+  async function handleSaveGroup() {
+    try {
+      if (editingGroup) {
+        await updateOptionGroup(groupContext, editingGroup.id, {
+          label: groupForm.label,
+          required: groupForm.required,
+          type: groupForm.type,
+        })
+      } else {
+        const newGroup: OptionGroup = {
+          id: groupForm.id,
+          label: groupForm.label,
+          required: groupForm.required,
+          type: groupForm.type,
+          options: [],
+        }
+        await addOptionGroup(groupContext, newGroup)
       }
-      addOptionGroup(groupContext, newGroup)
+      setGroupDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
     }
-    setGroupDialogOpen(false)
   }
 
   function confirmDeleteGroup(serviceId: string, group: OptionGroup) {
     setDeleteTarget({
       type: 'group',
       label: group.label,
-      onConfirm: () => {
-        removeOptionGroup(serviceId, group.id)
-        setDeleteDialogOpen(false)
+      onConfirm: async () => {
+        try {
+          await removeOptionGroup(serviceId, group.id)
+          setDeleteDialogOpen(false)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        }
       },
     })
     setDeleteDialogOpen(true)
@@ -299,21 +324,29 @@ export default function ProductsAdminPage() {
     setDeleteTarget({
       type: 'option',
       label: opt.label,
-      onConfirm: () => {
-        removeOption(serviceId, groupId, opt.id)
-        setDeleteDialogOpen(false)
+      onConfirm: async () => {
+        try {
+          await removeOption(serviceId, groupId, opt.id)
+          setDeleteDialogOpen(false)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        }
       },
     })
     setDeleteDialogOpen(true)
   }
 
-  function handleSaveOption() {
-    addOption(optionContext.serviceId, optionContext.groupId, {
-      id: optionForm.id,
-      label: optionForm.label,
-      description: optionForm.description || undefined,
-    })
-    setOptionDialogOpen(false)
+  async function handleSaveOption() {
+    try {
+      await addOption(optionContext.serviceId, optionContext.groupId, {
+        id: optionForm.id,
+        label: optionForm.label,
+        description: optionForm.description || undefined,
+      })
+      setOptionDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    }
   }
 
   /* ---------- Sub-group handlers ---------- */
@@ -324,7 +357,7 @@ export default function ProductsAdminPage() {
     setSubGroupDialogOpen(true)
   }
 
-  function handleSaveSubGroup() {
+  async function handleSaveSubGroup() {
     const newSubGroup: OptionGroup = {
       id: subGroupForm.id,
       label: subGroupForm.label,
@@ -332,8 +365,17 @@ export default function ProductsAdminPage() {
       type: subGroupForm.type,
       options: [],
     }
-    addSubGroup(subGroupContext.serviceId, subGroupContext.groupId, subGroupContext.optionId, newSubGroup)
-    setSubGroupDialogOpen(false)
+    try {
+      await addSubGroup(
+        subGroupContext.serviceId,
+        subGroupContext.groupId,
+        subGroupContext.optionId,
+        newSubGroup
+      )
+      setSubGroupDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    }
   }
 
   function confirmDeleteSubGroup(
@@ -345,9 +387,13 @@ export default function ProductsAdminPage() {
     setDeleteTarget({
       type: 'group',
       label: subGroup.label,
-      onConfirm: () => {
-        removeSubGroup(serviceId, groupId, optionId, subGroup.id)
-        setDeleteDialogOpen(false)
+      onConfirm: async () => {
+        try {
+          await removeSubGroup(serviceId, groupId, optionId, subGroup.id)
+          setDeleteDialogOpen(false)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        }
       },
     })
     setDeleteDialogOpen(true)
@@ -361,19 +407,23 @@ export default function ProductsAdminPage() {
     setSubOptionDialogOpen(true)
   }
 
-  function handleSaveSubOption() {
-    addSubOption(
-      subOptionContext.serviceId,
-      subOptionContext.groupId,
-      subOptionContext.optionId,
-      subOptionContext.subGroupId,
-      {
-        id: subOptionForm.id,
-        label: subOptionForm.label,
-        description: subOptionForm.description || undefined,
-      }
-    )
-    setSubOptionDialogOpen(false)
+  async function handleSaveSubOption() {
+    try {
+      await addSubOption(
+        subOptionContext.serviceId,
+        subOptionContext.groupId,
+        subOptionContext.optionId,
+        subOptionContext.subGroupId,
+        {
+          id: subOptionForm.id,
+          label: subOptionForm.label,
+          description: subOptionForm.description || undefined,
+        }
+      )
+      setSubOptionDialogOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed')
+    }
   }
 
   function confirmDeleteSubOption(
@@ -386,9 +436,13 @@ export default function ProductsAdminPage() {
     setDeleteTarget({
       type: 'option',
       label: subOpt.label,
-      onConfirm: () => {
-        removeSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
-        setDeleteDialogOpen(false)
+      onConfirm: async () => {
+        try {
+          await removeSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
+          setDeleteDialogOpen(false)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Delete failed')
+        }
       },
     })
     setDeleteDialogOpen(true)
