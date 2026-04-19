@@ -14,7 +14,18 @@ export function AuthBootstrap() {
         if (!mounted) return
         const store = useAuthStore.getState()
         store.setSession({ access_token, user: { id: userId, email } })
-        store.setProfile(profile)
+        // Preserve additional_addresses during Tranche-2: the Supabase profiles
+        // table has no column for them yet (Phase B3 work), so a clean
+        // setProfile(fetched) would wipe any addresses the homeowner added in
+        // /profile. Merge the local value from the current zustand profile if
+        // the fetched profile doesn't carry its own. Once B3 lands, the column
+        // becomes authoritative and this merge is a no-op.
+        const prior = store.profile
+        if (!profile.additional_addresses && prior?.additional_addresses) {
+          store.setProfile({ ...profile, additional_addresses: prior.additional_addresses })
+        } else {
+          store.setProfile(profile)
+        }
         // Catalog is authed-read-only — pull fresh data now that the session is live.
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
