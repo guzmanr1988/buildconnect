@@ -311,6 +311,11 @@ export function CartPage() {
                     <h3 className="text-[15px] font-semibold text-foreground">
                       {item.serviceName}
                     </h3>
+                    {item.address && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        <span className="font-medium">{item.address.label}:</span> {item.address.full}
+                      </p>
+                    )}
                     {/* Show selections */}
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {Object.entries(item.selections).map(([groupId, optionIds]) => {
@@ -599,6 +604,15 @@ export function CartPage() {
                 </SheetHeader>
 
                 <div className="space-y-4">
+                  {viewItem.address && (
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                        Property
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">{viewItem.address.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{viewItem.address.full}</p>
+                    </div>
+                  )}
                   <h3 className="text-sm font-semibold text-foreground">Project Summary</h3>
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
                     {Object.entries(viewItem.selections)

@@ -18,6 +18,11 @@ export interface AddonQuantities {
   waterfalls?: number
 }
 
+export interface CartItemAddress {
+  label: string  // "Primary" or SecondaryAddress.label
+  full: string   // single-line display string
+}
+
 export interface CartItem {
   id: string
   serviceId: string
@@ -32,6 +37,10 @@ export interface CartItem {
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
   metalRoofSelection?: { color: string; roofSize: string }
   addonQuantities?: AddonQuantities
+  // Which property this line item applies to. Phase B2: primary OR one of
+  // profile.additional_addresses, selected at add-to-project time. Optional
+  // because older cart items predating the selector have no address.
+  address?: CartItemAddress
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string

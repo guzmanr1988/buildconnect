@@ -5,8 +5,17 @@ import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets,
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useCatalogStore } from '@/stores/catalog-store'
-import { useCartStore } from '@/stores/cart-store'
+import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
+import { useAuthStore } from '@/stores/auth-store'
+import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
@@ -115,6 +124,26 @@ export function ServiceDetailPage() {
   // N distinct projects of the same service are allowed — different properties,
   // different contractors, different configurations. Cart-store already stores
   // each as a unique item via crypto.randomUUID(). No dedup gate on the button.
+
+  // Phase B2: per-service address selector. Options = primary + additional_addresses.
+  // Key format: "primary" or addr.id. Default primary. Edit mode: restore from
+  // the item being edited if it carries an address.
+  const homeownerProfile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
+  const addressOptions: Array<{ key: string; label: string; full: string }> = [
+    { key: 'primary', label: 'Primary', full: homeownerProfile.address || '' },
+    ...(homeownerProfile.additional_addresses ?? []).map((a) => ({
+      key: a.id,
+      label: a.label,
+      full: [a.street, a.city, a.state, a.zip].filter(Boolean).join(', '),
+    })),
+  ]
+  const [addressKey, setAddressKey] = useState<string>(() => {
+    const edit = editItemForService?.address as CartItemAddress | undefined
+    if (!edit) return 'primary'
+    const match = addressOptions.find((o) => o.label === edit.label)
+    return match?.key ?? 'primary'
+  })
+  const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
   // Legacy localStorage-based trigger: some older callers may still set
   // 'buildconnect-edit-item' instead of using the location.state channel.
@@ -642,8 +671,37 @@ export function ServiceDetailPage() {
           })}
         </div>
 
+        {/* Address selector — which property this project targets. Primary +
+            any additional addresses from the homeowner profile. Shared across
+            all 11 services, lives right above the Add-to-Project CTA. */}
+        <div className="mt-8 pt-6 border-t border-border/50">
+          <label htmlFor="address-select" className="block text-sm font-medium text-foreground mb-2">
+            Which property is this for?
+          </label>
+          <Select value={addressKey} onValueChange={setAddressKey}>
+            <SelectTrigger id="address-select" className="h-11 text-sm">
+              <SelectValue placeholder="Select a property" />
+            </SelectTrigger>
+            <SelectContent>
+              {addressOptions.map((opt) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  <span className="font-medium">{opt.label}</span>
+                  {opt.full && (
+                    <span className="ml-2 text-xs text-muted-foreground">{opt.full}</span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {addressOptions.length === 1 && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Add more properties from your profile to target a different address.
+            </p>
+          )}
+        </div>
+
         {/* CTA */}
-        <div className="mt-8 pt-6 border-t border-border/50 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
           <Button
             size="lg"
             className={cn(
@@ -674,6 +732,9 @@ export function ServiceDetailPage() {
                 void gid
               }
               const hasQuantities = Object.keys(prunedQuantities).length > 0
+              const itemAddress: CartItemAddress | undefined = selectedAddress?.full
+                ? { label: selectedAddress.label, full: selectedAddress.full }
+                : undefined
               const itemData = {
                 serviceId: service.id,
                 serviceName: service.name,
@@ -684,6 +745,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
                 ...(addonQuantities && { addonQuantities }),
+                ...(itemAddress && { address: itemAddress }),
               }
               if (editingItemId) {
                 // Update existing item
