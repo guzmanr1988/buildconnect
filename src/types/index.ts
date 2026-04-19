@@ -25,6 +25,15 @@ export type ServiceCategory =
 
 export type CatalogUnit = 'per_sq_ft' | 'per_unit' | 'per_linear_ft' | 'flat_rate'
 
+export interface SecondaryAddress {
+  id: string
+  label: string // e.g. "Guest House", "Rental Unit", "Vacation Home"
+  street: string
+  city: string
+  state?: string
+  zip: string
+}
+
 export interface Profile {
   id: string
   email: string
@@ -32,6 +41,11 @@ export interface Profile {
   role: UserRole
   phone: string
   address: string
+  // Additional properties beyond the primary address. A homeowner managing
+  // multiple properties can reach them from the per-service configurator
+  // address selector. Zustand-only / mock-bridged for now — Supabase JSONB
+  // column + RLS land in Tranche-2 (Phase B3).
+  additional_addresses?: SecondaryAddress[]
   company?: string
   avatar_color: string
   initials: string

@@ -10,6 +10,9 @@ interface AuthState {
   role: UserRole | null
   setSession: (session: AuthState['session']) => void
   setProfile: (profile: Profile | null) => void
+  // Partial-patch the current profile. Used by homeowner /profile CRUD for
+  // additional_addresses edits (no Supabase round-trip yet — Phase B3).
+  updateProfile: (patch: Partial<Profile>) => void
   // Clear local zustand state only — no supabase call. AuthBootstrap's
   // onAuthStateChange listener invokes this on SIGNED_OUT. Calling
   // supabase.auth.signOut() from here would re-fire SIGNED_OUT and loop,
@@ -32,6 +35,10 @@ export const useAuthStore = create<AuthState>()(
         set({ session, isAuthenticated: !!session }),
       setProfile: (profile) =>
         set({ profile, role: profile?.role ?? null }),
+      updateProfile: (patch) =>
+        set((state) => ({
+          profile: state.profile ? { ...state.profile, ...patch } : state.profile,
+        })),
       clearLocalSession: () =>
         set({ session: null, profile: null, isAuthenticated: false, role: null }),
       logout: () => {
