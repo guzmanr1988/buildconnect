@@ -27,6 +27,7 @@ import {
   MOCK_SETTINGS,
 } from '@/lib/mock-data'
 import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
@@ -55,17 +56,19 @@ export default function OverviewPage() {
   // instead of a blank page, matching "honest about DB state" posture.
   const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  useEffect(() => {
-    let mounted = true
+  const refreshAnalytics = () => {
     Promise.all([fetchAllClosedSales(), fetchAllTransactions()])
       .then(([cs, tx]) => {
-        if (!mounted) return
         setClosedSales(cs)
         setTransactions(tx)
       })
       .catch((err) => console.error('[admin/overview] analytics fetch failed:', err))
-    return () => { mounted = false }
+  }
+  useEffect(() => {
+    refreshAnalytics()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useRefetchOnFocus(refreshAnalytics)
 
   const totalGMV = useMemo(() => closedSales.reduce((s, c) => s + c.sale_amount, 0), [closedSales])
   const appRevenue = useMemo(() => closedSales.reduce((s, c) => s + c.commission, 0), [closedSales])

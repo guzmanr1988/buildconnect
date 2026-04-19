@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/accordion'
 import { PageHeader } from '@/components/shared/page-header'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { ServiceConfig, OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -131,6 +132,10 @@ export default function ProductsAdminPage() {
   useEffect(() => {
     hydrateFromServer()
   }, [hydrateFromServer])
+
+  // Refresh when the admin switches back to this tab — picks up vendor edits
+  // made in another client without requiring a manual reload.
+  useRefetchOnFocus(hydrateFromServer)
 
   // --- Service dialog ---
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false)

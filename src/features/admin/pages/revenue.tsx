@@ -33,6 +33,7 @@ import {
 } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { fetchAllClosedSales } from '@/lib/api/analytics'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { ClosedSale } from '@/types'
 
 const fadeUp = {
@@ -49,11 +50,16 @@ const CHART_COLORS = ['#f59e0b', '#3b82f6', '#06b6d4', '#10b981', '#ef4444']
 export default function RevenuePage() {
   // Phase 5: closed_sales fetched from Supabase at mount.
   const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
+  const refreshClosedSales = () => {
+    fetchAllClosedSales()
+      .then(setClosedSales)
+      .catch((err) => console.error('[admin/revenue] fetch failed:', err))
+  }
   useEffect(() => {
-    let mounted = true
-    fetchAllClosedSales().then((cs) => { if (mounted) setClosedSales(cs) }).catch((err) => console.error('[admin/revenue] fetch failed:', err))
-    return () => { mounted = false }
+    refreshClosedSales()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useRefetchOnFocus(refreshClosedSales)
 
   // Reverse-map Supabase vendor UUIDs → MOCK_VENDORS entries for display
   // (profile wiring is a separate Tranche 2 item; vendor display data still

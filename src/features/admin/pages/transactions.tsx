@@ -14,6 +14,7 @@ import {
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -60,11 +61,16 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 export default function TransactionsPage() {
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const refreshTransactions = () => {
+    fetchAllTransactions()
+      .then(setTransactions)
+      .catch((err) => console.error('[admin/transactions] fetch failed:', err))
+  }
   useEffect(() => {
-    let mounted = true
-    fetchAllTransactions().then((tx) => { if (mounted) setTransactions(tx) }).catch((err) => console.error('[admin/transactions] fetch failed:', err))
-    return () => { mounted = false }
+    refreshTransactions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useRefetchOnFocus(refreshTransactions)
 
   const grouped = useMemo(() => {
     const result: Record<SectionKey, Transaction[]> = {
