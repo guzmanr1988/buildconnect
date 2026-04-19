@@ -602,7 +602,13 @@ export default function ProductsAdminPage() {
                       </div>
                     </AccordionTrigger>
                     <div className="flex items-center gap-0.5 shrink-0">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditService(service)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEditService(service)}
+                        aria-label={`Edit ${service.name}`}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
@@ -610,6 +616,7 @@ export default function ProductsAdminPage() {
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => confirmDeleteService(service)}
+                        aria-label={`Delete ${service.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -677,7 +684,13 @@ export default function ProductsAdminPage() {
                                 )}
                               </button>
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditGroup(service.id, group)}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditGroup(service.id, group)}
+                                  aria-label={`Edit ${group.label}`}
+                                >
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                                 <Button
@@ -685,6 +698,7 @@ export default function ProductsAdminPage() {
                                   size="icon"
                                   className="h-7 w-7 text-destructive hover:text-destructive"
                                   onClick={() => confirmDeleteGroup(service.id, group)}
+                                  aria-label={`Delete ${group.label}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
