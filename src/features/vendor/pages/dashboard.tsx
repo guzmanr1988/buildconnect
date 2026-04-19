@@ -769,6 +769,11 @@ export default function VendorDashboard() {
                   }
                 }
                 setSoldDialogOpen(false)
+                // Also close the lead-detail modal so the vendor returns to the
+                // list view with the lead now in the Sold column (kratos msg
+                // 1776636334448). Matches the Confirm / Reject / Reschedule
+                // auto-close pattern already in place.
+                setSheetOpen(false)
               }}
             >
               <Handshake className="h-4 w-4 mr-1.5" /> Confirm Sale
