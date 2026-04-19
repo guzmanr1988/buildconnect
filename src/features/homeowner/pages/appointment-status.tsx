@@ -154,7 +154,7 @@ export function AppointmentStatusPage() {
               <DetailRow icon={FileText} label="Project" value={lead.project} />
               <DetailRow
                 icon={DollarSign}
-                label="Estimated Value"
+                label="Price"
                 value={`$${lead.value.toLocaleString()}`}
               />
               <DetailRow
