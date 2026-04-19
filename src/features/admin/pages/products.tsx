@@ -3,7 +3,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  ChevronDown,
   ChevronRight,
   GripVertical,
   Package,
@@ -153,6 +152,19 @@ export default function ProductsAdminPage() {
   const [openSubGroups, setOpenSubGroups] = useState<Set<string>>(new Set())
   const toggleSubGroup = (key: string) => {
     setOpenSubGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  // Per-group collapse at the option-group level (Products / Preferences / etc.).
+  // Default empty set = all option-groups collapsed when a service card is expanded;
+  // user-tap on the group header adds to the set to expand. Matches the
+  // collapse-default-at-every-layer directive from kratos msg 1776619023903.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -553,12 +565,22 @@ export default function ProductsAdminPage() {
                         <p className="text-sm text-muted-foreground italic pl-6">No option groups yet.</p>
                       )}
 
-                      {service.optionGroups.map((group) => (
+                      {service.optionGroups.map((group) => {
+                        const groupKey = `${service.id}-${group.id}`
+                        const groupOpen = openGroups.has(groupKey)
+                        return (
                         <Card key={group.id} className="rounded-lg border-dashed">
                           <CardContent className="p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(groupKey)}
+                                aria-expanded={groupOpen}
+                                aria-controls={`group-panel-${groupKey}`}
+                                className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                              >
+                                <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', groupOpen && 'rotate-90')} aria-hidden="true" />
+                                <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <span className="text-sm font-medium">{group.label}</span>
                                 <Badge variant="outline" className="text-xs">
                                   {group.type}
@@ -568,8 +590,8 @@ export default function ProductsAdminPage() {
                                     Required
                                   </Badge>
                                 )}
-                              </div>
-                              <div className="flex items-center gap-1">
+                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditGroup(service.id, group)}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
@@ -584,8 +606,9 @@ export default function ProductsAdminPage() {
                               </div>
                             </div>
 
-                            {/* Options within group */}
-                            <div className="pl-6 space-y-1">
+                            {/* Options within group — collapsible per Rod directive (nested accordion all-the-way-down). */}
+                            {groupOpen && (
+                            <div id={`group-panel-${groupKey}`} className="pl-6 space-y-1">
                               {group.options.map((opt) => (
                                 <div key={opt.id} className="space-y-1">
                                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt">
@@ -709,9 +732,11 @@ export default function ProductsAdminPage() {
                                 Add Option
                               </Button>
                             </div>
+                            )}
                           </CardContent>
                         </Card>
-                      ))}
+                        )
+                      })}
                     </div>
                   </CardContent>
                 </AccordionContent>
