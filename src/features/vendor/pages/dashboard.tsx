@@ -256,8 +256,8 @@ export default function VendorDashboard() {
         </motion.div>
       </div>
 
-      {/* Lead Status Tiles — 2x2 grid mirroring KPI card shape. */}
-      <motion.div variants={item} className="grid grid-cols-2 gap-2 sm:gap-4">
+      {/* Lead Status Tiles — vertical stack of full-width cards per Rod spec (kratos msg 1776575789350). */}
+      <motion.div variants={item} className="flex flex-col gap-2 sm:gap-3">
         <LeadStatusTile
           title="New Leads"
           count={newLeads.length}
