@@ -426,7 +426,7 @@ export const useCatalogStore = create<CatalogState>()(
     }),
     {
       name: 'buildconnect-catalog',
-      version: 7,
+      version: 8,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({

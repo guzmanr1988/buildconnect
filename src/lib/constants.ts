@@ -108,50 +108,27 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
               { id: 'impact_glass', label: 'Impact Glass' }, { id: 'low_e', label: 'Low-E Glass' },
             ]},
           ]},
-          { id: 'garage_doors', label: 'Garage Doors' },
-        ],
-      },
-      {
-        id: 'garage_door_type',
-        label: 'Garage Door Type',
-        required: false,
-        type: 'single',
-        options: [
-          { id: 'single_garage', label: 'Single Garage Door' },
-          { id: 'double_garage', label: 'Double Garage Door' },
-        ],
-      },
-      {
-        id: 'garage_door_size',
-        label: 'Garage Door Size',
-        required: false,
-        type: 'single',
-        options: [
-          { id: 'gd_4_panels', label: '4 Panels' },
-          { id: 'gd_5_panels', label: '5 Panels' },
-        ],
-      },
-      {
-        id: 'garage_door_color',
-        label: 'Garage Door Color',
-        required: false,
-        type: 'single',
-        options: [
-          { id: 'gd_bronze', label: 'Bronze' },
-          { id: 'gd_white', label: 'White' },
-          { id: 'gd_black', label: 'Black' },
-        ],
-      },
-      {
-        id: 'garage_door_glass',
-        label: 'Garage Door Glass Color',
-        required: false,
-        type: 'single',
-        options: [
-          { id: 'gd_grey_white', label: 'Grey-White' },
-          { id: 'gd_clear_white', label: 'Clear-White' },
-          { id: 'gd_grey', label: 'Grey' },
-          { id: 'gd_clear', label: 'Clear' },
+          { id: 'garage_doors', label: 'Garage Doors', subGroups: [
+            { id: 'garage_door_type', label: 'Garage Door Type', required: false, type: 'single' as const, options: [
+              { id: 'single_garage', label: 'Single Garage Door' },
+              { id: 'double_garage', label: 'Double Garage Door' },
+            ]},
+            { id: 'garage_door_size', label: 'Garage Door Size', required: false, type: 'single' as const, options: [
+              { id: 'gd_4_panels', label: '4 Panels' },
+              { id: 'gd_5_panels', label: '5 Panels' },
+            ]},
+            { id: 'garage_door_color', label: 'Garage Door Color', required: false, type: 'single' as const, options: [
+              { id: 'gd_bronze', label: 'Bronze' },
+              { id: 'gd_white', label: 'White' },
+              { id: 'gd_black', label: 'Black' },
+            ]},
+            { id: 'garage_door_glass', label: 'Garage Door Glass Color', required: false, type: 'single' as const, options: [
+              { id: 'gd_grey_white', label: 'Grey-White' },
+              { id: 'gd_clear_white', label: 'Clear-White' },
+              { id: 'gd_grey', label: 'Grey' },
+              { id: 'gd_clear', label: 'Clear' },
+            ]},
+          ]},
         ],
       },
       {
