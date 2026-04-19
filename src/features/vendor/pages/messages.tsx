@@ -286,9 +286,10 @@ export default function VendorMessages() {
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Reply to admin..."
                     className="flex-1"
+                    aria-label="Reply to admin"
                   />
-                  <Button type="submit" size="icon" disabled={!input.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send reply to admin">
+                    <Send className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </form>
               </div>
@@ -392,9 +393,10 @@ export default function VendorMessages() {
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Type a message..."
                     className="flex-1"
+                    aria-label="Type a message"
                   />
-                  <Button type="submit" size="icon" disabled={!input.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send message">
+                    <Send className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </form>
               </div>
