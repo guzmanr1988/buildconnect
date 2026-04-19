@@ -287,7 +287,7 @@ export default function VendorCalendar() {
         <EmptyState
           icon={CalendarIcon}
           title="No upcoming appointments"
-          description="Confirmed appointments will appear here."
+          description="Scheduled appointments will appear here."
         />
       )}
     </motion.div>

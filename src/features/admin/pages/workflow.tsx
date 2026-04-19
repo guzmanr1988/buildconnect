@@ -66,7 +66,7 @@ export default function WorkflowPage() {
 
   const stages = [
     { title: 'New Leads', icon: Inbox, color: 'bg-amber-500', borderColor: 'border-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/20', items: newLeads },
-    { title: 'Confirmed', icon: CheckCircle2, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: confirmed },
+    { title: 'Scheduled', icon: CheckCircle2, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: confirmed },
     { title: 'Sold', icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: sold },
     { title: 'Archived', icon: Archive, color: 'bg-slate-500', borderColor: 'border-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-950/20', items: archived },
   ]

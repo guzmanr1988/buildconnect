@@ -66,8 +66,24 @@ export default function VendorDashboard() {
     received_at: p.sentAt,
   })), [sentProjects])
 
-  // Put homeowner leads first so they appear at the top
-  const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
+  // Per-lead status overrides — applied on top of homeowner-leads + mock-leads
+  // so that vendor actions (Confirm / Reject / Reschedule / Mark-as-Sold) move
+  // a lead between sections regardless of whether the lead is backed by a
+  // sentProject (homeowner-bus channel) or a static MOCK_LEAD (pre-launch test
+  // harness). Keeps the "mock stays as test harness, but flows must close the
+  // loop as if real" rule working for the mock path too (Rod directive).
+  const [leadStatusOverrides, setLeadStatusOverrides] = useState<Record<string, Lead['status']>>({})
+  const setLeadStatus = (leadId: string, status: Lead['status']) => {
+    setLeadStatusOverrides((prev) => ({ ...prev, [leadId]: status }))
+  }
+
+  // Put homeowner leads first so they appear at the top, then apply overrides.
+  const leads = useMemo(() => {
+    const combined = [...homeownerLeads, ...mockLeads]
+    return combined.map((l) =>
+      leadStatusOverrides[l.id] ? { ...l, status: leadStatusOverrides[l.id] } : l
+    )
+  }, [mockLeads, homeownerLeads, leadStatusOverrides])
 
   // Lead categories
   const newLeads = leads.filter((l) => l.status === 'pending' || l.status === 'rescheduled')
@@ -282,7 +298,7 @@ export default function VendorDashboard() {
           </div>
         </LeadStatusTile>
         <LeadStatusTile
-          title="Confirmed Leads"
+          title="Scheduled Leads"
           count={confirmedLeads.length}
           color="bg-emerald-500"
           icon={CalendarCheck}
@@ -291,7 +307,7 @@ export default function VendorDashboard() {
         >
           <div className="grid gap-3">
             {confirmedLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No confirmed leads yet.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">No scheduled leads yet.</p>
             ) : (
               confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
@@ -472,6 +488,8 @@ export default function VendorDashboard() {
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                         onClick={() => {
+                          // Always flip the lead-status override so mock-leads move too.
+                          setLeadStatus(selected.id, 'confirmed')
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                           if (sp) {
                             updateProjectStatus(sp.id, 'approved')
@@ -561,11 +579,12 @@ export default function VendorDashboard() {
             <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancel</Button>
             <Button disabled={!rescheduleDate || !rescheduleTime} onClick={() => {
               if (selected) {
+                // Reschedule moves the lead to Confirmed regardless of sp backing.
+                setLeadStatus(selected.id, 'confirmed')
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                 if (sp) {
                   updateProjectBooking(sp.id, { date: rescheduleDate, time: rescheduleTime })
                   updateProjectStatus(sp.id, 'approved')
-                  setSelected({ ...selected, status: 'confirmed', slot: `${rescheduleDate}T${rescheduleTime}` })
                 }
               }
               setRescheduleOpen(false)
@@ -606,6 +625,8 @@ export default function VendorDashboard() {
               disabled={!rejectionReason.trim()}
               onClick={() => {
                 if (selected) {
+                  // Always flip the lead-status override so mock-leads move too.
+                  setLeadStatus(selected.id, 'rejected')
                   const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                   if (sp) {
                     updateProjectStatus(sp.id, 'declined')
@@ -615,7 +636,6 @@ export default function VendorDashboard() {
                       if (p.id === sp.id) p.rejectionReason = rejectionReason.trim()
                     })
                     useProjectsStore.setState({ sentProjects: [...store.sentProjects] })
-                    setSelected({ ...selected, status: 'rejected' })
                   }
                 }
                 setRejectDialogOpen(false)
@@ -643,7 +663,7 @@ export default function VendorDashboard() {
                   value={saleAmount}
                   onChange={(e) => setSaleAmount(e.target.value)}
                   placeholder="Enter total sale amount"
-                  className="w-full h-10 pl-7 pr-3 rounded-lg border border-input bg-background text-sm"
+                  className="w-full h-10 pl-7 pr-3 rounded-lg border border-input bg-background text-base"
                 />
               </div>
             </div>
@@ -670,10 +690,11 @@ export default function VendorDashboard() {
               disabled={!saleAmount || Number(saleAmount) <= 0}
               onClick={() => {
                 if (selected) {
+                  // Always flip the lead-status override so mock-leads move too.
+                  setLeadStatus(selected.id, 'completed')
                   const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                   if (sp) {
                     markProjectSold(sp.id, Number(saleAmount))
-                    setSelected({ ...selected, status: 'completed' })
                   }
                 }
                 setSoldDialogOpen(false)
