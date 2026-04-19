@@ -224,13 +224,17 @@ export default function UsersPage() {
         </div>
 
         {/* Role filter tabs */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter users by role">
           {ROLE_TABS.map(({ value, label, icon: Icon }) => (
             <Button
               key={value}
               variant={roleFilter === value ? 'default' : 'outline'}
               size="sm"
               onClick={() => setRoleFilter(value)}
+              // aria-pressed makes the active filter discoverable to screen readers.
+              // Visual active-state uses variant="default" (bg-primary); a11y parity
+              // requires the same signal on the accessibility tree.
+              aria-pressed={roleFilter === value}
               className="gap-2"
             >
               <Icon className="h-3.5 w-3.5" />
