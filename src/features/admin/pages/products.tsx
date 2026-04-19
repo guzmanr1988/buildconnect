@@ -114,10 +114,13 @@ export default function ProductsAdminPage() {
     updateOptionGroup,
     removeOptionGroup,
     addOption,
+    updateOption,
     removeOption,
     addSubGroup,
+    updateSubGroup,
     removeSubGroup,
     addSubOption,
+    updateSubOption,
     removeSubOption,
     hydrateFromServer,
   } = useCatalogStore()
@@ -146,6 +149,7 @@ export default function ProductsAdminPage() {
     serviceId: '',
     groupId: '',
   })
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null)
   const [optionForm, setOptionForm] = useState<OptionFormData>(emptyOptionForm)
 
   // --- Sub-group collapse state ---
@@ -179,6 +183,7 @@ export default function ProductsAdminPage() {
     groupId: '',
     optionId: '',
   })
+  const [editingSubGroupId, setEditingSubGroupId] = useState<string | null>(null)
   const [subGroupForm, setSubGroupForm] = useState<GroupFormData>(emptyGroupForm)
 
   // --- Sub-option dialog ---
@@ -189,6 +194,7 @@ export default function ProductsAdminPage() {
     optionId: string
     subGroupId: string
   }>({ serviceId: '', groupId: '', optionId: '', subGroupId: '' })
+  const [editingSubOptionId, setEditingSubOptionId] = useState<string | null>(null)
   const [subOptionForm, setSubOptionForm] = useState<OptionFormData>(emptyOptionForm)
 
   // --- Delete confirm ---
@@ -328,7 +334,19 @@ export default function ProductsAdminPage() {
 
   function openAddOption(serviceId: string, groupId: string) {
     setOptionContext({ serviceId, groupId })
+    setEditingOptionId(null)
     setOptionForm(emptyOptionForm)
+    setOptionDialogOpen(true)
+  }
+
+  function openEditOption(
+    serviceId: string,
+    groupId: string,
+    opt: { id: string; label: string; description?: string }
+  ) {
+    setOptionContext({ serviceId, groupId })
+    setEditingOptionId(opt.id)
+    setOptionForm({ id: opt.id, label: opt.label, description: opt.description ?? '' })
     setOptionDialogOpen(true)
   }
 
@@ -350,11 +368,18 @@ export default function ProductsAdminPage() {
 
   async function handleSaveOption() {
     try {
-      await addOption(optionContext.serviceId, optionContext.groupId, {
-        id: optionForm.id,
-        label: optionForm.label,
-        description: optionForm.description || undefined,
-      })
+      if (editingOptionId) {
+        await updateOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
+          label: optionForm.label,
+          description: optionForm.description || undefined,
+        })
+      } else {
+        await addOption(optionContext.serviceId, optionContext.groupId, {
+          id: optionForm.id,
+          label: optionForm.label,
+          description: optionForm.description || undefined,
+        })
+      }
       setOptionDialogOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed')
@@ -365,25 +390,57 @@ export default function ProductsAdminPage() {
 
   function openAddSubGroup(serviceId: string, groupId: string, optionId: string) {
     setSubGroupContext({ serviceId, groupId, optionId })
+    setEditingSubGroupId(null)
     setSubGroupForm(emptyGroupForm)
     setSubGroupDialogOpen(true)
   }
 
+  function openEditSubGroup(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroup: OptionGroup
+  ) {
+    setSubGroupContext({ serviceId, groupId, optionId })
+    setEditingSubGroupId(subGroup.id)
+    setSubGroupForm({
+      id: subGroup.id,
+      label: subGroup.label,
+      required: subGroup.required,
+      type: subGroup.type,
+    })
+    setSubGroupDialogOpen(true)
+  }
+
   async function handleSaveSubGroup() {
-    const newSubGroup: OptionGroup = {
-      id: subGroupForm.id,
-      label: subGroupForm.label,
-      required: subGroupForm.required,
-      type: subGroupForm.type,
-      options: [],
-    }
     try {
-      await addSubGroup(
-        subGroupContext.serviceId,
-        subGroupContext.groupId,
-        subGroupContext.optionId,
-        newSubGroup
-      )
+      if (editingSubGroupId) {
+        await updateSubGroup(
+          subGroupContext.serviceId,
+          subGroupContext.groupId,
+          subGroupContext.optionId,
+          editingSubGroupId,
+          {
+            label: subGroupForm.label,
+            required: subGroupForm.required,
+            type: subGroupForm.type,
+          }
+        )
+      } else {
+        const newSubGroup: OptionGroup = {
+          id: subGroupForm.id,
+          label: subGroupForm.label,
+          required: subGroupForm.required,
+          type: subGroupForm.type,
+          options: [],
+        }
+        await addSubGroup(
+          subGroupContext.serviceId,
+          subGroupContext.groupId,
+          subGroupContext.optionId,
+          newSubGroup
+        )
+      }
       setSubGroupDialogOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed')
@@ -415,23 +472,51 @@ export default function ProductsAdminPage() {
 
   function openAddSubOption(serviceId: string, groupId: string, optionId: string, subGroupId: string) {
     setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
+    setEditingSubOptionId(null)
     setSubOptionForm(emptyOptionForm)
+    setSubOptionDialogOpen(true)
+  }
+
+  function openEditSubOption(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOpt: { id: string; label: string; description?: string }
+  ) {
+    setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
+    setEditingSubOptionId(subOpt.id)
+    setSubOptionForm({ id: subOpt.id, label: subOpt.label, description: subOpt.description ?? '' })
     setSubOptionDialogOpen(true)
   }
 
   async function handleSaveSubOption() {
     try {
-      await addSubOption(
-        subOptionContext.serviceId,
-        subOptionContext.groupId,
-        subOptionContext.optionId,
-        subOptionContext.subGroupId,
-        {
-          id: subOptionForm.id,
-          label: subOptionForm.label,
-          description: subOptionForm.description || undefined,
-        }
-      )
+      if (editingSubOptionId) {
+        await updateSubOption(
+          subOptionContext.serviceId,
+          subOptionContext.groupId,
+          subOptionContext.optionId,
+          subOptionContext.subGroupId,
+          editingSubOptionId,
+          {
+            label: subOptionForm.label,
+            description: subOptionForm.description || undefined,
+          }
+        )
+      } else {
+        await addSubOption(
+          subOptionContext.serviceId,
+          subOptionContext.groupId,
+          subOptionContext.optionId,
+          subOptionContext.subGroupId,
+          {
+            id: subOptionForm.id,
+            label: subOptionForm.label,
+            description: subOptionForm.description || undefined,
+          }
+        )
+      }
       setSubOptionDialogOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed')
@@ -626,11 +711,11 @@ export default function ProductsAdminPage() {
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-0.5 shrink-0">
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-6 text-xs gap-0.5 sm:opacity-0 sm:group-hover/opt:opacity-100 transition-opacity"
+                                        className="h-7 text-xs gap-0.5"
                                         onClick={() => openAddSubGroup(service.id, group.id, opt.id)}
                                       >
                                         <Plus className="h-2.5 w-2.5" />
@@ -639,8 +724,18 @@ export default function ProductsAdminPage() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-6 opacity-0 group-hover/opt:opacity-100 text-destructive hover:text-destructive transition-opacity"
+                                        className="h-7 w-7"
+                                        onClick={() => openEditOption(service.id, group.id, opt)}
+                                        aria-label={`Edit ${opt.label}`}
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
                                         onClick={() => confirmDeleteOption(service.id, group.id, opt)}
+                                        aria-label={`Delete ${opt.label}`}
                                       >
                                         <Trash2 className="h-3 w-3" />
                                       </Button>
@@ -670,14 +765,26 @@ export default function ProductsAdminPage() {
                                                 </Badge>
                                               )}
                                             </button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-6 w-6 text-destructive hover:text-destructive"
-                                              onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
-                                            >
-                                              <Trash2 className="h-2.5 w-2.5" />
-                                            </Button>
+                                            <div className="flex items-center gap-0.5 shrink-0">
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                aria-label={`Edit ${subGroup.label}`}
+                                              >
+                                                <Pencil className="h-2.5 w-2.5" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                                onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                aria-label={`Delete ${subGroup.label}`}
+                                              >
+                                                <Trash2 className="h-2.5 w-2.5" />
+                                              </Button>
+                                            </div>
                                           </div>
 
                                           {/* Sub-options within sub-group */}
@@ -696,14 +803,26 @@ export default function ProductsAdminPage() {
                                                     </span>
                                                   )}
                                                 </div>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="h-6 w-6 sm:opacity-0 sm:group-hover/subopt:opacity-100 text-destructive hover:text-destructive transition-opacity"
-                                                  onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </Button>
+                                                <div className="flex items-center gap-0.5 shrink-0">
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                    aria-label={`Edit ${subOpt.label}`}
+                                                  >
+                                                    <Pencil className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                                    onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                    aria-label={`Delete ${subOpt.label}`}
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
                                               </div>
                                             ))}
                                             <Button
@@ -929,10 +1048,13 @@ export default function ProductsAdminPage() {
       <Dialog open={optionDialogOpen} onOpenChange={setOptionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Option</DialogTitle>
-            <DialogDescription>Add a new option to this group.</DialogDescription>
+            <DialogTitle>{editingOptionId ? 'Edit Option' : 'Add Option'}</DialogTitle>
+            <DialogDescription>
+              {editingOptionId ? 'Update the option label and description.' : 'Add a new option to this group.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {!editingOptionId && (
             <div className="space-y-1.5">
               <Label htmlFor="opt-id">Option ID (snake_case)</Label>
               <Input
@@ -942,6 +1064,7 @@ export default function ProductsAdminPage() {
                 onChange={(e) => setOptionForm((f) => ({ ...f, id: e.target.value }))}
               />
             </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="opt-label">Label</Label>
               <Input
@@ -965,8 +1088,11 @@ export default function ProductsAdminPage() {
             <Button variant="outline" onClick={() => setOptionDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveOption} disabled={!optionForm.id || !optionForm.label}>
-              Add Option
+            <Button
+              onClick={handleSaveOption}
+              disabled={!optionForm.label || (!editingOptionId && !optionForm.id)}
+            >
+              {editingOptionId ? 'Save Changes' : 'Add Option'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -976,10 +1102,13 @@ export default function ProductsAdminPage() {
       <Dialog open={subGroupDialogOpen} onOpenChange={setSubGroupDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Sub-Menu</DialogTitle>
-            <DialogDescription>Create a new sub-menu group under this option.</DialogDescription>
+            <DialogTitle>{editingSubGroupId ? 'Edit Sub-Menu' : 'Add Sub-Menu'}</DialogTitle>
+            <DialogDescription>
+              {editingSubGroupId ? 'Update the sub-menu label, required, and selection type.' : 'Create a new sub-menu group under this option.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {!editingSubGroupId && (
             <div className="space-y-1.5">
               <Label htmlFor="subgrp-id">Sub-Menu ID (snake_case)</Label>
               <Input
@@ -989,6 +1118,7 @@ export default function ProductsAdminPage() {
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, id: e.target.value }))}
               />
             </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="subgrp-label">Label</Label>
               <Input
@@ -1026,8 +1156,11 @@ export default function ProductsAdminPage() {
             <Button variant="outline" onClick={() => setSubGroupDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveSubGroup} disabled={!subGroupForm.id || !subGroupForm.label}>
-              Create Sub-Menu
+            <Button
+              onClick={handleSaveSubGroup}
+              disabled={!subGroupForm.label || (!editingSubGroupId && !subGroupForm.id)}
+            >
+              {editingSubGroupId ? 'Save Changes' : 'Create Sub-Menu'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1037,10 +1170,13 @@ export default function ProductsAdminPage() {
       <Dialog open={subOptionDialogOpen} onOpenChange={setSubOptionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Sub-Option</DialogTitle>
-            <DialogDescription>Add a new item to this sub-menu.</DialogDescription>
+            <DialogTitle>{editingSubOptionId ? 'Edit Sub-Option' : 'Add Sub-Option'}</DialogTitle>
+            <DialogDescription>
+              {editingSubOptionId ? 'Update the sub-option label and description.' : 'Add a new item to this sub-menu.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {!editingSubOptionId && (
             <div className="space-y-1.5">
               <Label htmlFor="subopt-id">Option ID (snake_case)</Label>
               <Input
@@ -1050,6 +1186,7 @@ export default function ProductsAdminPage() {
                 onChange={(e) => setSubOptionForm((f) => ({ ...f, id: e.target.value }))}
               />
             </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="subopt-label">Label</Label>
               <Input
@@ -1073,8 +1210,11 @@ export default function ProductsAdminPage() {
             <Button variant="outline" onClick={() => setSubOptionDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveSubOption} disabled={!subOptionForm.id || !subOptionForm.label}>
-              Add Item
+            <Button
+              onClick={handleSaveSubOption}
+              disabled={!subOptionForm.label || (!editingSubOptionId && !subOptionForm.id)}
+            >
+              {editingSubOptionId ? 'Save Changes' : 'Add Item'}
             </Button>
           </DialogFooter>
         </DialogContent>

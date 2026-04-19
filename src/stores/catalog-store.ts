@@ -41,6 +41,12 @@ interface CatalogState {
 
   // Option CRUD
   addOption: (serviceId: string, groupId: string, option: ServiceOption) => Promise<void>
+  updateOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    updates: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+  ) => Promise<void>
   removeOption: (serviceId: string, groupId: string, optionId: string) => Promise<void>
 
   // Sub-Group / Sub-Option CRUD
@@ -49,6 +55,13 @@ interface CatalogState {
     groupId: string,
     optionId: string,
     subGroup: OptionGroup
+  ) => Promise<void>
+  updateSubGroup: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    updates: Partial<Omit<OptionGroup, 'id' | 'options'>>
   ) => Promise<void>
   removeSubGroup: (
     serviceId: string,
@@ -62,6 +75,14 @@ interface CatalogState {
     optionId: string,
     subGroupId: string,
     subOption: ServiceOption
+  ) => Promise<void>
+  updateSubOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+    updates: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
   ) => Promise<void>
   removeSubOption: (
     serviceId: string,
@@ -157,6 +178,32 @@ const localAddOption = (
   ),
 })
 
+const localUpdateOption = (
+  state: CatalogState,
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  updates: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+): Pick<CatalogState, 'services'> => ({
+  services: state.services.map((s) =>
+    s.id === serviceId
+      ? {
+          ...s,
+          optionGroups: s.optionGroups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  options: g.options.map((o) =>
+                    o.id === optionId ? { ...o, ...updates } : o
+                  ),
+                }
+              : g
+          ),
+        }
+      : s
+  ),
+})
+
 const localRemoveOption = (
   state: CatalogState,
   serviceId: string,
@@ -195,6 +242,40 @@ const localAddSubGroup = (
                   options: g.options.map((o) =>
                     o.id === optionId
                       ? { ...o, subGroups: [...(o.subGroups || []), subGroup] }
+                      : o
+                  ),
+                }
+              : g
+          ),
+        }
+      : s
+  ),
+})
+
+const localUpdateSubGroup = (
+  state: CatalogState,
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subGroupId: string,
+  updates: Partial<Omit<OptionGroup, 'id' | 'options'>>
+): Pick<CatalogState, 'services'> => ({
+  services: state.services.map((s) =>
+    s.id === serviceId
+      ? {
+          ...s,
+          optionGroups: s.optionGroups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  options: g.options.map((o) =>
+                    o.id === optionId
+                      ? {
+                          ...o,
+                          subGroups: (o.subGroups || []).map((sg) =>
+                            sg.id === subGroupId ? { ...sg, ...updates } : sg
+                          ),
+                        }
                       : o
                   ),
                 }
@@ -261,6 +342,48 @@ const localAddSubOption = (
                           subGroups: (o.subGroups || []).map((sg) =>
                             sg.id === subGroupId
                               ? { ...sg, options: [...sg.options, subOption] }
+                              : sg
+                          ),
+                        }
+                      : o
+                  ),
+                }
+              : g
+          ),
+        }
+      : s
+  ),
+})
+
+const localUpdateSubOption = (
+  state: CatalogState,
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subGroupId: string,
+  subOptionId: string,
+  updates: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+): Pick<CatalogState, 'services'> => ({
+  services: state.services.map((s) =>
+    s.id === serviceId
+      ? {
+          ...s,
+          optionGroups: s.optionGroups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  options: g.options.map((o) =>
+                    o.id === optionId
+                      ? {
+                          ...o,
+                          subGroups: (o.subGroups || []).map((sg) =>
+                            sg.id === subGroupId
+                              ? {
+                                  ...sg,
+                                  options: sg.options.map((so) =>
+                                    so.id === subOptionId ? { ...so, ...updates } : so
+                                  ),
+                                }
                               : sg
                           ),
                         }
@@ -380,6 +503,11 @@ export const useCatalogStore = create<CatalogState>()(
         set((state) => localAddOption(state, serviceId, groupId, option))
       },
 
+      updateOption: async (serviceId, groupId, optionId, updates) => {
+        await api.updateOption(serviceId, groupId, optionId, updates)
+        set((state) => localUpdateOption(state, serviceId, groupId, optionId, updates))
+      },
+
       removeOption: async (serviceId, groupId, optionId) => {
         await api.deleteOption(serviceId, groupId, optionId)
         set((state) => localRemoveOption(state, serviceId, groupId, optionId))
@@ -388,6 +516,13 @@ export const useCatalogStore = create<CatalogState>()(
       addSubGroup: async (serviceId, groupId, optionId, subGroup) => {
         await api.createSubGroup(serviceId, groupId, optionId, subGroup)
         set((state) => localAddSubGroup(state, serviceId, groupId, optionId, subGroup))
+      },
+
+      updateSubGroup: async (serviceId, groupId, optionId, subGroupId, updates) => {
+        await api.updateSubGroup(serviceId, groupId, optionId, subGroupId, updates)
+        set((state) =>
+          localUpdateSubGroup(state, serviceId, groupId, optionId, subGroupId, updates)
+        )
       },
 
       removeSubGroup: async (serviceId, groupId, optionId, subGroupId) => {
@@ -401,6 +536,28 @@ export const useCatalogStore = create<CatalogState>()(
         await api.createSubOption(serviceId, groupId, optionId, subGroupId, subOption)
         set((state) =>
           localAddSubOption(state, serviceId, groupId, optionId, subGroupId, subOption)
+        )
+      },
+
+      updateSubOption: async (serviceId, groupId, optionId, subGroupId, subOptionId, updates) => {
+        await api.updateSubOption(
+          serviceId,
+          groupId,
+          optionId,
+          subGroupId,
+          subOptionId,
+          updates
+        )
+        set((state) =>
+          localUpdateSubOption(
+            state,
+            serviceId,
+            groupId,
+            optionId,
+            subGroupId,
+            subOptionId,
+            updates
+          )
         )
       },
 

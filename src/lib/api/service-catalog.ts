@@ -308,6 +308,24 @@ export async function createOption(
   if (error) throw new Error(`createOption: ${error.message}`)
 }
 
+export async function updateOption(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  patch: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+): Promise<void> {
+  const groupUuid = await resolveGroupUuid(serviceId, groupId)
+  const dbPatch: Record<string, unknown> = {}
+  if (patch.label !== undefined) dbPatch.label = patch.label
+  if (patch.description !== undefined) dbPatch.description = patch.description ?? null
+  const { error } = await supabase
+    .from('options')
+    .update(dbPatch)
+    .eq('option_group_id', groupUuid)
+    .eq('option_id', optionId)
+  if (error) throw new Error(`updateOption: ${error.message}`)
+}
+
 export async function deleteOption(
   serviceId: string,
   groupId: string,
@@ -380,6 +398,26 @@ export async function createSubGroup(
   if (error) throw new Error(`createSubGroup: ${error.message}`)
 }
 
+export async function updateSubGroup(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subGroupId: string,
+  patch: Partial<Omit<OptionGroup, 'id' | 'options'>>
+): Promise<void> {
+  const optionUuid = await resolveOptionUuid(serviceId, groupId, optionId)
+  const dbPatch: Record<string, unknown> = {}
+  if (patch.label !== undefined) dbPatch.label = patch.label
+  if (patch.required !== undefined) dbPatch.required = patch.required
+  if (patch.type !== undefined) dbPatch.type = patch.type
+  const { error } = await supabase
+    .from('sub_groups')
+    .update(dbPatch)
+    .eq('option_id', optionUuid)
+    .eq('sub_group_id', subGroupId)
+  if (error) throw new Error(`updateSubGroup: ${error.message}`)
+}
+
 export async function deleteSubGroup(
   serviceId: string,
   groupId: string,
@@ -411,6 +449,26 @@ export async function createSubOption(
     sort_order: 999,
   })
   if (error) throw new Error(`createSubOption: ${error.message}`)
+}
+
+export async function updateSubOption(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subGroupId: string,
+  subOptionId: string,
+  patch: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+): Promise<void> {
+  const subGroupUuid = await resolveSubGroupUuid(serviceId, groupId, optionId, subGroupId)
+  const dbPatch: Record<string, unknown> = {}
+  if (patch.label !== undefined) dbPatch.label = patch.label
+  if (patch.description !== undefined) dbPatch.description = patch.description ?? null
+  const { error } = await supabase
+    .from('sub_options')
+    .update(dbPatch)
+    .eq('sub_group_id', subGroupUuid)
+    .eq('sub_option_id', subOptionId)
+  if (error) throw new Error(`updateSubOption: ${error.message}`)
 }
 
 export async function deleteSubOption(
