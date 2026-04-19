@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   FileText, DollarSign, CreditCard, ArrowDownToLine, Building2,
@@ -13,9 +13,11 @@ import {
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
 import {
-  MOCK_VENDORS, MOCK_HOMEOWNERS, MOCK_CLOSED_SALES,
-  MOCK_TRANSACTIONS, MOCK_SETTINGS,
+  MOCK_VENDORS, MOCK_HOMEOWNERS, MOCK_SETTINGS,
 } from '@/lib/mock-data'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
+import type { ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -32,12 +34,35 @@ function fmt(n: number) {
 export default function ReportsPage() {
   const year = new Date().getFullYear()
 
-  const data = useMemo(() => {
-    const commissionTx = MOCK_TRANSACTIONS.filter((t) => t.type === 'commission')
-    const membershipTx = MOCK_TRANSACTIONS.filter((t) => t.type === 'membership')
-    const payoutTx = MOCK_TRANSACTIONS.filter((t) => t.type === 'payout')
+  // Phase 5: pull analytics from Supabase at mount.
+  const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  useEffect(() => {
+    let mounted = true
+    Promise.all([fetchAllClosedSales(), fetchAllTransactions()])
+      .then(([cs, tx]) => { if (mounted) { setClosedSales(cs); setTransactions(tx) } })
+      .catch((err) => console.error('[admin/reports] fetch failed:', err))
+    return () => { mounted = false }
+  }, [])
 
-    const totalGMV = MOCK_CLOSED_SALES.reduce((s, c) => s + c.sale_amount, 0)
+  // Reverse-map Supabase vendor UUIDs to MOCK_VENDORS mock-ids for the
+  // per-vendor breakdown (vendor display data still mock-sourced;
+  // profile wiring is separate Tranche 2).
+  const vendorByUuid = useMemo(() => {
+    const m = new Map<string, typeof MOCK_VENDORS[number]>()
+    for (const [mockId, uuid] of Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID)) {
+      const v = MOCK_VENDORS.find((mv) => mv.id === mockId)
+      if (v) m.set(uuid, v)
+    }
+    return m
+  }, [])
+
+  const data = useMemo(() => {
+    const commissionTx = transactions.filter((t) => t.type === 'commission')
+    const membershipTx = transactions.filter((t) => t.type === 'membership')
+    const payoutTx = transactions.filter((t) => t.type === 'payout')
+
+    const totalGMV = closedSales.reduce((s, c) => s + c.sale_amount, 0)
     const totalCommissionRevenue = commissionTx.reduce((s, t) => s + t.amount, 0)
     const commissionPaid = commissionTx.filter((t) => t.status === 'paid').reduce((s, t) => s + t.amount, 0)
     const commissionPending = commissionTx.filter((t) => t.status === 'pending').reduce((s, t) => s + t.amount, 0)
@@ -47,7 +72,8 @@ export default function ReportsPage() {
     const netIncome = totalRevenue - totalPayouts
 
     const vendorBreakdown = MOCK_VENDORS.map((v) => {
-      const sales = MOCK_CLOSED_SALES.filter((s) => s.vendor_id === v.id)
+      const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id]
+      const sales = uuid ? closedSales.filter((s) => s.vendor_id === uuid) : []
       const gmv = sales.reduce((s, c) => s + c.sale_amount, 0)
       const commission = sales.reduce((s, c) => s + c.commission, 0)
       const membership = MOCK_SETTINGS.subscription_fee
@@ -57,12 +83,15 @@ export default function ReportsPage() {
     return {
       totalGMV, totalCommissionRevenue, commissionPaid, commissionPending,
       totalMembershipRevenue, totalPayouts, totalRevenue, netIncome,
-      vendorBreakdown, closedDeals: MOCK_CLOSED_SALES.length,
+      vendorBreakdown, closedDeals: closedSales.length,
       activeVendors: MOCK_VENDORS.filter((v) => v.status === 'active').length,
       totalVendors: MOCK_VENDORS.length,
       activeHomeowners: MOCK_HOMEOWNERS.filter((h) => h.status === 'active').length,
     }
-  }, [])
+  }, [closedSales, transactions])
+
+  // Suppress unused-import lint for vendorByUuid (kept for future use)
+  void vendorByUuid
 
   const handlePrint = () => window.print()
 

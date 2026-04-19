@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
-import { MOCK_TRANSACTIONS } from '@/lib/mock-data'
-import type { TransactionType, TransactionStatus } from '@/types'
+import { fetchAllTransactions } from '@/lib/api/analytics'
+import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -58,14 +58,22 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 ]
 
 export default function TransactionsPage() {
+  // Phase 5: transactions fetched from Supabase at mount.
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  useEffect(() => {
+    let mounted = true
+    fetchAllTransactions().then((tx) => { if (mounted) setTransactions(tx) }).catch((err) => console.error('[admin/transactions] fetch failed:', err))
+    return () => { mounted = false }
+  }, [])
+
   const grouped = useMemo(() => {
-    const result: Record<SectionKey, typeof MOCK_TRANSACTIONS> = {
+    const result: Record<SectionKey, Transaction[]> = {
       commission_paid: [],
       commission_pending: [],
       membership: [],
       payout: [],
     }
-    for (const tx of MOCK_TRANSACTIONS) {
+    for (const tx of transactions) {
       if (tx.type === 'commission') {
         if (tx.status === 'paid') result.commission_paid.push(tx)
         else result.commission_pending.push(tx)
@@ -79,7 +87,7 @@ export default function TransactionsPage() {
       result[key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }
     return result
-  }, [])
+  }, [transactions])
 
   const sectionTotals = useMemo(() => ({
     commission_paid: grouped.commission_paid.reduce((s, t) => s + t.amount, 0),
@@ -89,16 +97,16 @@ export default function TransactionsPage() {
   }), [grouped])
 
   const totals = useMemo(() => ({
-    commission: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission').reduce((s, t) => s + t.amount, 0),
+    commission: transactions.filter((t) => t.type === 'commission').reduce((s, t) => s + t.amount, 0),
     membership: sectionTotals.membership,
     payout: sectionTotals.payout,
-  }), [sectionTotals])
+  }), [transactions, sectionTotals])
 
   const grandTotal = totals.commission + totals.membership + totals.payout
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transactions" description={`${MOCK_TRANSACTIONS.length} total transactions`} />
+      <PageHeader title="Transactions" description={`${transactions.length} total transactions`} />
 
       {/* Summary KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

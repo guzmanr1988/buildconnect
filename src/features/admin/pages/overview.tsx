@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -24,11 +24,10 @@ import { KpiCard } from '@/components/shared/kpi-card'
 import {
   MOCK_VENDORS,
   MOCK_HOMEOWNERS,
-  MOCK_CLOSED_SALES,
-  MOCK_TRANSACTIONS,
   MOCK_SETTINGS,
 } from '@/lib/mock-data'
-import type { AppSettings } from '@/types'
+import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
+import type { AppSettings, ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -39,8 +38,9 @@ const fadeUp = {
   }),
 }
 
-const totalGMV = MOCK_CLOSED_SALES.reduce((s, c) => s + c.sale_amount, 0)
-const appRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
+// Vendors + homeowners still mock-backed — Phase 5 scope is analytics aggregation
+// against real closed_sales + transactions + leads, NOT vendor/homeowner profile
+// wiring (that's a separate per-feature Tranche 2 item).
 const subscriptionRevenue = MOCK_VENDORS.length * MOCK_SETTINGS.subscription_fee
 const activeVendors = MOCK_VENDORS.filter((v) => v.status === 'active').length
 const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').length
@@ -48,6 +48,28 @@ const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').le
 export default function OverviewPage() {
   const navigate = useNavigate()
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
+
+  // Phase 5: admin analytics fetched from Supabase at mount (seeded by
+  // scripts/seed-phase5-analytics.mjs). Fall back to empty arrays on
+  // fetch failure so the page still renders — admin sees zeros-everywhere
+  // instead of a blank page, matching "honest about DB state" posture.
+  const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  useEffect(() => {
+    let mounted = true
+    Promise.all([fetchAllClosedSales(), fetchAllTransactions()])
+      .then(([cs, tx]) => {
+        if (!mounted) return
+        setClosedSales(cs)
+        setTransactions(tx)
+      })
+      .catch((err) => console.error('[admin/overview] analytics fetch failed:', err))
+    return () => { mounted = false }
+  }, [])
+
+  const totalGMV = useMemo(() => closedSales.reduce((s, c) => s + c.sale_amount, 0), [closedSales])
+  const appRevenue = useMemo(() => closedSales.reduce((s, c) => s + c.commission, 0), [closedSales])
+  const MOCK_TRANSACTIONS = transactions
 
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', icon: Wrench },

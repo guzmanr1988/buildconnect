@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   DollarSign,
@@ -29,9 +29,11 @@ import {
 } from 'recharts'
 import {
   MOCK_VENDORS,
-  MOCK_CLOSED_SALES,
   MOCK_SETTINGS,
 } from '@/lib/mock-data'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { fetchAllClosedSales } from '@/lib/api/analytics'
+import type { ClosedSale } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -45,12 +47,34 @@ const fadeUp = {
 const CHART_COLORS = ['#f59e0b', '#3b82f6', '#06b6d4', '#10b981', '#ef4444']
 
 export default function RevenuePage() {
+  // Phase 5: closed_sales fetched from Supabase at mount.
+  const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
+  useEffect(() => {
+    let mounted = true
+    fetchAllClosedSales().then((cs) => { if (mounted) setClosedSales(cs) }).catch((err) => console.error('[admin/revenue] fetch failed:', err))
+    return () => { mounted = false }
+  }, [])
+
+  // Reverse-map Supabase vendor UUIDs → MOCK_VENDORS entries for display
+  // (profile wiring is a separate Tranche 2 item; vendor display data still
+  // mock-sourced).
+  const vendorByUuid = useMemo(() => {
+    const m = new Map<string, typeof MOCK_VENDORS[number]>()
+    for (const [mockId, uuid] of Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID)) {
+      const v = MOCK_VENDORS.find((mv) => mv.id === mockId)
+      if (v) m.set(uuid, v)
+    }
+    return m
+  }, [])
+
   const vendorBreakdown = useMemo(() => {
     const map = new Map<
       string,
       { company: string; totalRevenue: number; appShare: number; vendorShare: number; deals: number; subActive: boolean; commissionPct: number }
     >()
 
+    // Seed with the 3 featured demo vendors (mapped via DEMO_VENDOR_UUID_BY_MOCK_ID)
+    // so they render even with zero sales.
     for (const vendor of MOCK_VENDORS) {
       map.set(vendor.id, {
         company: vendor.company,
@@ -63,8 +87,10 @@ export default function RevenuePage() {
       })
     }
 
-    for (const sale of MOCK_CLOSED_SALES) {
-      const entry = map.get(sale.vendor_id)
+    // Aggregate closed sales against the mock-vendor keys via UUID reverse-lookup.
+    for (const sale of closedSales) {
+      const vendor = vendorByUuid.get(sale.vendor_id)
+      const entry = vendor ? map.get(vendor.id) : undefined
       if (entry) {
         entry.totalRevenue += sale.sale_amount
         entry.appShare += sale.commission
@@ -74,7 +100,7 @@ export default function RevenuePage() {
     }
 
     return Array.from(map.values()).sort((a, b) => b.totalRevenue - a.totalRevenue)
-  }, [])
+  }, [closedSales, vendorByUuid])
 
   const chartData = vendorBreakdown.map((v) => ({
     name: v.company.length > 16 ? v.company.slice(0, 14) + '...' : v.company,
