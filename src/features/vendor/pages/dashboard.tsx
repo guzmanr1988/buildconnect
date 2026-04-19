@@ -401,7 +401,7 @@ export default function VendorDashboard() {
           </div>
         </LeadStatusTile>
         <LeadStatusTile
-          title="Archived Leads"
+          title="Projects Completed ✔️"
           count={archivedLeads.length}
           color="bg-slate-500"
           icon={Archive}
@@ -410,7 +410,7 @@ export default function VendorDashboard() {
         >
           <div className="grid gap-3">
             {archivedLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No archived leads.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">No completed projects yet.</p>
             ) : (
               archivedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
