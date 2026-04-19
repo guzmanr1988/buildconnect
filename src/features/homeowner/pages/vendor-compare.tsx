@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Star, Clock, ShieldCheck, Banknote, Award, TrendingUp } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -6,27 +7,78 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS } from '@/lib/mock-data'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { useCartStore } from '@/stores/cart-store'
+import {
+  computeVendorTotal,
+  formatPriceCents,
+  getVendorPriceMap,
+  type VendorPriceMap,
+  type VendorTotalResult,
+} from '@/lib/api/pricing'
 import { cn } from '@/lib/utils'
 
-const vendors = MOCK_VENDORS.slice(0, 3)
-
-function getHighlights(vendorList: typeof vendors) {
-  const sorted = [...vendorList]
-  const bestPrice = sorted[2] // lowest priced (mock: Paradise Pools)
-  const highestRated = sorted.reduce((a, b) => (a.rating > b.rating ? a : b))
-  return { bestPrice: bestPrice.id, highestRated: highestRated.id }
-}
-
-const highlights = getHighlights(vendors)
-
-const mockPricing: Record<string, { low: string; high: string }> = {
-  'v-1': { low: '$24,000', high: '$35,000' },
-  'v-2': { low: '$28,000', high: '$42,000' },
-  'v-3': { low: '$18,000', high: '$28,000' },
-}
+// Feature the first 3 mock vendors (Apex / Shield / Paradise) that have been
+// bridged to real Supabase profiles + seeded vendor_option_prices rows.
+const featuredVendors = MOCK_VENDORS.slice(0, 3)
 
 export function VendorComparePage() {
   const navigate = useNavigate()
+  const cartItems = useCartStore((s) => s.items)
+
+  const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      setLoading(true)
+      setFetchError(null)
+      try {
+        const entries = await Promise.all(
+          featuredVendors.map(async (v) => {
+            const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id]
+            if (!uuid) return [v.id, new Map()] as const
+            const map = await getVendorPriceMap(uuid)
+            return [v.id, map] as const
+          })
+        )
+        if (!mounted) return
+        setPriceMaps(Object.fromEntries(entries))
+      } catch (err) {
+        if (!mounted) return
+        setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  const totalsByVendor = useMemo(() => {
+    const out: Record<string, VendorTotalResult> = {}
+    for (const v of featuredVendors) {
+      const map = priceMaps[v.id]
+      if (!map) continue
+      out[v.id] = computeVendorTotal(map, cartItems)
+    }
+    return out
+  }, [priceMaps, cartItems])
+
+  const highlights = useMemo(() => {
+    // Best price: lowest non-zero total among vendors that cover all services and have no missing options.
+    const eligible = featuredVendors.filter((v) => {
+      const r = totalsByVendor[v.id]
+      return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.totalCents > 0
+    })
+    const bestPrice = eligible.length > 0
+      ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
+      : null
+    const highestRated = featuredVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+    return { bestPrice, highestRated }
+  }, [totalsByVendor])
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,11 +91,33 @@ export function VendorComparePage() {
         </p>
       </div>
 
+      {fetchError && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+          Could not load vendor pricing: {fetchError}. Showing vendor list without totals.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {vendors.map((vendor, i) => {
-          const pricing = mockPricing[vendor.id] ?? { low: '$20,000', high: '$30,000' }
+        {featuredVendors.map((vendor, i) => {
+          const result = totalsByVendor[vendor.id]
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
+
+          // Decide what to render in the Price slot.
+          let priceText: string
+          let priceTone: 'strong' | 'muted' = 'strong'
+          if (loading) {
+            priceText = 'Loading price…'
+            priceTone = 'muted'
+          } else if (!result || !result.hasSelections) {
+            priceText = 'Configure to see price'
+            priceTone = 'muted'
+          } else if (!result.coversAllServices || result.missingOptionKeys.length > 0 || result.totalCents === 0) {
+            priceText = 'Contact for quote'
+            priceTone = 'muted'
+          } else {
+            priceText = formatPriceCents(result.totalCents)
+          }
 
           return (
             <motion.div
@@ -53,7 +127,6 @@ export function VendorComparePage() {
               transition={{ duration: 0.35, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
             >
               <Card className={cn('relative h-full overflow-visible transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5', (isBestPrice || isHighestRated) && 'mt-3')}>
-                {/* Highlight badges */}
                 {(isBestPrice || isHighestRated) && (
                   <div className="absolute -top-3 left-4 flex gap-1.5 z-10">
                     {isHighestRated && (
@@ -72,7 +145,6 @@ export function VendorComparePage() {
                 )}
 
                 <CardContent className="flex flex-col gap-4 pt-4">
-                  {/* Avatar + info */}
                   <div className="flex items-center gap-3">
                     <AvatarInitials
                       initials={vendor.initials}
@@ -87,7 +159,6 @@ export function VendorComparePage() {
                     </div>
                   </div>
 
-                  {/* Rating */}
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-0.5">
                       {Array.from({ length: 5 }).map((_, starIdx) => (
@@ -112,21 +183,22 @@ export function VendorComparePage() {
                     </span>
                   </div>
 
-                  {/* Response time */}
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
                     <span>Response: {vendor.response_time}</span>
                   </div>
 
-                  {/* Pricing */}
+                  {/* Price */}
                   <div className="rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Estimated Price</p>
-                    <p className="text-lg font-bold font-heading text-foreground">
-                      {pricing.low} <span className="text-muted-foreground font-normal text-sm">-</span> {pricing.high}
+                    <p className="text-xs text-muted-foreground mb-1">Price</p>
+                    <p className={cn(
+                      'text-lg font-bold font-heading',
+                      priceTone === 'strong' ? 'text-foreground' : 'text-muted-foreground italic font-medium'
+                    )}>
+                      {priceText}
                     </p>
                   </div>
 
-                  {/* Badges */}
                   <div className="flex flex-wrap gap-1.5">
                     {vendor.verified && (
                       <Badge variant="secondary" className="gap-1 text-[10px]">
@@ -142,7 +214,6 @@ export function VendorComparePage() {
                     )}
                   </div>
 
-                  {/* CTA */}
                   <Button
                     size="lg"
                     className="mt-auto w-full h-11 text-sm font-medium"

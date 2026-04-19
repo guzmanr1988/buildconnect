@@ -16,6 +16,7 @@ import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/me
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
+import { getOptionMetadata } from '@/lib/option-metadata'
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -64,6 +65,9 @@ export function ServiceDetailPage() {
 
   const [selections, setSelections] = useState<Record<string, string[]>>(
     (editItemForService?.selections as Record<string, string[]>) || {}
+  )
+  const [selectionQuantities, setSelectionQuantities] = useState<Record<string, number>>(
+    (editItemForService?.selectionQuantities as Record<string, number>) || {}
   )
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
@@ -450,6 +454,58 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
+                {/* Quantity steppers for requiresQuantity options (install_windows, install_doors) */}
+                {group.options.some((o) => getOptionMetadata(o.id).requiresQuantity && selected.includes(o.id)) && (
+                  <div className="mt-3 flex flex-wrap gap-3 rounded-lg bg-muted/40 p-3">
+                    {group.options.map((option) => {
+                      const meta = getOptionMetadata(option.id)
+                      if (!meta.requiresQuantity || !selected.includes(option.id)) return null
+                      const min = meta.quantityRange?.min ?? 1
+                      const max = meta.quantityRange?.max ?? 99
+                      const qty = selectionQuantities[option.id] ?? min
+                      const set = (next: number) => {
+                        const clamped = Math.max(min, Math.min(max, next))
+                        setSelectionQuantities((prev) => ({ ...prev, [option.id]: clamped }))
+                      }
+                      return (
+                        <div key={`qty-${option.id}`} className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                            {option.label}: how many?
+                          </span>
+                          <div className="inline-flex items-center rounded-lg border border-border bg-background">
+                            <button
+                              type="button"
+                              aria-label={`Decrease ${option.label} quantity`}
+                              onClick={() => set(qty - 1)}
+                              disabled={qty <= min}
+                              className="h-8 w-8 rounded-l-lg text-sm font-bold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              –
+                            </button>
+                            <input
+                              type="number"
+                              aria-label={`${option.label} quantity`}
+                              min={min}
+                              max={max}
+                              value={qty}
+                              onChange={(e) => set(parseInt(e.target.value, 10) || min)}
+                              className="h-8 w-12 border-x border-border bg-background text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                            <button
+                              type="button"
+                              aria-label={`Increase ${option.label} quantity`}
+                              onClick={() => set(qty + 1)}
+                              disabled={qty >= max}
+                              className="h-8 w-8 rounded-r-lg text-sm font-bold text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
                 {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
@@ -638,10 +694,23 @@ export function ServiceDetailPage() {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
                 : undefined
+              // Prune selectionQuantities to only options still selected + flagged requiresQuantity,
+              // so stale stepper state from deselected options doesn't persist into cart/pricing.
+              const prunedQuantities: Record<string, number> = {}
+              for (const [gid, optIds] of Object.entries(selections)) {
+                for (const oid of optIds) {
+                  if (getOptionMetadata(oid).requiresQuantity && selectionQuantities[oid] !== undefined) {
+                    prunedQuantities[oid] = selectionQuantities[oid]
+                  }
+                }
+                void gid
+              }
+              const hasQuantities = Object.keys(prunedQuantities).length > 0
               const itemData = {
                 serviceId: service.id,
                 serviceName: service.name,
                 selections,
+                ...(hasQuantities && { selectionQuantities: prunedQuantities }),
                 ...(serviceId === 'windows_doors' && windowSelections.length > 0 && { windowSelections }),
                 ...(serviceId === 'windows_doors' && doorSelections.length > 0 && { doorSelections }),
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),

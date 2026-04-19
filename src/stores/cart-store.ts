@@ -23,6 +23,10 @@ export interface CartItem {
   serviceId: string
   serviceName: string
   selections: Record<string, string[]>
+  // Per-option quantities for options flagged requiresQuantity in option-metadata
+  // (e.g. install_windows / install_doors). Keyed by option_id. Absent for options
+  // that don't need a quantity.
+  selectionQuantities?: Record<string, number>
   windowSelections?: ConfiguratorEntry[]
   doorSelections?: ConfiguratorEntry[]
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
