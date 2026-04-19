@@ -108,13 +108,16 @@ export function HomeownerHome() {
         </div>
       </motion.div>
 
+      {/* Lifecycle block — 3 sections tightly grouped so they fit above the fold
+          on 375. Outer page gap-10 stays, but the 3 stages use space-y-3 internally. */}
+      <div className="flex flex-col gap-3">
       {/* Upcoming — always rendered with count; vendor hasn't sold yet. */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
           Upcoming <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({upcoming.length})</span>
         </p>
         {upcoming.length > 0 ? (
@@ -142,8 +145,8 @@ export function HomeownerHome() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
-            <p className="text-[13px] text-muted-foreground">No upcoming bookings yet</p>
+          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
+            <p className="text-[12px] text-muted-foreground">No upcoming bookings yet</p>
           </div>
         )}
       </motion.div>
@@ -154,7 +157,7 @@ export function HomeownerHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.09 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
           Active Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({activeProjects.length})</span>
         </p>
         {activeProjects.length > 0 ? (
@@ -182,8 +185,8 @@ export function HomeownerHome() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
-            <p className="text-[13px] text-muted-foreground">No active projects</p>
+          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
+            <p className="text-[12px] text-muted-foreground">No active projects</p>
           </div>
         )}
       </motion.div>
@@ -194,7 +197,7 @@ export function HomeownerHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.10 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
           Completed Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({completedProjects.length})</span>
         </p>
         {completedProjects.length > 0 ? (
@@ -222,11 +225,12 @@ export function HomeownerHome() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
-            <p className="text-[13px] text-muted-foreground">No completed projects yet</p>
+          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
+            <p className="text-[12px] text-muted-foreground">No completed projects yet</p>
           </div>
         )}
       </motion.div>
+      </div>
 
       {/* Section heading */}
       <div>
