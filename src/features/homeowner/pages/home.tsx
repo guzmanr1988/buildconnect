@@ -108,16 +108,16 @@ export function HomeownerHome() {
         </div>
       </motion.div>
 
-      {/* Upcoming */}
-      {upcoming.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-        >
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Upcoming
-          </p>
+      {/* Upcoming — always rendered with count; vendor hasn't sold yet. */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+          Upcoming <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({upcoming.length})</span>
+        </p>
+        {upcoming.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {upcoming.map((p) => (
               <button
@@ -141,19 +141,23 @@ export function HomeownerHome() {
               </button>
             ))}
           </div>
-        </motion.div>
-      )}
+        ) : (
+          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
+            <p className="text-[13px] text-muted-foreground">No upcoming bookings yet</p>
+          </div>
+        )}
+      </motion.div>
 
       {/* Active Projects — vendor has marked sold, project in motion */}
-      {activeProjects.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.09 }}
-        >
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Active Projects
-          </p>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.09 }}
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+          Active Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({activeProjects.length})</span>
+        </p>
+        {activeProjects.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {activeProjects.map((p) => (
               <button
@@ -177,19 +181,23 @@ export function HomeownerHome() {
               </button>
             ))}
           </div>
-        </motion.div>
-      )}
+        ) : (
+          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
+            <p className="text-[13px] text-muted-foreground">No active projects</p>
+          </div>
+        )}
+      </motion.div>
 
       {/* Completed Projects — sold more than 30 days ago, presumed finished */}
-      {completedProjects.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.10 }}
-        >
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Completed Projects
-          </p>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.10 }}
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+          Completed Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({completedProjects.length})</span>
+        </p>
+        {completedProjects.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {completedProjects.map((p) => (
               <button
@@ -213,8 +221,12 @@ export function HomeownerHome() {
               </button>
             ))}
           </div>
-        </motion.div>
-      )}
+        ) : (
+          <div className="rounded-2xl border border-dashed bg-card/50 p-5 text-center">
+            <p className="text-[13px] text-muted-foreground">No completed projects yet</p>
+          </div>
+        )}
+      </motion.div>
 
       {/* Section heading */}
       <div>
