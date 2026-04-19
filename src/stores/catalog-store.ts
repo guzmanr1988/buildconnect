@@ -218,7 +218,7 @@ export const useCatalogStore = create<CatalogState>()(
     }),
     {
       name: 'buildconnect-catalog',
-      version: 4,
+      version: 5,
       migrate: () => ({
         services: SERVICE_CATALOG,
       }),
