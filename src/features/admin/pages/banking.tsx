@@ -895,6 +895,7 @@ export default function BankingPage() {
                       </div>
                       <div className="flex flex-col items-center gap-2 shrink-0">
                         <Switch
+                          aria-label={`Auto-pay enabled for ${ap.name ?? 'vendor'}`}
                           checked={ap.enabled}
                           onCheckedChange={() => toggleAutoPay(ap.id)}
                         />

@@ -192,6 +192,7 @@ export default function OverviewPage() {
                         <span className="text-sm font-medium">{t.label}</span>
                       </div>
                       <Switch
+                        aria-label={t.label}
                         checked={settings[t.key] as boolean}
                         onCheckedChange={(val: boolean) =>
                           setSettings((prev) => ({ ...prev, [t.key]: val }))
