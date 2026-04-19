@@ -346,7 +346,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium">Stripe Payment Gateway</p>
                   <p className="text-xs text-muted-foreground">Enable Stripe for payment processing</p>
                 </div>
-                <Switch checked={ext.stripeEnabled} onCheckedChange={(val) => setExt((p) => ({ ...p, stripeEnabled: val }))} />
+                <Switch aria-label="Stripe Payment Gateway" checked={ext.stripeEnabled} onCheckedChange={(val) => setExt((p) => ({ ...p, stripeEnabled: val }))} />
               </div>
               {ext.stripeEnabled && (
                 <div className="space-y-2">
@@ -355,6 +355,7 @@ export default function SettingsPage() {
                     Stripe API Key
                   </Label>
                   <Input
+                    aria-label="Stripe API Key"
                     type="password"
                     placeholder="sk_live_..."
                     value={ext.stripeKey}
@@ -368,6 +369,7 @@ export default function SettingsPage() {
                   Google Maps API Key
                 </Label>
                 <Input
+                  aria-label="Google Maps API Key"
                   type="password"
                   placeholder="AIza..."
                   value={ext.mapsApiKey}
@@ -405,6 +407,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <Switch
+                      aria-label={t.label}
                       checked={settings[t.key] as boolean}
                       onCheckedChange={(val: boolean) => setSettings((prev) => ({ ...prev, [t.key]: val }))}
                     />
