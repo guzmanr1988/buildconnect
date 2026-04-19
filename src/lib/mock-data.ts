@@ -8,9 +8,20 @@ export const MOCK_HOMEOWNERS: Profile[] = [
 ]
 
 export const MOCK_VENDORS: Vendor[] = [
-  { id: 'v-1', email: 'apex@vendor.com', name: 'Carlos Mendez', role: 'vendor', phone: '(305) 555-1001', address: '100 NW 7th St, Miami, FL 33136', company: 'Apex Roofing & Solar', avatar_color: '#f59e0b', initials: 'AM', status: 'active', created_at: '2025-11-01T08:00:00Z', service_categories: ['roofing', 'air_conditioning'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 127, commission_pct: 15 },
-  { id: 'v-2', email: 'shield@vendor.com', name: 'Tony Rivera', role: 'vendor', phone: '(786) 555-1002', address: '200 SW 8th St, Miami, FL 33130', company: 'Shield Impact Windows', avatar_color: '#3b82f6', initials: 'TR', status: 'active', created_at: '2025-12-10T09:00:00Z', service_categories: ['windows_doors'], rating: 4.9, response_time: '~1 hour', verified: true, financing_available: true, total_reviews: 89, commission_pct: 15 },
-  { id: 'v-3', email: 'paradise@vendor.com', name: 'Ana Martinez', role: 'vendor', phone: '(305) 555-1003', address: '300 Brickell Ave, Miami, FL 33131', company: 'Paradise Pools FL', avatar_color: '#06b6d4', initials: 'PM', status: 'active', created_at: '2025-12-20T10:00:00Z', service_categories: ['pool', 'pergolas'], rating: 4.7, response_time: '~3 hours', verified: true, financing_available: false, total_reviews: 64, commission_pct: 10 },
+  { id: 'v-1', email: 'apex@vendor.com', name: 'Carlos Mendez', role: 'vendor', phone: '(305) 555-1001', address: '100 NW 7th St, Miami, FL 33136', company: 'Apex Roofing & Solar', avatar_color: '#f59e0b', initials: 'AM', status: 'active', created_at: '2025-11-01T08:00:00Z', service_categories: ['roofing', 'air_conditioning'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 127, commission_pct: 15, reps: [
+    { id: 'v-1-rep-1', name: 'Luis Ortega', role: 'Senior Project Manager', phone: '(305) 555-2001' },
+    { id: 'v-1-rep-2', name: 'Marco DeLeon', role: 'Roofing Lead', phone: '(305) 555-2002' },
+    { id: 'v-1-rep-3', name: 'Jennifer Alvarez', role: 'Solar Specialist', phone: '(305) 555-2003' },
+  ] },
+  { id: 'v-2', email: 'shield@vendor.com', name: 'Tony Rivera', role: 'vendor', phone: '(786) 555-1002', address: '200 SW 8th St, Miami, FL 33130', company: 'Shield Impact Windows', avatar_color: '#3b82f6', initials: 'TR', status: 'active', created_at: '2025-12-10T09:00:00Z', service_categories: ['windows_doors'], rating: 4.9, response_time: '~1 hour', verified: true, financing_available: true, total_reviews: 89, commission_pct: 15, reps: [
+    { id: 'v-2-rep-1', name: 'Roberto Silva', role: 'Senior Installation Lead', phone: '(786) 555-2004' },
+    { id: 'v-2-rep-2', name: 'Patricia Gomez', role: 'Project Coordinator', phone: '(786) 555-2005' },
+  ] },
+  { id: 'v-3', email: 'paradise@vendor.com', name: 'Ana Martinez', role: 'vendor', phone: '(305) 555-1003', address: '300 Brickell Ave, Miami, FL 33131', company: 'Paradise Pools FL', avatar_color: '#06b6d4', initials: 'PM', status: 'active', created_at: '2025-12-20T10:00:00Z', service_categories: ['pool', 'pergolas'], rating: 4.7, response_time: '~3 hours', verified: true, financing_available: false, total_reviews: 64, commission_pct: 10, reps: [
+    { id: 'v-3-rep-1', name: 'Diego Ramirez', role: 'Pool Design Lead', phone: '(305) 555-2006' },
+    { id: 'v-3-rep-2', name: 'Sofia Herrera', role: 'Project Manager', phone: '(305) 555-2007' },
+    { id: 'v-3-rep-3', name: 'Miguel Santos', role: 'Construction Supervisor', phone: '(305) 555-2008' },
+  ] },
   { id: 'v-4', email: 'elite@vendor.com', name: 'David Kim', role: 'vendor', phone: '(954) 555-1004', address: '400 Las Olas Blvd, Ft Lauderdale, FL 33301', company: 'Elite Paving Co', avatar_color: '#10b981', initials: 'EP', status: 'active', created_at: '2026-01-05T11:00:00Z', service_categories: ['driveways', 'pergolas'], rating: 4.6, response_time: '~4 hours', verified: true, financing_available: false, total_reviews: 43, commission_pct: 15 },
   { id: 'v-5', email: 'coolbreeze@vendor.com', name: 'Mike Johnson', role: 'vendor', phone: '(305) 555-1005', address: '500 Bird Rd, Miami, FL 33155', company: 'Cool Breeze HVAC', avatar_color: '#ef4444', initials: 'CB', status: 'pending', created_at: '2026-03-01T12:00:00Z', service_categories: ['air_conditioning'], rating: 4.5, response_time: '~2 hours', verified: false, financing_available: true, total_reviews: 21, commission_pct: 10 },
 ]

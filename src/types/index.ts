@@ -158,6 +158,14 @@ export interface Bug {
   created_at: string
 }
 
+export interface VendorRep {
+  id: string       // stable per-rep id within a vendor (not a Supabase UUID)
+  name: string
+  role?: string    // e.g. "Senior Project Manager", "Lead Installer"
+  phone?: string
+  email?: string
+}
+
 export interface Vendor extends Profile {
   company: string
   service_categories: ServiceCategory[]
@@ -167,6 +175,10 @@ export interface Vendor extends Profile {
   financing_available: boolean
   total_reviews: number
   commission_pct: number
+  // Vendor field reps that can be assigned to a customer lead at Confirm time.
+  // Mock-scoped for now; Supabase vendor_reps table lands in Tranche-2 with the
+  // rest of the vendor-profile wiring.
+  reps?: VendorRep[]
 }
 
 export interface ServiceConfig {

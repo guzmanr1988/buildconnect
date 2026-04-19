@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from './cart-store'
+import type { VendorRep } from '@/types'
 
 export interface ContractorInfo {
   name: string
@@ -33,6 +34,10 @@ export interface SentProject {
   saleAmount?: number
   rejectionReason?: string
   idDocument?: string
+  // Vendor-assigned field representative. Required before the vendor can
+  // Confirm a new-lead modal; editable post-confirm via the confirmed-tab
+  // edit flow. Visible to the homeowner on /home/appointments/:id.
+  assignedRep?: VendorRep
 }
 
 interface ProjectsState {
@@ -41,6 +46,7 @@ interface ProjectsState {
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
+  assignRep: (id: string, rep: VendorRep) => void
   removeProject: (id: string) => void
 }
 
@@ -87,6 +93,14 @@ export const useProjectsStore = create<ProjectsState>()(
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
             p.id === id ? { ...p, status: 'sold', soldAt: new Date().toISOString(), saleAmount } : p
+          ),
+        }))
+      },
+
+      assignRep: (id, rep) => {
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === id ? { ...p, assignedRep: rep } : p
           ),
         }))
       },
