@@ -473,17 +473,21 @@ export default function ProductsAdminPage() {
             <AccordionItem value={service.id} className="border-0">
               <Card className="rounded-xl shadow-sm hover:shadow-md transition overflow-hidden">
                 <CardHeader className="pb-0">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-start justify-between gap-1 sm:gap-2">
                     <AccordionTrigger className="hover:no-underline py-0 flex-1 min-w-0 [&[data-state=open]>svg]:hidden">
-                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
-                        <div className="text-left min-w-0 flex-1">
-                          <CardTitle className="text-sm sm:text-base truncate">{service.name}</CardTitle>
-                          <p className="text-[11px] sm:text-xs text-muted-foreground font-normal mt-0.5 line-clamp-2 sm:line-clamp-none">
-                            {service.tagline}
-                          </p>
+                      <div className="flex flex-col items-stretch gap-1 sm:gap-1.5 min-w-0 flex-1">
+                        {/* Row 1: icon + title/tagline */}
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
+                          <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
+                          <div className="text-left min-w-0 flex-1">
+                            <CardTitle className="text-sm sm:text-base truncate">{service.name}</CardTitle>
+                            <p className="text-[11px] sm:text-xs text-muted-foreground font-normal mt-0.5 line-clamp-2 sm:line-clamp-none">
+                              {service.tagline}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 shrink-0 max-w-[40%] sm:max-w-none justify-end">
+                        {/* Row 2: badges — on their own line so horizontal header row stays compact and action buttons don't clip on narrow widths */}
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pl-6 sm:pl-8">
                           {service.badge && (
                             <Badge variant="secondary" className={cn('text-[10px] sm:text-xs whitespace-nowrap', service.badgeColor)}>
                               {service.badge}
