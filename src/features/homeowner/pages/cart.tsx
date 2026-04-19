@@ -606,6 +606,11 @@ export function CartPage() {
                       .map(([groupId, optionIds]) => {
                       const group = service?.optionGroups.find((g) => g.id === groupId)
                       const aq = viewItem.addonQuantities
+                      // Derived Windows/Doors totals — shown inline on Products (windows/doors)
+                      // AND Install-for (install_windows/install_doors) pills so the drawer
+                      // matches the configurator pill pattern and keeps one source of truth.
+                      const windowsTotal = viewItem.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
+                      const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
                       return (
                         <div key={groupId}>
                           <p className="text-sm font-semibold text-foreground mb-1.5">
@@ -619,6 +624,10 @@ export function CartPage() {
                               let qty = ''
                               if (optId === 'led' && aq?.ledCount) qty = ` ×${aq.ledCount}`
                               if (optId === 'bubbler' && aq?.bubblerCount) qty = ` ×${aq.bubblerCount}`
+                              if (optId === 'windows' && windowsTotal > 0) qty = ` ${windowsTotal}`
+                              if (optId === 'doors' && doorsTotal > 0) qty = ` ${doorsTotal}`
+                              if (optId === 'install_windows' && windowsTotal > 0) qty = ` ${windowsTotal}`
+                              if (optId === 'install_doors' && doorsTotal > 0) qty = ` ${doorsTotal}`
                               if (optId === 'waterfall' && (aq?.laminarJets || aq?.waterfalls)) {
                                 const parts = []
                                 if (aq?.laminarJets) parts.push(`${aq.laminarJets} Jets`)
