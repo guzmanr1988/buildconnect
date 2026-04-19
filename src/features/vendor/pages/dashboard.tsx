@@ -8,7 +8,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
@@ -332,84 +331,75 @@ export default function VendorDashboard() {
         </LeadStatusTile>
       </motion.div>
 
-      {/* Lead Detail Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sheet-floating w-[85%] sm:max-w-md overflow-y-auto">
+      {/* Lead Detail Modal — centered floating dialog with dark backdrop (Dialog primitive handles ESC + backdrop-click dismissal). */}
+      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           {selected && (
-            <div className="space-y-4">
-              <SheetHeader>
-                <SheetTitle className="font-heading text-base">{selected.project}</SheetTitle>
-                <div className="flex items-center gap-2 mt-1">
+            <div className="space-y-3">
+              <DialogHeader className="space-y-1.5">
+                <DialogTitle className="font-heading text-base leading-tight">{selected.project}</DialogTitle>
+                <div className="flex items-center gap-2">
                   <StatusBadge status={selected.status} />
-                  <span className="text-sm text-muted-foreground">{selected.id}</span>
+                  <span className="text-xs text-muted-foreground">{selected.id}</span>
                 </div>
-              </SheetHeader>
+              </DialogHeader>
 
               {/* Customer Info */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Customer Info</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2.5 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span>{selected.address}</span>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Customer Info</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">{selected.address}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4 shrink-0" />
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>{selected.phone}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4 shrink-0" />
-                    <span>{selected.email}</span>
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">{selected.email}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Ruler className="h-4 w-4 shrink-0" />
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <Ruler className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>{selected.sq_ft.toLocaleString()} sq ft</span>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {/* Project Pack */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Project</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <FileCheck className="h-4 w-4 text-muted-foreground shrink-0" />
+              {/* Project */}
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Project</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <FileCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>Permit: {selected.permit_choice ? 'Yes (vendor handles)' : 'No'}</span>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Type</p>
-                    <Badge variant="secondary" className="text-xs capitalize">
+                  <div className="flex items-center gap-2 text-foreground/90">
+                    <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-[10px] capitalize">
                       {selected.service_category.replace(/_/g, ' ')}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Appointment */}
-              <Card className="rounded-xl shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-heading">Appointment</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-medium">{fmtDateTime(selected.slot)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
+                <div className="flex items-center gap-2 text-sm text-foreground/90">
+                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
+                </div>
+              </div>
 
-              {/* Value */}
-              <div className="flex items-center justify-between px-1">
-                <span className="text-sm text-muted-foreground">Estimated Value</span>
-                <span className="text-lg font-bold font-heading">{fmt(selected.value)}</span>
+              {/* Price */}
+              <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
+                <span className="text-sm text-muted-foreground font-medium">Price</span>
+                <span className="text-lg font-bold font-heading text-foreground">{fmt(selected.value)}</span>
               </div>
 
               <Separator />
@@ -485,8 +475,9 @@ export default function VendorDashboard() {
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                           if (sp) {
                             updateProjectStatus(sp.id, 'approved')
-                            setSelected({ ...selected, status: 'confirmed' })
                           }
+                          // Auto-close the lead-detail modal after Confirm fires (kratos msg 1776576431450).
+                          setSheetOpen(false)
                         }}
                       >
                         <Check className="h-4 w-4 mr-1.5" /> Confirm
@@ -497,6 +488,8 @@ export default function VendorDashboard() {
                         onClick={() => {
                           setRejectionReason('')
                           setRejectDialogOpen(true)
+                          // Close the main modal so the reject-reason sub-dialog owns the foreground.
+                          setSheetOpen(false)
                         }}
                       >
                         <X className="h-4 w-4 mr-1.5" /> Reject
@@ -505,7 +498,11 @@ export default function VendorDashboard() {
                     <Button
                       variant="outline"
                       className="w-full"
-                      onClick={() => setRescheduleOpen(true)}
+                      onClick={() => {
+                        setRescheduleOpen(true)
+                        // Close the main modal so the reschedule sub-dialog owns the foreground.
+                        setSheetOpen(false)
+                      }}
                     >
                       <RotateCcw className="h-4 w-4 mr-1.5" /> Reschedule
                     </Button>
@@ -514,8 +511,8 @@ export default function VendorDashboard() {
               </div>
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
