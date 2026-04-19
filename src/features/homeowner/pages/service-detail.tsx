@@ -112,7 +112,9 @@ export function ServiceDetailPage() {
   const removeItem = useCartStore((s) => s.removeItem)
   const cartItems = useCartStore((s) => s.items)
   const cartCount = cartItems.length
-  const alreadyInCart = cartItems.some((i) => i.serviceId === serviceId) && !editItemForService
+  // N distinct projects of the same service are allowed — different properties,
+  // different contractors, different configurations. Cart-store already stores
+  // each as a unique item via crypto.randomUUID(). No dedup gate on the button.
 
   // Legacy localStorage-based trigger: some older callers may still set
   // 'buildconnect-edit-item' instead of using the location.state channel.
@@ -648,7 +650,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || added || alreadyInCart}
+            disabled={!allRequiredDone || added}
             onClick={() => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -701,10 +703,10 @@ export function ServiceDetailPage() {
               setAdded(true)
             }}
           >
-            {added || alreadyInCart ? (
+            {added ? (
               <>
                 <Check className="h-4 w-4" />
-                {editingItemId ? 'Updated' : alreadyInCart ? 'Already in Cart' : 'Added to Cart'}
+                {editingItemId ? 'Updated' : 'Added to Cart'}
               </>
             ) : (
               <>
