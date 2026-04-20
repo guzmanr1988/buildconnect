@@ -104,8 +104,19 @@ export default function VendorDashboard() {
     }
   }, [mockVendorId, profile])
 
-  const mockLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [VENDOR_ID])
-  const closedSales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [VENDOR_ID])
+  // Gate seeded MOCK_LEADS + MOCK_CLOSED_SALES fixtures to only the 5
+  // featured mock vendors (v-1..v-5). Synthesized / unmapped vendors (e.g.
+  // generic Demo Vendor account) see only their own sentProjects — Rod
+  // P0 2026-04-20: DV was inheriting Maria L-0001 + James L-0005 as its
+  // own leads via the filter match when mockVendorId was null.
+  const mockLeads = useMemo(
+    () => (mockVendorId ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
+    [VENDOR_ID, mockVendorId]
+  )
+  const closedSales = useMemo(
+    () => (mockVendorId ? MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID) : []),
+    [VENDOR_ID, mockVendorId]
+  )
 
   // Convert sent projects from homeowner side into lead-like objects
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }

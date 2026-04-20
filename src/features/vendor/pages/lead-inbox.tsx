@@ -15,10 +15,9 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
-
-const VENDOR_ID = 'v-1'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
   roofing: Home,
@@ -43,7 +42,11 @@ function fmtDate(iso: string) {
 
 export default function LeadInbox() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const mockLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
+  const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+  const mockLeads = useMemo(
+    () => (isMock ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
+    [VENDOR_ID, isMock]
+  )
 
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
   const homeownerLeads: Lead[] = useMemo(() => sentProjects.map((p) => ({

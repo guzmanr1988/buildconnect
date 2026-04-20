@@ -9,10 +9,9 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
-
-const VENDOR_ID = 'v-1'
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: 'border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20',
@@ -51,6 +50,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function VendorCalendar() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const { vendorId: VENDOR_ID, isMock } = useVendorScope()
   const now = new Date()
   const [currentMonth, setCurrentMonth] = useState(now.getMonth())
   const [currentYear, setCurrentYear] = useState(now.getFullYear())
@@ -79,10 +79,14 @@ export default function VendorCalendar() {
     })), [sentProjects])
 
   const mockConfirmed = useMemo(
-    () => MOCK_LEADS.filter(
-      (l) => l.vendor_id === VENDOR_ID && ['confirmed', 'rescheduled'].includes(l.status)
+    () => (
+      isMock
+        ? MOCK_LEADS.filter(
+            (l) => l.vendor_id === VENDOR_ID && ['confirmed', 'rescheduled'].includes(l.status)
+          )
+        : []
     ),
-    []
+    [VENDOR_ID, isMock]
   )
 
   const leads = useMemo(
@@ -176,7 +180,7 @@ export default function VendorCalendar() {
             <div className="grid grid-cols-7 gap-1">
               {/* Empty cells for days before the 1st */}
               {Array.from({ length: firstDay }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square" />
+                <div key={`empty-${i}`} className="h-14 sm:h-16" />
               ))}
               {/* Day cells */}
               {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -193,7 +197,7 @@ export default function VendorCalendar() {
                     type="button"
                     onClick={() => setSelectedDate(isSelected ? null : dateStr)}
                     className={cn(
-                      'aspect-square rounded-lg flex flex-col items-center justify-center relative transition-all',
+                      'h-14 sm:h-16 rounded-lg flex flex-col items-center justify-center relative transition-all',
                       isSelected
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : isToday
