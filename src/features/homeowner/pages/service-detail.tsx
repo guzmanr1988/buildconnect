@@ -121,9 +121,18 @@ export function ServiceDetailPage() {
   const removeItem = useCartStore((s) => s.removeItem)
   const cartItems = useCartStore((s) => s.items)
   const cartCount = cartItems.length
-  // N distinct projects of the same service are allowed — different properties,
-  // different contractors, different configurations. Cart-store already stores
-  // each as a unique item via crypto.randomUUID(). No dedup gate on the button.
+  // Single-project-per-service-per-cart gate (kratos msg 1776669325145 Rod
+  // pivot from state-reset approach). Before Add-to-Project fires, check if
+  // cart already has an item for this service. If yes: disable the button +
+  // show 'Already in cart — book or remove first'. Removing the cart item
+  // OR completing its booking (which calls removeItem via booking-confirmation
+  // useEffect) re-enables the button. Edit flow exempt — editingItemId set
+  // means the user is updating their existing cart entry, not adding a second.
+  // Restored from ship #74 pre-multi-address deletion (commit 8daaf4a); gate
+  // is the only constraint — multi-address selector remains intact.
+  const alreadyInCart = cartItems.some(
+    (i) => i.serviceId === serviceId && i.id !== editingItemId
+  )
 
   // Phase B2: per-service address selector. Options = primary + additional_addresses.
   // Key format: "primary" or addr.id. Default primary. Edit mode: restore from
@@ -708,7 +717,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || added}
+            disabled={!allRequiredDone || added || alreadyInCart}
             onClick={() => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -823,9 +832,14 @@ export function ServiceDetailPage() {
               Project Details
             </Button>
           )}
-          {!allRequiredDone && (
+          {!allRequiredDone && !alreadyInCart && (
             <p className="text-xs text-muted-foreground text-center">
               Complete all required selections to continue
+            </p>
+          )}
+          {alreadyInCart && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 text-center font-medium">
+              Already in cart — book or remove first
             </p>
           )}
         </div>
