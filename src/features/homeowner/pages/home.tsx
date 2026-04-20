@@ -300,6 +300,7 @@ export function HomeownerHome() {
                       ) : (
                         tile.projects.map((p) => {
                           const isScheduled = tile.id === 'upcoming' && p.status === 'approved'
+                          const isActiveRow = tile.id === 'active'
                           return (
                           <button
                             key={p.leadId}
@@ -307,10 +308,12 @@ export function HomeownerHome() {
                             data-testid="home-tile-project"
                             data-lead-id={p.leadId}
                             data-scheduled={isScheduled ? 'true' : undefined}
+                            data-active-row={isActiveRow ? 'true' : undefined}
                             onClick={() => navigate(`/home/appointments/${p.leadId}`)}
                             className={cn(
                               'group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]',
-                              isScheduled && 'border-sky-300 bg-sky-50/40 dark:border-sky-500/40 dark:bg-sky-500/5'
+                              isScheduled && 'border-sky-300 bg-sky-50/40 dark:border-sky-500/40 dark:bg-sky-500/5',
+                              isActiveRow && 'border-emerald-300 bg-emerald-50/40 dark:border-emerald-500/40 dark:bg-emerald-500/5'
                             )}
                           >
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
