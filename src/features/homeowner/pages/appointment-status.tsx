@@ -95,7 +95,13 @@ export function AppointmentStatusPage() {
               <StatusBadge
                 status={lead.status}
                 className="text-sm"
-                label={lead.status === 'confirmed' ? 'Scheduled - Pending Approval' : undefined}
+                label={
+                  lead.status === 'pending'
+                    ? 'Scheduled - Pending Approval'
+                    : lead.status === 'confirmed'
+                      ? 'Approved'
+                      : undefined
+                }
               />
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
