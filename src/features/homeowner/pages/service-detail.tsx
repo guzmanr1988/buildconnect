@@ -838,6 +838,20 @@ export function ServiceDetailPage() {
                       return (
                         <span key={optId} className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
                           {opt?.label || optId}
+                          {/* W&D inline counts — match cart Project Summary + configurator
+                              pill pattern (windowTotal / doorTotal derived, one source of truth). */}
+                          {serviceId === 'windows_doors' && optId === 'windows' && windowTotal > 0 && (
+                            <span className="ml-1.5 text-xs opacity-75">{windowTotal}</span>
+                          )}
+                          {serviceId === 'windows_doors' && optId === 'doors' && doorTotal > 0 && (
+                            <span className="ml-1.5 text-xs opacity-75">{doorTotal}</span>
+                          )}
+                          {serviceId === 'windows_doors' && optId === 'install_windows' && windowTotal > 0 && (
+                            <span className="ml-1.5 text-xs opacity-75">{windowTotal}</span>
+                          )}
+                          {serviceId === 'windows_doors' && optId === 'install_doors' && doorTotal > 0 && (
+                            <span className="ml-1.5 text-xs opacity-75">{doorTotal}</span>
+                          )}
                           {/* Inline addon details */}
                           {serviceId === 'pool' && optId === 'led' && ledCount > 0 && (
                             <span className="ml-1.5 text-xs opacity-75">× {ledCount}</span>
