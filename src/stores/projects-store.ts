@@ -144,6 +144,35 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: 'buildconnect-projects',
+      // Hydration-race guard: default zustand-persist shallow-merge makes
+      // persistedState override currentState entirely. If a sentProject gets
+      // written (e.g. booking-confirmation.useEffect → sendProject) BEFORE
+      // hydration commits, the hydration replaces currentState and the
+      // just-written entry is lost. Explicit merge preserves currentState's
+      // in-session writes + dedupes by id on merge back into the array. Same
+      // defensive shape applied to the map fields (assignedRepByLead +
+      // leadStatusOverrides). Ship #57 — Rod asymmetry (old sentProjects
+      // persist, new ones vanish) via kratos msg 1776654848537 + 1776654936301.
+      merge: (persistedState, currentState) => {
+        const ps = (persistedState ?? {}) as Partial<ProjectsState>
+        const persistedProjects = ps.sentProjects ?? []
+        const currentProjects = currentState.sentProjects ?? []
+        const seenIds = new Set<string>()
+        const mergedProjects: SentProject[] = []
+        for (const p of [...persistedProjects, ...currentProjects]) {
+          if (!seenIds.has(p.id)) {
+            seenIds.add(p.id)
+            mergedProjects.push(p)
+          }
+        }
+        return {
+          ...currentState,
+          ...ps,
+          sentProjects: mergedProjects,
+          assignedRepByLead: { ...(ps.assignedRepByLead ?? {}), ...(currentState.assignedRepByLead ?? {}) },
+          leadStatusOverrides: { ...(ps.leadStatusOverrides ?? {}), ...(currentState.leadStatusOverrides ?? {}) },
+        }
+      },
     }
   )
 )

@@ -5,7 +5,7 @@ import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil,
+  UserCheck, Pencil, Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -181,6 +181,28 @@ export default function VendorDashboard() {
   const [editRepLeadId, setEditRepLeadId] = useState<string>('')
   const [editRepChoice, setEditRepChoice] = useState<string>('')
   const [editAdhocRepName, setEditAdhocRepName] = useState<string>('')
+
+  // Demo-mode Clear Demo Data button: wipes projects-store test entries so
+  // Rodolfo can reset QA state without manual localStorage fiddling. Gated
+  // by VITE_DEMO_MODE so it doesn't ship visible to real prod accounts.
+  // Default behavior: env-flag true in current pre-launch deploys; flip to
+  // 'false' in prod env when real users sign in.
+  const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+  const [clearDemoDialogOpen, setClearDemoDialogOpen] = useState(false)
+  const handleClearDemoData = () => {
+    useProjectsStore.setState({
+      sentProjects: [],
+      assignedRepByLead: {},
+      leadStatusOverrides: {},
+    })
+    try {
+      localStorage.removeItem('buildconnect-pending-item')
+      localStorage.removeItem('buildconnect-selected-contractor')
+      localStorage.removeItem('buildconnect-selected-booking')
+      localStorage.removeItem('buildconnect-homeowner-info')
+    } catch { /* storage errors non-fatal */ }
+    setClearDemoDialogOpen(false)
+  }
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Section collapse state
@@ -410,6 +432,18 @@ export default function VendorDashboard() {
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">{vendor.name} &middot; {vendor.phone}</p>
               </div>
+              {demoMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/30"
+                  onClick={() => setClearDemoDialogOpen(true)}
+                  aria-label="Clear demo data"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Clear Demo Data</span>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -929,6 +963,29 @@ export default function VendorDashboard() {
             >
               <Handshake className="h-4 w-4 mr-1.5" /> Confirm Sale
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear Demo Data confirmation — demo-mode gated (VITE_DEMO_MODE). */}
+      <Dialog open={clearDemoDialogOpen} onOpenChange={setClearDemoDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Clear Demo Data?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>
+              This will erase ALL projects in the vendor queue (pending / confirmed / sold / archived),
+              any assigned reps, and any in-progress booking handoff data.
+            </p>
+            <p className="text-xs">
+              Intended for QA — resets your demo state so you can re-test flows from scratch.
+              MOCK_LEADS fixtures (L-0001..L-0005) are not affected; only sentProjects and overrides get wiped.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearDemoDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleClearDemoData}>Clear Demo Data</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
