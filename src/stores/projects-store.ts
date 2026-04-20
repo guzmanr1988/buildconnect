@@ -42,11 +42,19 @@ export interface SentProject {
 
 interface ProjectsState {
   sentProjects: SentProject[]
+  // Lead-id → rep map. Covers the mock-lead case (MOCK_LEADS rows that don't
+  // have a sentProject row). Vendor dashboard writes to both this map AND the
+  // sentProject when a sentProject exists; homeowner + admin read from here
+  // keyed by lead.id, falling back to sentProject.assignedRep when needed.
+  assignedRepByLead: Record<string, VendorRep>
   sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string) => void
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
   assignRep: (id: string, rep: VendorRep) => void
+  // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
+  // handled via assignRep).
+  assignRepByLead: (leadId: string, rep: VendorRep) => void
   removeProject: (id: string) => void
 }
 
@@ -54,6 +62,7 @@ export const useProjectsStore = create<ProjectsState>()(
   persist(
     (set) => ({
       sentProjects: [],
+      assignedRepByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument) => {
         set((state) => ({
@@ -102,6 +111,12 @@ export const useProjectsStore = create<ProjectsState>()(
           sentProjects: state.sentProjects.map((p) =>
             p.id === id ? { ...p, assignedRep: rep } : p
           ),
+        }))
+      },
+
+      assignRepByLead: (leadId, rep) => {
+        set((state) => ({
+          assignedRepByLead: { ...state.assignedRepByLead, [leadId]: rep },
         }))
       },
 

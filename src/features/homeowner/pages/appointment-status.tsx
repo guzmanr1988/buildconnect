@@ -1,11 +1,12 @@
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft, UserCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
 import type { LeadStatus } from '@/types'
 
@@ -39,6 +40,12 @@ export function AppointmentStatusPage() {
   const timeline = statusTimeline[lead.id] ?? [
     { label: 'Lead submitted', time: 'Recently', status: 'pending' as LeadStatus },
   ]
+  // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
+  const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const assignedRep =
+    assignedRepByLead[lead.id] ??
+    sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)?.assignedRep
 
   function formatSlot(slot: string) {
     const d = new Date(slot)
@@ -136,6 +143,36 @@ export function AppointmentStatusPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Representative — only shown once the vendor has assigned one. */}
+        {assignedRep && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.18 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  Representative
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                <p className="text-base font-semibold text-foreground">{assignedRep.name}</p>
+                {assignedRep.role && (
+                  <p className="text-sm text-muted-foreground">{assignedRep.role}</p>
+                )}
+                {assignedRep.phone && (
+                  <DetailRow icon={Phone} label="Phone" value={assignedRep.phone} />
+                )}
+                {assignedRep.email && (
+                  <DetailRow icon={Mail} label="Email" value={assignedRep.email} />
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Lead details */}
         <motion.div

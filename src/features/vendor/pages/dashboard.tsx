@@ -44,6 +44,8 @@ export default function VendorDashboard() {
   const updateProjectBooking = useProjectsStore((s) => s.updateBooking)
   const markProjectSold = useProjectsStore((s) => s.markSold)
   const assignProjectRep = useProjectsStore((s) => s.assignRep)
+  const assignRepByLead = useProjectsStore((s) => s.assignRepByLead)
+  const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
 
   // Auth guard — redirect unauth'd or non-vendor roles to /login.
   useEffect(() => {
@@ -195,9 +197,12 @@ export default function VendorDashboard() {
     setSheetOpen(true)
   }
 
-  // Helper: look up sentProject + assignedRep for a given lead-id. Used by
-  // LeadCard (confirmed-tab rep line) and the edit-rep dialog.
+  // Helper: look up the assigned rep for a given lead-id. Checks both the
+  // lead-keyed override map (covers MOCK_LEADS without a sentProject) AND the
+  // sentProject.assignedRep. Order: override wins (latest vendor edit).
   const getAssignedRepForLead = (leadId: string): VendorRep | undefined => {
+    const override = assignedRepByLead[leadId]
+    if (override) return override
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
     return sp?.assignedRep
   }
@@ -212,6 +217,8 @@ export default function VendorDashboard() {
   const handleSaveEditRep = () => {
     const rep = vendor?.reps?.find((r) => r.id === editRepChoice)
     if (!rep || !editRepLeadId) return
+    // Always write to the lead-keyed map — that's what homeowner + admin read.
+    assignRepByLead(editRepLeadId, rep)
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === editRepLeadId)
     if (sp) assignProjectRep(sp.id, rep)
     setEditRepOpen(false)
@@ -231,6 +238,8 @@ export default function VendorDashboard() {
     return (
       <Card
         className="rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group"
+        data-testid="lead-card"
+        data-lead-id={lead.id}
         onClick={() => openLead(lead)}
       >
         <CardContent className="p-4">
@@ -653,7 +662,12 @@ export default function VendorDashboard() {
                           // confirmed tab / homeowner view.
                           const rep = vendor?.reps?.find((r) => r.id === selectedRepId)
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                          if (rep && sp) assignProjectRep(sp.id, rep)
+                          if (rep) {
+                            // Always write the lead-keyed override (covers mock-lead
+                            // paths without a sentProject).
+                            assignRepByLead(selected.id, rep)
+                            if (sp) assignProjectRep(sp.id, rep)
+                          }
                           // Always flip the lead-status override so mock-leads move too.
                           setLeadStatus(selected.id, 'confirmed')
                           if (sp) {

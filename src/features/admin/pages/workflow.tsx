@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { GitBranch, Inbox, CheckCircle2, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { GitBranch, Inbox, CheckCircle2, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ interface PipelineItem {
 
 export default function WorkflowPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
@@ -38,12 +39,14 @@ export default function WorkflowPage() {
     date: p.sentAt,
     initials: (p.homeowner?.name || 'C').split(' ').map(n => n[0]).join(''),
     vendor: p.contractor?.company,
+    rep: p.assignedRep?.name,
     status: p.status,
     soldAt: p.soldAt,
     saleAmount: p.saleAmount,
   })), [sentProjects])
 
-  // Mock leads as pipeline items
+  // Mock leads as pipeline items — rep comes from the lead-keyed override map
+  // populated when the vendor confirms the lead with a rep picked.
   const mockItems = useMemo(() => MOCK_LEADS.map((l) => ({
     id: l.id,
     name: l.homeowner_name,
@@ -51,9 +54,10 @@ export default function WorkflowPage() {
     date: l.received_at,
     initials: l.homeowner_name.split(' ').map(n => n[0]).join(''),
     vendor: 'MH Home Solutions',
+    rep: assignedRepByLead[l.id]?.name,
     status: l.status === 'confirmed' ? 'approved' : l.status === 'completed' ? 'sold' : l.status === 'rejected' ? 'declined' : 'pending',
     soldAt: undefined,
-  })), [])
+  })), [assignedRepByLead])
 
   const allItems = [...projectItems, ...mockItems]
   const q = searchQuery.toLowerCase()
@@ -174,7 +178,7 @@ export default function WorkflowPage() {
                           <p className="text-xs text-muted-foreground truncate">{lead.project}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {fmtDate(lead.date)}
@@ -183,6 +187,12 @@ export default function WorkflowPage() {
                           <span className="flex items-center gap-1 truncate">
                             <User className="h-3 w-3" />
                             {lead.vendor}
+                          </span>
+                        )}
+                        {lead.rep && (
+                          <span className="flex items-center gap-1 truncate text-primary">
+                            <UserCheck className="h-3 w-3" />
+                            {lead.rep}
                           </span>
                         )}
                       </div>
