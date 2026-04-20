@@ -144,12 +144,64 @@ export function AppointmentStatusPage() {
           </Card>
         </motion.div>
 
-        {/* Representative — only shown once the vendor has assigned one. */}
+        {/* Project Details — project-scoped fields (Project / Price / Vendor)
+            plus the Project Pack section. Split from Homeowner Info per Rod's
+            directive (kratos msg 1776650664847) so each card reads as one
+            coherent unit instead of 7 mixed fields. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.18 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Project Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <DetailRow icon={FileText} label="Project" value={lead.project} />
+              <DetailRow
+                icon={DollarSign}
+                label="Price"
+                value={`$${lead.value.toLocaleString()}`}
+              />
+              {vendor && (
+                <DetailRow
+                  icon={FileText}
+                  label="Vendor"
+                  value={vendor.company}
+                />
+              )}
+
+              {/* Pack items — scoped to the project, belongs here. */}
+              <div className="mt-2 border-t border-border pt-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Project Pack
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(lead.pack_items).map(([, items]) =>
+                    items.map((item) => (
+                      <Badge key={item} variant="secondary" className="text-[10px]">
+                        {item.replace(/_/g, ' ')}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Representative — only shown once the vendor has assigned one.
+            Sits between Project Details and Homeowner Info — vendor-contact
+            info reads as a bridge between project-scoped and homeowner-scoped. */}
         {assignedRep && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.18 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
           >
             <Card>
               <CardHeader>
@@ -174,11 +226,11 @@ export function AppointmentStatusPage() {
           </motion.div>
         )}
 
-        {/* Lead details */}
+        {/* Homeowner Info — homeowner-scoped contact fields only. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
         >
           <Card>
             <CardHeader>
@@ -188,17 +240,7 @@ export function AppointmentStatusPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <DetailRow icon={FileText} label="Project" value={lead.project} />
-              <DetailRow
-                icon={DollarSign}
-                label="Price"
-                value={`$${lead.value.toLocaleString()}`}
-              />
-              <DetailRow
-                icon={MapPin}
-                label="Address"
-                value={lead.address}
-              />
+              <DetailRow icon={MapPin} label="Address" value={lead.address} />
               <DetailRow icon={Phone} label="Phone" value={lead.phone} />
               <DetailRow icon={Mail} label="Email" value={lead.email} />
               <DetailRow
@@ -206,29 +248,6 @@ export function AppointmentStatusPage() {
                 label="Building Permit"
                 value={lead.permit_choice ? 'Yes' : 'No'}
               />
-              {vendor && (
-                <DetailRow
-                  icon={FileText}
-                  label="Vendor"
-                  value={vendor.company}
-                />
-              )}
-
-              {/* Pack items */}
-              <div className="mt-2 border-t border-border pt-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Project Pack
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(lead.pack_items).map(([, items]) =>
-                    items.map((item) => (
-                      <Badge key={item} variant="secondary" className="text-[10px]">
-                        {item.replace(/_/g, ' ')}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </div>
             </CardContent>
           </Card>
         </motion.div>
