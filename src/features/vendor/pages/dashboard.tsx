@@ -457,11 +457,17 @@ export default function VendorDashboard() {
     const rep = getAssignedRepForLead(lead.id)
     const cancelReq = cancellationRequestsByLead[lead.id]
     const hasPendingCancel = cancelReq?.status === 'pending'
+    // Schedule-Approved affordance (ship #100 per kratos msg 1776714878659):
+    // confirmed lead WITH rep assigned gets a green ring + inline 'Schedule
+    // Approved' label. Pending-cancel (red ring) wins over confirmed-approval
+    // (green ring) since the cancel is the more-urgent state.
+    const isScheduleApproved = lead.status === 'confirmed' && !!rep && !hasPendingCancel
     return (
       <Card
         className={cn(
           'rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group',
-          hasPendingCancel && 'ring-2 ring-destructive/40'
+          hasPendingCancel && 'ring-2 ring-destructive/40',
+          isScheduleApproved && 'ring-2 ring-emerald-500/40 border-emerald-500/40'
         )}
         data-testid="lead-card"
         data-lead-id={lead.id}
@@ -494,6 +500,12 @@ export default function VendorDashboard() {
                       Cancellation requested
                     </Badge>
                   )}
+                  {isScheduleApproved && (
+                    <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold gap-1">
+                      <Check className="h-3 w-3" />
+                      Schedule Approved
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -503,9 +515,15 @@ export default function VendorDashboard() {
             </div>
           </div>
           {rep && (
-            <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-2">
+            <div className={cn(
+              'mt-3 pt-3 border-t flex items-center justify-between gap-2',
+              isScheduleApproved ? 'border-emerald-500/30' : 'border-border/50'
+            )}>
               <div className="flex items-center gap-1.5 text-xs min-w-0">
-                <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                <UserCheck className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  isScheduleApproved ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'
+                )} />
                 <span className="text-muted-foreground">Rep:</span>
                 <span className="font-semibold text-foreground truncate">{rep.name}</span>
                 {rep.role && (
