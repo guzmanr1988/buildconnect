@@ -21,6 +21,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { SecondaryAddress } from '@/types'
+import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
+import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
 const emptyAddressForm: AddressFormData = { label: '', street: '', city: '', state: '', zip: '' }
@@ -46,11 +48,36 @@ export function HomeownerProfilePage() {
   const [profileForm, setProfileForm] = useState({
     name: profile.name,
     phone: profile.phone,
-    address: profile.address,
+  })
+  const [profileAddress, setProfileAddress] = useState<AddressFields>({
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
   })
 
   const openProfileEdit = () => {
-    setProfileForm({ name: profile.name, phone: profile.phone, address: profile.address })
+    setProfileForm({ name: profile.name, phone: profile.phone })
+    // Ship #113: attempt to parse existing single-line address into structured
+    // fields. Legacy format: 'Street, City, State ZIP'. If parse fails, leave
+    // user to re-enter (still saves full string on commit). Profile stays as
+    // single string in store until Tranche-2 structured migration.
+    const addr = profile.address ?? ''
+    const parts = addr.split(',').map((s) => s.trim())
+    let street = ''
+    let city = ''
+    let state = ''
+    let zip = ''
+    if (parts.length >= 3) {
+      street = parts[0]
+      city = parts[1]
+      const stateZip = parts[2].split(/\s+/).filter(Boolean)
+      state = (stateZip[0] ?? '').toUpperCase().slice(0, 2)
+      zip = (stateZip[1] ?? '').replace(/\D/g, '').slice(0, 5)
+    } else {
+      street = addr
+    }
+    setProfileAddress({ street, city, state, zip })
     setProfileEditing(true)
   }
 
@@ -59,16 +86,24 @@ export function HomeownerProfilePage() {
   }
 
   const saveProfileEdit = () => {
-    const trimmed = {
-      name: profileForm.name.trim(),
-      phone: profileForm.phone.trim(),
-      address: profileForm.address.trim(),
+    const name = profileForm.name.trim()
+    const phone = profileForm.phone.trim()
+    const addr = {
+      street: profileAddress.street.trim(),
+      city: profileAddress.city.trim(),
+      state: profileAddress.state.trim(),
+      zip: profileAddress.zip.trim(),
     }
-    if (!trimmed.name || !trimmed.phone || !trimmed.address) {
-      toast.error('Name, phone, and address are required')
+    if (!name || !phone) {
+      toast.error('Name and phone are required')
       return
     }
-    updateProfile(trimmed)
+    if (!addr.street || !addr.city || !addr.state || !addr.zip) {
+      toast.error('Complete all address fields')
+      return
+    }
+    const composed = composeAddress(addr)
+    updateProfile({ name, phone, address: composed })
     setProfileEditing(false)
     toast.success('Profile updated')
   }
@@ -170,20 +205,19 @@ export function HomeownerProfilePage() {
                   <Input
                     id="profile-phone"
                     type="tel"
+                    inputMode="tel"
+                    placeholder="305-555-0101"
                     value={profileForm.phone}
-                    onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, phone: formatPhoneNumber(e.target.value) }))}
                     className="h-9"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="profile-address" className="text-xs">Address</Label>
-                  <Input
-                    id="profile-address"
-                    value={profileForm.address}
-                    onChange={(e) => setProfileForm((f) => ({ ...f, address: e.target.value }))}
-                    className="h-9"
-                  />
-                </div>
+                <AddressFieldset
+                  idPrefix="profile-addr"
+                  labelSize="sm"
+                  value={profileAddress}
+                  onChange={setProfileAddress}
+                />
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="flex-1 gap-1.5" onClick={saveProfileEdit}>
                     <Check className="h-3.5 w-3.5" />
@@ -362,44 +396,17 @@ export function HomeownerProfilePage() {
                 onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="addr-street">Street</Label>
-              <Input
-                id="addr-street"
-                placeholder="123 Main St"
-                value={addressForm.street}
-                onChange={(e) => setAddressForm((f) => ({ ...f, street: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="addr-city">City</Label>
-                <Input
-                  id="addr-city"
-                  placeholder="Miami"
-                  value={addressForm.city}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="addr-state">State</Label>
-                <Input
-                  id="addr-state"
-                  placeholder="FL"
-                  value={addressForm.state ?? ''}
-                  onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="addr-zip">Zip</Label>
-              <Input
-                id="addr-zip"
-                placeholder="33101"
-                value={addressForm.zip}
-                onChange={(e) => setAddressForm((f) => ({ ...f, zip: e.target.value }))}
-              />
-            </div>
+            <AddressFieldset
+              idPrefix="addr"
+              required={false}
+              value={{
+                street: addressForm.street,
+                city: addressForm.city,
+                state: addressForm.state ?? '',
+                zip: addressForm.zip,
+              }}
+              onChange={(next) => setAddressForm((f) => ({ ...f, ...next }))}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddressDialogOpen(false)}>

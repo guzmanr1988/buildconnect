@@ -14,12 +14,17 @@ import { signUp } from '@/lib/auth'
 import { updateVendor } from '@/lib/api/vendors'
 import type { UserRole } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
+import { AddressFieldset } from '@/components/shared/address-fieldset'
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Invalid email address'),
-  phone: z.string().min(1, 'Phone is required'),
-  address: z.string().min(1, 'Address is required'),
+  phone: z.string().min(1, 'Phone is required').min(12, 'Enter a valid 10-digit phone'),
+  street: z.string().min(1, 'Street is required'),
+  city: z.string().min(1, 'City is required'),
+  state: z.string().min(1, 'State is required').length(2, 'Use 2-letter state code'),
+  zip: z.string().min(1, 'ZIP is required').regex(/^\d{5}$/, 'Use 5-digit ZIP'),
   company: z.string().optional(),
   password: z.string().min(1, 'Password is required').min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
@@ -56,10 +61,18 @@ export function RegisterPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: { state: 'FL' },
   })
+  const phoneValue = watch('phone') ?? ''
+  const streetValue = watch('street') ?? ''
+  const cityValue = watch('city') ?? ''
+  const stateValue = watch('state') ?? ''
+  const zipValue = watch('zip') ?? ''
 
   useEffect(() => {
     if (isAuthenticated && profile) {
@@ -70,12 +83,21 @@ export function RegisterPage() {
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
     setIsLoading(true)
+    // Compose the single-string address from the 4 split inputs (ship #113
+    // Option A per kratos msg 1776720207707). Profile.address remains a
+    // single string for back-compat; structured-shape migration is Tranche-2.
+    const composedAddress = composeAddress({
+      street: data.street,
+      city: data.city,
+      state: data.state,
+      zip: data.zip,
+    })
     try {
       const result = await signUp(data.email, data.password, {
         name: data.name,
         role: selectedRole,
         phone: data.phone,
-        address: data.address,
+        address: composedAddress,
         company: data.company,
       })
 
@@ -86,7 +108,7 @@ export function RegisterPage() {
         try {
           await updateVendor(userId, {
             phone: data.phone,
-            address: data.address,
+            address: composedAddress,
             ...(data.company ? { company: data.company } : {}),
           })
         } catch (err) {
@@ -222,29 +244,35 @@ export function RegisterPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="(305) 555-0000"
+                  placeholder="305-555-0101"
                   className="h-11"
-                  {...register('phone')}
+                  value={phoneValue}
+                  onChange={(e) => setValue('phone', formatPhoneNumber(e.target.value), { shouldValidate: false })}
                   aria-invalid={!!errors.phone}
+                  inputMode="tel"
                 />
                 {errors.phone && (
                   <p className="text-xs text-destructive">{errors.phone.message}</p>
                 )}
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
-                <Input
-                  id="address"
-                  placeholder="1234 Main St, Miami, FL 33101"
-                  className="h-11"
-                  {...register('address')}
-                  aria-invalid={!!errors.address}
-                />
-                {errors.address && (
-                  <p className="text-xs text-destructive">{errors.address.message}</p>
-                )}
-              </div>
+              <AddressFieldset
+                idPrefix="reg-addr"
+                required
+                value={{ street: streetValue, city: cityValue, state: stateValue, zip: zipValue }}
+                onChange={(next) => {
+                  setValue('street', next.street, { shouldValidate: false })
+                  setValue('city', next.city, { shouldValidate: false })
+                  setValue('state', next.state, { shouldValidate: false })
+                  setValue('zip', next.zip, { shouldValidate: false })
+                }}
+                errors={{
+                  street: errors.street?.message,
+                  city: errors.city?.message,
+                  state: errors.state?.message,
+                  zip: errors.zip?.message,
+                }}
+              />
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="reg-password">Password <span className="text-destructive">*</span></Label>
