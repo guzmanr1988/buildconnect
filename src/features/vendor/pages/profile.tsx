@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Building2, User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
@@ -28,8 +28,14 @@ export default function VendorProfile() {
   const profile = useAuthStore((s) => s.profile)
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
   const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
-  const myRequests = useVendorChangeRequestsStore((s) =>
-    s.requests.filter((r) => r.vendorId === (profile?.id ?? VENDOR_ID))
+  // Zustand-selector-returns-new-array-every-render = React error #185
+  // infinite loop (ship #111 regression caught by apollo 1776720418731).
+  // Select the stable array reference, useMemo the filter by-vendorId.
+  const allRequests = useVendorChangeRequestsStore((s) => s.requests)
+  const vendorIdKey = profile?.id ?? VENDOR_ID
+  const myRequests = useMemo(
+    () => allRequests.filter((r) => r.vendorId === vendorIdKey),
+    [allRequests, vendorIdKey],
   )
   const pendingRequest = myRequests.find((r) => r.status === 'pending')
 
