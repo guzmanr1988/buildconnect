@@ -5,7 +5,7 @@ import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Trash2,
+  UserCheck, Pencil, Trash2, Hammer,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -130,7 +130,7 @@ export default function VendorDashboard() {
 
   // Convert sent projects from homeowner side into lead-like objects
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
-  const homeownerLeads: Lead[] = useMemo(() => sentProjects.map((p) => ({
+  const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects.map((p) => ({
     id: `L-${p.id.slice(0, 4).toUpperCase()}`,
     _projectId: p.id,
     homeowner_id: 'ho-current',
@@ -149,6 +149,7 @@ export default function VendorDashboard() {
     pack_items: p.item.selections,
     slot: p.sentAt,
     received_at: p.sentAt,
+    soldAt: p.soldAt,
   })), [sentProjects, VENDOR_ID])
 
   // Per-lead status overrides are now persisted via projects-store (ship #55 —
@@ -165,11 +166,42 @@ export default function VendorDashboard() {
     )
   }, [mockLeads, homeownerLeads, leadStatusOverrides])
 
+  // Lifecycle thresholds mirror the homeowner /home 3-stage split. Sold split
+  // into Sold Leads (fresh, < 7d post Mark-Sold) + Active Projects (in-progress
+  // work, 7-30d) + Projects Completed (done, 30d+). MOCK_LEADS overridden to
+  // completed have no soldAt — those fall through to Projects Completed by
+  // default. Kratos msg 1776667843790 — Rod asked for 5-column vendor lifecycle
+  // matching homeowner side.
+  const SOLD_TO_ACTIVE_DAYS = 7
+  const ACTIVE_TO_COMPLETED_DAYS = 30
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const now = Date.now()
+  const soldAgeDays = (l: Lead & { soldAt?: string }): number | null => {
+    if (!l.soldAt) return null
+    return (now - new Date(l.soldAt).getTime()) / DAY_MS
+  }
+
   // Lead categories
   const newLeads = leads.filter((l) => l.status === 'pending' || l.status === 'rescheduled')
   const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
-  const soldLeads = leads.filter((l) => l.status === 'completed')
-  const archivedLeads = leads.filter((l) => l.status === 'rejected')
+  const soldLeads = leads.filter((l) => {
+    if (l.status !== 'completed') return false
+    const age = soldAgeDays(l as Lead & { soldAt?: string })
+    // Fresh-sold: within the Sold→Active threshold. No soldAt → fall through
+    // to Projects Completed (stale fixture or legacy sold-without-timestamp).
+    return age !== null && age < SOLD_TO_ACTIVE_DAYS
+  })
+  const activeProjects = leads.filter((l) => {
+    if (l.status !== 'completed') return false
+    const age = soldAgeDays(l as Lead & { soldAt?: string })
+    return age !== null && age >= SOLD_TO_ACTIVE_DAYS && age < ACTIVE_TO_COMPLETED_DAYS
+  })
+  const archivedLeads = leads.filter((l) => {
+    if (l.status === 'rejected') return true
+    if (l.status !== 'completed') return false
+    const age = soldAgeDays(l as Lead & { soldAt?: string })
+    return age === null || age >= ACTIVE_TO_COMPLETED_DAYS
+  })
 
   // KPI calculations
   const activeLeads = leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled')
@@ -249,7 +281,7 @@ export default function VendorDashboard() {
   // Section collapse state
   // Single-open accordion: at most one lead-status tile open at a time
   // (kratos msg 1776576047204). Null = all closed.
-  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'archived'
+  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'active' | 'archived'
   const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
   const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
@@ -584,6 +616,22 @@ export default function VendorDashboard() {
               <p className="text-sm text-muted-foreground py-4 text-center">No sold leads yet.</p>
             ) : (
               soldLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </LeadStatusTile>
+        <LeadStatusTile
+          title="Active Projects"
+          count={activeProjects.length}
+          color="bg-sky-500"
+          icon={Hammer}
+          open={openTile === 'active'}
+          onToggle={() => toggleTile('active')}
+        >
+          <div className="grid gap-3">
+            {activeProjects.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No active projects in progress.</p>
+            ) : (
+              activeProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
         </LeadStatusTile>
