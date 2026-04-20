@@ -290,14 +290,18 @@ export function applyQAPersona(persona: QAPersona) {
     version: 0,
   }))
 
-  // Cart
+  // Cart — seed idDocument with a 1x1 transparent-PNG placeholder so the
+  // homeowner-cart "Upload ID First" gate auto-passes for QA personas.
+  // Gate stays functional for real users (they have no pre-seed); only QA
+  // personas get the bypass. Flagged by kratos 1776665034233 after apollo
+  // couldn't automate the file upload during qa-2 cart-to-book sweep.
   localStorage.setItem('buildconnect-cart', JSON.stringify({
     state: {
       items: persona.cart.items,
       projectTitle: persona.cart.projectTitle ?? '',
       notes: persona.cart.notes ?? '',
       photos: [],
-      idDocument: null,
+      idDocument: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
     },
     version: 0,
   }))
