@@ -45,6 +45,12 @@ type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' |
 export interface CancellationRequest {
   requestedAt: string
   status: 'pending' | 'approved' | 'denied'
+  // Homeowner-provided context on why cancellation was requested. Ship #88
+  // extends the original shape (pending/approved/denied only) with
+  // audit-trail fields for vendor review + admin audit. Both optional to
+  // preserve back-compat with entries written pre-#88.
+  reason?: string
+  explanation?: string
 }
 
 interface ProjectsState {
@@ -76,7 +82,7 @@ interface ProjectsState {
   // handled via assignRep).
   assignRepByLead: (leadId: string, rep: VendorRep) => void
   setLeadStatus: (leadId: string, status: LeadStatusOverride) => void
-  requestCancellation: (leadId: string) => void
+  requestCancellation: (leadId: string, reason?: string, explanation?: string) => void
   approveCancellation: (leadId: string) => void
   denyCancellation: (leadId: string) => void
   removeProject: (id: string) => void
@@ -152,11 +158,16 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
       },
 
-      requestCancellation: (leadId) => {
+      requestCancellation: (leadId, reason, explanation) => {
         set((state) => ({
           cancellationRequestsByLead: {
             ...state.cancellationRequestsByLead,
-            [leadId]: { requestedAt: new Date().toISOString(), status: 'pending' },
+            [leadId]: {
+              requestedAt: new Date().toISOString(),
+              status: 'pending',
+              ...(reason !== undefined && { reason }),
+              ...(explanation !== undefined && { explanation }),
+            },
           },
         }))
       },

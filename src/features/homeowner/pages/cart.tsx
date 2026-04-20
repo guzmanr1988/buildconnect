@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -59,6 +60,39 @@ export function CartPage() {
   const SERVICE_CATALOG = useCatalogStore((s) => s.services)
   const [viewItem, setViewItem] = useState<CartItem | null>(null)
   const [idPreviewOpen, setIdPreviewOpen] = useState(false)
+  // Cancellation-request dialog (ship #88 extends arc feature-cancellation-request
+  // per kratos msg 1776670962547). Replaces the previous direct-click-flips-to-
+  // pending flow with a reason + explanation capture dialog.
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelDialogLeadId, setCancelDialogLeadId] = useState<string>('')
+  const [cancelReason, setCancelReason] = useState<string>('')
+  const [cancelExplanation, setCancelExplanation] = useState<string>('')
+
+  const CANCEL_REASONS = [
+    'No longer needed',
+    'Budget changed',
+    'Moving',
+    'Going with another contractor',
+    'Timeline issue',
+    'Other',
+  ] as const
+
+  const openCancelDialog = (leadId: string) => {
+    setCancelDialogLeadId(leadId)
+    setCancelReason('')
+    setCancelExplanation('')
+    setCancelDialogOpen(true)
+  }
+
+  const cancelSubmitEnabled =
+    cancelReason.length > 0 &&
+    (cancelReason !== 'Other' || cancelExplanation.trim().length > 0)
+
+  const submitCancellation = () => {
+    if (!cancelSubmitEnabled) return
+    requestCancellation(cancelDialogLeadId, cancelReason, cancelExplanation.trim() || undefined)
+    setCancelDialogOpen(false)
+  }
 
   // Auto-generate project name: "Customer Name - Service Abbreviations"
   const serviceAbbrev: Record<string, string> = {
@@ -253,7 +287,7 @@ export function CartPage() {
                             : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
                         )}
                         disabled={!isActionable}
-                        onClick={() => { if (isActionable) requestCancellation(leadId) }}
+                        onClick={() => { if (isActionable) openCancelDialog(leadId) }}
                       >
                         <XCircle className="h-3.5 w-3.5" />
                         {label}
@@ -625,7 +659,7 @@ export function CartPage() {
                             : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
                         )}
                         disabled={!isActionable}
-                        onClick={() => { if (isActionable) requestCancellation(leadId) }}
+                        onClick={() => { if (isActionable) openCancelDialog(leadId) }}
                       >
                         <XCircle className="h-3.5 w-3.5" />
                         {label}
@@ -792,6 +826,67 @@ export function CartPage() {
           {idDocument && (
             <img src={idDocument} alt="ID Document Preview" className="w-full rounded-lg" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancellation Request Dialog — ship #88 extends arc feature-cancellation-request.
+          Captures homeowner reason + optional explanation before flipping
+          cancellationRequestsByLead[leadId] to pending. Vendor sees these in
+          the Review Cancellation dialog on their dashboard. */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Request Project Cancellation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Tell us why — this goes to your contractor so they can review the request.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="cancel-reason" className="text-xs font-semibold text-foreground">
+                Reason <span className="text-destructive">*</span>
+              </label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger id="cancel-reason" className="h-10 text-sm">
+                  <SelectValue placeholder="Choose a reason…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="cancel-explanation" className="text-xs font-semibold text-foreground">
+                Explanation {cancelReason === 'Other' && <span className="text-destructive">*</span>}
+                {cancelReason !== 'Other' && <span className="text-muted-foreground font-normal"> (optional)</span>}
+              </label>
+              <Textarea
+                id="cancel-explanation"
+                value={cancelExplanation}
+                onChange={(e) => setCancelExplanation(e.target.value)}
+                placeholder={cancelReason === 'Other' ? 'Please describe your reason…' : 'Additional context for your contractor…'}
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setCancelDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              disabled={!cancelSubmitEnabled}
+              onClick={submitCancellation}
+            >
+              Submit Cancellation
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

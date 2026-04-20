@@ -1216,11 +1216,34 @@ export default function VendorDashboard() {
               mark the project as cancelled and notify them. Denying keeps the
               project active — they'll see the denial and can request again.
             </p>
-            {cancelReviewLeadId && cancellationRequestsByLead[cancelReviewLeadId]?.requestedAt && (
-              <p className="text-xs">
-                Requested {fmtDateTime(cancellationRequestsByLead[cancelReviewLeadId].requestedAt)}
-              </p>
-            )}
+            {cancelReviewLeadId && cancellationRequestsByLead[cancelReviewLeadId] && (() => {
+              const req = cancellationRequestsByLead[cancelReviewLeadId]
+              return (
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-2">
+                  {req.reason && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive/80 mb-0.5">
+                        Reason
+                      </p>
+                      <p className="text-sm font-medium text-foreground">{req.reason}</p>
+                    </div>
+                  )}
+                  {req.explanation && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive/80 mb-0.5">
+                        Homeowner note
+                      </p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{req.explanation}</p>
+                    </div>
+                  )}
+                  {req.requestedAt && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Requested {fmtDateTime(req.requestedAt)}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => setCancelReviewOpen(false)}>Close</Button>
