@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -72,6 +73,42 @@ export function VendorLayout() {
     iconColor: 'text-primary',
     tint: 'bg-primary/5',
   }))
+
+  // New-lead toast delta detection (ship #108 Phase C per kratos msg
+  // 1776718477775). Compare current notification IDs to last-seen set in
+  // localStorage; fire a sonner toast for each new lead. On first render,
+  // mark all as seen without firing — prevents spam on every layout
+  // mount. Real SMS/email infra deferred to Tranche-2 (Supabase Edge
+  // Function + Twilio / Resend).
+  const LAST_SEEN_KEY = 'buildconnect-vendor-last-seen-lead-ids'
+  const firstRenderRef = useRef(true)
+  useEffect(() => {
+    const currentIds = new Set(notifications.map((n) => n.id))
+    let seenIds: Set<string>
+    try {
+      const raw = localStorage.getItem(LAST_SEEN_KEY)
+      seenIds = new Set<string>(raw ? JSON.parse(raw) : [])
+    } catch {
+      seenIds = new Set<string>()
+    }
+
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false
+      localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
+      return
+    }
+
+    const newOnes = notifications.filter((n) => !seenIds.has(n.id))
+    for (const n of newOnes) {
+      toast(n.title, {
+        description: n.description,
+        icon: <InboxIcon className="h-4 w-4 text-primary" />,
+      })
+    }
+    if (newOnes.length > 0) {
+      localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
+    }
+  }, [notifications])
 
   return (
     <div className="min-h-screen bg-background">

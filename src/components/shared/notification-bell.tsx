@@ -1,6 +1,7 @@
 import { Bell, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
 export interface NotificationItem {
   id: string
@@ -38,9 +39,9 @@ export function NotificationBell({
           className={btnClass}
           aria-label={count > 0 ? `Notifications, ${count} new` : 'Notifications'}
         >
-          <Bell className="h-4 w-4" />
+          <Bell className={cn('h-4 w-4', count > 0 && 'animate-pulse text-primary')} />
           {count > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white ring-2 ring-background">
               {count > 9 ? '9+' : count}
             </span>
           )}
