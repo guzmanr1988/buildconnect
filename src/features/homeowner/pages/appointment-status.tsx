@@ -85,9 +85,24 @@ export function AppointmentStatusPage() {
   const vendor = sentProject
     ? MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company)
     : MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
-  const timeline = statusTimeline[lead.id] ?? [
+  const baseTimeline = statusTimeline[lead.id] ?? [
     { label: 'Lead submitted', time: 'Recently', status: 'pending' as LeadStatus },
   ]
+  // Dynamic timeline entries appended when the lead is post-confirm AND has
+  // an assigned rep. Two entries (per kratos msg 1776660496402): "Vendor
+  // confirmed visit" and "Representative assigned — <name>." Time field
+  // left empty since we don't persist a confirm-at timestamp yet; renderer
+  // omits the time line when falsy.
+  const dynamicTimeline: { label: string; time: string; status: LeadStatus }[] = []
+  if (lead.status === 'confirmed' && assignedRep) {
+    dynamicTimeline.push({ label: 'Vendor confirmed visit', time: '', status: 'confirmed' })
+    dynamicTimeline.push({
+      label: `Representative assigned — ${assignedRep.name}`,
+      time: '',
+      status: 'confirmed',
+    })
+  }
+  const timeline = [...baseTimeline, ...dynamicTimeline]
   // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
   const assignedRep =
     assignedRepByLead[lead.id] ??
@@ -190,7 +205,9 @@ export function AppointmentStatusPage() {
                         <p className="text-sm font-medium text-foreground">
                           {event.label}
                         </p>
-                        <p className="text-xs text-muted-foreground">{event.time}</p>
+                        {event.time && (
+                          <p className="text-xs text-muted-foreground">{event.time}</p>
+                        )}
                       </div>
                     </div>
                   ))}
