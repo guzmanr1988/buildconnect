@@ -166,14 +166,14 @@ export default function VendorDashboard() {
     )
   }, [mockLeads, homeownerLeads, leadStatusOverrides])
 
-  // Lifecycle thresholds mirror the homeowner /home 3-stage split. Sold split
-  // into Sold Leads (fresh, < 7d post Mark-Sold) + Active Projects (in-progress
-  // work, 7-30d) + Projects Completed (done, 30d+). MOCK_LEADS overridden to
-  // completed have no soldAt — those fall through to Projects Completed by
-  // default. Kratos msg 1776667843790 — Rod asked for 5-column vendor lifecycle
-  // matching homeowner side.
-  const SOLD_TO_ACTIVE_DAYS = 7
-  const ACTIVE_TO_COMPLETED_DAYS = 30
+  // Lifecycle thresholds simplified to single sold→completed split (kratos msg
+  // 1776693800134). Active Projects tile merged into Project Sold — the
+  // "currently active" bucket is any sold/approved project that isn't
+  // aged-out to Completed yet. Cancelled Projects split out as its own tile
+  // for post-accept cancellation-flow outcomes (distinct from vendor-upfront-
+  // rejection, though both currently share status='rejected' until Tranche-2
+  // schema divergence lands).
+  const SOLD_TO_COMPLETED_DAYS = 90
   const DAY_MS = 24 * 60 * 60 * 1000
   const now = Date.now()
   const soldAgeDays = (l: Lead & { soldAt?: string }): number | null => {
@@ -181,27 +181,39 @@ export default function VendorDashboard() {
     return (now - new Date(l.soldAt).getTime()) / DAY_MS
   }
 
+  // Cancelled predicate — takes precedence over status-based routing. A
+  // post-accept cancellation-approved lead has BOTH status='rejected' (set by
+  // approveCancellation via leadStatusOverrides) AND a cancellationRequestsByLead
+  // entry with status='approved'. Vendor-upfront-rejected leads have status=
+  // 'rejected' WITHOUT a cancellation-approved entry — they route to Cancelled
+  // Projects as well for pre-launch (both are "deadened" leads); Tranche-2
+  // schema divergence will split them.
+  const isCancelledLead = (l: Lead): boolean => {
+    const cReq = cancellationRequestsByLead[l.id]
+    if (cReq?.status === 'approved') return true
+    if (l.status === 'rejected') return true
+    return false
+  }
+
   // Lead categories
   const newLeads = leads.filter((l) => l.status === 'pending' || l.status === 'rescheduled')
   const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
-  const soldLeads = leads.filter((l) => {
+  const projectSold = leads.filter((l) => {
+    if (isCancelledLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
-    // Fresh-sold: within the Sold→Active threshold. No soldAt → fall through
-    // to Projects Completed (stale fixture or legacy sold-without-timestamp).
-    return age !== null && age < SOLD_TO_ACTIVE_DAYS
+    // Currently-active bucket: either just-sold (no soldAt yet → treat as
+    // fresh) OR sold less than SOLD_TO_COMPLETED_DAYS ago.
+    return age === null || age < SOLD_TO_COMPLETED_DAYS
   })
-  const activeProjects = leads.filter((l) => {
+  const projectsCompleted = leads.filter((l) => {
+    if (isCancelledLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
-    return age !== null && age >= SOLD_TO_ACTIVE_DAYS && age < ACTIVE_TO_COMPLETED_DAYS
+    // Truly-completed: aged-out past the 90d threshold.
+    return age !== null && age >= SOLD_TO_COMPLETED_DAYS
   })
-  const archivedLeads = leads.filter((l) => {
-    if (l.status === 'rejected') return true
-    if (l.status !== 'completed') return false
-    const age = soldAgeDays(l as Lead & { soldAt?: string })
-    return age === null || age >= ACTIVE_TO_COMPLETED_DAYS
-  })
+  const cancelledProjects = leads.filter(isCancelledLead)
 
   // KPI calculations
   const activeLeads = leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled')
@@ -281,7 +293,7 @@ export default function VendorDashboard() {
   // Section collapse state
   // Single-open accordion: at most one lead-status tile open at a time
   // (kratos msg 1776576047204). Null = all closed.
-  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'active' | 'archived'
+  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
   const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
   const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
@@ -470,7 +482,10 @@ export default function VendorDashboard() {
                 <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{lead.project}</p>
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className="text-sm font-bold">{fmt(lead.value)}</span>
-                  <StatusBadge status={lead.status} />
+                  <StatusBadge
+                    status={lead.status}
+                    label={isCancelledLead(lead) && lead.status === 'rejected' ? 'Cancelled' : undefined}
+                  />
                   {hasPendingCancel && (
                     <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] font-semibold gap-1">
                       <X className="h-3 w-3" />
@@ -513,6 +528,8 @@ export default function VendorDashboard() {
 
   function LeadStatusTile({
     title,
+    subtitle,
+    subtitleColor,
     count,
     color,
     icon: Icon,
@@ -521,6 +538,8 @@ export default function VendorDashboard() {
     children,
   }: {
     title: string
+    subtitle?: string
+    subtitleColor?: string
     count: number
     color: string
     icon: React.ElementType
@@ -554,7 +573,14 @@ export default function VendorDashboard() {
             <div className={cn('rounded-md p-1.5 shrink-0', color)}>
               <Icon className="h-3.5 w-3.5 text-white" />
             </div>
-            <p className="text-sm font-medium text-foreground truncate">{title}</p>
+            <div className="flex flex-col min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{title}</p>
+              {subtitle && (
+                <p className={cn('text-[10px] font-semibold uppercase tracking-wider leading-none mt-0.5', subtitleColor ?? 'text-muted-foreground')}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
             <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">{count}</Badge>
           </div>
           {open ? (
@@ -682,50 +708,52 @@ export default function VendorDashboard() {
           </div>
         </LeadStatusTile>
         <LeadStatusTile
-          title="Sold Leads"
-          count={soldLeads.length}
+          title="Project Sold"
+          subtitle="active"
+          subtitleColor="text-emerald-600"
+          count={projectSold.length}
           color="bg-primary"
           icon={Handshake}
           open={openTile === 'sold'}
           onToggle={() => toggleTile('sold')}
         >
           <div className="grid gap-3">
-            {soldLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No sold leads yet.</p>
+            {projectSold.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No active projects yet.</p>
             ) : (
-              soldLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
-        <LeadStatusTile
-          title="Active Projects"
-          count={activeProjects.length}
-          color="bg-sky-500"
-          icon={Hammer}
-          open={openTile === 'active'}
-          onToggle={() => toggleTile('active')}
-        >
-          <div className="grid gap-3">
-            {activeProjects.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No active projects in progress.</p>
-            ) : (
-              activeProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              projectSold.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
         </LeadStatusTile>
         <LeadStatusTile
           title="Projects Completed"
-          count={archivedLeads.length}
+          count={projectsCompleted.length}
           color="bg-slate-500"
           icon={Archive}
-          open={openTile === 'archived'}
-          onToggle={() => toggleTile('archived')}
+          open={openTile === 'completed'}
+          onToggle={() => toggleTile('completed')}
         >
           <div className="grid gap-3">
-            {archivedLeads.length === 0 ? (
+            {projectsCompleted.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No completed projects yet.</p>
             ) : (
-              archivedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              projectsCompleted.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </LeadStatusTile>
+        <LeadStatusTile
+          title="Cancelled Projects"
+          count={cancelledProjects.length}
+          color="bg-destructive"
+          icon={X}
+          open={openTile === 'cancelled'}
+          onToggle={() => toggleTile('cancelled')}
+        >
+          <div className="grid gap-3">
+            {cancelledProjects.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No cancelled projects.</p>
+            ) : (
+              cancelledProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
         </LeadStatusTile>
@@ -739,7 +767,10 @@ export default function VendorDashboard() {
               <DialogHeader className="space-y-1.5">
                 <DialogTitle className="font-heading text-base leading-tight">{selected.project}</DialogTitle>
                 <div className="flex items-center gap-2">
-                  <StatusBadge status={selected.status} />
+                  <StatusBadge
+                    status={selected.status}
+                    label={isCancelledLead(selected) && selected.status === 'rejected' ? 'Cancelled' : undefined}
+                  />
                   <span className="text-xs text-muted-foreground">{selected.id}</span>
                 </div>
               </DialogHeader>
@@ -875,7 +906,7 @@ export default function VendorDashboard() {
                 ) : selected.status === 'rejected' ? (
                   <>
                     <div className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg bg-red-50 text-red-700 font-semibold text-sm border border-red-200">
-                      <X className="h-4 w-4" /> Rejected
+                      <X className="h-4 w-4" /> {cancellationRequestsByLead[selected.id]?.status === 'approved' ? 'Cancelled' : 'Rejected'}
                     </div>
                     {(() => {
                       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
