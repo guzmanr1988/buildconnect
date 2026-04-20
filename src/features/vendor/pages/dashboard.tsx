@@ -765,7 +765,9 @@ export default function VendorDashboard() {
           {selected && (
             <div className="space-y-3">
               <DialogHeader className="space-y-1.5">
-                <DialogTitle className="font-heading text-base leading-tight">{selected.project}</DialogTitle>
+                <DialogTitle className="font-heading text-base font-bold uppercase tracking-wide leading-tight">
+                  {selected.project.split(' — ')[0]}
+                </DialogTitle>
                 <div className="flex items-center gap-2">
                   <StatusBadge
                     status={selected.status}
@@ -798,7 +800,11 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-              {/* Project */}
+              {/* Project — product selections chipped out of title into this
+                  section (ship #93 per kratos msg 1776695439349). Title stays
+                  service-name-only; the tag detail lives here. Permit +
+                  Financing have their own labeled rows, everything else
+                  becomes a capitalize chip. */}
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Project</p>
                 <div className="space-y-1.5 text-sm">
@@ -810,10 +816,25 @@ export default function VendorDashboard() {
                     <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <Badge variant="secondary" className="text-[10px] capitalize">
                       {selected.service_category.replace(/_/g, ' ')}
                     </Badge>
+                    {(() => {
+                      const selectionChips = Object.values(selected.pack_items ?? {})
+                        .flat()
+                        .filter((s) => s !== 'permit' && s !== 'financed' && s !== 'financing')
+                      if (selectionChips.length === 0) return null
+                      return selectionChips.map((s) => (
+                        <Badge
+                          key={s}
+                          variant="secondary"
+                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20"
+                        >
+                          {s.replace(/_/g, ' ')}
+                        </Badge>
+                      ))
+                    })()}
                   </div>
                 </div>
               </div>
