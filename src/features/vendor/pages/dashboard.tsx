@@ -798,6 +798,11 @@ export default function VendorDashboard() {
                             onChange={(e) => setAdhocRepName(e.target.value)}
                             placeholder="Enter the rep's name"
                             className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
+                            name="rep-name-no-autofill"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="words"
+                            spellCheck={false}
                           />
                           <p className="text-[11px] text-muted-foreground">
                             No reps on file yet. Type the rep's name — you can add a full roster later in Profile.
@@ -1149,6 +1154,11 @@ export default function VendorDashboard() {
                 onChange={(e) => setEditAdhocRepName(e.target.value)}
                 placeholder="Enter the rep's name"
                 className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
+                name="edit-rep-name-no-autofill"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="words"
+                spellCheck={false}
               />
             )}
             <p className="text-[11px] text-muted-foreground">

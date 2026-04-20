@@ -762,7 +762,30 @@ export function ServiceDetailPage() {
                   },
                 })
               }
+              // Single-project-at-a-time constraint: after Add-to-Project /
+              // Save-Changes, reset the configurator to a clean slate so the
+              // user can't keep editing what they just added. If they want to
+              // build another of the same service, they start from scratch.
+              // Toast + cart-count button provide confirmation that the add
+              // landed; 'added' flag briefly shows Added-checkmark then resets.
+              setSelections({})
+              setSelectionQuantities({})
+              setCustomPoolSize('')
+              setActiveAddonMenu(null)
+              setLaminarJets(0)
+              setWaterfalls(0)
+              setLedCount(0)
+              setBubblerCount(0)
+              setWindowSelections([])
+              setWindowConfigOpen(true)
+              setDoorSelections([])
+              setDoorConfigOpen(true)
+              setGarageDoorSelection({ type: '', size: '', color: '', glass: '' })
+              setGarageDoorConfigOpen(true)
+              setMetalRoofSelection({ color: '', roofSize: '' })
+              setMetalRoofConfigOpen(true)
               setAdded(true)
+              setTimeout(() => setAdded(false), 1200)
             }}
           >
             {added ? (
