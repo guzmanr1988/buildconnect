@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { AvatarUpload } from '@/components/shared/avatar-upload'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { SERVICE_CATALOG } from '@/lib/constants'
@@ -26,6 +27,7 @@ export default function VendorProfile() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
+  const updateProfile = useAuthStore((s) => s.updateProfile)
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
   const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
   // Zustand-selector-returns-new-array-every-render = React error #185
@@ -135,7 +137,13 @@ export default function VendorProfile() {
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row items-start gap-5">
-              <AvatarInitials initials={vendor.initials} color={vendor.avatar_color} size="lg" />
+              <AvatarUpload
+                initials={profile?.initials ?? vendor.initials}
+                color={profile?.avatar_color ?? vendor.avatar_color}
+                avatarUrl={profile?.avatar_url}
+                size="lg"
+                onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}
+              />
               <div className="flex-1 min-w-0 space-y-4 w-full">
                 {/* Company Name & Badges */}
                 <div>

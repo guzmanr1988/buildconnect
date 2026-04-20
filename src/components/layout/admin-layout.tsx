@@ -107,7 +107,7 @@ export function AdminLayout() {
                 className="cursor-pointer"
                 aria-label="Profile"
               >
-                <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />
+                <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
               </button>
             )}
           </div>

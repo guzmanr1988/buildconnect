@@ -48,6 +48,11 @@ export interface Profile {
   additional_addresses?: SecondaryAddress[]
   company?: string
   avatar_color: string
+  // Base64 data URL for uploaded avatar image. If present, renders instead
+  // of initials fallback (ship #115 per kratos msg 1776720328611 + extension
+  // 1776720343679). Mock-side for v1; Tranche-2 moves to Supabase Storage
+  // bucket + image moderation.
+  avatar_url?: string
   initials: string
   status: 'active' | 'pending' | 'suspended'
   created_at: string

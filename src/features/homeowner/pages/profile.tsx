@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { AvatarUpload } from '@/components/shared/avatar-upload'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { SecondaryAddress } from '@/types'
@@ -166,12 +167,24 @@ export function HomeownerProfilePage() {
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="mb-6 flex flex-col items-center text-center">
-              <AvatarInitials
-                initials={profile.initials}
-                color={profile.avatar_color}
-                size="lg"
-                className="mb-3"
-              />
+              {profileEditing ? (
+                <AvatarUpload
+                  avatarUrl={profile.avatar_url}
+                  initials={profile.initials}
+                  color={profile.avatar_color}
+                  size="lg"
+                  onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}
+                  className="mb-3"
+                />
+              ) : (
+                <AvatarInitials
+                  initials={profile.initials}
+                  color={profile.avatar_color}
+                  avatarUrl={profile.avatar_url}
+                  size="lg"
+                  className="mb-3"
+                />
+              )}
               <h2 className="text-xl font-bold font-heading text-foreground">
                 {profile.name}
               </h2>

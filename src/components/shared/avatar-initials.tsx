@@ -5,6 +5,11 @@ interface AvatarInitialsProps {
   color: string
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  // Optional uploaded avatar URL — base64 dataURL from AvatarUpload
+  // component, or future Supabase Storage URL. If present, renders
+  // the image; otherwise falls back to initials-on-color (ship #115
+  // per kratos msg 1776720328611).
+  avatarUrl?: string
 }
 
 const sizes = {
@@ -13,7 +18,26 @@ const sizes = {
   lg: 'h-14 w-14 text-lg',
 }
 
-export function AvatarInitials({ initials, color, size = 'md', className }: AvatarInitialsProps) {
+export function AvatarInitials({ initials, color, size = 'md', className, avatarUrl }: AvatarInitialsProps) {
+  if (avatarUrl) {
+    return (
+      <div
+        role="img"
+        aria-label={`Avatar: ${initials}`}
+        className={cn(
+          'rounded-full overflow-hidden shrink-0 ring-1 ring-foreground/10 bg-muted',
+          sizes[size],
+          className,
+        )}
+      >
+        <img
+          src={avatarUrl}
+          alt=""
+          className="w-full h-full object-cover"
+        />
+      </div>
+    )
+  }
   return (
     <div
       role="img"
