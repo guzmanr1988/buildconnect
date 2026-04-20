@@ -69,7 +69,7 @@ const PERSONA_1_FRESH: QAPersona = {
     phone: '305-555-0201',
     address: '1201 Brickell Ave, Miami, FL 33131',
     avatar_color: '#f472b6',
-    initials: 'AM',
+    initials: 'RJ',
     status: 'active',
     created_at: '2026-04-15T00:00:00.000Z',
   },
