@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthBootstrap } from '@/components/AuthBootstrap'
+import { QAPersonaSwitcher } from '@/components/QAPersonaSwitcher'
 import { router } from '@/router'
 
 const queryClient = new QueryClient({
@@ -17,6 +18,7 @@ export default function App() {
         <TooltipProvider>
           <AuthBootstrap />
           <RouterProvider router={router} />
+          <QAPersonaSwitcher />
           <Toaster richColors position="top-right" />
         </TooltipProvider>
       </QueryClientProvider>
