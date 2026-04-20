@@ -78,13 +78,20 @@ export default function VendorDashboard() {
   const VENDOR_ID = mockVendorId ?? profile?.id ?? ''
 
   // Vendor display-data: from MOCK_VENDORS fixture when mapped, synthesized
-  // from profile when not.
+  // from profile when not. Role-gate the synthesis — a homeowner profile
+  // (e.g. a QA persona left in auth-store during a pre-redirect first paint)
+  // must NOT be synthesized into a vendor, or the dashboard flashes that
+  // homeowner's name as the vendor name until the useEffect auth-guard
+  // redirect commits. Rod P0 2026-04-20 (kratos msg 1776665548710 via apollo
+  // sweep): Paradise-demo vendor profile rendered 'Ana Martinez' (qa-1
+  // persona name) before the redirect fired — this guard blocks the flash.
   const vendor: Vendor | null = useMemo(() => {
     if (mockVendorId) {
       const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
       if (m) return m
     }
     if (!profile) return null
+    if (profile.role !== 'vendor') return null
     return {
       id: profile.id,
       email: profile.email,
