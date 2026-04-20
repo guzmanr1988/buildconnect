@@ -698,10 +698,8 @@ export default function VendorDashboard() {
                             : !adhocRepName.trim()
                         }
                         onClick={() => {
-                          // Resolve + assign the rep BEFORE flipping status so the
-                          // project carries its rep the moment it appears in the
-                          // confirmed tab / homeowner view. Dropdown path uses the
-                          // selected VendorRep; free-form path builds an ad-hoc rep.
+                          // Resolve the rep; dropdown path uses the selected VendorRep,
+                          // free-form path builds an ad-hoc rep from the typed name.
                           const rep: VendorRep | undefined =
                             vendor?.reps && vendor.reps.length > 0
                               ? vendor.reps.find((r) => r.id === selectedRepId)
@@ -709,19 +707,19 @@ export default function VendorDashboard() {
                                 ? { id: `adhoc-${crypto.randomUUID()}`, name: adhocRepName.trim() }
                                 : undefined
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                          // Close the modal FIRST so the user sees a clean dismiss,
+                          // not a momentary re-render into the 'confirmed' branch body
+                          // ("Mark as Sold") before the close animation fires. State
+                          // updates propagate regardless of close order — the store
+                          // updates re-render the list underneath the already-closing
+                          // Dialog. Kratos msg 1776653897613 (Rod friction report).
+                          setSheetOpen(false)
                           if (rep) {
-                            // Always write the lead-keyed override (covers mock-lead
-                            // paths without a sentProject).
                             assignRepByLead(selected.id, rep)
                             if (sp) assignProjectRep(sp.id, rep)
                           }
-                          // Always flip the lead-status override so mock-leads move too.
                           setLeadStatus(selected.id, 'confirmed')
-                          if (sp) {
-                            updateProjectStatus(sp.id, 'approved')
-                          }
-                          // Auto-close the lead-detail modal after Confirm fires (kratos msg 1776576431450).
-                          setSheetOpen(false)
+                          if (sp) updateProjectStatus(sp.id, 'approved')
                         }}
                       >
                         <Check className="h-4 w-4 mr-1.5" /> Confirm
