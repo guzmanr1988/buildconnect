@@ -590,7 +590,10 @@ export const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; 
   pending: { label: 'Pending', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400', icon: '⏳' },
   // Display label 'Scheduled' — the underlying status enum stays 'confirmed' everywhere
   // (DB, zustand actions, filter predicates). Display-only rename per kratos msg 1776577149412.
-  confirmed: { label: 'Scheduled', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400', icon: '✅' },
+  // confirmed → sky/light-blue to match the /home Upcoming-row visual
+  // legend (ship #121). Homeowner appointment-status page overrides
+  // label to 'Approved'; shared default label stays 'Scheduled'.
+  confirmed: { label: 'Scheduled', color: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400', icon: '✓' },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: '🚫' },
   rescheduled: { label: 'Rescheduled', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: '🔄' },
   completed: { label: 'Completed', color: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400', icon: '☑️' },
