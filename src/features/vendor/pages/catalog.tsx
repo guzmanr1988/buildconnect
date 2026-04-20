@@ -148,9 +148,17 @@ export default function VendorCatalog() {
                   )}
                 </CardHeader>
 
-                {/* Option groups — only rendered when service is enabled AND panel is expanded. */}
+                {/* Option groups — only rendered when service is enabled AND panel is expanded.
+                    stopPropagation on CardContent onClick: defensive guard against any body
+                    click bubbling up to CardHeader's toggleExpanded collapse handler. Rod P0:
+                    clicking checkbox/Input inside expanded card was firing accordion collapse,
+                    preventing any option or price edits. */}
                 {expanded && (
-                  <CardContent id={`vendor-service-panel-${service.id}`} className="space-y-4 pt-0">
+                  <CardContent
+                    id={`vendor-service-panel-${service.id}`}
+                    className="space-y-4 pt-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {service.optionGroups.map((group) => (
                       <div key={group.id} className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
