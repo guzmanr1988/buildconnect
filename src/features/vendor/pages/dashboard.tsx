@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
@@ -591,12 +591,25 @@ export default function VendorDashboard() {
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
         </div>
-        {/* Expanded content — renders inline under the summary row, inside the same Card. */}
-        {open && children && (
-          <div className="border-t border-border/40 bg-muted/10 p-3">
-            {children}
-          </div>
-        )}
+        {/* Expanded content — animated height/opacity transition (ship #98 per
+            kratos msg 1776697863772). framer-motion AnimatePresence respects
+            prefers-reduced-motion automatically — no-op when user has it set. */}
+        <AnimatePresence initial={false}>
+          {open && children && (
+            <motion.div
+              key="tile-expanded"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-border/40 bg-muted/10 p-3">
+                {children}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Card>
     )
   }

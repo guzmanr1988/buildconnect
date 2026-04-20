@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
@@ -261,37 +261,50 @@ export function HomeownerHome() {
                   <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                 )}
               </button>
-              {open && (
-                <div className="border-t border-border/40 bg-muted/10 p-3 space-y-2">
-                  {tile.projects.length === 0 ? (
-                    <div className="rounded-xl border border-dashed bg-card/50 px-3 py-3 text-center">
-                      <p className="text-[12px] text-muted-foreground">{tile.emptyText}</p>
+              <AnimatePresence initial={false}>
+                {open && (
+                  <motion.div
+                    key="tile-content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="border-t border-border/40 bg-muted/10 p-3 space-y-2">
+                      {tile.projects.length === 0 ? (
+                        <div className="rounded-xl border border-dashed bg-card/50 px-3 py-3 text-center">
+                          <p className="text-[12px] text-muted-foreground">{tile.emptyText}</p>
+                        </div>
+                      ) : (
+                        tile.projects.map((p) => (
+                          <button
+                            key={p.leadId}
+                            type="button"
+                            data-testid="home-tile-project"
+                            data-lead-id={p.leadId}
+                            onClick={() => navigate(`/home/appointments/${p.leadId}`)}
+                            className="group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                              <CalendarDays className="h-4 w-4" strokeWidth={1.8} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-semibold font-heading text-foreground truncate">
+                                {p.item.serviceName}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                {tile.subtitleFor(p)}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+                          </button>
+                        ))
+                      )}
                     </div>
-                  ) : (
-                    tile.projects.map((p) => (
-                      <button
-                        key={p.leadId}
-                        type="button"
-                        onClick={() => navigate(`/home/appointments/${p.leadId}`)}
-                        className="group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]"
-                      >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <CalendarDays className="h-4 w-4" strokeWidth={1.8} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-semibold font-heading text-foreground truncate">
-                            {p.item.serviceName}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {tile.subtitleFor(p)}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )
         })}
