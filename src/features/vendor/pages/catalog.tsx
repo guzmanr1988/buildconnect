@@ -223,7 +223,7 @@ export default function VendorCatalog() {
                                     {optEnabled && <Check className="h-3 w-3" />}
                                   </button>
                                   <span className={cn(
-                                    'text-sm truncate',
+                                    'text-base truncate',
                                     optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
                                   )}>
                                     {option.label}
@@ -231,19 +231,19 @@ export default function VendorCatalog() {
                                 </div>
                                 {optEnabled && (
                                   <div
-                                    className="flex items-center gap-1 shrink-0"
+                                    className="flex items-center gap-1.5 shrink-0"
                                     onClick={(e) => e.stopPropagation()}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onPointerDown={(e) => e.stopPropagation()}
                                   >
-                                    <DollarSign className="h-3 w-3 text-muted-foreground" />
+                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
                                     <Input
                                       aria-label={`Price for ${option.label}`}
                                       type="number"
                                       value={price || ''}
                                       onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
                                       placeholder="0"
-                                      className="h-7 w-20 text-xs text-right"
+                                      className="h-10 w-24 text-base text-right"
                                     />
                                   </div>
                                 )}
@@ -287,7 +287,7 @@ export default function VendorCatalog() {
                                         {subEnabled && <Check className="h-2.5 w-2.5" />}
                                       </button>
                                       <span className={cn(
-                                        'text-xs truncate',
+                                        'text-sm truncate',
                                         subEnabled ? 'font-medium' : 'text-muted-foreground'
                                       )}>
                                         {subOpt.label}
@@ -295,33 +295,33 @@ export default function VendorCatalog() {
                                     </div>
                                     {subEnabled && (
                                       <div
-                                        className="flex items-center gap-1 shrink-0"
+                                        className="flex items-center gap-1.5 shrink-0"
                                         onClick={(e) => e.stopPropagation()}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onPointerDown={(e) => e.stopPropagation()}
                                       >
-                                        <span className="text-[10px] text-muted-foreground">$</span>
+                                        <span className="text-sm text-muted-foreground">$</span>
                                         <Input
                                           aria-label={`Price for ${subOpt.label}`}
                                           type="number"
                                           value={subPrice || ''}
                                           onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
                                           placeholder="0"
-                                          className="h-6 w-16 text-[11px] text-right"
+                                          className="h-9 w-20 text-sm text-right"
                                         />
                                         {/* Low-E Glass dual pricing: vendor can enter $ OR % markup.
                                             Rod directive kratos msg 1776659189645 — scoped to low_e sub-option
                                             only; other sub-options stay $ only. */}
                                         {subOpt.id === 'low_e' && (
                                           <>
-                                            <span className="text-[10px] text-muted-foreground ml-1">%</span>
+                                            <span className="text-sm text-muted-foreground ml-1">%</span>
                                             <Input
                                               aria-label={`Percent markup for ${subOpt.label}`}
                                               type="number"
                                               value={getPricePercent(service.id, subOpt.id) || ''}
                                               onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
                                               placeholder="0"
-                                              className="h-6 w-14 text-[11px] text-right"
+                                              className="h-9 w-16 text-sm text-right"
                                             />
                                           </>
                                         )}
