@@ -1,6 +1,9 @@
 import type { Profile, VendorRep } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
+import { useCartStore } from '@/stores/cart-store'
 import type { SentProject, ContractorInfo, BookingInfo, HomeownerInfo, CancellationRequest } from '@/stores/projects-store'
+import { useProjectsStore } from '@/stores/projects-store'
+import { useAuthStore } from '@/stores/auth-store'
 
 // QA personas for 2-week launch QA sweep. Each persona has a fully-seeded
 // starting state across auth + cart + projects stores so apollo (or any QA
@@ -282,60 +285,66 @@ export const QA_PERSONAS: QAPersona[] = [
 // zustand-persist hydrates from the fresh state on next mount.
 export function applyQAPersona(persona: QAPersona) {
   // Auth
-  localStorage.setItem('buildconnect-auth', JSON.stringify({
-    state: {
-      session: {
-        access_token: `qa-fake-token-${persona.id}`,
-        user: { id: persona.profile.id, email: persona.profile.email },
-      },
-      profile: persona.profile,
-      isAuthenticated: true,
-      role: persona.profile.role,
+  // Ship #103 per kratos msg 1776716415563 — Rod "demo taking long to open
+  // users." Prior implementation wrote localStorage then forced window.
+  // location.href full-bundle reload (~1-2s cold). Rewritten to push state
+  // DIRECTLY into the Zustand stores via .setState() — the persist
+  // middleware auto-writes to localStorage on every setState, so no manual
+  // JSON.stringify round-trip. Zustand in-memory state is fresh immediately;
+  // caller follows with SPA navigation (router.navigate instead of
+  // window.location.href) to skip the bundle reload. Target: <300ms from
+  // click to persona-UI landing.
+  useAuthStore.setState({
+    session: {
+      access_token: `qa-fake-token-${persona.id}`,
+      user: { id: persona.profile.id, email: persona.profile.email },
     },
-    version: 0,
-  }))
+    profile: persona.profile,
+    isAuthenticated: true,
+    role: persona.profile.role,
+  })
 
   // Cart — seed idDocument with a 1x1 transparent-PNG placeholder so the
   // homeowner-cart "Upload ID First" gate auto-passes for QA personas.
-  // Gate stays functional for real users (they have no pre-seed); only QA
-  // personas get the bypass. Flagged by kratos 1776665034233 after apollo
-  // couldn't automate the file upload during qa-2 cart-to-book sweep.
-  localStorage.setItem('buildconnect-cart', JSON.stringify({
-    state: {
-      items: persona.cart.items,
-      projectTitle: persona.cart.projectTitle ?? '',
-      notes: persona.cart.notes ?? '',
-      photos: [],
-      idDocument: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    },
-    version: 0,
-  }))
+  useCartStore.setState({
+    items: persona.cart.items,
+    projectTitle: persona.cart.projectTitle ?? '',
+    notes: persona.cart.notes ?? '',
+    photos: [],
+    idDocument: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  })
 
   // Projects — keys in assignedRepByLead + cancellationRequestsByLead
   // are already the actual derived lead-ids (L-XXXX = first 4 chars of
   // sp.id uppercased with L- prefix) to match what vendor + homeowner
   // pages compute at render time.
-  localStorage.setItem('buildconnect-projects', JSON.stringify({
-    state: {
-      sentProjects: persona.projects.sentProjects,
-      assignedRepByLead: persona.projects.assignedRepByLead,
-      leadStatusOverrides: persona.projects.leadStatusOverrides,
-      cancellationRequestsByLead: persona.projects.cancellationRequestsByLead,
-    },
-    version: 0,
-  }))
+  useProjectsStore.setState({
+    sentProjects: persona.projects.sentProjects,
+    assignedRepByLead: persona.projects.assignedRepByLead,
+    leadStatusOverrides: persona.projects.leadStatusOverrides,
+    cancellationRequestsByLead: persona.projects.cancellationRequestsByLead,
+  })
 
-  // Flag so downstream consumers can detect QA-seeded mode (optional —
-  // AuthBootstrap doesn't currently check but may be useful for future guards).
+  // Flag for AuthBootstrap QA-bypass + switcher's active-persona indicator.
+  // Written directly to localStorage since there's no dedicated Zustand
+  // store for the flag.
   localStorage.setItem('buildconnect-qa-persona-active', persona.id)
 }
 
 // Wipe QA state + clear all store keys. Used by the "Exit QA" option in the
-// switcher to restore a clean unauthed browser session.
+// switcher to restore a clean unauthed browser session. Zustand setState +
+// localStorage removal — Exit flow still does a reload to fully re-bootstrap
+// AuthBootstrap + Supabase-session check, which is acceptable for the rarer
+// Exit path (vs the frequent persona-switch path).
 export function clearQAPersona() {
-  localStorage.removeItem('buildconnect-auth')
-  localStorage.removeItem('buildconnect-cart')
-  localStorage.removeItem('buildconnect-projects')
+  useAuthStore.setState({ session: null, profile: null, isAuthenticated: false, role: null })
+  useCartStore.setState({ items: [], projectTitle: '', notes: '', photos: [], idDocument: null })
+  useProjectsStore.setState({
+    sentProjects: [],
+    assignedRepByLead: {},
+    leadStatusOverrides: {},
+    cancellationRequestsByLead: {},
+  })
   localStorage.removeItem('buildconnect-qa-persona-active')
   localStorage.removeItem('buildconnect-pending-item')
   localStorage.removeItem('buildconnect-selected-contractor')
