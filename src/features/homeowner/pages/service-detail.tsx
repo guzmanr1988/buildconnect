@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, X, HelpCircle } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -517,27 +517,10 @@ export function ServiceDetailPage() {
                     )}
                   </AnimatePresence>
                 )}
-                {/* Products measure-help (replaces prior 'Installation & Permits
-                    not included.' disclaimer per kratos msg 1776719791153).
-                    Swap to measurement-guide CTA. Real guide content is
-                    Tranche-2 — toast stub for now. */}
                 {group.id === 'products' && serviceId === 'windows_doors' && (
-                  <div className="mt-2 flex flex-col gap-2">
-                    <p className="text-[12px] text-muted-foreground leading-relaxed">
-                      Need help on how to measure your windows and doors? Click the help button below.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="self-start gap-1.5 text-xs"
-                      onClick={() => toast('Measurement guide coming soon', {
-                        description: 'A video + PDF walkthrough will ship in the next release.',
-                      })}
-                    >
-                      <HelpCircle className="h-3.5 w-3.5" />
-                      How to measure
-                    </Button>
-                  </div>
+                  <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed">
+                    Need help measuring your windows and doors? Visit Video Tutorials on the home dashboard for step-by-step guidance.
+                  </p>
                 )}
                 {/* Payment method note */}
                 {group.id === 'payment' && (
