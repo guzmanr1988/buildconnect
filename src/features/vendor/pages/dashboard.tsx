@@ -300,6 +300,17 @@ export default function VendorDashboard() {
     }
   }, [sheetOpen, selected])
 
+  // Layer 5 of bulletproof close for Review Cancellation dialog (kratos msg
+  // 1776672025175). Same pattern — if cancelReviewOpen flips false but the
+  // leadId state is still populated, clean the leadId. Catches backdrop/ESC/
+  // close-X paths that don't go through Approve/Deny handlers.
+  useEffect(() => {
+    if (!cancelReviewOpen && cancelReviewLeadId !== '') {
+      console.log('[vendor-cancel-review] LAYER5_CLEANUP cancelReviewOpen=false, clearing leadId')
+      setCancelReviewLeadId('')
+    }
+  }, [cancelReviewOpen, cancelReviewLeadId])
+
   const selectedSlot = MOCK_AVAILABLE_SLOTS.find((s) => s.date === rescheduleDate)
 
   const openLead = (lead: Lead) => {
@@ -340,18 +351,70 @@ export default function VendorDashboard() {
     setCancelReviewOpen(true)
   }
 
+  // Bulletproof close on Approve/Deny handlers — kratos msg 1776672025175
+  // Rodolfo reported Review Cancellation dialog stays open post-action. Same
+  // pattern as vendor new-lead Confirm (#87) + homeowner cancellation Submit
+  // (#90): try/finally close + setTimeout + rAF fallback with console traces.
+  // Layer 5 cleanup on cancelReviewOpen transition handled in separate useEffect
+  // below (forces setCancelReviewLeadId('') + setSelected(null) on close).
   const handleApproveCancellation = () => {
-    if (!cancelReviewLeadId) return
-    approveCancellation(cancelReviewLeadId)
-    setCancelReviewOpen(false)
-    setSelected(null)
-    setSheetOpen(false)
+    if (!cancelReviewLeadId) {
+      console.warn('[vendor-cancel-review] APPROVE early-return: no leadId')
+      return
+    }
+    console.log('[vendor-cancel-review] APPROVE_FIRED layer=sync leadId=', cancelReviewLeadId)
+    const leadIdSnapshot = cancelReviewLeadId
+    try {
+      approveCancellation(leadIdSnapshot)
+    } catch (err) {
+      console.error('[vendor-cancel-review] approve-body error, closing anyway:', err)
+    } finally {
+      console.log('[vendor-cancel-review] APPROVE_FIRED layer=finally')
+      setCancelReviewOpen(false)
+      setSelected(null)
+      setSheetOpen(false)
+    }
+    setTimeout(() => {
+      console.log('[vendor-cancel-review] APPROVE_FIRED layer=setTimeout')
+      setCancelReviewOpen(false)
+      setSelected(null)
+      setSheetOpen(false)
+    }, 0)
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => {
+        console.log('[vendor-cancel-review] APPROVE_FIRED layer=raf')
+        setCancelReviewOpen(false)
+        setSelected(null)
+        setSheetOpen(false)
+      })
+    }
   }
 
   const handleDenyCancellation = () => {
-    if (!cancelReviewLeadId) return
-    denyCancellation(cancelReviewLeadId)
-    setCancelReviewOpen(false)
+    if (!cancelReviewLeadId) {
+      console.warn('[vendor-cancel-review] DENY early-return: no leadId')
+      return
+    }
+    console.log('[vendor-cancel-review] DENY_FIRED layer=sync leadId=', cancelReviewLeadId)
+    const leadIdSnapshot = cancelReviewLeadId
+    try {
+      denyCancellation(leadIdSnapshot)
+    } catch (err) {
+      console.error('[vendor-cancel-review] deny-body error, closing anyway:', err)
+    } finally {
+      console.log('[vendor-cancel-review] DENY_FIRED layer=finally')
+      setCancelReviewOpen(false)
+    }
+    setTimeout(() => {
+      console.log('[vendor-cancel-review] DENY_FIRED layer=setTimeout')
+      setCancelReviewOpen(false)
+    }, 0)
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => {
+        console.log('[vendor-cancel-review] DENY_FIRED layer=raf')
+        setCancelReviewOpen(false)
+      })
+    }
   }
 
   const handleSaveEditRep = () => {
