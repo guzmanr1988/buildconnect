@@ -59,12 +59,12 @@ function homeowner(p: Profile): HomeownerInfo {
 
 const PERSONA_1_FRESH: QAPersona = {
   id: 'qa-1-fresh',
-  label: 'Ana Martinez — Fresh / Zero-state',
-  description: 'Fresh account in Miami, no cart, no projects. Tests onboarding + browse + configure + first-add flow.',
+  label: 'Rosa Jimenez — Fresh / Zero-state',
+  description: 'Fresh account in Miami, no cart, no projects. Tests onboarding + browse + configure + first-add flow. (Renamed 2026-04-20 from Ana Martinez to avoid name-collision with paradise-demo vendor owner.)',
   profile: {
-    id: 'qa-persona-1-ana-martinez',
-    email: 'ana.martinez.qa@buildc.net',
-    name: 'Ana Martinez',
+    id: 'qa-persona-1-rosa-jimenez',
+    email: 'rosa.jimenez.qa@buildc.net',
+    name: 'Rosa Jimenez',
     role: 'homeowner',
     phone: '305-555-0201',
     address: '1201 Brickell Ave, Miami, FL 33131',
