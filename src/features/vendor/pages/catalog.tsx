@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,19 +49,35 @@ export default function VendorCatalog() {
   // When a service is deactivated, remove it from the expanded set so
   // re-activating later starts cleanly collapsed (per Rod directive: active
   // tiles default collapsed, expansion is explicit-tap-driven only).
+  //
+  // BUG FIX (Rod P0 2026-04-20 via kratos msg 1776658491957): previous
+  // implementation read `s.id` but VendorServiceConfig has `s.serviceId` —
+  // currentlyEnabled was always Set([undefined]), so the loop deleted every
+  // entry from expandedServices on every vendorServices mutation. Every
+  // checkbox click fired this effect → cleared expandedServices → card
+  // collapsed. THIS was the actual click-collapses-card bug, not event
+  // propagation (ships #65/#66/#67 stopPropagation were treating a red
+  // herring). Field name corrected + also switched to enabled-transition
+  // tracking via ref so the effect only fires when a service actually flips
+  // from enabled=true to enabled=false (not on unrelated mutations like
+  // enabledOptions or pricing).
+  const prevEnabledRef = useRef<Record<string, boolean>>({})
   useEffect(() => {
-    const currentlyEnabled = new Set(vendorServices.filter((s) => s.enabled).map((s) => s.id))
-    setExpandedServices((prev) => {
-      let changed = false
-      const next = new Set(prev)
-      for (const id of prev) {
-        if (!currentlyEnabled.has(id)) {
-          next.delete(id)
-          changed = true
-        }
+    const deactivated: string[] = []
+    for (const s of vendorServices) {
+      const wasEnabled = prevEnabledRef.current[s.serviceId] ?? false
+      if (wasEnabled && !s.enabled) {
+        deactivated.push(s.serviceId)
       }
-      return changed ? next : prev
-    })
+      prevEnabledRef.current[s.serviceId] = s.enabled
+    }
+    if (deactivated.length > 0) {
+      setExpandedServices((prev) => {
+        const next = new Set(prev)
+        for (const id of deactivated) next.delete(id)
+        return next
+      })
+    }
   }, [vendorServices])
 
   const enabledCount = vendorServices.filter((s) => s.enabled).length
