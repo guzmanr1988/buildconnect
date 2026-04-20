@@ -35,14 +35,61 @@ const statusPulse: Record<string, string> = {
 
 export function AppointmentStatusPage() {
   const { id } = useParams<{ id: string }>()
-  const lead = MOCK_LEADS.find((l) => l.id === id) ?? MOCK_LEADS[0]
-  const vendor = MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
+  const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+
+  // Two lookup paths:
+  // 1. MOCK_LEADS (static fixtures L-0001..L-0005) — read by id match.
+  // 2. sentProjects (cart-created leads with id pattern L-${first4-of-uuid}) —
+  //    lookup by matching the URL id against the computed L-XXXX key and
+  //    converting SentProject status to Lead.status via the vendor-dashboard
+  //    statusMap (pending→pending, approved→confirmed, declined→rejected,
+  //    sold→completed). Without this path, cart-created URLs fell through to
+  //    MOCK_LEADS[0] (L-0001 confirmed) so the homeowner never saw their
+  //    lead's actual yellow/pending state.
+  const sentProjectStatusMap: Record<string, LeadStatus> = {
+    pending: 'pending',
+    approved: 'confirmed',
+    declined: 'rejected',
+    sold: 'completed',
+  }
+  const mockLead = MOCK_LEADS.find((l) => l.id === id)
+  const sentProject = !mockLead
+    ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
+    : undefined
+  const baseLead = mockLead
+    ?? (sentProject && {
+      id: `L-${sentProject.id.slice(0, 4).toUpperCase()}`,
+      homeowner_id: 'ho-current',
+      vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
+      project: sentProject.item.serviceName,
+      value: 0,
+      status: sentProjectStatusMap[sentProject.status] ?? 'pending',
+      slot: sentProject.sentAt,
+      permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),
+      service_category: sentProject.item.serviceId as LeadStatus & string,
+      pack_items: sentProject.item.selections,
+      sq_ft: 0,
+      financing: Object.values(sentProject.item.selections ?? {}).flat().includes('financed'),
+      address: sentProject.homeowner?.address || 'Pending site visit',
+      phone: sentProject.homeowner?.phone || '',
+      email: sentProject.homeowner?.email || '',
+      homeowner_name: sentProject.homeowner?.name || 'You',
+      received_at: sentProject.sentAt,
+    } as unknown as typeof MOCK_LEADS[number])
+    ?? MOCK_LEADS[0]
+  // Apply lead-status override (Phase C persist) on top of whatever we resolved.
+  const lead = leadStatusOverrides[baseLead.id]
+    ? { ...baseLead, status: leadStatusOverrides[baseLead.id] }
+    : baseLead
+  const vendor = sentProject
+    ? MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company)
+    : MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
   const timeline = statusTimeline[lead.id] ?? [
     { label: 'Lead submitted', time: 'Recently', status: 'pending' as LeadStatus },
   ]
   // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
-  const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
-  const sentProjects = useProjectsStore((s) => s.sentProjects)
   const assignedRep =
     assignedRepByLead[lead.id] ??
     sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)?.assignedRep
