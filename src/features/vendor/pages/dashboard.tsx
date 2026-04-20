@@ -746,27 +746,37 @@ export default function VendorDashboard() {
                             : !adhocRepName.trim()
                         }
                         onClick={() => {
-                          // Resolve the rep; dropdown path uses the selected VendorRep,
-                          // free-form path builds an ad-hoc rep from the typed name.
+                          // Snapshot selected before the close-sequence resets it —
+                          // Rod P0: adhoc-rep Confirm path was reading selected after
+                          // state-batch started committing, and on some React renders
+                          // selected.id was null before the handler body finished.
+                          // Take id first, act on it, then close.
+                          const selectedLeadId = selected.id
                           const rep: VendorRep | undefined =
                             vendor?.reps && vendor.reps.length > 0
                               ? vendor.reps.find((r) => r.id === selectedRepId)
                               : adhocRepName.trim()
-                                ? { id: `adhoc-${crypto.randomUUID()}`, name: adhocRepName.trim() }
+                                ? {
+                                    id: typeof crypto !== 'undefined' && crypto.randomUUID
+                                      ? `adhoc-${crypto.randomUUID()}`
+                                      : `adhoc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                    name: adhocRepName.trim(),
+                                  }
                                 : undefined
-                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                          // Write state updates FIRST so the lead actually moves to
-                          // Scheduled column. Then clear selected + close dialog —
-                          // resetting selected blanks the Dialog body during close
-                          // animation so the 'confirmed' branch (Mark-as-Sold) never
-                          // flashes. Combines Rod-surfaced "lead doesn't move" fix +
-                          // prior close-first flash-elimination into one order.
+                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selectedLeadId)
                           if (rep) {
-                            assignRepByLead(selected.id, rep)
+                            assignRepByLead(selectedLeadId, rep)
                             if (sp) assignProjectRep(sp.id, rep)
                           }
-                          setLeadStatus(selected.id, 'confirmed')
+                          setLeadStatus(selectedLeadId, 'confirmed')
                           if (sp) updateProjectStatus(sp.id, 'approved')
+                          // Aggressive close: reset ALL rep-picker state + body scope
+                          // + sheet open. Clearing rep state avoids any residue
+                          // tripping the next openLead re-entry. setSelected(null)
+                          // blanks Dialog body during close; setSheetOpen(false)
+                          // starts the close animation.
+                          setSelectedRepId('')
+                          setAdhocRepName('')
                           setSelected(null)
                           setSheetOpen(false)
                         }}
