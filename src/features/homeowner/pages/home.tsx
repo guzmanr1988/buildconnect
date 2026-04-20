@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, PlayCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -331,14 +332,38 @@ export function HomeownerHome() {
 
       {/* Section heading */}
       <div>
-        <motion.h2
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="text-2xl sm:text-3xl font-bold font-heading text-foreground tracking-tight"
-        >
-          What would you like to build?
-        </motion.h2>
+        <div className="flex items-start justify-between gap-3">
+          <motion.h2
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-2xl sm:text-3xl font-bold font-heading text-foreground tracking-tight"
+          >
+            What would you like to build?
+          </motion.h2>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.12 }}
+            className="shrink-0"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                toast('Video tutorials coming soon', {
+                  description: 'Short service explainers will live here soon.',
+                  icon: <PlayCircle className="h-4 w-4 text-primary" />,
+                })
+              }
+              className="gap-2"
+            >
+              <PlayCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Video Tutorials</span>
+              <span className="sm:hidden">Tutorials</span>
+            </Button>
+          </motion.div>
+        </div>
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
