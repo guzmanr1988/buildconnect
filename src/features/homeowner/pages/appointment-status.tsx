@@ -85,6 +85,14 @@ export function AppointmentStatusPage() {
   const vendor = sentProject
     ? MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company)
     : MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
+  // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
+  // Must be declared BEFORE baseTimeline/dynamicTimeline consumer block —
+  // apollo caught TDZ on ship #72 when dynamicTimeline referenced assignedRep
+  // before its initializer. Declaration order matters for minified bundles.
+  const assignedRep =
+    assignedRepByLead[lead.id] ??
+    sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)?.assignedRep
+
   const baseTimeline = statusTimeline[lead.id] ?? [
     { label: 'Lead submitted', time: 'Recently', status: 'pending' as LeadStatus },
   ]
@@ -103,10 +111,6 @@ export function AppointmentStatusPage() {
     })
   }
   const timeline = [...baseTimeline, ...dynamicTimeline]
-  // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
-  const assignedRep =
-    assignedRepByLead[lead.id] ??
-    sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)?.assignedRep
 
   function formatSlot(slot: string) {
     const d = new Date(slot)
