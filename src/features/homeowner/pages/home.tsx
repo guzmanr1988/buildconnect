@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, Hammer, CheckCircle2 } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -30,6 +30,7 @@ export function HomeownerHome() {
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
 
   const sortByRecent = <T extends { sentAt: string }>(list: T[]) =>
     [...list].sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
@@ -115,12 +116,23 @@ export function HomeownerHome() {
     lifecycle.push(p)
   }
 
-  const upcoming = sortByRecent(
-    lifecycle.filter((p) => p.status === 'pending')
-  ).slice(0, 3)
+  // Cancelled predicate — mirror vendor-side isCancelledLead logic. A lead
+  // lands in Cancelled when the cancellation-request flow completes with
+  // status='approved' OR leadStatusOverrides='rejected' (pre-Tranche-2
+  // schema divergence, rejected = cancelled bucket).
+  const isCancelled = (leadId: string, status: string): boolean => {
+    const cReq = cancellationRequestsByLead[leadId]
+    if (cReq?.status === 'approved') return true
+    if (status === 'declined') return true
+    return false
+  }
+
+  const upcomingAll = lifecycle.filter((p) => p.status === 'pending' && !isCancelled(p.leadId, p.status))
+  const upcoming = sortByRecent(upcomingAll).slice(0, 3)
 
   const activeProjects = sortByRecent(
     lifecycle.filter((p) => {
+      if (isCancelled(p.leadId, p.status)) return false
       if (p.status === 'approved') return true
       if (p.status !== 'sold') return false
       if (!p.soldAt) return true
@@ -130,10 +142,15 @@ export function HomeownerHome() {
 
   const completedProjects = sortByRecent(
     lifecycle.filter((p) => {
+      if (isCancelled(p.leadId, p.status)) return false
       if (p.status !== 'sold') return false
       if (!p.soldAt) return false
       return new Date(p.soldAt).getTime() < activeCutoff
     })
+  )
+
+  const cancelledProjects = sortByRecent(
+    lifecycle.filter((p) => isCancelled(p.leadId, p.status))
   )
 
   const howItWorks = [
@@ -182,6 +199,55 @@ export function HomeownerHome() {
                 {profile.phone}
               </span>
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Project status summary — 2x2 grid of lifecycle stage counters (ship
+          #96 per kratos msg 1776697364860 Rodolfo ask). Mirrors the vendor-
+          dashboard 5-col lifecycle at a condensed homeowner-side read-out.
+          Tiles: Upcoming / Active / Completed / Cancelled. Lives above the
+          existing vertical section list which handles detail browsing. */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.04 }}
+        className="grid grid-cols-2 gap-3"
+      >
+        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+            <Clock className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Upcoming</p>
+            <p className="text-xl font-bold font-heading text-foreground leading-tight">{upcomingAll.length}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <Hammer className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Active</p>
+            <p className="text-xl font-bold font-heading text-foreground leading-tight">{activeProjects.length}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Completed</p>
+            <p className="text-xl font-bold font-heading text-foreground leading-tight">{completedProjects.length}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+            <XCircle className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Cancelled</p>
+            <p className="text-xl font-bold font-heading text-foreground leading-tight">{cancelledProjects.length}</p>
           </div>
         </div>
       </motion.div>
