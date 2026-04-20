@@ -479,7 +479,9 @@ export default function VendorDashboard() {
                 <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">
                   {lead.homeowner_name}
                 </p>
-                <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{lead.project}</p>
+                <p className="text-sm font-bold text-foreground/90 mt-0.5 truncate">
+                  {lead.project.split(' — ')[0]}
+                </p>
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className="text-sm font-bold">{fmt(lead.value)}</span>
                   <StatusBadge
