@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, AlertCircle } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -232,39 +232,6 @@ export function HomeownerHome() {
           </div>
         </div>
       </motion.div>
-
-      {/* Profile-completion nudge (ship #105 per kratos msg 1776718477775).
-          Amber banner when profile.address missing — vendors need address for
-          accurate matching. Hides once address filled. Banner replaces itself
-          cleanly when cleared, no layout shift. */}
-      {!profile.address?.trim() && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="rounded-xl border border-amber-300/50 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/40 p-3 flex items-center gap-3"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400">
-            <AlertCircle className="h-4 w-4" strokeWidth={2} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-              Complete your profile
-            </p>
-            <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">
-              Add your address so contractors can match you with the right services.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0 border-amber-400/60 text-amber-900 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40"
-            onClick={() => navigate('/home/profile')}
-          >
-            Complete Profile
-          </Button>
-        </motion.div>
-      )}
 
       {/* Project status accordion — 2x2 grid of lifecycle stage tiles fused
           with detail lists (ship #97 per kratos msg 1776697638074). Each tile
