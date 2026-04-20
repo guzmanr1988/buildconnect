@@ -467,7 +467,7 @@ export default function VendorDashboard() {
           </div>
         </LeadStatusTile>
         <LeadStatusTile
-          title="Projects Completed ✔️"
+          title="Projects Completed"
           count={archivedLeads.length}
           color="bg-slate-500"
           icon={Archive}
