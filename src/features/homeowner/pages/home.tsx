@@ -39,16 +39,14 @@ export function HomeownerHome() {
   const sortByRecent = <T extends { sentAt: string }>(list: T[]) =>
     [...list].sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
 
-  // Rod P0 2026-04-20 (kratos msg 1776661512633): approved leads weren't
-  // populating Active Projects because (a) approved was bucketed under
-  // upcoming, (b) MOCK_LEADS with leadStatusOverrides were never merged into
-  // homeowner lifecycle view at all. Fixes both.
-
-  // UPCOMING: lead submitted, vendor hasn't acted yet. status=pending only.
-  //   (approved split out into Active Projects per Rod directive — vendor
-  //    has confirmed visit, so it's Active, not Upcoming.)
-  // ACTIVE: vendor-confirmed (approved) OR sold-but-within-active-window.
-  // COMPLETED: sold more than ACTIVE_TO_COMPLETED_DAYS ago.
+  // Bucket rules (kratos msg 1776722335225 — Rodolfo revision):
+  //   UPCOMING : pending (lead submitted, vendor not acted) OR approved
+  //              (vendor Scheduled — confirmed but work not started yet).
+  //   ACTIVE   : sold (work in progress / post-payment) within
+  //              ACTIVE_TO_COMPLETED_DAYS window.
+  //   COMPLETED: sold older than ACTIVE_TO_COMPLETED_DAYS.
+  // Homeowner-perspective: anything where work hasn't physically started =
+  // still "Upcoming". Only flip to Active when vendor marks Sold.
   const activeCutoff = Date.now() - ACTIVE_TO_COMPLETED_DAYS * 24 * 60 * 60 * 1000
 
   // Unified lifecycle entry shape — leadId is the URL-stable id used for
@@ -131,13 +129,16 @@ export function HomeownerHome() {
     return false
   }
 
-  const upcomingAll = lifecycle.filter((p) => p.status === 'pending' && !isCancelled(p.leadId, p.status))
-  const upcoming = sortByRecent(upcomingAll).slice(0, 3)
+  const upcomingAll = sortByRecent(
+    lifecycle.filter(
+      (p) => (p.status === 'pending' || p.status === 'approved') && !isCancelled(p.leadId, p.status)
+    )
+  )
+  const upcoming = upcomingAll.slice(0, 3)
 
   const activeProjects = sortByRecent(
     lifecycle.filter((p) => {
       if (isCancelled(p.leadId, p.status)) return false
-      if (p.status === 'approved') return true
       if (p.status !== 'sold') return false
       if (!p.soldAt) return true
       return new Date(p.soldAt).getTime() >= activeCutoff
@@ -247,8 +248,8 @@ export function HomeownerHome() {
         className="grid grid-cols-2 gap-3"
       >
         {([
-          { id: 'upcoming' as const, label: 'Upcoming', count: upcomingAll.length, icon: Clock, iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', projects: upcomingAll, emptyText: 'No upcoming yet', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.booking.date} · ${p.booking.time}` },
-          { id: 'active' as const, label: 'Active', count: activeProjects.length, icon: Hammer, iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', projects: activeProjects, emptyText: 'No active projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.status === 'approved' ? 'Scheduled' : 'In progress'}${p.soldAt ? ' · Sold ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
+          { id: 'upcoming' as const, label: 'Upcoming', count: upcomingAll.length, icon: Clock, iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', projects: upcomingAll, emptyText: 'No upcoming yet', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.status === 'approved' ? 'Scheduled' : 'Pending vendor'} · ${p.booking.date} ${p.booking.time}` },
+          { id: 'active' as const, label: 'Active', count: activeProjects.length, icon: Hammer, iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', projects: activeProjects, emptyText: 'No active projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · In progress${p.soldAt ? ' · Sold ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
           { id: 'completed' as const, label: 'Completed', count: completedProjects.length, icon: CheckCircle2, iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300', projects: completedProjects, emptyText: 'No completed projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Completed${p.soldAt ? ' ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
           { id: 'cancelled' as const, label: 'Cancelled', count: cancelledProjects.length, icon: XCircle, iconBg: 'bg-destructive/10 text-destructive', projects: cancelledProjects, emptyText: 'No cancelled projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Cancelled` },
         ] as const).map((tile) => {
