@@ -170,7 +170,7 @@ const PERSONA_3_APPROVED: QAPersona = {
       sentAt: '2026-04-05T15:00:00.000Z',
       assignedRep: rep,
     }],
-    assignedRepByLead: { 'L-QA30': rep },
+    assignedRepByLead: { 'L-QA3S': rep },
     leadStatusOverrides: {},
     cancellationRequestsByLead: {},
   },
@@ -200,7 +200,7 @@ const PERSONA_4_MIXED: QAPersona = {
   projects: {
     sentProjects: [
       {
-        id: 'qa4sp0001roof',
+        id: 'roof4miguelqa',
         item: {
           id: 'qa4-item-1',
           serviceId: 'roofing',
@@ -219,7 +219,7 @@ const PERSONA_4_MIXED: QAPersona = {
         assignedRep: rep,
       },
       {
-        id: 'qa4sp0002bath',
+        id: 'bath4miguelqa',
         item: {
           id: 'qa4-item-2',
           serviceId: 'bathroom',
@@ -235,7 +235,7 @@ const PERSONA_4_MIXED: QAPersona = {
         assignedRep: rep,
       },
       {
-        id: 'qa4sp0003pool',
+        id: 'pool4miguelqa',
         item: {
           id: 'qa4-item-3',
           serviceId: 'pool',
@@ -252,13 +252,13 @@ const PERSONA_4_MIXED: QAPersona = {
       },
     ],
     assignedRepByLead: {
-      'L-QA40': rep,
-      'L-QA41': rep,
-      'L-QA42': rep,
+      'L-ROOF': rep,
+      'L-BATH': rep,
+      'L-POOL': rep,
     },
     leadStatusOverrides: {},
     cancellationRequestsByLead: {
-      'L-QA40': {
+      'L-POOL': {
         requestedAt: '2026-04-19T20:00:00.000Z',
         status: 'pending',
       },
@@ -272,17 +272,6 @@ export const QA_PERSONAS: QAPersona[] = [
   PERSONA_3_APPROVED,
   PERSONA_4_MIXED,
 ]
-
-// Derive the lead-id from a sentProject.id the same way the vendor/homeowner
-// pages do — first 4 chars uppercased with L- prefix. Persona 4's cancellation
-// request is keyed by the first sentProject's derived leadId: L-QA40 comes from
-// 'qa4sp0001roof' prefix → 'QA4S' → so real derived ids differ. Seed the
-// cancellationRequestsByLead + assignedRepByLead using the actual derived keys
-// at persona-load time (see applyQAPersona), not at module-definition time.
-
-function deriveLeadId(spId: string): string {
-  return `L-${spId.slice(0, 4).toUpperCase()}`
-}
 
 // Write the persona to localStorage. Callers should reload the page after so
 // zustand-persist hydrates from the fresh state on next mount.
@@ -313,36 +302,16 @@ export function applyQAPersona(persona: QAPersona) {
     version: 0,
   }))
 
-  // Projects — rekey assignedRepByLead + cancellationRequestsByLead to match
-  // the actual derived leadIds from the sentProjects the persona seeds.
-  const rekeyedReps: Record<string, VendorRep> = {}
-  const rekeyedCancels: Record<string, CancellationRequest> = {}
-  const sentProjectIds = persona.projects.sentProjects.map((p) => p.id)
-
-  // For persona-4, the declared maps use placeholder keys L-QA40/41/42 (in
-  // order of the sentProjects). Map those to the actual derived lead ids.
-  const declaredRepKeys = Object.keys(persona.projects.assignedRepByLead)
-  const declaredCancelKeys = Object.keys(persona.projects.cancellationRequestsByLead)
-
-  declaredRepKeys.forEach((key, idx) => {
-    const realSpId = sentProjectIds[idx] ?? sentProjectIds[0]
-    if (realSpId) {
-      rekeyedReps[deriveLeadId(realSpId)] = persona.projects.assignedRepByLead[key]
-    }
-  })
-  declaredCancelKeys.forEach((key, idx) => {
-    const realSpId = sentProjectIds[idx] ?? sentProjectIds[0]
-    if (realSpId) {
-      rekeyedCancels[deriveLeadId(realSpId)] = persona.projects.cancellationRequestsByLead[key]
-    }
-  })
-
+  // Projects — keys in assignedRepByLead + cancellationRequestsByLead
+  // are already the actual derived lead-ids (L-XXXX = first 4 chars of
+  // sp.id uppercased with L- prefix) to match what vendor + homeowner
+  // pages compute at render time.
   localStorage.setItem('buildconnect-projects', JSON.stringify({
     state: {
       sentProjects: persona.projects.sentProjects,
-      assignedRepByLead: rekeyedReps,
+      assignedRepByLead: persona.projects.assignedRepByLead,
       leadStatusOverrides: persona.projects.leadStatusOverrides,
-      cancellationRequestsByLead: rekeyedCancels,
+      cancellationRequestsByLead: persona.projects.cancellationRequestsByLead,
     },
     version: 0,
   }))
