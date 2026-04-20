@@ -249,3 +249,16 @@ body, #root {
     gap: 0.5rem !important;
   }
 }
+
+/* Hide number-input spinner arrows globally. Rod directive: plain number
+   boxes on vendor catalog (and everywhere else). Applies to both
+   WebKit (Chrome/Safari) and Firefox. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

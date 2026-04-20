@@ -6,7 +6,12 @@ export interface VendorServiceConfig {
   serviceId: string
   enabled: boolean
   enabledOptions: Record<string, string[]> // groupId -> array of enabled optionIds
-  pricing: Record<string, number> // optionId -> price
+  pricing: Record<string, number> // optionId -> price (cents OR dollars, caller-scoped)
+  // Optional percentage-markup price. Currently only used on Low-E Glass
+  // sub-option in /vendor/catalog — Rod directive: vendor can price Low-E
+  // either as $ OR as % markup over another baseline. Extensible to other
+  // options that need dual $ / % pricing.
+  pricingPercent?: Record<string, number> // optionId -> percent
 }
 
 interface VendorCatalogState {
@@ -15,9 +20,11 @@ interface VendorCatalogState {
   toggleService: (serviceId: string) => void
   toggleOption: (serviceId: string, groupId: string, optionId: string) => void
   setPrice: (serviceId: string, optionId: string, price: number) => void
+  setPricePercent: (serviceId: string, optionId: string, percent: number) => void
   isServiceEnabled: (serviceId: string) => boolean
   isOptionEnabled: (serviceId: string, groupId: string, optionId: string) => boolean
   getPrice: (serviceId: string, optionId: string) => number
+  getPricePercent: (serviceId: string, optionId: string) => number
 }
 
 export const useVendorCatalogStore = create<VendorCatalogState>()(
@@ -71,6 +78,16 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         }))
       },
 
+      setPricePercent: (serviceId, optionId, percent) => {
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.serviceId === serviceId
+              ? { ...s, pricingPercent: { ...(s.pricingPercent ?? {}), [optionId]: percent } }
+              : s
+          ),
+        }))
+      },
+
       isServiceEnabled: (serviceId) => {
         return get().services.find((s) => s.serviceId === serviceId)?.enabled || false
       },
@@ -84,6 +101,11 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       getPrice: (serviceId, optionId) => {
         const service = get().services.find((s) => s.serviceId === serviceId)
         return service?.pricing[optionId] || 0
+      },
+
+      getPricePercent: (serviceId, optionId) => {
+        const service = get().services.find((s) => s.serviceId === serviceId)
+        return service?.pricingPercent?.[optionId] || 0
       },
     }),
     {

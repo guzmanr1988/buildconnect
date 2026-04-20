@@ -19,9 +19,11 @@ export default function VendorCatalog() {
     toggleService,
     toggleOption,
     setPrice,
+    setPricePercent,
     isServiceEnabled,
     isOptionEnabled,
     getPrice,
+    getPricePercent,
   } = useVendorCatalogStore()
 
   // Expand state is per-service, session-scoped (no persist — if vendor
@@ -307,6 +309,22 @@ export default function VendorCatalog() {
                                           placeholder="0"
                                           className="h-6 w-16 text-[11px] text-right"
                                         />
+                                        {/* Low-E Glass dual pricing: vendor can enter $ OR % markup.
+                                            Rod directive kratos msg 1776659189645 — scoped to low_e sub-option
+                                            only; other sub-options stay $ only. */}
+                                        {subOpt.id === 'low_e' && (
+                                          <>
+                                            <span className="text-[10px] text-muted-foreground ml-1">%</span>
+                                            <Input
+                                              aria-label={`Percent markup for ${subOpt.label}`}
+                                              type="number"
+                                              value={getPricePercent(service.id, subOpt.id) || ''}
+                                              onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
+                                              placeholder="0"
+                                              className="h-6 w-14 text-[11px] text-right"
+                                            />
+                                          </>
+                                        )}
                                       </div>
                                     )}
                                   </div>
