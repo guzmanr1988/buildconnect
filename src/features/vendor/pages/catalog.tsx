@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { getOptionMetadata } from '@/lib/option-metadata'
 import { cn } from '@/lib/utils'
 
 export default function VendorCatalog() {
@@ -245,6 +246,23 @@ export default function VendorCatalog() {
                                       placeholder="0"
                                       className="h-10 w-24 text-base text-right"
                                     />
+                                    {/* Top-level options can also opt into dual-pricing via
+                                        OPTION_METADATA.supportsPercentMarkup. Currently only
+                                        sub-options carry the flag (low_e + casement), but if a
+                                        future top-level option is flagged, the UX is ready. */}
+                                    {getOptionMetadata(option.id).supportsPercentMarkup && (
+                                      <>
+                                        <span className="text-sm text-muted-foreground ml-1">%</span>
+                                        <Input
+                                          aria-label={`Percent markup for ${option.label}`}
+                                          type="number"
+                                          value={getPricePercent(service.id, option.id) || ''}
+                                          onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
+                                          placeholder="0"
+                                          className="h-10 w-20 text-base text-right"
+                                        />
+                                      </>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -309,10 +327,12 @@ export default function VendorCatalog() {
                                           placeholder="0"
                                           className="h-9 w-20 text-sm text-right"
                                         />
-                                        {/* Low-E Glass dual pricing: vendor can enter $ OR % markup.
-                                            Rod directive kratos msg 1776659189645 — scoped to low_e sub-option
-                                            only; other sub-options stay $ only. */}
-                                        {subOpt.id === 'low_e' && (
+                                        {/* Dual $ / % pricing on sub-options flagged
+                                            supportsPercentMarkup in OPTION_METADATA.
+                                            Currently low_e + casement; add more by flag-flip,
+                                            not code branch. Rod directives kratos msgs
+                                            1776659189645 + 1776659949844. */}
+                                        {getOptionMetadata(subOpt.id).supportsPercentMarkup && (
                                           <>
                                             <span className="text-sm text-muted-foreground ml-1">%</span>
                                             <Input

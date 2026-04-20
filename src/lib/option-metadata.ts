@@ -14,11 +14,19 @@
 export type OptionMetadata = {
   requiresQuantity?: boolean
   quantityRange?: { min: number; max: number }
+  // Enables dual $ / % pricing UI on /vendor/catalog — vendor sees a second
+  // Input for percent markup alongside the $ price. When both are set, the
+  // effective price is base + (base × percent/100). Currently FE-only until
+  // Tranche-2 adds a Supabase column for the percent (vendor_option_prices
+  // has only price_cents today, no percent column).
+  supportsPercentMarkup?: boolean
 }
 
 export const OPTION_METADATA: Record<string, OptionMetadata> = {
   install_windows: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
   install_doors: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
+  low_e: { supportsPercentMarkup: true },
+  casement: { supportsPercentMarkup: true },
 }
 
 export function getOptionMetadata(optionId: string): OptionMetadata {
