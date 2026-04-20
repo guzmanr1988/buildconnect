@@ -13,7 +13,6 @@ import type { LeadStatus } from '@/types'
 const statusTimeline: Record<string, { label: string; time: string; status: LeadStatus }[]> = {
   'L-0001': [
     { label: 'Lead submitted', time: 'Apr 7, 2:22 PM', status: 'pending' },
-    { label: 'Vendor confirmed visit', time: 'Apr 7, 4:10 PM', status: 'confirmed' },
   ],
   'L-0002': [
     { label: 'Lead submitted', time: 'Apr 8, 9:45 AM', status: 'pending' },
