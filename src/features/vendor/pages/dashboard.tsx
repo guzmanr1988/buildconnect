@@ -838,6 +838,9 @@ export default function VendorDashboard() {
                       ))
                     })()}
                   </div>
+                  <p className="text-xs text-muted-foreground italic pt-0.5">
+                    Full project details available in the Projects tab.
+                  </p>
                 </div>
               </div>
 
