@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -153,6 +155,15 @@ export function HomeownerHome() {
     lifecycle.filter((p) => isCancelled(p.leadId, p.status))
   )
 
+  // Accordion state for 2x2 fused tile-grid (ship #97 per kratos msg
+  // 1776697638074). Tap any tile → drops down the project list inline
+  // under the tile. One-open-at-a-time for consistency with vendor
+  // dashboard 5-col accordion. null = all collapsed.
+  type HomeTileId = 'upcoming' | 'active' | 'completed' | 'cancelled'
+  const [openHomeTile, setOpenHomeTile] = useState<HomeTileId | null>(null)
+  const toggleHomeTile = (id: HomeTileId) =>
+    setOpenHomeTile((prev) => (prev === id ? null : id))
+
   const howItWorks = [
     { n: 1, t: 'Tell us about your project', d: 'Pick a service and answer a few questions about what you need.' },
     { n: 2, t: 'Get matched', d: 'We connect you with verified contractors in your area.' },
@@ -203,178 +214,88 @@ export function HomeownerHome() {
         </div>
       </motion.div>
 
-      {/* Project status summary — 2x2 grid of lifecycle stage counters (ship
-          #96 per kratos msg 1776697364860 Rodolfo ask). Mirrors the vendor-
-          dashboard 5-col lifecycle at a condensed homeowner-side read-out.
-          Tiles: Upcoming / Active / Completed / Cancelled. Lives above the
-          existing vertical section list which handles detail browsing. */}
+      {/* Project status accordion — 2x2 grid of lifecycle stage tiles fused
+          with detail lists (ship #97 per kratos msg 1776697638074). Each tile
+          click-expands its project list inline underneath. One-open-at-a-time
+          for consistency with vendor dashboard 5-col accordion pattern.
+          Default: all collapsed; empty-state renders inside tile when tapped
+          with no projects in that bucket. */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.04 }}
         className="grid grid-cols-2 gap-3"
       >
-        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-            <Clock className="h-5 w-5" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Upcoming</p>
-            <p className="text-xl font-bold font-heading text-foreground leading-tight">{upcomingAll.length}</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-            <Hammer className="h-5 w-5" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Active</p>
-            <p className="text-xl font-bold font-heading text-foreground leading-tight">{activeProjects.length}</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Completed</p>
-            <p className="text-xl font-bold font-heading text-foreground leading-tight">{completedProjects.length}</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border bg-card p-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-            <XCircle className="h-5 w-5" strokeWidth={1.8} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Cancelled</p>
-            <p className="text-xl font-bold font-heading text-foreground leading-tight">{cancelledProjects.length}</p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Lifecycle block — 3 sections tightly grouped so they fit above the fold
-          on 375. Outer page gap-10 stays, but the 3 stages use space-y-3 internally. */}
-      <div className="flex flex-col gap-3">
-      {/* Upcoming — always rendered with count; vendor hasn't sold yet. */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.08 }}
-      >
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-          Upcoming <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({upcoming.length})</span>
-        </p>
-        {upcoming.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {upcoming.map((p) => (
+        {([
+          { id: 'upcoming' as const, label: 'Upcoming', count: upcomingAll.length, icon: Clock, iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', projects: upcomingAll, emptyText: 'No upcoming yet', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.booking.date} · ${p.booking.time}` },
+          { id: 'active' as const, label: 'Active', count: activeProjects.length, icon: Hammer, iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', projects: activeProjects, emptyText: 'No active projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.status === 'approved' ? 'Scheduled' : 'In progress'}${p.soldAt ? ' · Sold ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
+          { id: 'completed' as const, label: 'Completed', count: completedProjects.length, icon: CheckCircle2, iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300', projects: completedProjects, emptyText: 'No completed projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Completed${p.soldAt ? ' ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
+          { id: 'cancelled' as const, label: 'Cancelled', count: cancelledProjects.length, icon: XCircle, iconBg: 'bg-destructive/10 text-destructive', projects: cancelledProjects, emptyText: 'No cancelled projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Cancelled` },
+        ] as const).map((tile) => {
+          const open = openHomeTile === tile.id
+          const Icon = tile.icon
+          return (
+            <div
+              key={tile.id}
+              className={cn(
+                'rounded-2xl border bg-card overflow-hidden transition-all col-span-1',
+                open && 'ring-2 ring-primary/40 shadow-md col-span-2'
+              )}
+            >
               <button
-                key={p.leadId}
                 type="button"
-                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
-                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
+                onClick={() => toggleHomeTile(tile.id)}
+                className="w-full p-4 flex items-center gap-3 text-left hover:bg-muted/30"
+                aria-expanded={open}
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <CalendarDays className="h-5 w-5" strokeWidth={1.8} />
+                <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tile.iconBg)}>
+                  <Icon className="h-5 w-5" strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
-                    {p.item.serviceName}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground truncate">
-                    {p.contractor.company} · {p.booking.date} · {p.booking.time}
-                  </p>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{tile.label}</p>
+                  <p className="text-xl font-bold font-heading text-foreground leading-tight">{tile.count}</p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+                {open ? (
+                  <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
               </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
-            <p className="text-[12px] text-muted-foreground">No upcoming bookings yet</p>
-          </div>
-        )}
+              {open && (
+                <div className="border-t border-border/40 bg-muted/10 p-3 space-y-2">
+                  {tile.projects.length === 0 ? (
+                    <div className="rounded-xl border border-dashed bg-card/50 px-3 py-3 text-center">
+                      <p className="text-[12px] text-muted-foreground">{tile.emptyText}</p>
+                    </div>
+                  ) : (
+                    tile.projects.map((p) => (
+                      <button
+                        key={p.leadId}
+                        type="button"
+                        onClick={() => navigate(`/home/appointments/${p.leadId}`)}
+                        className="group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <CalendarDays className="h-4 w-4" strokeWidth={1.8} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold font-heading text-foreground truncate">
+                            {p.item.serviceName}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {tile.subtitleFor(p)}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </motion.div>
-
-      {/* Active Projects — vendor has marked sold, project in motion */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.09 }}
-      >
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-          Active Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({activeProjects.length})</span>
-        </p>
-        {activeProjects.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activeProjects.map((p) => (
-              <button
-                key={p.leadId}
-                type="button"
-                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
-                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <Hammer className="h-5 w-5" strokeWidth={1.8} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
-                    {p.item.serviceName}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground truncate">
-                    {p.contractor.company} · In progress · Sold {p.soldAt ? new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
-            <p className="text-[12px] text-muted-foreground">No active projects</p>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Completed Projects — sold more than 30 days ago, presumed finished */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.10 }}
-      >
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-          Completed Projects <span className="ml-1 text-muted-foreground/70 normal-case tracking-normal">({completedProjects.length})</span>
-        </p>
-        {completedProjects.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {completedProjects.map((p) => (
-              <button
-                key={p.leadId}
-                type="button"
-                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
-                className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold font-heading text-foreground truncate">
-                    {p.item.serviceName}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground truncate">
-                    {p.contractor.company} · Completed {p.soldAt ? new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed bg-card/50 px-3 py-2 text-center">
-            <p className="text-[12px] text-muted-foreground">No completed projects yet</p>
-          </div>
-        )}
-      </motion.div>
-      </div>
 
       {/* Section heading */}
       <div>
