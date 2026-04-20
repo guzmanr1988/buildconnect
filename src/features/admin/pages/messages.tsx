@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MessageSquare, Send, Search } from 'lucide-react'
@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 import type { Vendor } from '@/types'
 
@@ -29,6 +30,11 @@ export default function AdminMessagesPage() {
 
   const allMessages = useAdminMessagesStore((s) => s.messages)
   const addMessage = useAdminMessagesStore((s) => s.addMessage)
+
+  // Cross-tab rehydrate so messages sent from vendor/homeowner surface on
+  // admin tab-back. Phase 2c admin-SoT per kratos msg 1776725610193.
+  const rehydrateMessages = useCallback(() => useAdminMessagesStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateMessages)
 
   const filteredVendors = useMemo(() => {
     if (!searchQuery.trim()) return MOCK_VENDORS

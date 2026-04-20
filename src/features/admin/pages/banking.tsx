@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Landmark,
@@ -55,6 +55,8 @@ import {
   MOCK_CLOSED_SALES,
   MOCK_BANK_ACCOUNTS,
 } from '@/lib/mock-data'
+import { useProjectsStore } from '@/stores/projects-store'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -66,20 +68,13 @@ const fadeUp = {
   }),
 }
 
-const totalRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
+const baselineRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
 const pendingPayouts = MOCK_TRANSACTIONS
   .filter((t) => t.type === 'payout' && t.status === 'pending')
   .reduce((s, t) => s + t.amount, 0)
 const totalDisbursed = MOCK_TRANSACTIONS
   .filter((t) => t.type === 'payout' && t.status === 'paid')
   .reduce((s, t) => s + t.amount, 0)
-
-const revenueChartData = [
-  { month: 'Jan', revenue: 4200 },
-  { month: 'Feb', revenue: 6800 },
-  { month: 'Mar', revenue: 9100 },
-  { month: 'Apr', revenue: totalRevenue },
-]
 
 const TYPE_CONFIG: Record<TransactionType, { label: string; className: string }> = {
   commission: {
@@ -130,6 +125,31 @@ const salaryHistory = [
 ]
 
 export default function BankingPage() {
+  // Phase 2c admin-SoT per kratos msg 1776725610193. Add sentProjects-sold
+  // commission on top of the MOCK_CLOSED_SALES baseline so banking KPIs +
+  // chart reflect Mark-Sold actions taken through the mock loop.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateProjects)
+
+  const mockCommission = useMemo(() => {
+    return sentProjects
+      .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0)
+      .reduce((s, p) => {
+        const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
+        const pct = (v?.commission_pct ?? 15) / 100
+        return s + Math.round((p.saleAmount ?? 0) * pct)
+      }, 0)
+  }, [sentProjects])
+
+  const totalRevenue = baselineRevenue + mockCommission
+  const revenueChartData = useMemo(() => [
+    { month: 'Jan', revenue: 4200 },
+    { month: 'Feb', revenue: 6800 },
+    { month: 'Mar', revenue: 9100 },
+    { month: 'Apr', revenue: totalRevenue },
+  ], [totalRevenue])
+
   const [bankForm, setBankForm] = useState({
     bankName: '',
     routing: '',
