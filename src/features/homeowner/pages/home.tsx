@@ -350,6 +350,7 @@ export function HomeownerHome() {
             <Button
               variant="outline"
               size="sm"
+              aria-label="Video Tutorials"
               onClick={() =>
                 toast('Video tutorials coming soon', {
                   description: 'Short service explainers will live here soon.',
