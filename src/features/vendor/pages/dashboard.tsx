@@ -190,16 +190,33 @@ export default function VendorDashboard() {
   const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
   const [clearDemoDialogOpen, setClearDemoDialogOpen] = useState(false)
   const handleClearDemoData = () => {
+    // Triple-belt: (1) in-memory reset via setState, (2) explicit localStorage
+    // removeItem on the persist key, (3) forced re-write of the empty state to
+    // localStorage. Covers the case where setState's persist-middleware-write
+    // fails silently OR the merge function would re-introduce stale data on
+    // next hydration. Rod P0 2026-04-20: Maria L-8B2E was surviving Clear
+    // because the persist path wasn't fully wiping.
     useProjectsStore.setState({
       sentProjects: [],
       assignedRepByLead: {},
       leadStatusOverrides: {},
     })
     try {
+      localStorage.removeItem('buildconnect-projects')
+      // Re-write empty state so any consumer reading localStorage after Clear
+      // sees a clean state, not a missing key that might trigger fallback.
+      localStorage.setItem(
+        'buildconnect-projects',
+        JSON.stringify({
+          state: { sentProjects: [], assignedRepByLead: {}, leadStatusOverrides: {} },
+          version: 0,
+        })
+      )
       localStorage.removeItem('buildconnect-pending-item')
       localStorage.removeItem('buildconnect-selected-contractor')
       localStorage.removeItem('buildconnect-selected-booking')
       localStorage.removeItem('buildconnect-homeowner-info')
+      localStorage.removeItem('buildconnect-id-document')
     } catch { /* storage errors non-fatal */ }
     setClearDemoDialogOpen(false)
   }
