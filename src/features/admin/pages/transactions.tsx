@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -15,6 +15,7 @@ import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useProjectsStore } from '@/stores/projects-store'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -72,6 +73,29 @@ export default function TransactionsPage() {
   }, [])
   useRefetchOnFocus(refreshTransactions)
 
+  // Mock-side merge: vendor Mark-Sold on QA personas writes to the zustand
+  // sentProjects store (not Supabase), so admin would miss those commissions.
+  // Synthesize commission rows from sold sentProjects so admin sees the full
+  // loop. Phase 2 admin-SoT audit per kratos msg 1776725170680.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateProjects)
+
+  const mockSoldTransactions = useMemo<Transaction[]>(() => {
+    return sentProjects
+      .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
+      .map((p) => ({
+        id: `mock-tx-${p.id}`,
+        type: 'commission' as TransactionType,
+        status: 'paid' as TransactionStatus,
+        company: p.contractor?.company ?? 'Unknown vendor',
+        detail: p.item.serviceName,
+        customer: p.homeowner?.name,
+        amount: Math.round((p.saleAmount ?? 0) * 0.15),
+        date: p.soldAt!,
+      }))
+  }, [sentProjects])
+
   const grouped = useMemo(() => {
     const result: Record<SectionKey, Transaction[]> = {
       commission_paid: [],
@@ -79,7 +103,15 @@ export default function TransactionsPage() {
       membership: [],
       payout: [],
     }
-    for (const tx of transactions) {
+    // Dedupe: if Supabase fetch returned a row with id matching our mock synth,
+    // prefer the Supabase row (it's the authoritative version once the Tranche-2
+    // closed_sales→transactions write path lands).
+    const supabaseIds = new Set(transactions.map((t) => t.id))
+    const unified = [
+      ...transactions,
+      ...mockSoldTransactions.filter((t) => !supabaseIds.has(t.id)),
+    ]
+    for (const tx of unified) {
       if (tx.type === 'commission') {
         if (tx.status === 'paid') result.commission_paid.push(tx)
         else result.commission_pending.push(tx)
@@ -93,7 +125,7 @@ export default function TransactionsPage() {
       result[key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }
     return result
-  }, [transactions])
+  }, [transactions, mockSoldTransactions])
 
   const sectionTotals = useMemo(() => ({
     commission_paid: grouped.commission_paid.reduce((s, t) => s + t.amount, 0),
@@ -103,16 +135,17 @@ export default function TransactionsPage() {
   }), [grouped])
 
   const totals = useMemo(() => ({
-    commission: transactions.filter((t) => t.type === 'commission').reduce((s, t) => s + t.amount, 0),
+    commission: sectionTotals.commission_paid + sectionTotals.commission_pending,
     membership: sectionTotals.membership,
     payout: sectionTotals.payout,
-  }), [transactions, sectionTotals])
+  }), [sectionTotals])
 
   const grandTotal = totals.commission + totals.membership + totals.payout
+  const unifiedTxCount = grouped.commission_paid.length + grouped.commission_pending.length + grouped.membership.length + grouped.payout.length
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transactions" description={`${transactions.length} total transactions`} />
+      <PageHeader title="Transactions" description={`${unifiedTxCount} total transactions`} />
 
       {/* Summary KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

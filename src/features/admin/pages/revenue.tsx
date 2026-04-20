@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   DollarSign,
@@ -34,6 +34,7 @@ import {
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { fetchAllClosedSales } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useProjectsStore } from '@/stores/projects-store'
 import type { ClosedSale } from '@/types'
 
 const fadeUp = {
@@ -60,6 +61,14 @@ export default function RevenuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useRefetchOnFocus(refreshClosedSales)
+
+  // Mock-side merge: QA persona Mark-Sold writes to sentProjects (zustand,
+  // not Supabase) so those sales never reach closed_sales. Admin should see
+  // the full mock loop + real Supabase data side by side. Phase 2 admin-SoT
+  // audit per kratos msg 1776725170680.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateProjects)
 
   // Reverse-map Supabase vendor UUIDs → MOCK_VENDORS entries for display
   // (profile wiring is a separate Tranche 2 item; vendor display data still
@@ -105,8 +114,25 @@ export default function RevenuePage() {
       }
     }
 
+    // Mock-side merge: sentProjects with status=sold + saleAmount add to the
+    // matching vendor by company name (mock vendors don't have a UUID bridge
+    // — they're identified by contractor.company on the sent-project entry).
+    // Dedupe safeguard: if a sentProject has been mirrored into closed_sales
+    // (same vendor + same amount + same day), skip to avoid double-counting.
+    for (const sp of sentProjects) {
+      if (sp.status !== 'sold' || !sp.saleAmount || sp.saleAmount <= 0) continue
+      const entry = Array.from(map.values()).find((v) => v.company === sp.contractor?.company)
+      if (!entry) continue
+      const commissionPct = entry.commissionPct / 100
+      const platformFee = Math.round(sp.saleAmount * commissionPct)
+      entry.totalRevenue += sp.saleAmount
+      entry.appShare += platformFee
+      entry.vendorShare += (sp.saleAmount - platformFee)
+      entry.deals += 1
+    }
+
     return Array.from(map.values()).sort((a, b) => b.totalRevenue - a.totalRevenue)
-  }, [closedSales, vendorByUuid])
+  }, [closedSales, vendorByUuid, sentProjects])
 
   const chartData = vendorBreakdown.map((v) => ({
     name: v.company.length > 16 ? v.company.slice(0, 14) + '...' : v.company,
