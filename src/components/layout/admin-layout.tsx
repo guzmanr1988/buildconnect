@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText } from 'lucide-react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { NotificationBell, type NotificationItem } from '@/components/shared/notification-bell'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
+import { MOCK_BUGS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -52,7 +54,20 @@ export function AdminLayout() {
   const isMobile = useMobile()
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Admin notifications = open bugs awaiting triage. Simple proxy for
+  // "something needs admin attention" until a richer admin-events stream
+  // lands (Tranche-2). Bell now renders on admin too — previously missing.
+  const openBugs = MOCK_BUGS.filter((b) => b.status === 'open')
+  const notifications: NotificationItem[] = openBugs.map((b) => ({
+    id: b.id,
+    title: `Open bug · ${b.priority}`,
+    description: b.description,
+    icon: AlertCircle,
+    iconColor: b.priority === 'high' ? 'text-red-500' : b.priority === 'medium' ? 'text-amber-500' : 'text-muted-foreground',
+  }))
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,8 +99,17 @@ export function AdminLayout() {
             {!isMobile && <h2 className="text-lg font-semibold font-heading">Admin Dashboard</h2>}
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell notifications={notifications} />
             <ThemeToggle />
-            {profile && <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />}
+            {profile && (
+              <button
+                onClick={() => navigate('/admin/profile')}
+                className="cursor-pointer"
+                aria-label="Profile"
+              >
+                <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />
+              </button>
+            )}
           </div>
         </header>
 

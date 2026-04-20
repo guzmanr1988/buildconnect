@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Bell, Menu, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { NotificationBell, type NotificationItem } from '@/components/shared/notification-bell'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
+import { MOCK_LEADS } from '@/lib/mock-data'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -47,8 +50,28 @@ export function VendorLayout() {
   const isMobile = useMobile()
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
+  const navigate = useNavigate()
   const { sidebarCollapsed, toggleSidebarCollapsed } = useUIStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Vendor notifications = pending leads awaiting action. Reverse-map
+  // profile.id → mock-vendor-id so the demo vendors see their MOCK_LEADS
+  // rows; authed-but-unmapped vendors see an empty list.
+  const mockVendorId = profile
+    ? Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(([, uuid]) => uuid === profile.id)?.[0]
+    : null
+  const vendorIdForLeads = mockVendorId ?? profile?.id ?? ''
+  const pendingLeads = MOCK_LEADS.filter(
+    (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
+  )
+  const notifications: NotificationItem[] = pendingLeads.map((l) => ({
+    id: l.id,
+    title: 'New Lead',
+    description: `${l.homeowner_name} — ${l.project}`,
+    icon: InboxIcon,
+    iconColor: 'text-primary',
+    tint: 'bg-primary/5',
+  }))
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,12 +117,17 @@ export function VendorLayout() {
             {isMobile && <Logo />}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent" />
-            </Button>
+            <NotificationBell notifications={notifications} />
             <ThemeToggle />
-            {profile && <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />}
+            {profile && (
+              <button
+                onClick={() => navigate('/vendor/profile')}
+                className="cursor-pointer"
+                aria-label="Profile"
+              >
+                <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />
+              </button>
+            )}
           </div>
         </header>
 

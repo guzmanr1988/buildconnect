@@ -1,17 +1,16 @@
-import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Palette, MessageCircle, User, Bell, ShoppingCart, CheckCircle2, X } from 'lucide-react'
+import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { NotificationBell, type NotificationItem } from '@/components/shared/notification-bell'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
@@ -28,7 +27,14 @@ export function HomeownerLayout() {
   const cartCount = useCartStore((s) => s.items.length)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
-  const [notifOpen, setNotifOpen] = useState(false)
+  const notifications: NotificationItem[] = approvedProjects.map((p) => ({
+    id: p.id,
+    title: 'Project Approved!',
+    description: `Congratulations! The vendor has approved your ${p.item.serviceName} request. Your project is booked.`,
+    icon: CheckCircle2,
+    iconColor: 'text-emerald-500',
+    tint: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+  }))
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,52 +57,14 @@ export function HomeownerLayout() {
               ))}
             </nav>
             <div className="flex items-center gap-2">
-              <Popover open={notifOpen} onOpenChange={setNotifOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative rounded-full"
-                    aria-label={
-                      approvedProjects.length > 0
-                        ? `Notifications, ${approvedProjects.length} new`
-                        : 'Notifications'
-                    }
-                  >
-                    <Bell className="h-4 w-4" />
-                    {approvedProjects.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                        {approvedProjects.length}
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="end">
-                  <div className="p-3 border-b">
-                    <h3 className="text-sm font-semibold">Notifications</h3>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {approvedProjects.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">No new notifications</div>
-                    ) : (
-                      approvedProjects.map((p) => (
-                        <div key={p.id} className="flex items-start gap-3 p-3 border-b last:border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
-                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Project Approved!</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Congratulations! The vendor has approved your {p.item.serviceName} request. Your project is booked.
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <NotificationBell notifications={notifications} />
               <ThemeToggle />
               {profile && (
-                <button onClick={() => navigate('/home/profile')} className="cursor-pointer">
+                <button
+                  onClick={() => navigate('/home/profile')}
+                  className="cursor-pointer"
+                  aria-label="Profile"
+                >
                   <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />
                 </button>
               )}
@@ -113,50 +81,17 @@ export function HomeownerLayout() {
               <Logo />
             </button>
             <div className="flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative rounded-full h-8 w-8"
-                    aria-label={
-                      approvedProjects.length > 0
-                        ? `Notifications, ${approvedProjects.length} new`
-                        : 'Notifications'
-                    }
-                  >
-                    <Bell className="h-4 w-4" />
-                    {approvedProjects.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                        {approvedProjects.length}
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="end">
-                  <div className="p-3 border-b">
-                    <h3 className="text-sm font-semibold">Notifications</h3>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {approvedProjects.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">No new notifications</div>
-                    ) : (
-                      approvedProjects.map((p) => (
-                        <div key={p.id} className="flex items-start gap-3 p-3 border-b last:border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
-                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Project Approved!</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Congratulations! The vendor has approved your {p.item.serviceName} request. Your project is booked.
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <NotificationBell notifications={notifications} size="sm" />
               <ThemeToggle />
+              {profile && (
+                <button
+                  onClick={() => navigate('/home/profile')}
+                  className="cursor-pointer"
+                  aria-label="Profile"
+                >
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} size="sm" />
+                </button>
+              )}
             </div>
           </div>
         </header>
