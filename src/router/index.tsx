@@ -20,6 +20,7 @@ import { BookingConfirmationPage } from '@/features/homeowner/pages/booking-conf
 import { AppointmentStatusPage } from '@/features/homeowner/pages/appointment-status'
 import { HomeownerMessagesPage } from '@/features/homeowner/pages/messages'
 import { HomeownerProfilePage } from '@/features/homeowner/pages/profile'
+import { HomeownerTutorialsPage } from '@/features/homeowner/pages/tutorials'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
 import { CartPage } from '@/features/homeowner/pages/cart'
 
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
           { path: 'booking/confirmed', element: <BookingConfirmationPage />, handle: { title: 'Booking confirmed' } },
           // appointment-status may set a dynamic title later; falls back to static here
           { path: 'appointments/:id', element: <AppointmentStatusPage />, handle: { title: 'Appointment' } },
+          { path: 'tutorials', element: <HomeownerTutorialsPage />, handle: { title: 'Tutorials' } },
           { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
           { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
         ],

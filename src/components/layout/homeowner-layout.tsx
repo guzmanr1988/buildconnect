@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X, HelpCircle } from 'lucide-react'
+import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X, HelpCircle, PlayCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
   { to: '/home/cart', icon: ShoppingCart, label: 'Projects' },
+  { to: '/home/tutorials', icon: PlayCircle, label: 'Tutorials' },
   { to: '/home/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/home/profile', icon: User, label: 'Profile' },
 ]
