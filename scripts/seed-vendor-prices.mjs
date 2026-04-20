@@ -236,15 +236,18 @@ async function seedPricesFor(vendor, vendorUuid, catalog) {
     for (const g of svc.option_groups) {
       for (const o of g.options) {
         const price = vendor.priceFor({ serviceId: svc.id, groupId: g.group_id, optionId: o.option_id })
-        if (price > 0) {
-          rows.push({
-            vendor_id: vendorUuid,
-            option_id: o.id,
-            price_cents: price,
-            currency: 'USD',
-            active: true,
-          })
-        }
+        // Emit $0 rows for options the vendor covers-but-does-not-charge-for
+        // (e.g. "Financed" payment, "Windows" parent option with per-sub-group
+        // pricing). Without these rows, computeVendorTotal treats them as
+        // missing and flips the card to "Contact for quote" even though the
+        // vendor DOES cover the service.
+        rows.push({
+          vendor_id: vendorUuid,
+          option_id: o.id,
+          price_cents: price,
+          currency: 'USD',
+          active: true,
+        })
       }
     }
   }

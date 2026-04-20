@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PR-12 contrast sample — b-005</title>
+  <!--
+    Standalone CSS-only sample for b-005 axe contrast QA.
+    Pulls the PR-12 preview CSS bundle. Covers text-muted-foreground on the
+    two dominant surface backgrounds (bg-background, bg-card) in both light
+    and .dark scope, at font sizes that span the WCAG large/normal boundary
+    (18.66px / 24px). Baseline rows (text-foreground) included so axe can
+    confirm the change is isolated to muted-foreground.
+  -->
+  <link rel="stylesheet" href="https://01a2e160.buildconnect.pages.dev/assets/index-COThd_5b.css" />
+  <style>
+    /* Minimal layout so axe can see each element distinctly. No design intent. */
+    body { font-family: system-ui, sans-serif; padding: 24px; margin: 0; }
+    section { margin-bottom: 32px; padding: 16px; border-radius: 8px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 12px; opacity: 0.6; }
+    .row { margin: 8px 0; }
+    .row small { display: block; font-size: 11px; opacity: 0.5; margin-top: 2px; }
+  </style>
+</head>
+<body class="bg-background text-foreground">
+
+  <!-- ─── LIGHT MODE ─── -->
+  <section class="bg-background">
+    <h2>LIGHT / bg-background</h2>
+    <div class="row">
+      <span class="text-foreground">text-foreground: Primary copy baseline</span>
+      <small>text-foreground vs --background</small>
+    </div>
+    <div class="row">
+      <span class="text-muted-foreground">text-muted-foreground: Secondary copy — 16px</span>
+      <small>text-muted-foreground (0.425) vs --background</small>
+    </div>
+    <div class="row">
+      <span class="text-muted-foreground" style="font-size:14px">text-muted-foreground: small — 14px</span>
+      <small>below the 18.66px / bold-24px WCAG large-text threshold</small>
+    </div>
+    <div class="row">
+      <span class="text-muted-foreground" style="font-size:12px">text-muted-foreground: extra-small — 12px</span>
+      <small>tightest small-text check</small>
+    </div>
+  </section>
+
+  <section class="bg-card" style="border: 1px solid; border-color: var(--border);">
+    <h2>LIGHT / bg-card</h2>
+    <div class="row">
+      <span class="text-card-foreground">text-card-foreground: Card title baseline</span>
+      <small>text-card-foreground vs --card</small>
+    </div>
+    <div class="row">
+      <span class="text-muted-foreground">text-muted-foreground: Card helper text — 16px</span>
+      <small>text-muted-foreground (0.425) vs --card (pure white)</small>
+    </div>
+    <div class="row">
+      <span class="text-muted-foreground" style="font-size:12px">text-muted-foreground on card: small — 12px</span>
+      <small>worst-case: smallest text on brightest surface</small>
+    </div>
+  </section>
+
+  <!-- ─── DARK MODE ─── -->
+  <div class="dark">
+    <section class="bg-background">
+      <h2>DARK / bg-background</h2>
+      <div class="row">
+        <span class="text-foreground">text-foreground: Primary copy baseline</span>
+        <small>text-foreground vs --background</small>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground">text-muted-foreground: Secondary copy — 16px</span>
+        <small>text-muted-foreground (0.695) vs --background</small>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground" style="font-size:14px">text-muted-foreground: small — 14px</span>
+        <small>below large-text threshold, dark mode</small>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground" style="font-size:12px">text-muted-foreground: extra-small — 12px</span>
+      </div>
+    </section>
+
+    <section class="bg-card" style="border: 1px solid; border-color: var(--border);">
+      <h2>DARK / bg-card</h2>
+      <div class="row">
+        <span class="text-card-foreground">text-card-foreground: Card title baseline</span>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground">text-muted-foreground: Card helper text — 16px</span>
+        <small>text-muted-foreground (0.695) vs --card (dark-mode card)</small>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground" style="font-size:12px">text-muted-foreground on card: small — 12px</span>
+      </div>
+    </section>
+
+    <!-- Sidebar variant (used heavily on /admin + /vendor layouts) -->
+    <section class="bg-sidebar text-sidebar-foreground">
+      <h2>DARK / bg-sidebar</h2>
+      <div class="row">
+        <span class="text-sidebar-foreground">text-sidebar-foreground baseline</span>
+      </div>
+      <div class="row">
+        <span class="text-muted-foreground" style="font-size:12px">text-muted-foreground on sidebar — 12px</span>
+        <small>dark-mode nav helper-text check</small>
+      </div>
+    </section>
+  </div>
+
+</body>
+</html>

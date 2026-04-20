@@ -48,6 +48,9 @@ export default function VendorDashboard() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const setLeadStatus = useProjectsStore((s) => s.setLeadStatus)
+  const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  const approveCancellation = useProjectsStore((s) => s.approveCancellation)
+  const denyCancellation = useProjectsStore((s) => s.denyCancellation)
 
   // Auth guard — redirect unauth'd or non-vendor roles to /login.
   useEffect(() => {
@@ -192,6 +195,9 @@ export default function VendorDashboard() {
   const [editRepLeadId, setEditRepLeadId] = useState<string>('')
   const [editRepChoice, setEditRepChoice] = useState<string>('')
   const [editAdhocRepName, setEditAdhocRepName] = useState<string>('')
+  // Cancellation-request review dialog (Phase B).
+  const [cancelReviewOpen, setCancelReviewOpen] = useState(false)
+  const [cancelReviewLeadId, setCancelReviewLeadId] = useState<string>('')
 
   // Demo-mode Clear Demo Data button: wipes projects-store test entries so
   // Rodolfo can reset QA state without manual localStorage fiddling. Gated
@@ -275,6 +281,25 @@ export default function VendorDashboard() {
     setEditRepOpen(true)
   }
 
+  const openCancelReview = (leadId: string) => {
+    setCancelReviewLeadId(leadId)
+    setCancelReviewOpen(true)
+  }
+
+  const handleApproveCancellation = () => {
+    if (!cancelReviewLeadId) return
+    approveCancellation(cancelReviewLeadId)
+    setCancelReviewOpen(false)
+    setSelected(null)
+    setSheetOpen(false)
+  }
+
+  const handleDenyCancellation = () => {
+    if (!cancelReviewLeadId) return
+    denyCancellation(cancelReviewLeadId)
+    setCancelReviewOpen(false)
+  }
+
   const handleSaveEditRep = () => {
     if (!editRepLeadId) return
     const rep: VendorRep | undefined =
@@ -301,9 +326,14 @@ export default function VendorDashboard() {
 
   function LeadCard({ lead }: { lead: Lead }) {
     const rep = getAssignedRepForLead(lead.id)
+    const cancelReq = cancellationRequestsByLead[lead.id]
+    const hasPendingCancel = cancelReq?.status === 'pending'
     return (
       <Card
-        className="rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group"
+        className={cn(
+          'rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group',
+          hasPendingCancel && 'ring-2 ring-destructive/40'
+        )}
         data-testid="lead-card"
         data-lead-id={lead.id}
         onClick={() => openLead(lead)}
@@ -324,6 +354,12 @@ export default function VendorDashboard() {
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className="text-sm font-bold">{fmt(lead.value)}</span>
                   <StatusBadge status={lead.status} />
+                  {hasPendingCancel && (
+                    <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] font-semibold gap-1">
+                      <X className="h-3 w-3" />
+                      Cancellation requested
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -637,6 +673,27 @@ export default function VendorDashboard() {
 
               {/* Actions */}
               <div className="flex flex-col gap-2">
+                {(() => {
+                  const cancelReq = cancellationRequestsByLead[selected.id]
+                  if (cancelReq?.status !== 'pending') return null
+                  return (
+                    <div className="rounded-lg border-2 border-destructive/40 bg-destructive/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <X className="h-4 w-4 text-destructive shrink-0" />
+                        <p className="text-sm font-semibold text-destructive">Cancellation requested by homeowner</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Requested {fmtDateTime(cancelReq.requestedAt)}. Approving cancels the project; denying keeps it on the books.
+                      </p>
+                      <Button
+                        className="w-full bg-destructive hover:bg-destructive/90 text-white"
+                        onClick={() => openCancelReview(selected.id)}
+                      >
+                        Review Cancellation Request
+                      </Button>
+                    </div>
+                  )
+                })()}
                 {selected.status === 'completed' ? (
                   <>
                     <div className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg bg-primary/10 text-primary font-semibold text-sm border border-primary/20">
@@ -1024,6 +1081,40 @@ export default function VendorDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearDemoDialogOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleClearDemoData}>Clear Demo Data</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancellation Review Dialog — vendor approves or denies a homeowner's
+          cancellation request. Approve flips the lead into the cancelled bucket
+          (reuses 'rejected' per ship #75 Phase A — Tranche-2 will diverge).
+          Deny keeps status intact and sets request.status = 'denied', letting
+          the homeowner re-request if still inside the 48h window. */}
+      <Dialog open={cancelReviewOpen} onOpenChange={setCancelReviewOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Cancellation Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm text-muted-foreground">
+            <p>
+              The homeowner is requesting to cancel this project. Approving will
+              mark the project as cancelled and notify them. Denying keeps the
+              project active — they'll see the denial and can request again.
+            </p>
+            {cancelReviewLeadId && cancellationRequestsByLead[cancelReviewLeadId]?.requestedAt && (
+              <p className="text-xs">
+                Requested {fmtDateTime(cancellationRequestsByLead[cancelReviewLeadId].requestedAt)}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setCancelReviewOpen(false)}>Close</Button>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={handleDenyCancellation}>
+              Deny Cancellation
+            </Button>
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={handleApproveCancellation}>
+              Approve Cancellation
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
