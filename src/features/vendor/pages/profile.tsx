@@ -1,18 +1,23 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Building2, User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
-  BadgeCheck, CreditCard, Pencil, LogOut, Shield,
+  BadgeCheck, CreditCard, LogOut, Shield, MessageCircle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import { useAuthStore } from '@/stores/auth-store'
+import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 import { cn } from '@/lib/utils'
 
 const VENDOR_ID = 'v-1'
@@ -20,7 +25,37 @@ const VENDOR_ID = 'v-1'
 export default function VendorProfile() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const profile = useAuthStore((s) => s.profile)
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
+  const myRequests = useVendorChangeRequestsStore((s) =>
+    s.requests.filter((r) => r.vendorId === (profile?.id ?? VENDOR_ID))
+  )
+  const pendingRequest = myRequests.find((r) => r.status === 'pending')
+
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false)
+  const [requestText, setRequestText] = useState('')
+
+  // Vendor Request Info Change flow (ship Phase C per kratos msg
+  // 1776719583850). Vendors cannot self-edit — they submit a request with
+  // free-text description; admin mediates approval + applies actual edits.
+  // Mock-side for v1; Tranche-2 moves to Supabase-backed with RLS + audit.
+  const handleSubmitRequest = () => {
+    const text = requestText.trim()
+    if (!text) {
+      toast.error('Describe what needs to change')
+      return
+    }
+    createRequest(
+      profile?.id ?? VENDOR_ID,
+      vendor.company,
+      profile?.name ?? vendor.name,
+      text,
+    )
+    setRequestText('')
+    setRequestDialogOpen(false)
+    toast.success('Request submitted. Admin will review shortly.')
+  }
 
   const serviceNames = vendor.service_categories
     .map((cat) => SERVICE_CATALOG.find((s) => s.id === cat)?.name || cat)
@@ -37,10 +72,57 @@ export default function VendorProfile() {
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <PageHeader title="Profile" description="Manage your company information">
-        <Button variant="outline" size="sm">
-          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit Profile
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRequestDialogOpen(true)}
+          disabled={!!pendingRequest}
+        >
+          <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+          {pendingRequest ? 'Change requested' : 'Request Info Change'}
         </Button>
       </PageHeader>
+
+      {pendingRequest && (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/40 p-3 text-sm">
+          <p className="font-semibold text-amber-900 dark:text-amber-100">Change request pending admin review</p>
+          <p className="text-amber-800/80 dark:text-amber-200/80 mt-1 whitespace-pre-wrap">{pendingRequest.requestedChange}</p>
+        </div>
+      )}
+
+      <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Request Profile Change</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Describe what needs to change — company name, address, phone, service categories, etc.
+              Admin will review + apply the change or follow up.
+            </p>
+            <Textarea
+              value={requestText}
+              onChange={(e) => setRequestText(e.target.value)}
+              placeholder="What info needs to change?"
+              rows={4}
+              className="text-sm resize-none"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setRequestDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={!requestText.trim()}
+              onClick={handleSubmitRequest}
+            >
+              Submit Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Company Info Card */}
       <motion.div variants={item}>

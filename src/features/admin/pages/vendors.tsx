@@ -15,7 +15,12 @@ import {
   Send,
   CheckCircle2,
   RotateCcw,
+  MessageCircle,
+  Check,
+  X,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -63,6 +68,34 @@ const fadeUp = {
 }
 
 export default function VendorsPage() {
+  const changeRequests = useVendorChangeRequestsStore((s) => s.requests)
+  const approveRequest = useVendorChangeRequestsStore((s) => s.approveRequest)
+  const denyRequest = useVendorChangeRequestsStore((s) => s.denyRequest)
+  const pendingChangeRequests = changeRequests.filter((r) => r.status === 'pending')
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
+  const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
+  const [resolveNote, setResolveNote] = useState('')
+
+  const openResolve = (id: string, action: 'approve' | 'deny') => {
+    setResolveRequestId(id)
+    setResolveAction(action)
+    setResolveNote('')
+    setResolveDialogOpen(true)
+  }
+  const submitResolve = () => {
+    if (!resolveRequestId) return
+    const note = resolveNote.trim() || undefined
+    if (resolveAction === 'approve') {
+      approveRequest(resolveRequestId, note)
+      toast.success('Request approved')
+    } else {
+      denyRequest(resolveRequestId, note)
+      toast.success('Request denied')
+    }
+    setResolveDialogOpen(false)
+  }
+
   const navigate = useNavigate()
   const [commissionOverrides, setCommissionOverrides] = useState<Record<string, number>>({})
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
@@ -155,6 +188,98 @@ export default function VendorsPage() {
           </div>
         </div>
       </PageHeader>
+
+      {/* Pending Change Requests (ship Phase C per kratos msg 1776719583850).
+          Admin-mediated vendor profile changes — vendors submit a request
+          from /vendor/profile, admin approves or denies here. Approve marks
+          resolved; actual data-edit happens side-channel for v1 (Tranche-2
+          adds the data-edit form). */}
+      {pendingChangeRequests.length > 0 && (
+        <Card className="rounded-xl border-amber-300/60 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700/40">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+              <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                Pending Change Requests ({pendingChangeRequests.length})
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {pendingChangeRequests.map((req) => (
+                <div key={req.id} className="rounded-lg border bg-background p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{req.vendorCompany}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {req.vendorName} · Submitted {new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 border-emerald-400/60 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                        onClick={() => openResolve(req.id, 'approve')}
+                      >
+                        <Check className="h-3 w-3" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5"
+                        onClick={() => openResolve(req.id, 'deny')}
+                      >
+                        <X className="h-3 w-3" />
+                        Deny
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-foreground/80 whitespace-pre-wrap rounded bg-muted/40 p-2">
+                    {req.requestedChange}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {resolveAction === 'approve' ? 'Approve Change Request' : 'Deny Change Request'}
+            </DialogTitle>
+            <DialogDescription>
+              {resolveAction === 'approve'
+                ? 'Mark this request as approved. Actual profile edits happen side-channel for now.'
+                : 'Mark this request as denied. Vendor can re-submit if needed.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-semibold">Note to vendor (optional)</label>
+            <Textarea
+              value={resolveNote}
+              onChange={(e) => setResolveNote(e.target.value)}
+              placeholder={resolveAction === 'approve' ? 'e.g. Updated address confirmed, applied' : 'e.g. Need proof of license for address change'}
+              rows={3}
+              className="text-sm resize-none"
+            />
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setResolveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant={resolveAction === 'approve' ? 'default' : 'destructive'}
+              className="w-full sm:w-auto"
+              onClick={submitResolve}
+            >
+              {resolveAction === 'approve' ? 'Approve' : 'Deny'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Vendor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
