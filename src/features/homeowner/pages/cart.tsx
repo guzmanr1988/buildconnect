@@ -48,6 +48,13 @@ export function CartPage() {
   const navigate = useNavigate()
   const { items, notes, photos, idDocument, removeItem, updateItem, setNotes, addPhoto, removePhoto, setIdDocument, clearCart } = useCartStore()
   const { sentProjects, sendProject, removeProject } = useProjectsStore()
+  const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  const requestCancellation = useProjectsStore((s) => s.requestCancellation)
+
+  // leadId used as the unified key for cancellationRequestsByLead across
+  // sentProject + MOCK_LEAD paths (L-XXXX shape, first 4 of UUID uppercased
+  // for sentProjects). Vendor dashboard reads this same key.
+  const leadIdFor = (projectId: string) => `L-${projectId.slice(0, 4).toUpperCase()}`
   const profile = useAuthStore((s) => s.profile)
   const SERVICE_CATALOG = useCatalogStore((s) => s.services)
   const [viewItem, setViewItem] = useState<CartItem | null>(null)
@@ -215,21 +222,44 @@ export function CartPage() {
                       )}
                     </div>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'mt-3 w-full h-9 gap-2 rounded-xl text-xs font-semibold',
-                      canCancel(project.sentAt)
-                        ? 'text-destructive border-destructive/30 hover:bg-destructive/10'
-                        : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
-                    )}
-                    disabled={!canCancel(project.sentAt)}
-                    onClick={() => canCancel(project.sentAt) && removeProject(project.id)}
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    {canCancel(project.sentAt) ? 'Cancel Project' : 'Cancellation period expired'}
-                  </Button>
+                  {(() => {
+                    const leadId = leadIdFor(project.id)
+                    const cReq = cancellationRequestsByLead[leadId]
+                    const withinCancel = canCancel(project.sentAt)
+                    // State machine:
+                    //   no request + within-window → "Request Project Cancellation" (enabled, red)
+                    //   no request + expired → "Cancellation period expired" (disabled, muted)
+                    //   pending → "Cancellation requested — awaiting vendor" (disabled, muted)
+                    //   approved → "Project cancelled" (disabled, muted)
+                    //   denied + within-window → "Cancellation denied — request again" (enabled, red)
+                    //   denied + expired → "Cancellation denied — period expired" (disabled, muted)
+                    const isActionable =
+                      (!cReq && withinCancel) || (cReq?.status === 'denied' && withinCancel)
+                    let label: string
+                    if (cReq?.status === 'pending') label = 'Cancellation requested — awaiting vendor'
+                    else if (cReq?.status === 'approved') label = 'Project cancelled'
+                    else if (cReq?.status === 'denied' && withinCancel) label = 'Cancellation denied — request again'
+                    else if (cReq?.status === 'denied') label = 'Cancellation denied — period expired'
+                    else if (!withinCancel) label = 'Cancellation period expired'
+                    else label = 'Request Project Cancellation'
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          'mt-3 w-full h-9 gap-2 rounded-xl text-xs font-semibold',
+                          isActionable
+                            ? 'text-destructive border-destructive/30 hover:bg-destructive/10'
+                            : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
+                        )}
+                        disabled={!isActionable}
+                        onClick={() => { if (isActionable) requestCancellation(leadId) }}
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                        {label}
+                      </Button>
+                    )
+                  })()}
                 </div>
               )
             })}
@@ -564,21 +594,44 @@ export function CartPage() {
                       )}
                     </div>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'mt-3 w-full h-9 gap-2 rounded-xl text-xs font-semibold',
-                      canCancel(project.sentAt)
-                        ? 'text-destructive border-destructive/30 hover:bg-destructive/10'
-                        : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
-                    )}
-                    disabled={!canCancel(project.sentAt)}
-                    onClick={() => canCancel(project.sentAt) && removeProject(project.id)}
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    {canCancel(project.sentAt) ? 'Cancel Project' : 'Cancellation period expired'}
-                  </Button>
+                  {(() => {
+                    const leadId = leadIdFor(project.id)
+                    const cReq = cancellationRequestsByLead[leadId]
+                    const withinCancel = canCancel(project.sentAt)
+                    // State machine:
+                    //   no request + within-window → "Request Project Cancellation" (enabled, red)
+                    //   no request + expired → "Cancellation period expired" (disabled, muted)
+                    //   pending → "Cancellation requested — awaiting vendor" (disabled, muted)
+                    //   approved → "Project cancelled" (disabled, muted)
+                    //   denied + within-window → "Cancellation denied — request again" (enabled, red)
+                    //   denied + expired → "Cancellation denied — period expired" (disabled, muted)
+                    const isActionable =
+                      (!cReq && withinCancel) || (cReq?.status === 'denied' && withinCancel)
+                    let label: string
+                    if (cReq?.status === 'pending') label = 'Cancellation requested — awaiting vendor'
+                    else if (cReq?.status === 'approved') label = 'Project cancelled'
+                    else if (cReq?.status === 'denied' && withinCancel) label = 'Cancellation denied — request again'
+                    else if (cReq?.status === 'denied') label = 'Cancellation denied — period expired'
+                    else if (!withinCancel) label = 'Cancellation period expired'
+                    else label = 'Request Project Cancellation'
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          'mt-3 w-full h-9 gap-2 rounded-xl text-xs font-semibold',
+                          isActionable
+                            ? 'text-destructive border-destructive/30 hover:bg-destructive/10'
+                            : 'text-muted-foreground border-muted cursor-not-allowed opacity-50'
+                        )}
+                        disabled={!isActionable}
+                        onClick={() => { if (isActionable) requestCancellation(leadId) }}
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                        {label}
+                      </Button>
+                    )
+                  })()}
                 </div>
               )
             })}

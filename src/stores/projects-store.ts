@@ -42,6 +42,11 @@ export interface SentProject {
 
 type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
 
+export interface CancellationRequest {
+  requestedAt: string
+  status: 'pending' | 'approved' | 'denied'
+}
+
 interface ProjectsState {
   sentProjects: SentProject[]
   // Lead-id → rep map. Covers the mock-lead case (MOCK_LEADS rows that don't
@@ -55,6 +60,13 @@ interface ProjectsState {
   // via kratos msg 1776654141640). Moved here so it rides the same persist
   // channel as sentProjects + assignedRepByLead.
   leadStatusOverrides: Record<string, LeadStatusOverride>
+  // Lead-id → cancellation request. Homeowner flips to {status: "pending"}
+  // via cart "Request Project Cancellation" button; vendor approves/denies
+  // from dashboard. Approve flips status to "approved" AND sets
+  // leadStatusOverrides[leadId]="rejected" (reusing rejected bucket as the
+  // cancelled lifecycle state per kratos msg 1776662371771 — Tranche-2
+  // schema will diverge cancelled vs rejected).
+  cancellationRequestsByLead: Record<string, CancellationRequest>
   sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string) => void
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
@@ -64,6 +76,9 @@ interface ProjectsState {
   // handled via assignRep).
   assignRepByLead: (leadId: string, rep: VendorRep) => void
   setLeadStatus: (leadId: string, status: LeadStatusOverride) => void
+  requestCancellation: (leadId: string) => void
+  approveCancellation: (leadId: string) => void
+  denyCancellation: (leadId: string) => void
   removeProject: (id: string) => void
 }
 
@@ -73,6 +88,7 @@ export const useProjectsStore = create<ProjectsState>()(
       sentProjects: [],
       assignedRepByLead: {},
       leadStatusOverrides: {},
+      cancellationRequestsByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument) => {
         set((state) => ({
@@ -136,6 +152,48 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
       },
 
+      requestCancellation: (leadId) => {
+        set((state) => ({
+          cancellationRequestsByLead: {
+            ...state.cancellationRequestsByLead,
+            [leadId]: { requestedAt: new Date().toISOString(), status: 'pending' },
+          },
+        }))
+      },
+
+      approveCancellation: (leadId) => {
+        set((state) => {
+          const prev = state.cancellationRequestsByLead[leadId]
+          return {
+            cancellationRequestsByLead: {
+              ...state.cancellationRequestsByLead,
+              [leadId]: {
+                requestedAt: prev?.requestedAt ?? new Date().toISOString(),
+                status: 'approved',
+              },
+            },
+            // Cancellation-approved = lifecycle cancelled = reuses rejected
+            // bucket. Tranche-2 will diverge.
+            leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: 'rejected' },
+          }
+        })
+      },
+
+      denyCancellation: (leadId) => {
+        set((state) => {
+          const prev = state.cancellationRequestsByLead[leadId]
+          return {
+            cancellationRequestsByLead: {
+              ...state.cancellationRequestsByLead,
+              [leadId]: {
+                requestedAt: prev?.requestedAt ?? new Date().toISOString(),
+                status: 'denied',
+              },
+            },
+          }
+        })
+      },
+
       removeProject: (id) => {
         set((state) => ({
           sentProjects: state.sentProjects.filter((p) => p.id !== id),
@@ -171,6 +229,7 @@ export const useProjectsStore = create<ProjectsState>()(
           sentProjects: mergedProjects,
           assignedRepByLead: { ...(ps.assignedRepByLead ?? {}), ...(currentState.assignedRepByLead ?? {}) },
           leadStatusOverrides: { ...(ps.leadStatusOverrides ?? {}), ...(currentState.leadStatusOverrides ?? {}) },
+          cancellationRequestsByLead: { ...(ps.cancellationRequestsByLead ?? {}), ...(currentState.cancellationRequestsByLead ?? {}) },
         }
       },
     }
