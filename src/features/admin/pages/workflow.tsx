@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GitBranch, Inbox, CheckCircle2, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_LEADS } from '@/lib/mock-data'
+import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 
 function fmtDate(iso: string) {
@@ -27,37 +28,73 @@ interface PipelineItem {
 export default function WorkflowPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
 
-  // Convert sent projects into pipeline items
-  const projectItems = useMemo(() => sentProjects.map((p) => ({
-    id: p.id,
-    name: p.homeowner?.name || 'Customer',
-    project: p.item.serviceName,
-    date: p.sentAt,
-    initials: (p.homeowner?.name || 'C').split(' ').map(n => n[0]).join(''),
-    vendor: p.contractor?.company,
-    rep: p.assignedRep?.name,
-    status: p.status,
-    soldAt: p.soldAt,
-    saleAmount: p.saleAmount,
-  })), [sentProjects])
+  // Cross-tab refetch: zustand updates within the same tab trigger re-renders
+  // automatically, but vendor/homeowner actions from another tab only persist
+  // to localStorage. When admin tabs back into /admin/workflow, rehydrate from
+  // localStorage so the pipeline reflects actions taken elsewhere.
+  const rehydrate = useCallback(() => {
+    useProjectsStore.persist.rehydrate()
+  }, [])
+  useRefetchOnFocus(rehydrate)
 
-  // Mock leads as pipeline items — rep comes from the lead-keyed override map
-  // populated when the vendor confirms the lead with a rep picked.
-  const mockItems = useMemo(() => MOCK_LEADS.map((l) => ({
-    id: l.id,
-    name: l.homeowner_name,
-    project: l.project.split('—')[0].trim(),
-    date: l.received_at,
-    initials: l.homeowner_name.split(' ').map(n => n[0]).join(''),
-    vendor: 'MH Home Solutions',
-    rep: assignedRepByLead[l.id]?.name,
-    status: l.status === 'confirmed' ? 'approved' : l.status === 'completed' ? 'sold' : l.status === 'rejected' ? 'declined' : 'pending',
-    soldAt: undefined,
-  })), [assignedRepByLead])
+  // Convert sent projects (cart-created homeowner flow) into pipeline items.
+  // status flows end-to-end from homeowner submit → vendor confirm → vendor
+  // sold → admin view. Cancellation-approved entries move to 'cancelled'.
+  const projectItems = useMemo(() => sentProjects.map((p) => {
+    const leadKey = `L-${p.id.slice(0, 4).toUpperCase()}`
+    const cReq = cancellationRequestsByLead[leadKey] ?? cancellationRequestsByLead[p.id]
+    const cancelApproved = cReq?.status === 'approved'
+    return {
+      id: p.id,
+      name: p.homeowner?.name || 'Customer',
+      project: p.item.serviceName,
+      date: p.sentAt,
+      initials: (p.homeowner?.name || 'C').split(' ').map(n => n[0]).join(''),
+      vendor: p.contractor?.company,
+      rep: p.assignedRep?.name,
+      status: cancelApproved ? 'declined' : p.status,
+      soldAt: p.soldAt,
+      saleAmount: p.saleAmount,
+      pendingCancel: cReq?.status === 'pending',
+    }
+  }), [sentProjects, cancellationRequestsByLead])
+
+  // MOCK_LEADS fixtures merged through leadStatusOverrides (vendor actions) and
+  // cancellationRequestsByLead (admin-mediated cancellation). Previously only
+  // read raw MOCK_LEADS.status, so vendor confirm/reject/sold flows were
+  // invisible to admin — kratos msg 1776725074142.
+  const mockStatusMap: Record<string, 'pending' | 'approved' | 'sold' | 'declined'> = {
+    pending: 'pending',
+    confirmed: 'approved',
+    completed: 'sold',
+    rejected: 'declined',
+    rescheduled: 'pending',
+  }
+  const mockItems = useMemo(() => MOCK_LEADS.map((l) => {
+    const rawStatus = leadStatusOverrides[l.id] ?? l.status
+    const cReq = cancellationRequestsByLead[l.id]
+    const cancelApproved = cReq?.status === 'approved'
+    const mappedStatus = cancelApproved ? 'declined' : (mockStatusMap[rawStatus] ?? 'pending')
+    const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
+    return {
+      id: l.id,
+      name: l.homeowner_name,
+      project: l.project.split('—')[0].trim(),
+      date: l.received_at,
+      initials: l.homeowner_name.split(' ').map(n => n[0]).join(''),
+      vendor: vendor?.company ?? 'Unknown vendor',
+      rep: assignedRepByLead[l.id]?.name,
+      status: mappedStatus,
+      soldAt: undefined,
+      pendingCancel: cReq?.status === 'pending',
+    }
+  }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
 
   const allItems = [...projectItems, ...mockItems]
   const q = searchQuery.toLowerCase()
@@ -209,6 +246,11 @@ export default function WorkflowPage() {
                         <p className="text-[10px] text-primary font-medium">
                           Sold {fmtDate(lead.soldAt)}
                         </p>
+                      )}
+                      {lead.pendingCancel && (
+                        <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 dark:text-amber-400 dark:border-amber-500/40">
+                          Cancel request pending
+                        </Badge>
                       )}
                       {lead.saleAmount && lead.saleAmount > 0 && (
                         <div className="rounded bg-background/80 p-2 space-y-1 text-[10px] border">
