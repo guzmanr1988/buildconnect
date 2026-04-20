@@ -96,6 +96,10 @@ export const router = createBrowserRouter([
         handle: { title: 'Admin · Overview' },
         children: [
           { index: true, element: <OverviewPage /> },
+          // /admin/overview alias for apollo probe + any stale bookmarks
+          // that point to the explicit overview path. /admin (index) is
+          // the canonical route; /admin/overview renders the same element.
+          { path: 'overview', element: <OverviewPage />, handle: { title: 'Admin · Overview' } },
           { path: 'revenue', element: <RevenuePage />, handle: { title: 'Admin · Revenue' } },
           { path: 'vendors', element: <VendorsPage />, handle: { title: 'Admin · Vendors' } },
           { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
