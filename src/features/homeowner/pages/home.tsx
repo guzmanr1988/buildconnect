@@ -298,14 +298,20 @@ export function HomeownerHome() {
                           <p className="text-[12px] text-muted-foreground">{tile.emptyText}</p>
                         </div>
                       ) : (
-                        tile.projects.map((p) => (
+                        tile.projects.map((p) => {
+                          const isScheduled = tile.id === 'upcoming' && p.status === 'approved'
+                          return (
                           <button
                             key={p.leadId}
                             type="button"
                             data-testid="home-tile-project"
                             data-lead-id={p.leadId}
+                            data-scheduled={isScheduled ? 'true' : undefined}
                             onClick={() => navigate(`/home/appointments/${p.leadId}`)}
-                            className="group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]"
+                            className={cn(
+                              'group w-full flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all duration-300 hover:shadow-md hover:-translate-y-[1px]',
+                              isScheduled && 'border-sky-300 bg-sky-50/40 dark:border-sky-500/40 dark:bg-sky-500/5'
+                            )}
                           >
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                               <CalendarDays className="h-4 w-4" strokeWidth={1.8} />
@@ -320,7 +326,8 @@ export function HomeownerHome() {
                             </div>
                             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5" />
                           </button>
-                        ))
+                          )
+                        })
                       )}
                     </div>
                   </motion.div>
