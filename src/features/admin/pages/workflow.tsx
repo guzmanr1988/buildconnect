@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { GitBranch, Inbox, CheckCircle2, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -152,7 +152,16 @@ export default function WorkflowPage() {
                   </div>
                 </CardHeader>
               </button>
+              <AnimatePresence initial={false}>
               {isOpen && (
+              <motion.div
+                key="workflow-stage-expanded"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
               <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pt-0">
                 {stage.items.length === 0 ? (
                   <div className="text-center py-6 text-sm text-muted-foreground">
@@ -221,7 +230,9 @@ export default function WorkflowPage() {
                   ))
                 )}
               </CardContent>
+              </motion.div>
               )}
+              </AnimatePresence>
             </Card>
           </motion.div>
           )

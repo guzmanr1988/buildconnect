@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -181,8 +181,20 @@ export default function VendorCatalog() {
                     stopPropagation on CardContent onClick: defensive guard against any body
                     click bubbling up to CardHeader's toggleExpanded collapse handler. Rod P0:
                     clicking checkbox/Input inside expanded card was firing accordion collapse,
-                    preventing any option or price edits. */}
+                    preventing any option or price edits.
+
+                    AnimatePresence wrap for smooth expand/collapse animation (ship #99 per
+                    kratos msg 1776698050290 — extending #98 pattern to every accordion). */}
+                <AnimatePresence initial={false}>
                 {expanded && (
+                  <motion.div
+                    key="catalog-service-panel"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                    className="overflow-hidden"
+                  >
                   <CardContent
                     id={`vendor-service-panel-${service.id}`}
                     className="space-y-4 pt-0"
@@ -356,7 +368,9 @@ export default function VendorCatalog() {
                       </div>
                     ))}
                   </CardContent>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </Card>
             </motion.div>
           )

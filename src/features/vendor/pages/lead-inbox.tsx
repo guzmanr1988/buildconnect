@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, User, MapPin, Calendar,
   Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse,
@@ -145,8 +145,20 @@ export default function LeadInbox() {
                     </CardContent>
                   </button>
 
-                  {/* Expanded detail */}
+                  {/* Expanded detail — AnimatePresence + motion.div wraps the
+                      inline expansion so open/close animates smoothly (ship
+                      #99 pattern). Reduced-motion respected via global
+                      MotionConfig at App root. */}
+                  <AnimatePresence initial={false}>
                   {isExpanded && (
+                    <motion.div
+                      key="lead-inbox-expanded"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                      className="overflow-hidden"
+                    >
                     <div className="px-4 sm:px-5 pb-5 space-y-4 border-t overflow-hidden">
                       {/* Customer details */}
                       <div className="flex flex-wrap gap-4 pt-4 text-sm text-muted-foreground">
@@ -393,7 +405,9 @@ export default function LeadInbox() {
                         )
                       })()}
                     </div>
+                    </motion.div>
                   )}
+                  </AnimatePresence>
                 </Card>
               </motion.div>
             )
