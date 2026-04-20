@@ -179,6 +179,10 @@ export const useProjectsStore = create<ProjectsState>()(
             cancellationRequestsByLead: {
               ...state.cancellationRequestsByLead,
               [leadId]: {
+                // Preserve the full prev entry so reason + explanation ride
+                // through the state transition — apollo surfaced audit-trail
+                // drop on approve/deny (msg 1776671343450). Only status flips.
+                ...(prev ?? {}),
                 requestedAt: prev?.requestedAt ?? new Date().toISOString(),
                 status: 'approved',
               },
@@ -197,6 +201,9 @@ export const useProjectsStore = create<ProjectsState>()(
             cancellationRequestsByLead: {
               ...state.cancellationRequestsByLead,
               [leadId]: {
+                // Preserve reason + explanation through the deny transition
+                // (see approveCancellation above — same audit-trail fix).
+                ...(prev ?? {}),
                 requestedAt: prev?.requestedAt ?? new Date().toISOString(),
                 status: 'denied',
               },
