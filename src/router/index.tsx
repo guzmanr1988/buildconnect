@@ -82,6 +82,10 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <VendorDashboard /> },
           { path: 'leads', element: <LeadInbox />, handle: { title: 'Vendor · Leads' } },
+          // /vendor/projects alias for apollo probe + any UI surface that
+          // labels the leads bucket as Projects (sidebar label-to-URL
+          // intuition). /vendor/leads is canonical; both render LeadInbox.
+          { path: 'projects', element: <LeadInbox />, handle: { title: 'Vendor · Projects' } },
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
