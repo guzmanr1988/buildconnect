@@ -99,23 +99,33 @@ export default function VendorCatalog() {
           return (
             <motion.div key={service.id} variants={item}>
               <Card className={cn('rounded-xl shadow-sm transition', enabled && 'border-primary/30')}>
-                {/* Service header — clickable to toggle collapse when service is enabled. */}
-                <CardHeader
-                  className={cn('pb-2', enabled && 'cursor-pointer select-none')}
-                  onClick={() => { if (enabled) toggleExpanded(service.id) }}
-                  role={enabled ? 'button' : undefined}
-                  tabIndex={enabled ? 0 : undefined}
-                  aria-expanded={enabled ? expanded : undefined}
-                  aria-controls={enabled ? `vendor-service-panel-${service.id}` : undefined}
-                  onKeyDown={(e) => {
-                    if (!enabled) return
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      toggleExpanded(service.id)
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between">
+                {/* Service header — only the top TITLE ROW is clickable for collapse.
+                    Tagline + optionCount + Switch stay non-collapsing to prevent any
+                    accidental collapse from clicks outside the explicit header-bar area.
+                    Rod P0: ship #65 CardContent stopPropagation was a no-op (CardHeader
+                    is sibling not ancestor of CardContent); real issue was CardHeader's
+                    broad clickable area capturing clicks users intended for the header
+                    body (tagline / counter). Scoping collapse trigger strictly to the
+                    chevron+title row per kratos msg 1776658178638. */}
+                <CardHeader className="pb-2">
+                  <div
+                    className={cn(
+                      'flex items-center justify-between',
+                      enabled && 'cursor-pointer select-none'
+                    )}
+                    onClick={() => { if (enabled) toggleExpanded(service.id) }}
+                    role={enabled ? 'button' : undefined}
+                    tabIndex={enabled ? 0 : undefined}
+                    aria-expanded={enabled ? expanded : undefined}
+                    aria-controls={enabled ? `vendor-service-panel-${service.id}` : undefined}
+                    onKeyDown={(e) => {
+                      if (!enabled) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleExpanded(service.id)
+                      }
+                    }}
+                  >
                     <div className="flex items-center gap-3">
                       {enabled && (
                         <ChevronDown
@@ -133,7 +143,7 @@ export default function VendorCatalog() {
                         </Badge>
                       )}
                     </div>
-                    {/* Switch must not bubble its click up to the header's toggle-collapse handler. */}
+                    {/* Switch must not bubble its click up to the inner title-row collapse handler. */}
                     <div onClick={(e) => e.stopPropagation()}>
                       <Switch
                         checked={enabled}
