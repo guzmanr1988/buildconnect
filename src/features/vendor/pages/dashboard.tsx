@@ -5,6 +5,7 @@ import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
+  UserCheck, Pencil,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
-import type { Lead, Vendor } from '@/types'
+import type { Lead, Vendor, VendorRep } from '@/types'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -42,6 +43,7 @@ export default function VendorDashboard() {
   const updateProjectStatus = useProjectsStore((s) => s.updateStatus)
   const updateProjectBooking = useProjectsStore((s) => s.updateBooking)
   const markProjectSold = useProjectsStore((s) => s.markSold)
+  const assignProjectRep = useProjectsStore((s) => s.assignRep)
 
   // Auth guard — redirect unauth'd or non-vendor roles to /login.
   useEffect(() => {
@@ -166,6 +168,13 @@ export default function VendorDashboard() {
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
   const [saleAmount, setSaleAmount] = useState('')
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  // Assign-rep flow: selectedRepId is the rep chosen in the new-lead modal
+  // (Confirm is gated on it being non-empty). editRepOpen/editRep* drive the
+  // post-confirm swap dialog opened from the confirmed-tab LeadCard.
+  const [selectedRepId, setSelectedRepId] = useState<string>('')
+  const [editRepOpen, setEditRepOpen] = useState(false)
+  const [editRepLeadId, setEditRepLeadId] = useState<string>('')
+  const [editRepChoice, setEditRepChoice] = useState<string>('')
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Section collapse state
@@ -179,7 +188,33 @@ export default function VendorDashboard() {
 
   const openLead = (lead: Lead) => {
     setSelected(lead)
+    // Restore any previously-assigned rep for this lead so the selector
+    // reflects reality if the modal is reopened pre-confirm.
+    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+    setSelectedRepId(sp?.assignedRep?.id ?? '')
     setSheetOpen(true)
+  }
+
+  // Helper: look up sentProject + assignedRep for a given lead-id. Used by
+  // LeadCard (confirmed-tab rep line) and the edit-rep dialog.
+  const getAssignedRepForLead = (leadId: string): VendorRep | undefined => {
+    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
+    return sp?.assignedRep
+  }
+
+  const openEditRep = (leadId: string) => {
+    const current = getAssignedRepForLead(leadId)
+    setEditRepLeadId(leadId)
+    setEditRepChoice(current?.id ?? '')
+    setEditRepOpen(true)
+  }
+
+  const handleSaveEditRep = () => {
+    const rep = vendor?.reps?.find((r) => r.id === editRepChoice)
+    if (!rep || !editRepLeadId) return
+    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === editRepLeadId)
+    if (sp) assignProjectRep(sp.id, rep)
+    setEditRepOpen(false)
   }
 
   const container = {
@@ -192,6 +227,7 @@ export default function VendorDashboard() {
   }
 
   function LeadCard({ lead }: { lead: Lead }) {
+    const rep = getAssignedRepForLead(lead.id)
     return (
       <Card
         className="rounded-xl shadow-sm hover:shadow-md transition cursor-pointer group"
@@ -221,6 +257,27 @@ export default function VendorDashboard() {
               <p className="text-xs text-muted-foreground mt-0.5">{lead.id}</p>
             </div>
           </div>
+          {rep && (
+            <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs min-w-0">
+                <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-muted-foreground">Rep:</span>
+                <span className="font-semibold text-foreground truncate">{rep.name}</span>
+                {rep.role && (
+                  <span className="text-muted-foreground truncate">· {rep.role}</span>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={(e) => { e.stopPropagation(); openEditRep(lead.id) }}
+                aria-label={`Edit rep for ${lead.id}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -555,13 +612,50 @@ export default function VendorDashboard() {
                   </>
                 ) : (
                   <>
+                    {/* Assign Representative — required before Confirm can fire.
+                        Surfaced only on pending-status leads (the branch we're in). */}
+                    {vendor?.reps && vendor.reps.length > 0 && (
+                      <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                        <label htmlFor="assign-rep" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                          <UserCheck className="h-3.5 w-3.5 text-primary" />
+                          Assign Representative
+                          <span className="text-destructive">*</span>
+                        </label>
+                        <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+                          <SelectTrigger id="assign-rep" className="h-10 text-sm">
+                            <SelectValue placeholder="Choose a rep for this lead…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {vendor.reps.map((rep) => (
+                              <SelectItem key={rep.id} value={rep.id}>
+                                <span className="font-medium">{rep.name}</span>
+                                {rep.role && (
+                                  <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
+                                )}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!selectedRepId && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Pick a rep before confirming so the homeowner knows who's coming out.
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        disabled={!selectedRepId}
                         onClick={() => {
+                          // Resolve + assign the rep BEFORE flipping status so the
+                          // project carries its rep the moment it appears in the
+                          // confirmed tab / homeowner view.
+                          const rep = vendor?.reps?.find((r) => r.id === selectedRepId)
+                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                          if (rep && sp) assignProjectRep(sp.id, rep)
                           // Always flip the lead-status override so mock-leads move too.
                           setLeadStatus(selected.id, 'confirmed')
-                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                           if (sp) {
                             updateProjectStatus(sp.id, 'approved')
                           }
@@ -778,6 +872,43 @@ export default function VendorDashboard() {
             >
               <Handshake className="h-4 w-4 mr-1.5" /> Confirm Sale
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Rep Dialog — post-confirm rep swap, opened from LeadCard pencil. */}
+      <Dialog open={editRepOpen} onOpenChange={setEditRepOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Change Representative</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {vendor?.reps && vendor.reps.length > 0 ? (
+              <Select value={editRepChoice} onValueChange={setEditRepChoice}>
+                <SelectTrigger className="h-10 text-sm">
+                  <SelectValue placeholder="Choose a rep…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendor.reps.map((rep) => (
+                    <SelectItem key={rep.id} value={rep.id}>
+                      <span className="font-medium">{rep.name}</span>
+                      {rep.role && (
+                        <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm text-muted-foreground">No reps on file for this vendor.</p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              The homeowner will see the new rep the next time they open this appointment.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRepOpen(false)}>Cancel</Button>
+            <Button disabled={!editRepChoice} onClick={handleSaveEditRep}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
