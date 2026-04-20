@@ -704,19 +704,20 @@ export default function VendorDashboard() {
                                 ? { id: `adhoc-${crypto.randomUUID()}`, name: adhocRepName.trim() }
                                 : undefined
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                          // Close the modal FIRST so the user sees a clean dismiss,
-                          // not a momentary re-render into the 'confirmed' branch body
-                          // ("Mark as Sold") before the close animation fires. State
-                          // updates propagate regardless of close order — the store
-                          // updates re-render the list underneath the already-closing
-                          // Dialog. Kratos msg 1776653897613 (Rod friction report).
-                          setSheetOpen(false)
+                          // Write state updates FIRST so the lead actually moves to
+                          // Scheduled column. Then clear selected + close dialog —
+                          // resetting selected blanks the Dialog body during close
+                          // animation so the 'confirmed' branch (Mark-as-Sold) never
+                          // flashes. Combines Rod-surfaced "lead doesn't move" fix +
+                          // prior close-first flash-elimination into one order.
                           if (rep) {
                             assignRepByLead(selected.id, rep)
                             if (sp) assignProjectRep(sp.id, rep)
                           }
                           setLeadStatus(selected.id, 'confirmed')
                           if (sp) updateProjectStatus(sp.id, 'approved')
+                          setSelected(null)
+                          setSheetOpen(false)
                         }}
                       >
                         <Check className="h-4 w-4 mr-1.5" /> Confirm
