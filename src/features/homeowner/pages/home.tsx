@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
-import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
+import { MOCK_HOMEOWNERS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
@@ -29,31 +29,101 @@ export function HomeownerHome() {
   const comingSoon = services.filter((s) => s.phase2)
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
 
   const sortByRecent = <T extends { sentAt: string }>(list: T[]) =>
     [...list].sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
 
-  // UPCOMING: vendor hasn't sold yet, project still pre-close.
-  // Includes pending + approved (vendor confirmed visit). Excludes declined + sold.
+  // Rod P0 2026-04-20 (kratos msg 1776661512633): approved leads weren't
+  // populating Active Projects because (a) approved was bucketed under
+  // upcoming, (b) MOCK_LEADS with leadStatusOverrides were never merged into
+  // homeowner lifecycle view at all. Fixes both.
+
+  // UPCOMING: lead submitted, vendor hasn't acted yet. status=pending only.
+  //   (approved split out into Active Projects per Rod directive — vendor
+  //    has confirmed visit, so it's Active, not Upcoming.)
+  // ACTIVE: vendor-confirmed (approved) OR sold-but-within-active-window.
+  // COMPLETED: sold more than ACTIVE_TO_COMPLETED_DAYS ago.
+  const activeCutoff = Date.now() - ACTIVE_TO_COMPLETED_DAYS * 24 * 60 * 60 * 1000
+
+  // Unified lifecycle entry shape — leadId is the URL-stable id used for
+  // navigation to /home/appointments/:leadId. For sentProjects (cart-created)
+  // it's L-${first4-of-uuid}. For MOCK_LEADS (static fixtures) it's the
+  // fixture id directly (L-0001, L-0002, etc.).
+  interface LifecycleEntry {
+    leadId: string
+    item: { serviceId: string; serviceName: string; selections: Record<string, string[]> }
+    status: 'pending' | 'approved' | 'declined' | 'sold'
+    contractor: { company: string; name: string; rating: number }
+    booking: { date: string; time: string }
+    sentAt: string
+    soldAt?: string
+  }
+
+  // MOCK_LEADS with leadStatusOverrides mirror the vendor-side action flow.
+  // Convert into LifecycleEntry so the buckets can treat them uniformly.
+  const mockLifecycleStatusMap: Record<string, 'pending' | 'approved' | 'declined' | 'sold'> = {
+    pending: 'pending',
+    confirmed: 'approved',
+    rejected: 'declined',
+    completed: 'sold',
+    rescheduled: 'pending',
+  }
+  const mockLeadsAsEntries: LifecycleEntry[] = MOCK_LEADS
+    .filter((l) => l.homeowner_id === profile.id || l.homeowner_id === 'ho-1')
+    .map((l) => {
+      const overrideStatus = leadStatusOverrides[l.id]
+      const effectiveLeadStatus = overrideStatus ?? l.status
+      const mappedStatus = mockLifecycleStatusMap[effectiveLeadStatus] ?? 'pending'
+      const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
+      return {
+        leadId: l.id,
+        item: { serviceId: l.service_category, serviceName: vendor?.company || l.project, selections: l.pack_items },
+        status: mappedStatus,
+        contractor: { company: vendor?.company || 'Vendor', name: vendor?.name || '', rating: vendor?.rating || 0 },
+        booking: { date: new Date(l.slot).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), time: new Date(l.slot).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) },
+        sentAt: l.received_at,
+        soldAt: undefined,
+      }
+    })
+
+  const sentProjectsAsEntries: LifecycleEntry[] = sentProjects.map((p) => ({
+    leadId: `L-${p.id.slice(0, 4).toUpperCase()}`,
+    item: { serviceId: p.item.serviceId, serviceName: p.item.serviceName, selections: p.item.selections },
+    status: p.status,
+    contractor: p.contractor,
+    booking: p.booking,
+    sentAt: p.sentAt,
+    soldAt: p.soldAt,
+  }))
+
+  // Unified lifecycle feed: sentProjects-derived first, MOCK_LEADS-derived
+  // second. Dedupe by leadId defensively.
+  const seenIds = new Set<string>()
+  const lifecycle: LifecycleEntry[] = []
+  for (const p of [...sentProjectsAsEntries, ...mockLeadsAsEntries]) {
+    if (seenIds.has(p.leadId)) continue
+    seenIds.add(p.leadId)
+    lifecycle.push(p)
+  }
+
   const upcoming = sortByRecent(
-    sentProjects.filter((p) => p.status === 'pending' || p.status === 'approved')
+    lifecycle.filter((p) => p.status === 'pending')
   ).slice(0, 3)
 
-  // ACTIVE: sold, in motion — sold within the last ACTIVE_TO_COMPLETED_DAYS.
-  const activeCutoff = Date.now() - ACTIVE_TO_COMPLETED_DAYS * 24 * 60 * 60 * 1000
   const activeProjects = sortByRecent(
-    sentProjects.filter((p) => {
+    lifecycle.filter((p) => {
+      if (p.status === 'approved') return true
       if (p.status !== 'sold') return false
-      if (!p.soldAt) return true // sold without a date → assume active
+      if (!p.soldAt) return true
       return new Date(p.soldAt).getTime() >= activeCutoff
     })
   )
 
-  // COMPLETED: sold more than ACTIVE_TO_COMPLETED_DAYS ago, presumed done.
   const completedProjects = sortByRecent(
-    sentProjects.filter((p) => {
+    lifecycle.filter((p) => {
       if (p.status !== 'sold') return false
-      if (!p.soldAt) return false // no date → stays in active
+      if (!p.soldAt) return false
       return new Date(p.soldAt).getTime() < activeCutoff
     })
   )
@@ -124,9 +194,9 @@ export function HomeownerHome() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {upcoming.map((p) => (
               <button
-                key={p.id}
+                key={p.leadId}
                 type="button"
-                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
                 className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
               >
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -164,9 +234,9 @@ export function HomeownerHome() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {activeProjects.map((p) => (
               <button
-                key={p.id}
+                key={p.leadId}
                 type="button"
-                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
                 className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
               >
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -204,9 +274,9 @@ export function HomeownerHome() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {completedProjects.map((p) => (
               <button
-                key={p.id}
+                key={p.leadId}
                 type="button"
-                onClick={() => navigate(`/home/appointments/${p.item.serviceId}`)}
+                onClick={() => navigate(`/home/appointments/${p.leadId}`)}
                 className="group flex items-center gap-4 rounded-2xl border bg-card p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px] dark:hover:shadow-black/20"
               >
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
