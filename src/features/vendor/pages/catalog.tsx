@@ -168,6 +168,8 @@ export default function VendorCatalog() {
                     id={`vendor-service-panel-${service.id}`}
                     className="space-y-4 pt-0"
                     onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                   >
                     {service.optionGroups.map((group) => (
                       <div key={group.id} className="space-y-2">
@@ -190,7 +192,9 @@ export default function VendorCatalog() {
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
                                   <button
                                     type="button"
-                                    onClick={() => toggleOption(service.id, group.id, option.id)}
+                                    onClick={(e) => { e.stopPropagation(); toggleOption(service.id, group.id, option.id) }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                     className={cn(
                                       'flex h-5 w-5 items-center justify-center rounded border shrink-0 transition',
                                       optEnabled
@@ -208,7 +212,12 @@ export default function VendorCatalog() {
                                   </span>
                                 </div>
                                 {optEnabled && (
-                                  <div className="flex items-center gap-1 shrink-0">
+                                  <div
+                                    className="flex items-center gap-1 shrink-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                  >
                                     <DollarSign className="h-3 w-3 text-muted-foreground" />
                                     <Input
                                       aria-label={`Price for ${option.label}`}
@@ -247,7 +256,9 @@ export default function VendorCatalog() {
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <button
                                         type="button"
-                                        onClick={() => toggleOption(service.id, subGroup.id, subOpt.id)}
+                                        onClick={(e) => { e.stopPropagation(); toggleOption(service.id, subGroup.id, subOpt.id) }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
                                         className={cn(
                                           'flex h-4 w-4 items-center justify-center rounded border shrink-0 transition',
                                           subEnabled
@@ -265,7 +276,12 @@ export default function VendorCatalog() {
                                       </span>
                                     </div>
                                     {subEnabled && (
-                                      <div className="flex items-center gap-1 shrink-0">
+                                      <div
+                                        className="flex items-center gap-1 shrink-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                      >
                                         <span className="text-[10px] text-muted-foreground">$</span>
                                         <Input
                                           aria-label={`Price for ${subOpt.label}`}
