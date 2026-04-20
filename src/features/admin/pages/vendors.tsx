@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
+import { useProjectsStore } from '@/stores/projects-store'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -72,6 +74,22 @@ export default function VendorsPage() {
   const approveRequest = useVendorChangeRequestsStore((s) => s.approveRequest)
   const denyRequest = useVendorChangeRequestsStore((s) => s.denyRequest)
   const pendingChangeRequests = changeRequests.filter((r) => r.status === 'pending')
+
+  // Cross-tab rehydrate: vendor-side change-requests + project status changes
+  // persist to localStorage but don't cross-tab-sync. Rehydrate on tab-back
+  // so admin sees the freshest state. Phase 2b admin-SoT per kratos msg
+  // 1776725252468.
+  const rehydrateRequests = useCallback(() => useVendorChangeRequestsStore.persist.rehydrate(), [])
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateRequests)
+  useRefetchOnFocus(rehydrateProjects)
+
+  // Per-vendor lead-status merge: MOCK_LEADS.status + vendor-side overrides.
+  // Previously the per-vendor status counts ignored vendor confirm/reject
+  // actions (only raw MOCK_LEADS.status seen); now the accordion accurately
+  // reflects vendor state changes.
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
@@ -157,7 +175,15 @@ export default function VendorsPage() {
 
   const vendorData = useMemo(() => {
     return MOCK_VENDORS.map((vendor) => {
-      const leads = MOCK_LEADS.filter((l) => l.vendor_id === vendor.id)
+      const rawLeads = MOCK_LEADS.filter((l) => l.vendor_id === vendor.id)
+      // Apply vendor-side action overrides + admin-approved cancellations so
+      // the per-vendor status counts reflect the full lifecycle.
+      const leads = rawLeads.map((l) => {
+        const cReq = cancellationRequestsByLead[l.id]
+        const cancelApproved = cReq?.status === 'approved'
+        const effectiveStatus = cancelApproved ? 'rejected' : (leadStatusOverrides[l.id] ?? l.status)
+        return { ...l, status: effectiveStatus as LeadStatus }
+      })
       const closedSales = MOCK_CLOSED_SALES.filter((c) => c.vendor_id === vendor.id)
       const totalRevenue = closedSales.reduce((s, c) => s + c.sale_amount, 0)
 
@@ -171,7 +197,7 @@ export default function VendorsPage() {
 
       return { vendor, leads, closedSales, totalRevenue, statusCounts }
     })
-  }, [])
+  }, [leadStatusOverrides, cancellationRequestsByLead])
 
   return (
     <div className="space-y-6">

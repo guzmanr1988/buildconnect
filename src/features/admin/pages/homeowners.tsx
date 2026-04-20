@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -44,6 +44,8 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useProjectsStore } from '@/stores/projects-store'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -117,6 +119,21 @@ export default function HomeownersPage() {
   const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
   const suspendHomeowner = useAdminModerationStore((s) => s.suspendHomeowner)
   const reactivateHomeowner = useAdminModerationStore((s) => s.reactivateHomeowner)
+
+  // Cross-tab rehydrate: admin-moderation + projects both persist to LS but
+  // don't auto-sync across tabs. Rehydrate on focus so status changes +
+  // homeowner cart-created projects surface here. Phase 2b admin-SoT per
+  // kratos msg 1776725252468.
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+  useRefetchOnFocus(rehydrateProjects)
+
+  // Live homeowner projects: merge CUSTOMER_PROJECTS fixtures with
+  // sentProjects (cart-created flow). sentProjects know which homeowner via
+  // homeowner.email (Profile.id used to not map back to mock ho-N ids, so
+  // email is the stable bridge key).
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
 
   const homeowners = useMemo(
     () =>
@@ -203,9 +220,30 @@ export default function HomeownersPage() {
       {/* Homeowner Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filtered.map((homeowner, i) => {
-          const projects = CUSTOMER_PROJECTS.filter(
+          const fixtureProjects = CUSTOMER_PROJECTS.filter(
             (p) => p.homeowner_id === homeowner.id
           )
+          // Merge sentProjects: cart-created projects where the homeowner
+          // email matches (stable bridge to mock ho-N ids). Synthesize
+          // CustomerProject rows so the existing renderer handles both.
+          const sentForHomeowner: CustomerProject[] = sentProjects
+            .filter((sp) => sp.homeowner?.email === homeowner.email)
+            .map((sp) => ({
+              id: sp.id,
+              homeowner_id: homeowner.id,
+              project_name: sp.item.serviceName,
+              service_type: sp.item.serviceName,
+              status: (sp.status === 'sold'
+                ? 'completed'
+                : sp.status === 'approved'
+                  ? 'confirmed'
+                  : sp.status === 'declined'
+                    ? 'rejected'
+                    : 'pending') as LeadStatus,
+              date_submitted: sp.sentAt,
+              contractor_assigned: sp.contractor?.company ?? 'Unassigned',
+            }))
+          const projects = [...sentForHomeowner, ...fixtureProjects]
           return (
             <motion.div
               key={homeowner.id}

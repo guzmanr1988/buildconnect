@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/lib/mock-data'
 import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useProjectsStore } from '@/stores/projects-store'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
@@ -70,9 +71,56 @@ export default function OverviewPage() {
   }, [])
   useRefetchOnFocus(refreshAnalytics)
 
-  const totalGMV = useMemo(() => closedSales.reduce((s, c) => s + c.sale_amount, 0), [closedSales])
-  const appRevenue = useMemo(() => closedSales.reduce((s, c) => s + c.commission, 0), [closedSales])
-  const MOCK_TRANSACTIONS = transactions
+  // Mock-side merge: QA persona Mark-Sold writes to sentProjects (zustand,
+  // not Supabase). Include mock-originated sold projects in GMV/App-Revenue
+  // and synthesize commission rows for the transaction-totals card. Phase 2b
+  // admin-SoT per kratos msg 1776725252468.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateProjects)
+
+  const mockSoldSales = useMemo(() => {
+    return sentProjects.filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
+  }, [sentProjects])
+
+  const totalGMV = useMemo(() => {
+    const supabaseGMV = closedSales.reduce((s, c) => s + c.sale_amount, 0)
+    const mockGMV = mockSoldSales.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
+    return supabaseGMV + mockGMV
+  }, [closedSales, mockSoldSales])
+  const appRevenue = useMemo(() => {
+    const supabaseComm = closedSales.reduce((s, c) => s + c.commission, 0)
+    // Use each vendor's commission_pct if resolvable; fall back to 15% default.
+    const mockComm = mockSoldSales.reduce((s, p) => {
+      const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
+      const pct = (vendor?.commission_pct ?? 15) / 100
+      return s + Math.round((p.saleAmount ?? 0) * pct)
+    }, 0)
+    return supabaseComm + mockComm
+  }, [closedSales, mockSoldSales])
+
+  // Synthesize mock commission rows (15% default) for the transaction-totals
+  // card so Paid-Commissions + GMV stay visually aligned.
+  const mockCommissions = useMemo<Transaction[]>(() => {
+    return mockSoldSales.map((p) => {
+      const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
+      const pct = (vendor?.commission_pct ?? 15) / 100
+      return {
+        id: `mock-tx-${p.id}`,
+        type: 'commission',
+        status: 'paid',
+        company: p.contractor?.company ?? 'Unknown vendor',
+        detail: p.item.serviceName,
+        customer: p.homeowner?.name,
+        amount: Math.round((p.saleAmount ?? 0) * pct),
+        date: p.soldAt!,
+      }
+    })
+  }, [mockSoldSales])
+  const MOCK_TRANSACTIONS = useMemo(() => {
+    const supabaseIds = new Set(transactions.map((t) => t.id))
+    return [...transactions, ...mockCommissions.filter((t) => !supabaseIds.has(t.id))]
+  }, [transactions, mockCommissions])
 
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', icon: Wrench },
