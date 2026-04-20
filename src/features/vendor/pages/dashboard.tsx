@@ -174,9 +174,16 @@ export default function VendorDashboard() {
   // (Confirm is gated on it being non-empty). editRepOpen/editRep* drive the
   // post-confirm swap dialog opened from the confirmed-tab LeadCard.
   const [selectedRepId, setSelectedRepId] = useState<string>('')
+  // Fallback path: when the authed vendor has no reps[] on file (e.g. Demo
+  // Vendor that's not mapped to a MOCK_VENDOR), the selector hides and a
+  // free-form name input takes its place. Typed name is used to build an
+  // ad-hoc VendorRep on Confirm. Keeps the flow unblocked for vendors who
+  // haven't configured reps yet.
+  const [adhocRepName, setAdhocRepName] = useState<string>('')
   const [editRepOpen, setEditRepOpen] = useState(false)
   const [editRepLeadId, setEditRepLeadId] = useState<string>('')
   const [editRepChoice, setEditRepChoice] = useState<string>('')
+  const [editAdhocRepName, setEditAdhocRepName] = useState<string>('')
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Section collapse state
@@ -194,6 +201,7 @@ export default function VendorDashboard() {
     // reflects reality if the modal is reopened pre-confirm.
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
     setSelectedRepId(sp?.assignedRep?.id ?? '')
+    setAdhocRepName('')
     setSheetOpen(true)
   }
 
@@ -211,13 +219,24 @@ export default function VendorDashboard() {
     const current = getAssignedRepForLead(leadId)
     setEditRepLeadId(leadId)
     setEditRepChoice(current?.id ?? '')
+    // If current rep is adhoc OR vendor has no reps on file, pre-populate the
+    // free-form input with the current name so the fallback UX shows what's
+    // already assigned.
+    setEditAdhocRepName(
+      current && (!vendor?.reps?.length || current.id.startsWith('adhoc-')) ? current.name : ''
+    )
     setEditRepOpen(true)
   }
 
   const handleSaveEditRep = () => {
-    const rep = vendor?.reps?.find((r) => r.id === editRepChoice)
-    if (!rep || !editRepLeadId) return
-    // Always write to the lead-keyed map — that's what homeowner + admin read.
+    if (!editRepLeadId) return
+    const rep: VendorRep | undefined =
+      vendor?.reps && vendor.reps.length > 0
+        ? vendor.reps.find((r) => r.id === editRepChoice)
+        : editAdhocRepName.trim()
+          ? { id: `adhoc-${crypto.randomUUID()}`, name: editAdhocRepName.trim() }
+          : undefined
+    if (!rep) return
     assignRepByLead(editRepLeadId, rep)
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === editRepLeadId)
     if (sp) assignProjectRep(sp.id, rep)
@@ -622,45 +641,73 @@ export default function VendorDashboard() {
                 ) : (
                   <>
                     {/* Assign Representative — required before Confirm can fire.
-                        Surfaced only on pending-status leads (the branch we're in). */}
-                    {vendor?.reps && vendor.reps.length > 0 && (
-                      <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
-                        <label htmlFor="assign-rep" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                          <UserCheck className="h-3.5 w-3.5 text-primary" />
-                          Assign Representative
-                          <span className="text-destructive">*</span>
-                        </label>
-                        <Select value={selectedRepId} onValueChange={setSelectedRepId}>
-                          <SelectTrigger id="assign-rep" className="h-10 text-sm">
-                            <SelectValue placeholder="Choose a rep for this lead…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {vendor.reps.map((rep) => (
-                              <SelectItem key={rep.id} value={rep.id}>
-                                <span className="font-medium">{rep.name}</span>
-                                {rep.role && (
-                                  <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
-                                )}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {!selectedRepId && (
+                        Two UIs: dropdown when vendor has reps on file, free-form
+                        name input as fallback when reps[] is empty (e.g. Demo
+                        Vendor path). */}
+                    <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                      <label htmlFor="assign-rep" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                        <UserCheck className="h-3.5 w-3.5 text-primary" />
+                        Assign Representative
+                        <span className="text-destructive">*</span>
+                      </label>
+                      {vendor?.reps && vendor.reps.length > 0 ? (
+                        <>
+                          <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+                            <SelectTrigger id="assign-rep" className="h-10 text-sm">
+                              <SelectValue placeholder="Choose a rep for this lead…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {vendor.reps.map((rep) => (
+                                <SelectItem key={rep.id} value={rep.id}>
+                                  <span className="font-medium">{rep.name}</span>
+                                  {rep.role && (
+                                    <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
+                                  )}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {!selectedRepId && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Pick a rep before confirming so the homeowner knows who's coming out.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            id="assign-rep"
+                            type="text"
+                            value={adhocRepName}
+                            onChange={(e) => setAdhocRepName(e.target.value)}
+                            placeholder="Enter the rep's name"
+                            className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
+                          />
                           <p className="text-[11px] text-muted-foreground">
-                            Pick a rep before confirming so the homeowner knows who's coming out.
+                            No reps on file yet. Type the rep's name — you can add a full roster later in Profile.
                           </p>
-                        )}
-                      </div>
-                    )}
+                        </>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        disabled={!selectedRepId}
+                        disabled={
+                          vendor?.reps && vendor.reps.length > 0
+                            ? !selectedRepId
+                            : !adhocRepName.trim()
+                        }
                         onClick={() => {
                           // Resolve + assign the rep BEFORE flipping status so the
                           // project carries its rep the moment it appears in the
-                          // confirmed tab / homeowner view.
-                          const rep = vendor?.reps?.find((r) => r.id === selectedRepId)
+                          // confirmed tab / homeowner view. Dropdown path uses the
+                          // selected VendorRep; free-form path builds an ad-hoc rep.
+                          const rep: VendorRep | undefined =
+                            vendor?.reps && vendor.reps.length > 0
+                              ? vendor.reps.find((r) => r.id === selectedRepId)
+                              : adhocRepName.trim()
+                                ? { id: `adhoc-${crypto.randomUUID()}`, name: adhocRepName.trim() }
+                                : undefined
                           const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                           if (rep) {
                             // Always write the lead-keyed override (covers mock-lead
@@ -914,7 +961,13 @@ export default function VendorDashboard() {
                 </SelectContent>
               </Select>
             ) : (
-              <p className="text-sm text-muted-foreground">No reps on file for this vendor.</p>
+              <input
+                type="text"
+                value={editAdhocRepName}
+                onChange={(e) => setEditAdhocRepName(e.target.value)}
+                placeholder="Enter the rep's name"
+                className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
+              />
             )}
             <p className="text-[11px] text-muted-foreground">
               The homeowner will see the new rep the next time they open this appointment.
@@ -922,7 +975,16 @@ export default function VendorDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditRepOpen(false)}>Cancel</Button>
-            <Button disabled={!editRepChoice} onClick={handleSaveEditRep}>Save</Button>
+            <Button
+              disabled={
+                vendor?.reps && vendor.reps.length > 0
+                  ? !editRepChoice
+                  : !editAdhocRepName.trim()
+              }
+              onClick={handleSaveEditRep}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

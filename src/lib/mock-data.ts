@@ -22,8 +22,14 @@ export const MOCK_VENDORS: Vendor[] = [
     { id: 'v-3-rep-2', name: 'Sofia Herrera', role: 'Project Manager', phone: '(305) 555-2007' },
     { id: 'v-3-rep-3', name: 'Miguel Santos', role: 'Construction Supervisor', phone: '(305) 555-2008' },
   ] },
-  { id: 'v-4', email: 'elite@vendor.com', name: 'David Kim', role: 'vendor', phone: '(954) 555-1004', address: '400 Las Olas Blvd, Ft Lauderdale, FL 33301', company: 'Elite Paving Co', avatar_color: '#10b981', initials: 'EP', status: 'active', created_at: '2026-01-05T11:00:00Z', service_categories: ['driveways', 'pergolas'], rating: 4.6, response_time: '~4 hours', verified: true, financing_available: false, total_reviews: 43, commission_pct: 15 },
-  { id: 'v-5', email: 'coolbreeze@vendor.com', name: 'Mike Johnson', role: 'vendor', phone: '(305) 555-1005', address: '500 Bird Rd, Miami, FL 33155', company: 'Cool Breeze HVAC', avatar_color: '#ef4444', initials: 'CB', status: 'pending', created_at: '2026-03-01T12:00:00Z', service_categories: ['air_conditioning'], rating: 4.5, response_time: '~2 hours', verified: false, financing_available: true, total_reviews: 21, commission_pct: 10 },
+  { id: 'v-4', email: 'elite@vendor.com', name: 'David Kim', role: 'vendor', phone: '(954) 555-1004', address: '400 Las Olas Blvd, Ft Lauderdale, FL 33301', company: 'Elite Paving Co', avatar_color: '#10b981', initials: 'EP', status: 'active', created_at: '2026-01-05T11:00:00Z', service_categories: ['driveways', 'pergolas'], rating: 4.6, response_time: '~4 hours', verified: true, financing_available: false, total_reviews: 43, commission_pct: 15, reps: [
+    { id: 'v-4-rep-1', name: 'Kevin Park', role: 'Site Lead', phone: '(954) 555-2009' },
+    { id: 'v-4-rep-2', name: 'Antonio Reyes', role: 'Paver Foreman', phone: '(954) 555-2010' },
+  ] },
+  { id: 'v-5', email: 'coolbreeze@vendor.com', name: 'Mike Johnson', role: 'vendor', phone: '(305) 555-1005', address: '500 Bird Rd, Miami, FL 33155', company: 'Cool Breeze HVAC', avatar_color: '#ef4444', initials: 'CB', status: 'pending', created_at: '2026-03-01T12:00:00Z', service_categories: ['air_conditioning'], rating: 4.5, response_time: '~2 hours', verified: false, financing_available: true, total_reviews: 21, commission_pct: 10, reps: [
+    { id: 'v-5-rep-1', name: 'Brian Walsh', role: 'HVAC Technician', phone: '(305) 555-2011' },
+    { id: 'v-5-rep-2', name: 'Jessica Tran', role: 'Installation Coordinator', phone: '(305) 555-2012' },
+  ] },
 ]
 
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
