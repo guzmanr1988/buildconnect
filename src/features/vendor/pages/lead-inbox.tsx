@@ -114,6 +114,8 @@ export default function LeadInbox() {
                   <button
                     type="button"
                     className="w-full text-left"
+                    aria-expanded={isExpanded}
+                    aria-controls={`lead-inbox-panel-${lead.id}`}
                     onClick={() => setExpandedId(isExpanded ? null : lead.id)}
                   >
                     <CardContent className="p-4 sm:p-5">
@@ -153,6 +155,7 @@ export default function LeadInbox() {
                   {isExpanded && (
                     <motion.div
                       key="lead-inbox-expanded"
+                      id={`lead-inbox-panel-${lead.id}`}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
