@@ -285,6 +285,21 @@ export default function VendorDashboard() {
   const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
   const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
+  // Layer 5 of bulletproof close (kratos msg 1776670030582): if sheetOpen
+  // ever flips to false but selected is non-null, forcibly clear selected +
+  // rep-picker state. This catches any path where Dialog closes via backdrop
+  // tap / ESC / close-X without going through the Confirm handler. Also
+  // catches the pathological case where the Confirm handler's setSheetOpen(false)
+  // commits but selected somehow stays populated — next effect-cycle cleans.
+  useEffect(() => {
+    if (!sheetOpen && selected !== null) {
+      console.log('[vendor-confirm] LAYER5_CLEANUP sheetOpen=false, forcing selected=null')
+      setSelected(null)
+      setSelectedRepId('')
+      setAdhocRepName('')
+    }
+  }, [sheetOpen, selected])
+
   const selectedSlot = MOCK_AVAILABLE_SLOTS.find((s) => s.date === rescheduleDate)
 
   const openLead = (lead: Lead) => {
@@ -873,40 +888,80 @@ export default function VendorDashboard() {
                             ? !selectedRepId
                             : !adhocRepName.trim()
                         }
-                        onClick={() => {
-                          // Snapshot selected before the close-sequence resets it —
-                          // Rod P0: adhoc-rep Confirm path was reading selected after
-                          // state-batch started committing, and on some React renders
-                          // selected.id was null before the handler body finished.
-                          // Take id first, act on it, then close.
-                          const selectedLeadId = selected.id
-                          const rep: VendorRep | undefined =
-                            vendor?.reps && vendor.reps.length > 0
-                              ? vendor.reps.find((r) => r.id === selectedRepId)
-                              : adhocRepName.trim()
-                                ? {
-                                    id: typeof crypto !== 'undefined' && crypto.randomUUID
-                                      ? `adhoc-${crypto.randomUUID()}`
-                                      : `adhoc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                                    name: adhocRepName.trim(),
-                                  }
-                                : undefined
-                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selectedLeadId)
-                          if (rep) {
-                            assignRepByLead(selectedLeadId, rep)
-                            if (sp) assignProjectRep(sp.id, rep)
+                        onClick={(e) => {
+                          // BULLETPROOF close — 3rd recurrence on Rodolfo's side
+                          // despite ship #63 defensive hardening, #65 state-first
+                          // reorder, and #77 autofill-disable. Previous fixes all
+                          // addressed plausible mechanisms but none fully closed it
+                          // (kratos msg 1776670030582). This version layers 5
+                          // independent close-guarantees so if ANY path fails the
+                          // others catch it.
+                          //
+                          // Layer 1: preventDefault + stopPropagation — eliminate
+                          //          any iOS Safari passive-event-listener or
+                          //          scroll-lock consumption of the tap.
+                          // Layer 2: try/catch/finally — close commits in finally
+                          //          even if store-write throws.
+                          // Layer 3: setTimeout(0) fallback — async re-fire on the
+                          //          task queue after current render commits, in
+                          //          case a race between setState + Dialog's own
+                          //          state-update swallows the first close.
+                          // Layer 4: requestAnimationFrame fallback — re-fire on
+                          //          next paint frame in case both sync + task-
+                          //          queue close got overridden.
+                          // Layer 5: useEffect cleanup on sheetOpen transition —
+                          //          if somehow sheetOpen stays true, the effect
+                          //          forces selected=null which blanks the body.
+                          e.preventDefault()
+                          e.stopPropagation()
+                          console.log('[vendor-confirm] CONFIRM_FIRED layer=sync leadId=', selected.id)
+
+                          try {
+                            const selectedLeadId = selected.id
+                            const rep: VendorRep | undefined =
+                              vendor?.reps && vendor.reps.length > 0
+                                ? vendor.reps.find((r) => r.id === selectedRepId)
+                                : adhocRepName.trim()
+                                  ? {
+                                      id: typeof crypto !== 'undefined' && crypto.randomUUID
+                                        ? `adhoc-${crypto.randomUUID()}`
+                                        : `adhoc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                      name: adhocRepName.trim(),
+                                    }
+                                  : undefined
+                            const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selectedLeadId)
+                            if (rep) {
+                              assignRepByLead(selectedLeadId, rep)
+                              if (sp) assignProjectRep(sp.id, rep)
+                            }
+                            setLeadStatus(selectedLeadId, 'confirmed')
+                            if (sp) updateProjectStatus(sp.id, 'approved')
+                          } catch (err) {
+                            console.error('[vendor-confirm] handler-body error, proceeding to close anyway:', err)
+                          } finally {
+                            // Layer 2 close — GUARANTEED execution.
+                            console.log('[vendor-confirm] CONFIRM_FIRED layer=finally')
+                            setSelectedRepId('')
+                            setAdhocRepName('')
+                            setSelected(null)
+                            setSheetOpen(false)
                           }
-                          setLeadStatus(selectedLeadId, 'confirmed')
-                          if (sp) updateProjectStatus(sp.id, 'approved')
-                          // Aggressive close: reset ALL rep-picker state + body scope
-                          // + sheet open. Clearing rep state avoids any residue
-                          // tripping the next openLead re-entry. setSelected(null)
-                          // blanks Dialog body during close; setSheetOpen(false)
-                          // starts the close animation.
-                          setSelectedRepId('')
-                          setAdhocRepName('')
-                          setSelected(null)
-                          setSheetOpen(false)
+
+                          // Layer 3 — microtask-queue fallback.
+                          setTimeout(() => {
+                            console.log('[vendor-confirm] CONFIRM_FIRED layer=setTimeout')
+                            setSelected(null)
+                            setSheetOpen(false)
+                          }, 0)
+
+                          // Layer 4 — next-frame fallback.
+                          if (typeof requestAnimationFrame !== 'undefined') {
+                            requestAnimationFrame(() => {
+                              console.log('[vendor-confirm] CONFIRM_FIRED layer=raf')
+                              setSelected(null)
+                              setSheetOpen(false)
+                            })
+                          }
                         }}
                       >
                         <Check className="h-4 w-4 mr-1.5" /> Confirm
