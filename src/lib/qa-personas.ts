@@ -167,7 +167,12 @@ const PERSONA_3_APPROVED: QAPersona = {
       contractor,
       booking: { date: '2026-05-08', time: '2:00 PM' },
       homeowner: homeowner(PERSONA_3_PROFILE),
-      sentAt: '2026-04-05T15:00:00.000Z',
+      // Fresh sentAt so the 3-business-day cancellation window is still
+      // open — apollo probe T1 needs this to exercise the Request-
+      // Cancellation dialog flow. Prior timestamp (2026-04-05) was 11+
+      // business days old → canCancel=false → button disabled → dialog
+      // never opened. Msg 1776671514407.
+      sentAt: '2026-04-19T15:00:00.000Z',
       assignedRep: rep,
     }],
     assignedRepByLead: { 'L-QA3S': rep },

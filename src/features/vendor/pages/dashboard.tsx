@@ -1218,22 +1218,20 @@ export default function VendorDashboard() {
             </p>
             {cancelReviewLeadId && cancellationRequestsByLead[cancelReviewLeadId] && (() => {
               const req = cancellationRequestsByLead[cancelReviewLeadId]
+              // Ship #90 simplified homeowner capture to single Reason textarea;
+              // vendor display consolidates too. Prefer reason field; fall back
+              // to explanation for back-compat with pre-#90 entries that may
+              // have written explanation instead.
+              const text = req.reason || req.explanation
+              if (!text && !req.requestedAt) return null
               return (
                 <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-2">
-                  {req.reason && (
+                  {text && (
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive/80 mb-0.5">
-                        Reason
+                        Homeowner's reason
                       </p>
-                      <p className="text-sm font-medium text-foreground">{req.reason}</p>
-                    </div>
-                  )}
-                  {req.explanation && (
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive/80 mb-0.5">
-                        Homeowner note
-                      </p>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{req.explanation}</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{text}</p>
                     </div>
                   )}
                   {req.requestedAt && (

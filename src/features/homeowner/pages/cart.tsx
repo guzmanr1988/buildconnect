@@ -60,38 +60,66 @@ export function CartPage() {
   const SERVICE_CATALOG = useCatalogStore((s) => s.services)
   const [viewItem, setViewItem] = useState<CartItem | null>(null)
   const [idPreviewOpen, setIdPreviewOpen] = useState(false)
-  // Cancellation-request dialog (ship #88 extends arc feature-cancellation-request
-  // per kratos msg 1776670962547). Replaces the previous direct-click-flips-to-
-  // pending flow with a reason + explanation capture dialog.
+  // Cancellation-request dialog (ship #88 extended + ship #90 simplified per
+  // kratos msg 1776671567585). Simplification: single Reason textarea instead
+  // of dropdown + explanation combo. Bulletproof 5-layer open-and-close
+  // pattern applied (analogue of ship #87 vendor Confirm bulletproof-close;
+  // apollo surfaced T1 click-to-open no-op on #88 because early-return branch
+  // at the empty-cart-with-sentProjects case didn't mount the Dialog in the
+  // React tree — now the Dialog renders in all return branches).
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelDialogLeadId, setCancelDialogLeadId] = useState<string>('')
   const [cancelReason, setCancelReason] = useState<string>('')
-  const [cancelExplanation, setCancelExplanation] = useState<string>('')
-
-  const CANCEL_REASONS = [
-    'No longer needed',
-    'Budget changed',
-    'Moving',
-    'Going with another contractor',
-    'Timeline issue',
-    'Other',
-  ] as const
 
   const openCancelDialog = (leadId: string) => {
-    setCancelDialogLeadId(leadId)
-    setCancelReason('')
-    setCancelExplanation('')
-    setCancelDialogOpen(true)
+    console.log('[homeowner-cancel] OPEN_FIRED layer=sync leadId=', leadId)
+    try {
+      setCancelDialogLeadId(leadId)
+      setCancelReason('')
+      setCancelDialogOpen(true)
+    } catch (err) {
+      console.error('[homeowner-cancel] open-body error, proceeding anyway:', err)
+    }
+    // Layer 2 — microtask-queue fallback
+    setTimeout(() => {
+      console.log('[homeowner-cancel] OPEN_FIRED layer=setTimeout')
+      setCancelDialogLeadId(leadId)
+      setCancelDialogOpen(true)
+    }, 0)
+    // Layer 3 — next-frame fallback
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => {
+        console.log('[homeowner-cancel] OPEN_FIRED layer=raf')
+        setCancelDialogOpen(true)
+      })
+    }
   }
 
-  const cancelSubmitEnabled =
-    cancelReason.length > 0 &&
-    (cancelReason !== 'Other' || cancelExplanation.trim().length > 0)
+  const cancelSubmitEnabled = cancelReason.trim().length > 0
 
   const submitCancellation = () => {
     if (!cancelSubmitEnabled) return
-    requestCancellation(cancelDialogLeadId, cancelReason, cancelExplanation.trim() || undefined)
-    setCancelDialogOpen(false)
+    console.log('[homeowner-cancel] SUBMIT_FIRED layer=sync')
+    try {
+      requestCancellation(cancelDialogLeadId, cancelReason.trim())
+    } catch (err) {
+      console.error('[homeowner-cancel] submit-body error, closing anyway:', err)
+    } finally {
+      // Layer 2 — guaranteed close
+      setCancelDialogOpen(false)
+    }
+    // Layer 3 — microtask-queue fallback
+    setTimeout(() => {
+      console.log('[homeowner-cancel] SUBMIT_FIRED layer=setTimeout')
+      setCancelDialogOpen(false)
+    }, 0)
+    // Layer 4 — next-frame fallback
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => {
+        console.log('[homeowner-cancel] SUBMIT_FIRED layer=raf')
+        setCancelDialogOpen(false)
+      })
+    }
   }
 
   // Auto-generate project name: "Customer Name - Service Abbreviations"
@@ -154,6 +182,53 @@ export function CartPage() {
     }
     navigate('/home/vendor-compare')
   }
+
+  // Dialog JSX extracted so it renders in every return branch — apollo T1
+  // bug on #88 was that the empty-cart-with-sentProjects early return didn't
+  // mount the Dialog, so the trigger button in THAT branch fired state-only
+  // with no Dialog element to render. Hoisted variable referenced at end of
+  // each return branch guarantees mount regardless of which branch runs.
+  const cancelDialogJsx = (
+    <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-heading">Request Project Cancellation</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Tell us why — this goes to your contractor so they can review the request.
+          </p>
+          <div className="space-y-2">
+            <label htmlFor="cancel-reason" className="text-xs font-semibold text-foreground">
+              Reason <span className="text-destructive">*</span>
+            </label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Enter your reason for cancellation…"
+              rows={4}
+              className="text-sm resize-none"
+              autoFocus
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setCancelDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            className="w-full sm:w-auto"
+            disabled={!cancelSubmitEnabled}
+            onClick={submitCancellation}
+          >
+            Submit Cancellation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 
   if (items.length === 0 && sentProjects.length === 0) {
     return (
@@ -299,6 +374,7 @@ export function CartPage() {
             })}
           </div>
         </div>
+        {cancelDialogJsx}
       </div>
     )
   }
@@ -829,66 +905,7 @@ export function CartPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Cancellation Request Dialog — ship #88 extends arc feature-cancellation-request.
-          Captures homeowner reason + optional explanation before flipping
-          cancellationRequestsByLead[leadId] to pending. Vendor sees these in
-          the Review Cancellation dialog on their dashboard. */}
-      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Request Project Cancellation</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              Tell us why — this goes to your contractor so they can review the request.
-            </p>
-            <div className="space-y-2">
-              <label htmlFor="cancel-reason" className="text-xs font-semibold text-foreground">
-                Reason <span className="text-destructive">*</span>
-              </label>
-              <Select value={cancelReason} onValueChange={setCancelReason}>
-                <SelectTrigger id="cancel-reason" className="h-10 text-sm">
-                  <SelectValue placeholder="Choose a reason…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CANCEL_REASONS.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="cancel-explanation" className="text-xs font-semibold text-foreground">
-                Explanation {cancelReason === 'Other' && <span className="text-destructive">*</span>}
-                {cancelReason !== 'Other' && <span className="text-muted-foreground font-normal"> (optional)</span>}
-              </label>
-              <Textarea
-                id="cancel-explanation"
-                value={cancelExplanation}
-                onChange={(e) => setCancelExplanation(e.target.value)}
-                placeholder={cancelReason === 'Other' ? 'Please describe your reason…' : 'Additional context for your contractor…'}
-                rows={3}
-                className="text-sm resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setCancelDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              disabled={!cancelSubmitEnabled}
-              onClick={submitCancellation}
-            >
-              Submit Cancellation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {cancelDialogJsx}
     </div>
   )
 }
