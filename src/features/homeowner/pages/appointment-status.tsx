@@ -92,7 +92,11 @@ export function AppointmentStatusPage() {
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className={cn('h-3 w-3 rounded-full', statusPulse[lead.status])} />
-              <StatusBadge status={lead.status} className="text-sm" />
+              <StatusBadge
+                status={lead.status}
+                className="text-sm"
+                label={lead.status === 'confirmed' ? 'Scheduled - Pending Approval' : undefined}
+              />
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-4 w-4" />
