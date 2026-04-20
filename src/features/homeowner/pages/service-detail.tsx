@@ -766,7 +766,7 @@ export function ServiceDetailPage() {
                 addItem(itemData)
                 toast.success(`${service.name} added to your project`, {
                   action: {
-                    label: 'View cart',
+                    label: 'View projects',
                     onClick: () => navigate('/home/cart'),
                   },
                 })
@@ -800,7 +800,7 @@ export function ServiceDetailPage() {
             {added ? (
               <>
                 <Check className="h-4 w-4" />
-                {editingItemId ? 'Updated' : 'Added to Cart'}
+                {editingItemId ? 'Updated' : 'Added to Projects'}
               </>
             ) : (
               <>
@@ -818,7 +818,7 @@ export function ServiceDetailPage() {
               onClick={() => navigate('/home/cart')}
             >
               <ShoppingCart className="h-4 w-4" />
-              View Cart ({cartCount} {cartCount === 1 ? 'item' : 'items'})
+              View Projects ({cartCount} {cartCount === 1 ? 'item' : 'items'})
             </Button>
           )}
           {allRequiredDone && Object.keys(selections).length > 0 && (

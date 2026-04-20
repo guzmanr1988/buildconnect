@@ -237,7 +237,7 @@ export function CartPage() {
           <ShoppingCart className="h-10 w-10 text-muted-foreground" />
         </div>
         <div className="text-center">
-          <h2 className="text-xl font-semibold font-heading text-foreground">Your cart is empty</h2>
+          <h2 className="text-xl font-semibold font-heading text-foreground">No projects yet</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Browse services and add items to your project
           </p>
@@ -262,7 +262,7 @@ export function CartPage() {
           Back to services
         </Button>
         <div className="text-center py-8">
-          <h2 className="text-xl font-semibold font-heading text-foreground">Cart is empty</h2>
+          <h2 className="text-xl font-semibold font-heading text-foreground">No projects yet</h2>
           <p className="mt-2 text-sm text-muted-foreground">All projects have been sent to contractors</p>
           <Button onClick={() => navigate('/home')} className="gap-2 mt-4">
             Add More Services

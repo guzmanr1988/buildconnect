@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 
 const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
-  { to: '/home/cart', icon: ShoppingCart, label: 'Cart' },
+  { to: '/home/cart', icon: ShoppingCart, label: 'Projects' },
   { to: '/home/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/home/profile', icon: User, label: 'Profile' },
 ]
