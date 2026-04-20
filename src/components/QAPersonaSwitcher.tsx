@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { QA_PERSONAS, applyQAPersona, clearQAPersona, activeQAPersonaId } from '@/lib/qa-personas'
-import { router } from '@/router'
 
 // Floating QA persona switcher. Visible only when VITE_DEMO_MODE !== 'false'.
 // Lets apollo (or any QA operator) jump between 4 pre-seeded homeowner
@@ -30,20 +29,19 @@ export function QAPersonaSwitcher() {
     const persona = QA_PERSONAS.find((p) => p.id === personaId)
     if (!persona) return
     applyQAPersona(persona)
-    // SPA navigation via router instance — skips the full bundle reload that
-    // window.location.href='/home' forces (~1-2s cold). Ship #103 per Rod
-    // report 'demo taking long to open users' via kratos 1776716415563.
-    // Target: <300ms click-to-landing.
-    setOpen(false)
-    setActiveId(persona.id)
-    router.navigate('/home')
+    // REVERTED to window.location.href full-reload per kratos msg
+    // 1776717519163 — ship #103 SPA-nav optimization caused a regression
+    // where AuthBootstrap's qaPersonaActive snapshot (captured at initial
+    // mount with [] deps) was stale after SPA nav, letting Supabase events
+    // clobber persona state. Full reload re-mounts AuthBootstrap with fresh
+    // flag read. Slower (~1-2s) but correct. Perf optimization filed as
+    // Tranche-2 task_1776716736651_418 plus a new task for the correct fix.
+    window.location.href = '/home'
   }
 
   const handleExit = () => {
     clearQAPersona()
-    setOpen(false)
-    setActiveId(null)
-    router.navigate('/login')
+    window.location.href = '/login'
   }
 
   const active = activeId ? QA_PERSONAS.find((p) => p.id === activeId) : null
