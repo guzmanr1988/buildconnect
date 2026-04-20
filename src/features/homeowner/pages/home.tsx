@@ -69,8 +69,16 @@ export function HomeownerHome() {
     completed: 'sold',
     rescheduled: 'pending',
   }
+  // Gate MOCK_LEADS to the profile whose id ACTUALLY matches the fixture's
+  // homeowner_id. Previously had a `|| l.homeowner_id === 'ho-1'` fallback
+  // that leaked ho-1's mock leads (Apex + Elite) into every profile's /home
+  // Upcoming bucket — QA personas, real signups, and the Rod P0
+  // homeowner-side analog of the vendor zombie state we gated via
+  // useVendorScope. Dropping the fallback: MOCK_HOMEOWNERS[0] default-profile
+  // path still matches because profile.id is already 'ho-1' in that case, so
+  // the fallback was redundant AND leaking.
   const mockLeadsAsEntries: LifecycleEntry[] = MOCK_LEADS
-    .filter((l) => l.homeowner_id === profile.id || l.homeowner_id === 'ho-1')
+    .filter((l) => l.homeowner_id === profile.id)
     .map((l) => {
       const overrideStatus = leadStatusOverrides[l.id]
       const effectiveLeadStatus = overrideStatus ?? l.status
