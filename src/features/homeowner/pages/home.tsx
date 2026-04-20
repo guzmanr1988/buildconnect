@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import { MOCK_HOMEOWNERS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
+import { OnboardingTour, hasSeenOnboarding } from '../components/onboarding-tour'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
 // COMPLETED. Time-based heuristic since sentProject has no projectCompletedAt
@@ -163,6 +164,24 @@ export function HomeownerHome() {
   const [openHomeTile, setOpenHomeTile] = useState<HomeTileId | null>(null)
   const toggleHomeTile = (id: HomeTileId) =>
     setOpenHomeTile((prev) => (prev === id ? null : id))
+
+  // Onboarding tour (ship #106 Phase B per kratos msg 1776718477775).
+  // Auto-open on first-ever /home visit for a homeowner; dismissible via
+  // Skip/Next-through/backdrop/ESC. Nav '?' button also reopens it via
+  // custom 'buildconnect:open-onboarding' window event emitted by the
+  // homeowner-layout help button.
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  useEffect(() => {
+    if (!hasSeenOnboarding()) {
+      const t = setTimeout(() => setOnboardingOpen(true), 300)
+      return () => clearTimeout(t)
+    }
+  }, [])
+  useEffect(() => {
+    const handler = () => setOnboardingOpen(true)
+    window.addEventListener('buildconnect:open-onboarding', handler)
+    return () => window.removeEventListener('buildconnect:open-onboarding', handler)
+  }, [])
 
   const howItWorks = [
     { n: 1, t: 'Tell us about your project', d: 'Pick a service and answer a few questions about what you need.' },
@@ -453,6 +472,8 @@ export function HomeownerHome() {
           ))}
         </div>
       </motion.div>
+
+      <OnboardingTour open={onboardingOpen} onClose={() => setOnboardingOpen(false)} />
     </div>
   )
 }

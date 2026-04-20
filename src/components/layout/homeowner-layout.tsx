@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X } from 'lucide-react'
+import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X, HelpCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -58,6 +58,15 @@ export function HomeownerLayout() {
             </nav>
             <div className="flex items-center gap-2">
               <NotificationBell notifications={notifications} />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => window.dispatchEvent(new Event('buildconnect:open-onboarding'))}
+                aria-label="Reopen onboarding tour"
+                className="h-9 w-9"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </Button>
               <ThemeToggle />
               {profile && (
                 <button
@@ -82,6 +91,15 @@ export function HomeownerLayout() {
             </button>
             <div className="flex items-center gap-2">
               <NotificationBell notifications={notifications} size="sm" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => window.dispatchEvent(new Event('buildconnect:open-onboarding'))}
+                aria-label="Reopen onboarding tour"
+                className="h-8 w-8"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
               <ThemeToggle />
               {profile && (
                 <button
