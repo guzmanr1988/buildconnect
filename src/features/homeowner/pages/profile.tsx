@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, Mail, LogOut, Sun, Moon, Plus, Pencil, Trash2, Home as HomeIcon } from 'lucide-react'
+import { MapPin, Phone, Mail, LogOut, Sun, Moon, Plus, Pencil, Trash2, Home as HomeIcon, Check, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -37,6 +37,41 @@ export function HomeownerProfilePage() {
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
   const [addressForm, setAddressForm] = useState<AddressFormData>(emptyAddressForm)
   const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null)
+
+  // Profile self-edit (ship Phase B per kratos msg 1776719583850). Edit button
+  // toggles form-mode on the primary profile card; save commits name/phone/
+  // address via updateProfile (zustand-persist auto-syncs localStorage).
+  // Email stays read-only (auth identity, changing requires re-auth flow).
+  const [profileEditing, setProfileEditing] = useState(false)
+  const [profileForm, setProfileForm] = useState({
+    name: profile.name,
+    phone: profile.phone,
+    address: profile.address,
+  })
+
+  const openProfileEdit = () => {
+    setProfileForm({ name: profile.name, phone: profile.phone, address: profile.address })
+    setProfileEditing(true)
+  }
+
+  const cancelProfileEdit = () => {
+    setProfileEditing(false)
+  }
+
+  const saveProfileEdit = () => {
+    const trimmed = {
+      name: profileForm.name.trim(),
+      phone: profileForm.phone.trim(),
+      address: profileForm.address.trim(),
+    }
+    if (!trimmed.name || !trimmed.phone || !trimmed.address) {
+      toast.error('Name, phone, and address are required')
+      return
+    }
+    updateProfile(trimmed)
+    setProfileEditing(false)
+    toast.success('Profile updated')
+  }
 
   const openAddAddress = () => {
     setEditingAddressId(null)
@@ -110,20 +145,83 @@ export function HomeownerProfilePage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="text-foreground">{profile.email}</span>
+            {profileEditing ? (
+              <div className="flex flex-col gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-name" className="text-xs">Name</Label>
+                  <Input
+                    id="profile-name"
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-email" className="text-xs">Email <span className="text-muted-foreground font-normal">(read-only)</span></Label>
+                  <Input
+                    id="profile-email"
+                    value={profile.email}
+                    disabled
+                    className="h-9 bg-muted/30"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-phone" className="text-xs">Phone</Label>
+                  <Input
+                    id="profile-phone"
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="profile-address" className="text-xs">Address</Label>
+                  <Input
+                    id="profile-address"
+                    value={profileForm.address}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, address: e.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" className="flex-1 gap-1.5" onClick={saveProfileEdit}>
+                    <Check className="h-3.5 w-3.5" />
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={cancelProfileEdit}>
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="text-foreground">{profile.phone}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="text-foreground">{profile.address}</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-foreground">{profile.email}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-foreground">{profile.phone}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-foreground">{profile.address}</span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full gap-1.5"
+                  onClick={openProfileEdit}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Profile
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </motion.div>
