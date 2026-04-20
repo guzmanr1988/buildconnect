@@ -46,6 +46,8 @@ export default function VendorDashboard() {
   const assignProjectRep = useProjectsStore((s) => s.assignRep)
   const assignRepByLead = useProjectsStore((s) => s.assignRepByLead)
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const setLeadStatus = useProjectsStore((s) => s.setLeadStatus)
 
   // Auth guard — redirect unauth'd or non-vendor roles to /login.
   useEffect(() => {
@@ -128,16 +130,11 @@ export default function VendorDashboard() {
     received_at: p.sentAt,
   })), [sentProjects, VENDOR_ID])
 
-  // Per-lead status overrides — applied on top of homeowner-leads + mock-leads
-  // so that vendor actions (Confirm / Reject / Reschedule / Mark-as-Sold) move
-  // a lead between sections regardless of whether the lead is backed by a
-  // sentProject (homeowner-bus channel) or a static MOCK_LEAD (pre-launch test
-  // harness). Keeps the "mock stays as test harness, but flows must close the
-  // loop as if real" rule working for the mock path too (Rod directive).
-  const [leadStatusOverrides, setLeadStatusOverrides] = useState<Record<string, Lead['status']>>({})
-  const setLeadStatus = (leadId: string, status: Lead['status']) => {
-    setLeadStatusOverrides((prev) => ({ ...prev, [leadId]: status }))
-  }
+  // Per-lead status overrides are now persisted via projects-store (ship #55 —
+  // Rod-surfaced refresh-wipes-everything on Demo Vendor). Vendor actions
+  // (Confirm / Reject / Reschedule / Mark-as-Sold) write to the store; the
+  // store's persist middleware keeps the override alive across page reloads.
+  // Previously this was component useState and wiped on refresh.
 
   // Put homeowner leads first so they appear at the top, then apply overrides.
   const leads = useMemo(() => {
