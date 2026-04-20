@@ -177,7 +177,7 @@ export function RegisterPage() {
 
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name">Full Name <span className="text-destructive">*</span></Label>
                 <Input
                   id="name"
                   placeholder="John Doe"
@@ -192,7 +192,7 @@ export function RegisterPage() {
 
               {selectedRole === 'vendor' && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="company">Company Name</Label>
+                  <Label htmlFor="company">Company Name <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   <Input
                     id="company"
                     placeholder="Your Company LLC"
@@ -203,7 +203,7 @@ export function RegisterPage() {
               )}
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="reg-email">Email</Label>
+                <Label htmlFor="reg-email">Email <span className="text-destructive">*</span></Label>
                 <Input
                   id="reg-email"
                   type="email"
@@ -218,7 +218,7 @@ export function RegisterPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">Phone <span className="text-destructive">*</span></Label>
                 <Input
                   id="phone"
                   type="tel"
@@ -233,7 +233,7 @@ export function RegisterPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
                 <Input
                   id="address"
                   placeholder="1234 Main St, Miami, FL 33101"
@@ -247,7 +247,7 @@ export function RegisterPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="reg-password">Password</Label>
+                <Label htmlFor="reg-password">Password <span className="text-destructive">*</span></Label>
                 <div className="relative">
                   <Input
                     id="reg-password"
@@ -274,7 +274,7 @@ export function RegisterPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Label htmlFor="confirmPassword">Confirm Password <span className="text-destructive">*</span></Label>
                 <Input
                   id="confirmPassword"
                   type="password"
