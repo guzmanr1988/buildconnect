@@ -67,13 +67,21 @@ interface CustomerProject {
   status: LeadStatus
   date_submitted: string
   contractor_assigned: string
+  // Optional secondary-address label — when set, the per-homeowner
+  // Other-Addresses dropdown (ship #135) uses it to bucket projects by
+  // property. Absent = Primary by default (see synthesis path in the
+  // main component). Ship #137 added Maria's Beach House seed so the
+  // dropdown renders out-of-the-box without requiring runtime cart-add.
+  address_label?: string
 }
 
 const CUSTOMER_PROJECTS: CustomerProject[] = [
-  // Maria
+  // Maria — 3 Primary + 1 Beach House (ship #137 demo-seed for Other-Addresses
+  // dropdown visibility per kratos msg 1776743704759).
   { id: 'cp-1', homeowner_id: 'ho-1', project_name: 'Full Roof Replacement - Barrel Tile', service_type: 'Roofing', status: 'confirmed', date_submitted: '2026-04-07T14:22:00Z', contractor_assigned: 'Apex Roofing & Solar' },
   { id: 'cp-2', homeowner_id: 'ho-1', project_name: 'Paver Driveway - Full Install', service_type: 'Driveways', status: 'rescheduled', date_submitted: '2026-04-05T11:30:00Z', contractor_assigned: 'Elite Paving Co' },
   { id: 'cp-3', homeowner_id: 'ho-1', project_name: 'Louvered Pergola 12x16', service_type: 'Pergolas', status: 'rejected', date_submitted: '2026-04-04T15:45:00Z', contractor_assigned: 'Paradise Pools FL' },
+  { id: 'cp-1b', homeowner_id: 'ho-1', project_name: 'Pool & Spa - Key Largo Beach House', service_type: 'Pool & Oasis', status: 'pending', date_submitted: '2026-04-10T10:00:00Z', contractor_assigned: 'Paradise Pools FL', address_label: 'Beach House' },
   // James
   { id: 'cp-4', homeowner_id: 'ho-2', project_name: 'Impact Windows - Full Home', service_type: 'Windows & Doors', status: 'pending', date_submitted: '2026-04-08T09:45:00Z', contractor_assigned: 'Shield Impact Windows' },
   { id: 'cp-5', homeowner_id: 'ho-2', project_name: 'Metal Roof + Solar Prep', service_type: 'Roofing', status: 'pending', date_submitted: '2026-04-09T08:15:00Z', contractor_assigned: 'Apex Roofing & Solar' },
@@ -239,7 +247,7 @@ export default function HomeownersPage() {
         {filtered.map((homeowner, i) => {
           const fixtureProjects: (CustomerProject & { address_label?: string })[] = CUSTOMER_PROJECTS
             .filter((p) => p.homeowner_id === homeowner.id)
-            .map((p) => ({ ...p, address_label: 'Primary' }))
+            .map((p) => ({ ...p, address_label: p.address_label ?? 'Primary' }))
           // Merge sentProjects: cart-created projects where the homeowner
           // email matches (stable bridge to mock ho-N ids). Synthesize
           // CustomerProject rows so the existing renderer handles both.
