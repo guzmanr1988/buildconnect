@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, ChevronRight, User, MapPin, Calendar,
@@ -31,6 +31,30 @@ function fmtDate(iso: string) {
 export default function LeadInbox() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+
+  // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
+  // Log vendor-side read snapshot on every sentProjects mutation so we
+  // can observe whether the write from /home/booking/confirmed lands
+  // in the store as the vendor sees it. VITE_DEMO_MODE-gated. Fires
+  // on length change (write or hydrate), not every render.
+  useEffect(() => {
+    if ((import.meta.env.VITE_DEMO_MODE ?? 'true') === 'false') return
+    // eslint-disable-next-line no-console
+    console.log('[#212 leads-diag] lead-inbox READ snapshot:', {
+      current_VENDOR_ID: VENDOR_ID,
+      isMock,
+      sentProjects_length: sentProjects.length,
+      entries: sentProjects.slice(0, 10).map((p) => ({
+        id: p.id,
+        itemId: p.item?.id,
+        serviceName: p.item?.serviceName,
+        contractor_vendor_id: p.contractor?.vendor_id,
+        contractor_company: p.contractor?.company,
+        status: p.status,
+        sentAt: p.sentAt,
+      })),
+    })
+  }, [sentProjects, VENDOR_ID, isMock])
   const mockLeads = useMemo(
     () => (isMock ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
     [VENDOR_ID, isMock]

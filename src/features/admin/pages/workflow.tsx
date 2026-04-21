@@ -25,6 +25,28 @@ export default function WorkflowPage() {
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
 
+  // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
+  // Log admin-workflow read snapshot on sentProjects mutation so we
+  // can observe whether the write lands in the store as admin sees it.
+  // VITE_DEMO_MODE-gated.
+  useEffect(() => {
+    if ((import.meta.env.VITE_DEMO_MODE ?? 'true') === 'false') return
+    // eslint-disable-next-line no-console
+    console.log('[#212 leads-diag] admin/workflow READ snapshot:', {
+      sentProjects_length: sentProjects.length,
+      entries: sentProjects.slice(0, 10).map((p) => ({
+        id: p.id,
+        itemId: p.item?.id,
+        serviceName: p.item?.serviceName,
+        contractor_vendor_id: p.contractor?.vendor_id,
+        contractor_company: p.contractor?.company,
+        status: p.status,
+        sentAt: p.sentAt,
+      })),
+      leadStatusOverrides_keys: Object.keys(leadStatusOverrides),
+    })
+  }, [sentProjects, leadStatusOverrides])
+
   // Per-vendor commission % override (ship #130 store) — drives the per-lead
   // commission split render in sold-card rows. Live-ripple: admin edits % on
   // /admin/vendors → getVendorCommission returns the new value → card split

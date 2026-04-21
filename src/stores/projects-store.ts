@@ -191,21 +191,36 @@ export const useProjectsStore = create<ProjectsState>()(
       repAssignedAtByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument) => {
-        set((state) => ({
-          sentProjects: [
-            ...state.sentProjects,
-            {
-              id: crypto.randomUUID(),
-              item,
-              status: 'pending',
-              contractor,
-              booking,
-              idDocument,
-              homeowner,
-              sentAt: new Date().toISOString(),
-            },
-          ],
-        }))
+        set((state) => {
+          const next: SentProject = {
+            id: crypto.randomUUID(),
+            item,
+            status: 'pending',
+            contractor,
+            booking,
+            idDocument,
+            homeowner,
+            sentAt: new Date().toISOString(),
+          }
+          const nextSentProjects = [...state.sentProjects, next]
+          // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
+          // Log write-side state so we can observe whether sendProject
+          // actually fires + what contractor is stamped on the new
+          // entry. VITE_DEMO_MODE-gated so prod builds skip.
+          if ((import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false') {
+            // eslint-disable-next-line no-console
+            console.log('[#212 leads-diag] sendProject WRITE:', {
+              newId: next.id,
+              itemId: item.id,
+              serviceName: item.serviceName,
+              contractor_vendor_id: contractor.vendor_id,
+              contractor_company: contractor.company,
+              sentAt: next.sentAt,
+              sentProjects_length_after: nextSentProjects.length,
+            })
+          }
+          return { sentProjects: nextSentProjects }
+        })
       },
 
       updateStatus: (id, status) => {
