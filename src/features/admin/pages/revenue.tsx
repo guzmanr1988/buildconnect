@@ -35,6 +35,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { fetchAllClosedSales } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { ClosedSale } from '@/types'
 
 const fadeUp = {
@@ -70,6 +71,17 @@ export default function RevenuePage() {
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
+  // Per-vendor commission % override (ship #130). Admin edits on
+  // /admin/vendors write to this store; all revenue math ripples through
+  // getVendorCommission so the commercial shape stays consistent.
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+  const resolveCommissionPct = useCallback(
+    (id: string, defaultPct: number) => vendorCommissionOverrides[id] ?? defaultPct,
+    [vendorCommissionOverrides],
+  )
+
   // Reverse-map Supabase vendor UUIDs → MOCK_VENDORS entries for display
   // (profile wiring is a separate Tranche 2 item; vendor display data still
   // mock-sourced).
@@ -98,7 +110,7 @@ export default function RevenuePage() {
         vendorShare: 0,
         deals: 0,
         subActive: vendor.status === 'active',
-        commissionPct: vendor.commission_pct,
+        commissionPct: resolveCommissionPct(vendor.id, vendor.commission_pct),
       })
     }
 
@@ -132,7 +144,7 @@ export default function RevenuePage() {
     }
 
     return Array.from(map.values()).sort((a, b) => b.totalRevenue - a.totalRevenue)
-  }, [closedSales, vendorByUuid, sentProjects])
+  }, [closedSales, vendorByUuid, sentProjects, resolveCommissionPct])
 
   const chartData = vendorBreakdown.map((v) => ({
     name: v.company.length > 16 ? v.company.slice(0, 14) + '...' : v.company,

@@ -19,6 +19,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
@@ -60,6 +61,15 @@ export default function ReportsPage() {
     [sentProjects],
   )
 
+  // Per-vendor commission % override (ship #130).
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+  const resolveCommissionPct = useCallback(
+    (id: string, defaultPct: number) => vendorCommissionOverrides[id] ?? defaultPct,
+    [vendorCommissionOverrides],
+  )
+
   // Reverse-map Supabase vendor UUIDs to MOCK_VENDORS mock-ids for the
   // per-vendor breakdown (vendor display data still mock-sourced;
   // profile wiring is separate Tranche 2).
@@ -80,7 +90,7 @@ export default function ReportsPage() {
     const mockGMV = mockSoldSales.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
     const mockCommission = mockSoldSales.reduce((s, p) => {
       const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
-      const pct = (v?.commission_pct ?? 15) / 100
+      const pct = (v ? resolveCommissionPct(v.id, v.commission_pct) : 15) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
 
@@ -94,18 +104,19 @@ export default function ReportsPage() {
     const netIncome = totalRevenue - totalPayouts
 
     const vendorBreakdown = MOCK_VENDORS.map((v) => {
+      const effectivePct = resolveCommissionPct(v.id, v.commission_pct)
       const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id]
       const supabaseSales = uuid ? closedSales.filter((s) => s.vendor_id === uuid) : []
       const mockForVendor = mockSoldSales.filter((p) => p.contractor?.company === v.company)
       const supabaseGmv = supabaseSales.reduce((s, c) => s + c.sale_amount, 0)
       const supabaseCommission = supabaseSales.reduce((s, c) => s + c.commission, 0)
       const mockGmv = mockForVendor.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
-      const mockComm = mockForVendor.reduce((s, p) => s + Math.round((p.saleAmount ?? 0) * (v.commission_pct / 100)), 0)
+      const mockComm = mockForVendor.reduce((s, p) => s + Math.round((p.saleAmount ?? 0) * (effectivePct / 100)), 0)
       const membership = MOCK_SETTINGS.subscription_fee
       return {
         company: v.company,
         name: v.name,
-        commissionPct: v.commission_pct,
+        commissionPct: effectivePct,
         gmv: supabaseGmv + mockGmv,
         commission: supabaseCommission + mockComm,
         membership,
@@ -120,7 +131,7 @@ export default function ReportsPage() {
       totalVendors: MOCK_VENDORS.length,
       activeHomeowners: MOCK_HOMEOWNERS.filter((h) => h.status === 'active').length,
     }
-  }, [closedSales, transactions, mockSoldSales])
+  }, [closedSales, transactions, mockSoldSales, resolveCommissionPct])
 
   // Suppress unused-import lint for vendorByUuid (kept for future use)
   void vendorByUuid

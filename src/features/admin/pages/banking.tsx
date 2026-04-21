@@ -56,6 +56,7 @@ import {
   MOCK_BANK_ACCOUNTS,
 } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { TransactionType, TransactionStatus } from '@/types'
 
@@ -132,15 +133,20 @@ export default function BankingPage() {
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
+  // Per-vendor commission % override (ship #130).
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+
   const mockCommission = useMemo(() => {
     return sentProjects
       .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0)
       .reduce((s, p) => {
         const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
-        const pct = (v?.commission_pct ?? 15) / 100
+        const pct = (v ? (vendorCommissionOverrides[v.id] ?? v.commission_pct) : 15) / 100
         return s + Math.round((p.saleAmount ?? 0) * pct)
       }, 0)
-  }, [sentProjects])
+  }, [sentProjects, vendorCommissionOverrides])
 
   const totalRevenue = baselineRevenue + mockCommission
   const revenueChartData = useMemo(() => [

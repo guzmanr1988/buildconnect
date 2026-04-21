@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
@@ -115,7 +116,11 @@ export default function VendorsPage() {
   }
 
   const navigate = useNavigate()
-  const [commissionOverrides, setCommissionOverrides] = useState<Record<string, number>>({})
+  // Commission % overrides now persist in admin-moderation-store (ship #130)
+  // so edits ripple to revenue/reports/overview/banking via the shared store
+  // instead of being trapped in local useState.
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const setVendorCommission = useAdminModerationStore((s) => s.setVendorCommission)
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
   const [verifiedVendors, setVerifiedVendors] = useState<Set<string>>(new Set())
   const [suspendTarget, setSuspendTarget] = useState<Vendor | null>(null)
@@ -126,8 +131,7 @@ export default function VendorsPage() {
   const [messageSent, setMessageSent] = useState(false)
 
   const updateCommission = (vendorId: string, pct: number) => {
-    const clamped = Math.max(1, Math.min(50, pct))
-    setCommissionOverrides((prev) => ({ ...prev, [vendorId]: clamped }))
+    setVendorCommission(vendorId, pct)
   }
 
   const handleSuspend = (vendor: Vendor) => {
@@ -381,7 +385,7 @@ export default function VendorsPage() {
                       type="number"
                       min={1}
                       max={50}
-                      value={commissionOverrides[vendor.id] ?? vendor.commission_pct}
+                      value={vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct}
                       onChange={(e) => updateCommission(vendor.id, Number(e.target.value))}
                       className="w-16 h-8 text-center text-sm font-bold"
                     />

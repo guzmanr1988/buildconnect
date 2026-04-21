@@ -29,6 +29,7 @@ import {
 import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
 
 const fadeUp = {
@@ -79,6 +80,15 @@ export default function OverviewPage() {
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
+  // Per-vendor commission % override (ship #130).
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+  const resolveCommissionPct = useCallback(
+    (id: string, defaultPct: number) => vendorCommissionOverrides[id] ?? defaultPct,
+    [vendorCommissionOverrides],
+  )
+
   const mockSoldSales = useMemo(() => {
     return sentProjects.filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
   }, [sentProjects])
@@ -90,21 +100,23 @@ export default function OverviewPage() {
   }, [closedSales, mockSoldSales])
   const appRevenue = useMemo(() => {
     const supabaseComm = closedSales.reduce((s, c) => s + c.commission, 0)
-    // Use each vendor's commission_pct if resolvable; fall back to 15% default.
+    // Use each vendor's effective commission_pct (admin override or default);
+    // fall back to 15% if the vendor can't be resolved by company name.
     const mockComm = mockSoldSales.reduce((s, p) => {
       const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor?.commission_pct ?? 15) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
     return supabaseComm + mockComm
-  }, [closedSales, mockSoldSales])
+  }, [closedSales, mockSoldSales, resolveCommissionPct])
 
-  // Synthesize mock commission rows (15% default) for the transaction-totals
-  // card so Paid-Commissions + GMV stay visually aligned.
+  // Synthesize mock commission rows for the transaction-totals card so
+  // Paid-Commissions + GMV stay visually aligned. Effective commission_pct
+  // honored per vendor.
   const mockCommissions = useMemo<Transaction[]>(() => {
     return mockSoldSales.map((p) => {
       const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor?.commission_pct ?? 15) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
       return {
         id: `mock-tx-${p.id}`,
         type: 'commission',
@@ -116,7 +128,7 @@ export default function OverviewPage() {
         date: p.soldAt!,
       }
     })
-  }, [mockSoldSales])
+  }, [mockSoldSales, resolveCommissionPct])
   const MOCK_TRANSACTIONS = useMemo(() => {
     const supabaseIds = new Set(transactions.map((t) => t.id))
     return [...transactions, ...mockCommissions.filter((t) => !supabaseIds.has(t.id))]
