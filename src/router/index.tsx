@@ -46,6 +46,7 @@ import BugsPage from '@/features/admin/pages/bugs'
 import ProductsAdminPage from '@/features/admin/pages/products'
 import UsersPage from '@/features/admin/pages/users'
 import HomeownersPage from '@/features/admin/pages/homeowners'
+import EmployeesPage from '@/features/admin/pages/employees'
 import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
 import ReportsPage from '@/features/admin/pages/reports'
@@ -121,6 +122,7 @@ export const router = createBrowserRouter([
           { path: 'overview', element: <OverviewPage />, handle: { title: 'Admin · Overview' } },
           { path: 'revenue', element: <RevenuePage />, handle: { title: 'Admin · Revenue' } },
           { path: 'vendors', element: <VendorsPage />, handle: { title: 'Admin · Vendors' } },
+          { path: 'employees', element: <EmployeesPage />, handle: { title: 'Admin · Employees' } },
           { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
           { path: 'transactions', element: <TransactionsPage />, handle: { title: 'Admin · Transactions' } },
           { path: 'reports', element: <ReportsPage />, handle: { title: 'Admin · Reports' } },

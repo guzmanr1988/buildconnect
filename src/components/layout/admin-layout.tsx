@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -20,6 +20,7 @@ const navItems = [
   { to: '/admin/vendors', icon: Users, label: 'Vendors' },
   { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
+  { to: '/admin/employees', icon: UserCog, label: 'Employees' },
   { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/admin/transactions', icon: Receipt, label: 'Transactions' },
   { to: '/admin/reports', icon: FileText, label: 'Reports' },
