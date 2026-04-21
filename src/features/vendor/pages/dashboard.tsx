@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
@@ -17,6 +18,7 @@ import { Separator } from '@/components/ui/separator'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
+import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
@@ -49,6 +51,14 @@ export default function VendorDashboard() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const setLeadStatus = useProjectsStore((s) => s.setLeadStatus)
+  // Ship #191 — reschedule request actions + map read. Map-entry read
+  // is stable (undefined or RescheduleRequest object) per the banked
+  // zustand-selector-stable-reference rule.
+  const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
+  const requestReschedule = useProjectsStore((s) => s.requestReschedule)
+  const approveReschedule = useProjectsStore((s) => s.approveReschedule)
+  const counterReschedule = useProjectsStore((s) => s.counterReschedule)
+  const rejectReschedule = useProjectsStore((s) => s.rejectReschedule)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approveCancellation = useProjectsStore((s) => s.approveCancellation)
   const denyCancellation = useProjectsStore((s) => s.denyCancellation)
@@ -246,6 +256,8 @@ export default function VendorDashboard() {
   const [rescheduleOpen, setRescheduleOpen] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
+  // Ship #191 — vendor counter-propose dialog.
+  const [vendorCounterOpen, setVendorCounterOpen] = useState(false)
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
   const [saleAmount, setSaleAmount] = useState('')
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
@@ -832,6 +844,93 @@ export default function VendorDashboard() {
                 </div>
               </DialogHeader>
 
+              {/* Ship #191 — inbound reschedule banner. Homeowner
+                  requested a new time; vendor can approve / counter /
+                  reject. Only shows while request is pending; resolved
+                  requests fall through. */}
+              {(() => {
+                const req = rescheduleRequestsMap[selected.id]
+                if (!req || req.status !== 'pending' || req.requestedBy !== 'homeowner') return null
+                return (
+                  <div className="rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <RotateCcw className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-sm">
+                        <p className="font-semibold text-foreground">Homeowner requested a reschedule</p>
+                        <p className="mt-1 text-foreground/80">
+                          <span className="font-medium">{req.proposedDate} · {req.proposedTime}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5">
+                            (was {req.originalDate} · {req.originalTime})
+                          </span>
+                        </p>
+                        {req.reason && (
+                          <p className="mt-1 text-xs text-muted-foreground italic">"{req.reason}"</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => {
+                          approveReschedule(selected.id)
+                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                          if (sp) {
+                            updateProjectBooking(sp.id, { date: req.proposedDate, time: req.proposedTime })
+                          }
+                          toast.success('New time approved — homeowner notified.')
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => setVendorCounterOpen(true)}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Counter
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs gap-1 text-destructive hover:text-destructive"
+                        onClick={() => {
+                          rejectReschedule(selected.id)
+                          toast.success('Keeping the original time.')
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                        Keep original
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Ship #191 — outbound reschedule banner. Vendor proposed;
+                  waiting on homeowner. Read-only status indicator. */}
+              {(() => {
+                const req = rescheduleRequestsMap[selected.id]
+                if (!req || req.status !== 'pending' || req.requestedBy !== 'vendor') return null
+                return (
+                  <div className="rounded-lg border border-sky-300/60 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-700/40 p-3">
+                    <div className="flex items-start gap-2">
+                      <Clock className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-sm">
+                        <p className="font-semibold text-foreground">Reschedule proposal pending</p>
+                        <p className="mt-1 text-foreground/80">
+                          You proposed <span className="font-medium">{req.proposedDate} · {req.proposedTime}</span>.
+                          Waiting on homeowner confirmation.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Customer Info */}
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Customer Info</p>
@@ -1218,12 +1317,31 @@ export default function VendorDashboard() {
             <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancel</Button>
             <Button disabled={!rescheduleDate || !rescheduleTime} onClick={() => {
               if (selected) {
-                // Reschedule moves the lead to Confirmed regardless of sp backing.
-                setLeadStatus(selected.id, 'confirmed')
+                // Ship #191 (Rodolfo-direct pivot #12) — branch by lead
+                // status. Pre-approval (pending / rescheduled): vendor
+                // reschedule still acts as first-acceptance at a new
+                // time (confirms + sets slot, no homeowner negotiation
+                // needed since nothing was agreed yet). Post-approval
+                // (confirmed): creates a RescheduleRequest so the
+                // homeowner can approve / counter / reject.
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                if (sp) {
-                  updateProjectBooking(sp.id, { date: rescheduleDate, time: rescheduleTime })
-                  updateProjectStatus(sp.id, 'approved')
+                if (selected.status === 'confirmed') {
+                  requestReschedule(
+                    selected.id,
+                    'vendor',
+                    rescheduleDate,
+                    rescheduleTime,
+                    selected.slot.split('T')[0],
+                    selected.slot.split('T')[1]?.slice(0, 5) ?? '',
+                  )
+                  toast.success('New time sent to homeowner for approval.')
+                } else {
+                  setLeadStatus(selected.id, 'confirmed')
+                  if (sp) {
+                    updateProjectBooking(sp.id, { date: rescheduleDate, time: rescheduleTime })
+                    updateProjectStatus(sp.id, 'approved')
+                  }
+                  toast.success('Lead confirmed at new time.')
                 }
               }
               setRescheduleOpen(false)
@@ -1484,6 +1602,26 @@ export default function VendorDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Ship #191 — vendor counter-propose dialog. Mounts
+          unconditionally per dialog-mount-in-every-return-branch
+          discipline; consumes the selected lead's current reschedule
+          request for pre-fill. */}
+      <ReschedulePickerDialog
+        open={vendorCounterOpen}
+        onOpenChange={setVendorCounterOpen}
+        mode="counter"
+        currentDate={selected ? rescheduleRequestsMap[selected.id]?.proposedDate : undefined}
+        currentTime={selected ? rescheduleRequestsMap[selected.id]?.proposedTime : undefined}
+        otherPartyLabel={selected?.homeowner_name}
+        onSubmit={(proposedDate, proposedTime, reason) => {
+          if (selected) {
+            counterReschedule(selected.id, proposedDate, proposedTime, reason)
+            toast.success('Counter-proposal sent to homeowner.')
+          }
+          setVendorCounterOpen(false)
+        }}
+      />
     </motion.div>
   )
 }

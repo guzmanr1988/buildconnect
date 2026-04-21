@@ -61,6 +61,34 @@ export interface SentProject {
 // isCancelledLead predicate (back-compat read path).
 type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed' | 'cancelled'
 
+// Ship #191 (Rodolfo-direct 2026-04-21 pivot #12) — bidirectional
+// reschedule-request shape. Either party proposes a new date/time;
+// the other approves, counters (which flips the proposer), or rejects
+// (which keeps the original). Entity exists only post-approval when
+// a two-party negotiation is needed — pre-approval homeowner reschedules
+// just updateBooking directly since the vendor hasn't accepted yet and
+// there's nothing to negotiate.
+export type RescheduleParty = 'homeowner' | 'vendor'
+
+export interface RescheduleRequest {
+  // Who is proposing this new time. Counter-proposal flips this.
+  requestedBy: RescheduleParty
+  requestedAt: string
+  // Proposed new slot.
+  proposedDate: string
+  proposedTime: string
+  // Snapshot of what the lead had when this request opened, so a
+  // Reject can clearly show what is being kept.
+  originalDate: string
+  originalTime: string
+  status: 'pending' | 'approved' | 'rejected'
+  // Optional context ("family emergency", "truck broke down"). Shown
+  // on the other party's banner.
+  reason?: string
+  // Set when the request resolves — approved/rejected.
+  resolvedAt?: string
+}
+
 export interface CancellationRequest {
   requestedAt: string
   status: 'pending' | 'approved' | 'denied'
@@ -92,6 +120,10 @@ interface ProjectsState {
   // cancelled lifecycle state per kratos msg 1776662371771 — Tranche-2
   // schema will diverge cancelled vs rejected).
   cancellationRequestsByLead: Record<string, CancellationRequest>
+  // Ship #191 — lead-id → RescheduleRequest entity (post-approval
+  // two-party negotiation). Pre-approval homeowner reschedules skip
+  // this and updateBooking directly.
+  rescheduleRequestsByLead: Record<string, RescheduleRequest>
   // Lead-id → vendor-confirm timestamp. Parallel to leadStatusOverrides
   // for the mock-lead path (MOCK_LEADS rows w/o sentProject). Written
   // whenever setLeadStatus(id, 'confirmed') fires; homeowner timeline on
@@ -114,6 +146,36 @@ interface ProjectsState {
   requestCancellation: (leadId: string, reason?: string, explanation?: string) => void
   approveCancellation: (leadId: string) => void
   denyCancellation: (leadId: string) => void
+  // Ship #191 — reschedule negotiation actions. Pre-approval homeowner
+  // reschedule uses updateBooking directly and doesn't go through here.
+  // Post-approval both parties can propose via requestReschedule.
+  requestReschedule: (
+    leadId: string,
+    requestedBy: RescheduleParty,
+    proposedDate: string,
+    proposedTime: string,
+    originalDate: string,
+    originalTime: string,
+    reason?: string,
+  ) => void
+  // Accept the proposed time. Consumer updates the lead's booking
+  // separately (this action only closes the request); keeping the two
+  // concerns separate means the lead update path (sentProjects vs
+  // MOCK_LEADS) stays where its caller already handles it.
+  approveReschedule: (leadId: string) => void
+  // Counter with a new time. Flips requestedBy + updates proposed slot;
+  // keeps original snapshot, resets status to 'pending' on the other
+  // side of the table.
+  counterReschedule: (
+    leadId: string,
+    proposedDate: string,
+    proposedTime: string,
+    reason?: string,
+  ) => void
+  // Reject — status flips to 'rejected' + resolvedAt stamped; lead
+  // stays on its original time. Request entry kept for audit (homeowner
+  // + admin visibility); fresh requestReschedule replaces on future need.
+  rejectReschedule: (leadId: string) => void
   removeProject: (id: string) => void
 }
 
@@ -124,6 +186,7 @@ export const useProjectsStore = create<ProjectsState>()(
       assignedRepByLead: {},
       leadStatusOverrides: {},
       cancellationRequestsByLead: {},
+      rescheduleRequestsByLead: {},
       leadConfirmedAtByLead: {},
       repAssignedAtByLead: {},
 
@@ -265,6 +328,82 @@ export const useProjectsStore = create<ProjectsState>()(
           sentProjects: state.sentProjects.filter((p) => p.id !== id),
         }))
       },
+
+      // Ship #191 — reschedule request (post-approval two-party).
+      requestReschedule: (leadId, requestedBy, proposedDate, proposedTime, originalDate, originalTime, reason) =>
+        set((state) => ({
+          rescheduleRequestsByLead: {
+            ...state.rescheduleRequestsByLead,
+            [leadId]: {
+              requestedBy,
+              requestedAt: new Date().toISOString(),
+              proposedDate,
+              proposedTime,
+              originalDate,
+              originalTime,
+              status: 'pending',
+              ...(reason ? { reason } : {}),
+            },
+          },
+        })),
+
+      approveReschedule: (leadId) =>
+        set((state) => {
+          const prev = state.rescheduleRequestsByLead[leadId]
+          if (!prev) return state
+          return {
+            rescheduleRequestsByLead: {
+              ...state.rescheduleRequestsByLead,
+              [leadId]: {
+                ...prev,
+                status: 'approved',
+                resolvedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
+
+      counterReschedule: (leadId, proposedDate, proposedTime, reason) =>
+        set((state) => {
+          const prev = state.rescheduleRequestsByLead[leadId]
+          if (!prev) return state
+          return {
+            rescheduleRequestsByLead: {
+              ...state.rescheduleRequestsByLead,
+              [leadId]: {
+                // Counter flips the proposer to the other party; clears
+                // resolvedAt; resets status to pending on the other side.
+                // originalDate/originalTime stay as the FIRST-proposed
+                // slot so the thread of negotiation has a consistent
+                // anchor.
+                ...prev,
+                requestedBy: prev.requestedBy === 'homeowner' ? 'vendor' : 'homeowner',
+                proposedDate,
+                proposedTime,
+                requestedAt: new Date().toISOString(),
+                status: 'pending',
+                resolvedAt: undefined,
+                ...(reason !== undefined ? { reason } : {}),
+              },
+            },
+          }
+        }),
+
+      rejectReschedule: (leadId) =>
+        set((state) => {
+          const prev = state.rescheduleRequestsByLead[leadId]
+          if (!prev) return state
+          return {
+            rescheduleRequestsByLead: {
+              ...state.rescheduleRequestsByLead,
+              [leadId]: {
+                ...prev,
+                status: 'rejected',
+                resolvedAt: new Date().toISOString(),
+              },
+            },
+          }
+        }),
     }),
     {
       name: 'buildconnect-projects',
@@ -296,6 +435,7 @@ export const useProjectsStore = create<ProjectsState>()(
           assignedRepByLead: { ...(ps.assignedRepByLead ?? {}), ...(currentState.assignedRepByLead ?? {}) },
           leadStatusOverrides: { ...(ps.leadStatusOverrides ?? {}), ...(currentState.leadStatusOverrides ?? {}) },
           cancellationRequestsByLead: { ...(ps.cancellationRequestsByLead ?? {}), ...(currentState.cancellationRequestsByLead ?? {}) },
+          rescheduleRequestsByLead: { ...(ps.rescheduleRequestsByLead ?? {}), ...(currentState.rescheduleRequestsByLead ?? {}) },
           leadConfirmedAtByLead: { ...(ps.leadConfirmedAtByLead ?? {}), ...(currentState.leadConfirmedAtByLead ?? {}) },
           repAssignedAtByLead: { ...(ps.repAssignedAtByLead ?? {}), ...(currentState.repAssignedAtByLead ?? {}) },
         }

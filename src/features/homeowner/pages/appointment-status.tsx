@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft, UserCheck } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
@@ -41,6 +44,22 @@ export function AppointmentStatusPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadConfirmedAtByLead = useProjectsStore((s) => s.leadConfirmedAtByLead)
   const repAssignedAtByLead = useProjectsStore((s) => s.repAssignedAtByLead)
+  // Ship #191 — reschedule negotiation state. Key lookup stays lean
+  // (raw map-entry selector returns undefined or the entity — stable
+  // either way per the banked zustand-selector-stable-reference rule).
+  const rescheduleRequest = useProjectsStore((s) => s.rescheduleRequestsByLead[id ?? ''])
+  const requestReschedule = useProjectsStore((s) => s.requestReschedule)
+  const approveReschedule = useProjectsStore((s) => s.approveReschedule)
+  const counterReschedule = useProjectsStore((s) => s.counterReschedule)
+  const rejectReschedule = useProjectsStore((s) => s.rejectReschedule)
+  const updateBooking = useProjectsStore((s) => s.updateBooking)
+
+  // Ship #191 — dialog open-state. Separate flags for request (pre-
+  // approval simple update OR post-approval homeowner propose) and
+  // counter (homeowner counter-propose in response to vendor's
+  // proposal). Both use the same picker dialog component.
+  const [reschedulePickerOpen, setReschedulePickerOpen] = useState(false)
+  const [counterPickerOpen, setCounterPickerOpen] = useState(false)
 
   // Two lookup paths:
   // 1. MOCK_LEADS (static fixtures L-0001..L-0005) — read by id match.
@@ -208,6 +227,138 @@ export function AppointmentStatusPage() {
         </Card>
       </motion.div>
 
+      {/* Ship #191 — reschedule banner + action row. Vendor-proposed
+          banner surfaces when there's a pending request with
+          requestedBy='vendor'. Request-Reschedule action is available
+          pre-approval (simple update) and post-approval (request entity).
+          Status=pending + no existing request → simple picker updates
+          booking directly (no negotiation since vendor hasn't accepted).
+          Status=confirmed + no existing request → propose new slot via
+          request entity (two-party negotiation). Rescheduled + rejected
+          + cancelled lifecycle states hide the action entirely. */}
+      {rescheduleRequest && rescheduleRequest.status === 'pending' && rescheduleRequest.requestedBy === 'vendor' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        >
+          <Card className="border-sky-300/60 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-700/40">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-400">
+                  <RefreshCw className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    Your vendor proposed a new time
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {rescheduleRequest.proposedDate} · {rescheduleRequest.proposedTime}
+                    </span>
+                    <span className="text-xs ml-2">
+                      (was {rescheduleRequest.originalDate} · {rescheduleRequest.originalTime})
+                    </span>
+                  </p>
+                  {rescheduleRequest.reason && (
+                    <p className="mt-1.5 text-xs text-muted-foreground italic">
+                      "{rescheduleRequest.reason}"
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    approveReschedule(lead.id)
+                    // Apply the proposed slot to the booking.
+                    updateBooking(matchedSentProject?.id ?? lead.id, {
+                      date: rescheduleRequest.proposedDate,
+                      time: rescheduleRequest.proposedTime,
+                    })
+                    toast.success('New time approved — your vendor is notified.')
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Approve new time
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setCounterPickerOpen(true)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Counter-propose
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5 text-destructive hover:text-destructive"
+                  onClick={() => {
+                    rejectReschedule(lead.id)
+                    toast.success('Keeping the original time.')
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Keep original
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Ship #191 — homeowner's own pending reschedule awaiting vendor */}
+      {rescheduleRequest && rescheduleRequest.status === 'pending' && rescheduleRequest.requestedBy === 'homeowner' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        >
+          <Card className="border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700/40">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    Reschedule request pending
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    You proposed{' '}
+                    <span className="font-medium text-foreground">
+                      {rescheduleRequest.proposedDate} · {rescheduleRequest.proposedTime}
+                    </span>
+                    . Waiting for your vendor to confirm or suggest another time.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Ship #191 — Request Reschedule action. Hidden once negotiation
+          is in flight (show banner above instead) or lead is in a
+          terminal state. */}
+      {!rescheduleRequest && (lead.status === 'pending' || lead.status === 'confirmed') && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setReschedulePickerOpen(true)}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Request reschedule
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Timeline */}
         <motion.div
@@ -360,6 +511,58 @@ export function AppointmentStatusPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Ship #191 — reschedule picker + counter picker mounted
+          unconditionally per dialog-mount-in-every-return-branch
+          discipline. Pre-approval (lead.status='pending', no request
+          entity) simple path: updateBooking directly; no negotiation
+          needed since vendor hasn't accepted. Post-approval
+          (lead.status='confirmed') creates the request entity so the
+          vendor can approve/counter/reject. */}
+      <ReschedulePickerDialog
+        open={reschedulePickerOpen}
+        onOpenChange={setReschedulePickerOpen}
+        mode="request"
+        currentDate={lead.slot.split('T')[0]}
+        currentTime={lead.slot.split('T')[1]?.slice(0, 5) ?? ''}
+        otherPartyLabel={vendor?.company}
+        onSubmit={(proposedDate, proposedTime, reason) => {
+          if (lead.status === 'pending') {
+            // Pre-approval: skip request entity, update booking
+            // directly. Vendor sees the new time on next view.
+            const targetId = matchedSentProject?.id ?? lead.id
+            updateBooking(targetId, { date: proposedDate, time: proposedTime })
+            toast.success('New time sent to your vendor.')
+          } else {
+            // Post-approval: two-party negotiation via request entity.
+            requestReschedule(
+              lead.id,
+              'homeowner',
+              proposedDate,
+              proposedTime,
+              lead.slot.split('T')[0],
+              lead.slot.split('T')[1]?.slice(0, 5) ?? '',
+              reason,
+            )
+            toast.success("Reschedule request sent to your vendor.")
+          }
+          setReschedulePickerOpen(false)
+        }}
+      />
+
+      <ReschedulePickerDialog
+        open={counterPickerOpen}
+        onOpenChange={setCounterPickerOpen}
+        mode="counter"
+        currentDate={rescheduleRequest?.proposedDate}
+        currentTime={rescheduleRequest?.proposedTime}
+        otherPartyLabel={vendor?.company}
+        onSubmit={(proposedDate, proposedTime, reason) => {
+          counterReschedule(lead.id, proposedDate, proposedTime, reason)
+          toast.success('Counter-proposal sent to your vendor.')
+          setCounterPickerOpen(false)
+        }}
+      />
     </div>
   )
 }
