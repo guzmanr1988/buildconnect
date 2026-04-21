@@ -32,6 +32,7 @@ import {
   type VendorPaymentMethod,
 } from '@/stores/vendor-billing-store'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
+import { useVendorPaymentsStore } from '@/stores/vendor-payments-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
@@ -90,6 +91,13 @@ export default function VendorBanking() {
   const bankEnabledMap = useVendorEmployeesStore((s) => s.bankEnabledByVendor)
   const payrollBankEnabled = bankEnabledMap[payrollVendorId] ?? false
   const setPayrollBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
+
+  // Ship #22 — Account Rep payment history. Keyed via the same
+  // useVendorScope vendorId as the #21 toggle (shared key-source
+  // per banked key-source-consistency rule). Raw-map selector +
+  // render-body fallback (post-#190 pattern).
+  const accountRepPaymentsMap = useVendorPaymentsStore((s) => s.paymentsByVendor)
+  const accountRepPayments = accountRepPaymentsMap[payrollVendorId] ?? []
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
@@ -430,6 +438,60 @@ export default function VendorBanking() {
                 </Label>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Ship #22 — Account Rep Payment History. Reads from
+          vendor-payments store keyed by useVendorScope.vendorId (same
+          resolver as the #21 toggle above). Shows recent mock
+          payments with frozen ACH-style descriptor ('BUILDCONNECT ·
+          [VENDOR] · PAYROLL') visible per 'mock closes loop as if
+          real' directive. Empty state prompts the vendor to pay from
+          /vendor/account-reps. */}
+      <motion.div variants={item}>
+        <Card className="rounded-xl shadow-sm hover:shadow-md transition" data-vendor-account-rep-payment-history>
+          <CardHeader>
+            <CardTitle className="font-heading">Account Rep Payment History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {accountRepPayments.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center">
+                <p className="text-sm text-muted-foreground">No account rep payments yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Payments sent from the Account Reps tab will show up here with the bank descriptor on file.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Account Rep</TableHead>
+                      <TableHead className="font-semibold hidden sm:table-cell">Destination</TableHead>
+                      <TableHead className="font-semibold hidden md:table-cell">Descriptor</TableHead>
+                      <TableHead className="font-semibold text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {accountRepPayments.map((p) => (
+                      <TableRow key={p.id} data-account-rep-payment-row data-account-rep-payment-id={p.id}>
+                        <TableCell className="text-sm">{fmtDate(p.paidAt)}</TableCell>
+                        <TableCell className="font-medium">{p.accountRepName}</TableCell>
+                        <TableCell className="font-mono text-xs hidden sm:table-cell">
+                          {p.bankName} ••••{p.bankAccountLast4}
+                        </TableCell>
+                        <TableCell className="font-mono text-[11px] text-muted-foreground hidden md:table-cell">
+                          {p.descriptor}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{fmt(p.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

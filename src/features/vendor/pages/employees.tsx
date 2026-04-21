@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar,
+  Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar, DollarSign,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +15,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import {
@@ -25,9 +26,18 @@ import {
   type EmploymentStatus,
   type EmployeeAccountType,
 } from '@/stores/vendor-employees-store'
+import {
+  useVendorPaymentsStore,
+  buildPayrollDescriptor,
+} from '@/stores/vendor-payments-store'
 import { useVendorScope } from '@/lib/vendor-scope'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
+
+function fmtUSD(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n)
+}
 
 /*
  * Ship #204 (Rodolfo-direct 2026-04-21 pivot #18, correctly-scoped
@@ -118,6 +128,19 @@ export default function VendorEmployeesPage() {
   const [form, setForm] = useState<VendorEmployeeInput>(blankEmployee())
   const [deactivateTarget, setDeactivateTarget] = useState<VendorEmployee | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<VendorEmployee | null>(null)
+
+  // Ship #22 — Pay Account Rep flow. Two-step dialog (amount + review →
+  // confirm) mirroring /vendor/banking Pay Commission shape. On confirm,
+  // writes to vendor-payments store with frozen-at-payment-time descriptor.
+  // Descriptor format: BUILDCONNECT · [VENDOR COMPANY] · PAYROLL —
+  // mirrors real ACH NACHA CCD conventions for bank-statement fidelity
+  // per mock-closes-loop-as-if-real directive.
+  const [payTarget, setPayTarget] = useState<VendorEmployee | null>(null)
+  const [payStep, setPayStep] = useState<1 | 2>(1)
+  const [payAmount, setPayAmount] = useState<string>('')
+  const addPayment = useVendorPaymentsStore((s) => s.addPayment)
+  const vendorCompany = MOCK_VENDORS.find((v) => v.id === vendorId)?.company ?? 'Vendor'
+  const descriptor = buildPayrollDescriptor(vendorCompany)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -444,6 +467,26 @@ export default function VendorEmployeesPage() {
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
                   </Button>
+                  {/* Ship #22 — Pay button. Gate: active status +
+                      payroll-integration-toggle on + bank info on file.
+                      All three required — no Pay on deactivated reps,
+                      bank-toggle-off vendors, or records without bank
+                      fields filled in (prevents confusing empty-state
+                      in the Pay dialog). */}
+                  {selected.status === 'active' && bankEnabled && selected.bankAccountLast4 && (
+                    <Button
+                      onClick={() => {
+                        setPayTarget(selected)
+                        setPayStep(1)
+                        setPayAmount('')
+                      }}
+                      className="gap-1.5"
+                      data-account-rep-pay
+                    >
+                      <DollarSign className="h-3.5 w-3.5" />
+                      Pay
+                    </Button>
+                  )}
                   {selected.status === 'inactive' ? (
                     <Button
                       variant="outline"
@@ -672,6 +715,137 @@ export default function VendorEmployeesPage() {
               className="w-full sm:w-auto"
             >
               Deactivate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ship #22 — Pay Account Rep dialog. Two-step (review → confirm)
+          mirroring /vendor/banking Pay Commission shape for cross-flow
+          design consistency. Mounted unconditionally at page level per
+          dialog-mount-every-return-branch discipline. */}
+      <Dialog open={!!payTarget} onOpenChange={(o) => { if (!o) { setPayTarget(null); setPayStep(1); setPayAmount('') } }}>
+        <DialogContent className="sm:max-w-md" data-account-rep-pay-dialog>
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {payStep === 1 ? 'Pay Account Rep' : 'Confirm Payment'}
+            </DialogTitle>
+            <DialogDescription>
+              {payStep === 1
+                ? 'Enter the amount to pay. Review the details before confirming.'
+                : 'This will send the payment. Confirm to complete.'}
+            </DialogDescription>
+          </DialogHeader>
+          {payTarget && (
+            <div className="space-y-4 py-2">
+              {payStep === 1 ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Amount</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        className="pl-9 h-10 text-sm"
+                        placeholder="0.00"
+                        min={0}
+                        step={0.01}
+                        autoFocus
+                        data-account-rep-pay-amount
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-2 text-xs">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">To</span>
+                      <span className="font-medium text-right">{payTarget.firstName} {payTarget.lastName}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Account</span>
+                      <span className="font-mono font-medium text-right">
+                        {payTarget.bankName ?? 'Bank'} ••••{payTarget.bankAccountLast4}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div>
+                      <span className="text-muted-foreground text-[11px]">Will appear on your bank statement as:</span>
+                      <p
+                        className="font-mono text-[11px] font-semibold text-foreground mt-1 break-all"
+                        data-account-rep-pay-descriptor
+                      >
+                        {descriptor}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-3">
+                  <div className="rounded-2xl bg-primary/10 p-4 inline-block mb-3">
+                    <DollarSign className="h-8 w-8 text-primary" />
+                  </div>
+                  <p className="text-lg font-bold font-heading">{fmtUSD(Number(payAmount) || 0)}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    to {payTarget.firstName} {payTarget.lastName}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2 font-mono">
+                    {payTarget.bankName ?? 'Bank'} ••••{payTarget.bankAccountLast4}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-3 font-mono break-all">
+                    {descriptor}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (payStep === 2) {
+                  setPayStep(1)
+                } else {
+                  setPayTarget(null)
+                  setPayAmount('')
+                }
+              }}
+            >
+              {payStep === 2 ? 'Back' : 'Cancel'}
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (payStep === 1) {
+                  const amt = Number(payAmount)
+                  if (!amt || amt <= 0 || Number.isNaN(amt)) {
+                    toast.error('Enter an amount above $0.')
+                    return
+                  }
+                  setPayStep(2)
+                  return
+                }
+                if (payTarget) {
+                  addPayment(vendorId, {
+                    vendorId,
+                    accountRepId: payTarget.id,
+                    accountRepName: `${payTarget.firstName} ${payTarget.lastName}`,
+                    amount: Number(payAmount),
+                    descriptor,
+                    bankAccountLast4: payTarget.bankAccountLast4 ?? '',
+                    bankName: payTarget.bankName ?? 'Bank',
+                  })
+                  toast.success(`${fmtUSD(Number(payAmount))} sent to ${payTarget.firstName}.`)
+                  setPayTarget(null)
+                  setPayStep(1)
+                  setPayAmount('')
+                }
+              }}
+              data-account-rep-pay-confirm
+            >
+              {payStep === 1 ? 'Continue' : 'Confirm & Pay'}
             </Button>
           </DialogFooter>
         </DialogContent>
