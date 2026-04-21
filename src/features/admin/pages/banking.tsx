@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Landmark,
   DollarSign,
@@ -241,6 +242,85 @@ export default function BankingPage() {
 
   const [editingAP, setEditingAP] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', description: '', frequency: '', day: '', amount: '' })
+
+  // Ship #162: wire the dead submit buttons across all banking tabs.
+  // All actions are mock-stubs (no real banking integration) but now
+  // provide immediate feedback + clear the form so admin can see the
+  // action completed. Tranche-2 wires real Stripe/ACH/payroll.
+  const [newAP, setNewAP] = useState({ name: '', description: '', frequency: '', day: '', amount: '' })
+
+  const handleLinkBank = () => {
+    if (!bankForm.bankName.trim() || !bankForm.routing.trim() || !bankForm.account.trim()) {
+      toast.error('Fill bank name, routing, and account number')
+      return
+    }
+    if (bankForm.account !== bankForm.confirmAccount) {
+      toast.error('Account numbers do not match')
+      return
+    }
+    toast.success(`${bankForm.bankName} linked (mock)`, {
+      description: 'Tranche-2: wire to Plaid/Stripe Financial Connections.',
+    })
+    setBankForm({ bankName: '', routing: '', account: '', confirmAccount: '', accountType: '' })
+  }
+
+  const handleRecordDeposit = () => {
+    if (!depositForm.amount || Number(depositForm.amount) <= 0) {
+      toast.error('Enter a valid deposit amount')
+      return
+    }
+    toast.success(`Deposit recorded: $${Number(depositForm.amount).toLocaleString()} (mock)`, {
+      description: depositForm.reference ? `Ref: ${depositForm.reference}` : 'Tranche-2: post to Supabase deposits table.',
+    })
+    setDepositForm({ amount: '', reference: '', date: '', note: '' })
+  }
+
+  const handleSendPayout = () => {
+    if (!disbursementForm.vendorId || !disbursementForm.amount || Number(disbursementForm.amount) <= 0) {
+      toast.error('Select vendor and enter a valid payout amount')
+      return
+    }
+    const vendor = MOCK_VENDORS.find((v) => v.id === disbursementForm.vendorId)
+    toast.success(`Payout sent: $${Number(disbursementForm.amount).toLocaleString()} → ${vendor?.company ?? 'Vendor'} (mock)`, {
+      description: 'Tranche-2: ACH via Stripe payouts API.',
+    })
+    setDisbursementForm({ vendorId: '', amount: '', memo: '' })
+  }
+
+  const handleSendSalary = () => {
+    if (!salaryForm.employeeName.trim() || !salaryForm.amount || Number(salaryForm.amount) <= 0) {
+      toast.error('Enter employee name and valid amount')
+      return
+    }
+    toast.success(`Salary sent: ${salaryForm.employeeName} $${Number(salaryForm.amount).toLocaleString()} (mock)`, {
+      description: 'Tranche-2: wire to payroll provider.',
+    })
+    setSalaryForm({ employeeName: '', role: '', amount: '', period: '' })
+  }
+
+  const handleAddAutoPayment = () => {
+    if (!newAP.name.trim() || !newAP.frequency || !newAP.day) {
+      toast.error('Fill name, frequency, and day of month')
+      return
+    }
+    const id = `ap-${Date.now()}`
+    setAutoPayments((prev) => [
+      ...prev,
+      {
+        id,
+        name: newAP.name,
+        description: newAP.description,
+        frequency: newAP.frequency,
+        day: Number(newAP.day),
+        amount: newAP.amount ? Number(newAP.amount) : undefined,
+        enabled: true,
+        type: 'vendor' as const,
+        totalPaid: 0,
+      },
+    ])
+    toast.success(`Auto-payment "${newAP.name}" added`)
+    setNewAP({ name: '', description: '', frequency: '', day: '', amount: '' })
+  }
 
   const toggleAutoPay = (id: string) => {
     setAutoPayments((prev) =>
@@ -526,7 +606,7 @@ export default function BankingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full gap-2">
+                <Button className="w-full gap-2" onClick={handleLinkBank}>
                   <Link2 className="h-4 w-4" />
                   Link Bank Account
                 </Button>
@@ -581,7 +661,7 @@ export default function BankingPage() {
                     onChange={(e) => setDepositForm((p) => ({ ...p, note: e.target.value }))}
                   />
                 </div>
-                <Button className="w-full gap-2">
+                <Button className="w-full gap-2" onClick={handleRecordDeposit}>
                   <ArrowDownToLine className="h-4 w-4" />
                   Record Deposit
                 </Button>
@@ -683,7 +763,7 @@ export default function BankingPage() {
                     }
                   />
                 </div>
-                <Button className="w-full gap-2">
+                <Button className="w-full gap-2" onClick={handleSendPayout}>
                   <Send className="h-4 w-4" />
                   Send Payout
                 </Button>
@@ -794,7 +874,7 @@ export default function BankingPage() {
                     />
                   </div>
                 </div>
-                <Button className="w-full gap-2">
+                <Button className="w-full gap-2" onClick={handleSendSalary}>
                   <Send className="h-4 w-4" />
                   Send Salary Payout
                 </Button>
@@ -1055,45 +1135,56 @@ export default function BankingPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Payment Name</Label>
-                  <Input placeholder="e.g. Monthly Vendor Payout" />
+                  <Input
+                    placeholder="e.g. Monthly Vendor Payout"
+                    value={newAP.name}
+                    onChange={(e) => setNewAP((p) => ({ ...p, name: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="vendor">Vendor Payout</SelectItem>
-                      <SelectItem value="salary">Salary Payout</SelectItem>
-                      <SelectItem value="collection">Fee Collection</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Description (optional)</Label>
+                  <Input
+                    placeholder="Short description"
+                    value={newAP.description}
+                    onChange={(e) => setNewAP((p) => ({ ...p, description: e.target.value }))}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Frequency</Label>
-                    <Select>
+                    <Select value={newAP.frequency} onValueChange={(v) => setNewAP((p) => ({ ...p, frequency: v }))}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Frequency" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="biweekly">Bi-Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="Weekly">Weekly</SelectItem>
+                        <SelectItem value="Bi-Weekly">Bi-Weekly</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Day of Month</Label>
-                    <Input type="number" min={1} max={28} placeholder="1-28" />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={28}
+                      placeholder="1-28"
+                      value={newAP.day}
+                      onChange={(e) => setNewAP((p) => ({ ...p, day: e.target.value }))}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Amount (optional — leave blank for variable)</Label>
-                  <Input type="number" placeholder="0.00" />
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={newAP.amount}
+                    onChange={(e) => setNewAP((p) => ({ ...p, amount: e.target.value }))}
+                  />
                 </div>
-                <Button className="w-full gap-2">
+                <Button className="w-full gap-2" onClick={handleAddAutoPayment}>
                   <Plus className="h-4 w-4" />
                   Add Auto Payment
                 </Button>
