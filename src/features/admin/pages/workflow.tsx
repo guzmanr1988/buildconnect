@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,24 @@ export default function WorkflowPage() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+
+  // Per-vendor commission % override (ship #130 store) — drives the per-lead
+  // commission split render in sold-card rows. Live-ripple: admin edits % on
+  // /admin/vendors → getVendorCommission returns the new value → card split
+  // recalcs on next render. Phase 3 admin commercial-control per kratos msg
+  // 1776742245468.
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
+  useRefetchOnFocus(rehydrateModeration)
+  const resolveCommissionPct = useCallback(
+    (companyName?: string): number => {
+      if (!companyName) return 15
+      const v = MOCK_VENDORS.find((x) => x.company === companyName)
+      if (!v) return 15
+      return vendorCommissionOverrides[v.id] ?? v.commission_pct
+    },
+    [vendorCommissionOverrides],
+  )
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
@@ -82,6 +101,10 @@ export default function WorkflowPage() {
     const cancelApproved = cReq?.status === 'approved'
     const mappedStatus = cancelApproved ? 'declined' : (mockStatusMap[rawStatus] ?? 'pending')
     const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
+    // Bridge to MOCK_CLOSED_SALES so fixture-completed leads carry saleAmount
+    // + soldAt on the admin pipeline view. Without this bridge, the per-lead
+    // commission split would only render for sentProjects-derived entries.
+    const closedSale = MOCK_CLOSED_SALES.find((c) => c.lead_id === l.id)
     return {
       id: l.id,
       name: l.homeowner_name,
@@ -91,7 +114,8 @@ export default function WorkflowPage() {
       vendor: vendor?.company ?? 'Unknown vendor',
       rep: assignedRepByLead[l.id]?.name,
       status: mappedStatus,
-      soldAt: undefined,
+      soldAt: closedSale?.closed_at,
+      saleAmount: closedSale?.sale_amount,
       pendingCancel: cReq?.status === 'pending',
     }
   }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
@@ -286,22 +310,33 @@ export default function WorkflowPage() {
                           Cancel request pending
                         </Badge>
                       )}
-                      {lead.saleAmount && lead.saleAmount > 0 && (
-                        <div className="rounded bg-background/80 p-2 space-y-1 text-[10px] border">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Total</span>
-                            <span className="font-bold">${lead.saleAmount.toLocaleString()}</span>
+                      {lead.saleAmount && lead.saleAmount > 0 && (() => {
+                        // Mirror vendor-banking display shape (kratos msg
+                        // 1776742302054 P0): Sale Total / Vendor's Share <pct>%
+                        // (emerald) / BuildConnect Commission <pct>% (amber).
+                        // Vendor sees "Your <pct>%" in banking; admin sees
+                        // "Vendor's <pct>%" — same numbers, inverse register.
+                        const commissionPct = resolveCommissionPct(lead.vendor)
+                        const vendorPct = 100 - commissionPct
+                        const bcAmount = Math.round(lead.saleAmount * (commissionPct / 100))
+                        const vendorAmount = lead.saleAmount - bcAmount
+                        return (
+                          <div className="rounded bg-background/80 p-2 space-y-1 text-[10px] border">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Sale Total</span>
+                              <span className="font-bold">${lead.saleAmount.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                              <span className="font-medium">Vendor's Share {vendorPct}%</span>
+                              <span className="font-bold">${vendorAmount.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                              <span className="font-medium">BuildConnect Commission {commissionPct}%</span>
+                              <span className="font-bold">${bcAmount.toLocaleString()}</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-                            <span>Vendor (85%)</span>
-                            <span className="font-bold">${Math.round(lead.saleAmount * 0.85).toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between text-amber-700 dark:text-amber-400">
-                            <span>BuildConnect (15%)</span>
-                            <span className="font-bold">${Math.round(lead.saleAmount * 0.15).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   ))
                 )}
@@ -418,26 +453,33 @@ export default function WorkflowPage() {
                       </div>
                     )}
 
-                    {/* Commission breakdown for sold */}
-                    {selectedItem.saleAmount && selectedItem.saleAmount > 0 && (
-                      <div className="rounded-xl border p-4 space-y-2">
-                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission</h4>
-                        <div className="space-y-1.5 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Sale Total</span>
-                            <span className="font-bold">${selectedItem.saleAmount.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-                            <span>Vendor (85%)</span>
-                            <span className="font-bold">${Math.round(selectedItem.saleAmount * 0.85).toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between text-amber-700 dark:text-amber-400">
-                            <span>BuildConnect (15%)</span>
-                            <span className="font-bold">${Math.round(selectedItem.saleAmount * 0.15).toLocaleString()}</span>
+                    {/* Commission breakdown — mirrors vendor-banking shape +
+                        per-vendor commission_pct (ship #133). */}
+                    {selectedItem.saleAmount && selectedItem.saleAmount > 0 && (() => {
+                      const commissionPct = resolveCommissionPct(selectedItem.vendor)
+                      const vendorPct = 100 - commissionPct
+                      const bcAmount = Math.round(selectedItem.saleAmount * (commissionPct / 100))
+                      const vendorAmount = selectedItem.saleAmount - bcAmount
+                      return (
+                        <div className="rounded-xl border p-4 space-y-2">
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission</h4>
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Sale Total</span>
+                              <span className="font-bold">${selectedItem.saleAmount.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                              <span className="font-medium">Vendor's Share {vendorPct}%</span>
+                              <span className="font-bold">${vendorAmount.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                              <span className="font-medium">BuildConnect Commission {commissionPct}%</span>
+                              <span className="font-bold">${bcAmount.toLocaleString()}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )
+                    })()}
 
                     {/* Rejection reason */}
                     {selectedItem.project_data.rejectionReason && (
