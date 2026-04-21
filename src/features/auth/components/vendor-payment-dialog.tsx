@@ -220,6 +220,7 @@ export function VendorPaymentDialog({
                   <Label htmlFor="vpd-holder" className="text-xs font-semibold">Name on card</Label>
                   <Input
                     id="vpd-holder"
+                    data-payment-field="holder"
                     autoComplete="cc-name"
                     value={holder}
                     onChange={(e) => setHolder(e.target.value)}
@@ -232,6 +233,7 @@ export function VendorPaymentDialog({
                   <div className="relative">
                     <Input
                       id="vpd-card"
+                      data-payment-field="card-number"
                       autoComplete="cc-number"
                       inputMode="numeric"
                       value={cardNumber}
@@ -243,10 +245,14 @@ export function VendorPaymentDialog({
                         number input. Updates as user types via the
                         detectCardBrand IIN-prefix match. Hidden when no
                         brand match yet, so empty/unknown prefixes don't
-                        render a bogus label. */}
+                        render a bogus label.
+                        Ship #186 — data-payment-brand carries the
+                        detected brand text so probes can verify
+                        detection without Base-UI auto-ID discovery. */}
                     {detectedBrand && (
                       <motion.span
                         key={detectedBrand}
+                        data-payment-brand={detectedBrand}
                         initial={{ opacity: 0, x: 4 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
@@ -262,6 +268,7 @@ export function VendorPaymentDialog({
                     <Label htmlFor="vpd-expiry" className="text-xs font-semibold">Expires</Label>
                     <Input
                       id="vpd-expiry"
+                      data-payment-field="expiry"
                       autoComplete="cc-exp"
                       inputMode="numeric"
                       value={expiry}
@@ -274,6 +281,7 @@ export function VendorPaymentDialog({
                     <Label htmlFor="vpd-cvv" className="text-xs font-semibold">CVV</Label>
                     <Input
                       id="vpd-cvv"
+                      data-payment-field="cvv"
                       autoComplete="cc-csc"
                       inputMode="numeric"
                       value={cvv}
@@ -290,6 +298,7 @@ export function VendorPaymentDialog({
                   <Label htmlFor="vpd-holder-ck" className="text-xs font-semibold">Account holder name</Label>
                   <Input
                     id="vpd-holder-ck"
+                    data-payment-field="holder"
                     value={holder}
                     onChange={(e) => setHolder(e.target.value)}
                     placeholder="First Last"
@@ -300,6 +309,7 @@ export function VendorPaymentDialog({
                   <Label htmlFor="vpd-bank" className="text-xs font-semibold">Bank name</Label>
                   <Input
                     id="vpd-bank"
+                    data-payment-field="bank-name"
                     value={bankName}
                     onChange={(e) => setBankName(e.target.value)}
                     placeholder="e.g. Chase, Bank of America"
@@ -311,6 +321,7 @@ export function VendorPaymentDialog({
                     <Label htmlFor="vpd-routing" className="text-xs font-semibold">Routing number</Label>
                     <Input
                       id="vpd-routing"
+                      data-payment-field="routing"
                       inputMode="numeric"
                       value={routing}
                       onChange={(e) => setRouting(e.target.value)}
@@ -322,6 +333,7 @@ export function VendorPaymentDialog({
                     <Label htmlFor="vpd-account" className="text-xs font-semibold">Account number</Label>
                     <Input
                       id="vpd-account"
+                      data-payment-field="account"
                       inputMode="numeric"
                       value={account}
                       onChange={(e) => setAccount(e.target.value)}
