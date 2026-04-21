@@ -710,22 +710,29 @@ export default function ProductsAdminPage() {
                               </div>
                             </div>
 
-                            {/* Options within group — collapsible per Rod directive (nested accordion all-the-way-down). */}
+                            {/* Options within group — collapsible per Rod directive (nested accordion all-the-way-down).
+                                Ship #174 (Rodolfo direct 2026-04-21): `space-y-1` on this container + the
+                                per-option wrapper was 4px, which on narrow admin widths let flex-wrapped action
+                                rows visually crowd/overlap the next option. Bumped to space-y-2 + removed the
+                                flex-wrap on the row so the action cluster stays on one line; label truncates
+                                instead. Air-con Add-Ons section specifically triggered the crowding because
+                                every option has a Sub-Menu + Edit + Delete trio and no description, so the
+                                row compressed vertically. */}
                             {groupOpen && (
-                            <div id={`group-panel-${groupKey}`} className="pl-6 space-y-1">
+                            <div id={`group-panel-${groupKey}`} className="pl-6 space-y-2">
                               {group.options.map((opt) => (
-                                <div key={opt.id} className="space-y-1">
-                                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt">
+                                <div key={opt.id} className="space-y-2">
+                                  <div className="flex items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt">
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
-                                      <span>{opt.label}</span>
+                                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                                      <span className="truncate">{opt.label}</span>
                                       {opt.description && (
-                                        <span className="text-sm text-muted-foreground hidden sm:inline">
+                                        <span className="text-sm text-muted-foreground hidden sm:inline truncate">
                                           -- {opt.description}
                                         </span>
                                       )}
                                       {opt.subGroups && opt.subGroups.length > 0 && (
-                                        <Badge variant="outline" className="text-xs">
+                                        <Badge variant="outline" className="text-xs shrink-0">
                                           {opt.subGroups.length} sub-menu{opt.subGroups.length !== 1 && 's'}
                                         </Badge>
                                       )}
@@ -806,16 +813,21 @@ export default function ProductsAdminPage() {
                                             </div>
                                           </div>
 
-                                          {/* Sub-options within sub-group */}
-                                          {openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && <div className="pl-5 space-y-0.5">
+                                          {/* Sub-options within sub-group.
+                                              Ship #174: `space-y-0.5` (2px) was
+                                              preventively bumped to space-y-1 (4px)
+                                              as part of the same crowding fix, for
+                                              consistency when a service like air-con
+                                              adds sub-groups under its addons. */}
+                                          {openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && <div className="pl-5 space-y-1">
                                             {subGroup.options.map((subOpt) => (
                                               <div
                                                 key={subOpt.id}
-                                                className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt"
+                                                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt"
                                               >
-                                                <div className="flex items-center gap-2">
-                                                  <GripVertical className="h-3 w-3 text-muted-foreground/40" />
-                                                  <span>{subOpt.label}</span>
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                  <GripVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+                                                  <span className="truncate">{subOpt.label}</span>
                                                   {subOpt.description && (
                                                     <span className="text-xs text-muted-foreground hidden sm:inline">
                                                       -- {subOpt.description}
