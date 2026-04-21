@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -519,7 +519,14 @@ export function ServiceDetailPage() {
                 )}
                 {group.id === 'products' && serviceId === 'windows_doors' && (
                   <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed">
-                    Need help measuring your windows and doors? Visit Video Tutorials on the home dashboard for step-by-step guidance.
+                    Need help measuring your windows and doors?{' '}
+                    <Link
+                      to="/home/tutorials?service=windows_doors"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Watch the step-by-step tutorial
+                    </Link>
+                    .
                   </p>
                 )}
                 {/* Payment method note */}
