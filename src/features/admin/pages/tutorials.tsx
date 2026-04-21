@@ -208,47 +208,55 @@ export default function AdminTutorialsPage() {
                 data-admin-tutorial-id={t.id}
               >
                 <Card className={cn('rounded-xl transition', !isVisible && 'opacity-60')}>
-                  <CardContent className="p-4 flex items-start gap-4">
-                    <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5">
-                      <PlayCircle className="h-6 w-6 text-primary" strokeWidth={1.8} />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-foreground truncate">{t.title}</p>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {TUTORIAL_SERVICE_LABELS[t.serviceId] ?? t.serviceId}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] gap-1',
-                            isVisible
-                              ? 'border-emerald-400/60 text-emerald-700 dark:text-emerald-400'
-                              : 'border-amber-400/60 text-amber-700 dark:text-amber-400',
-                          )}
-                        >
-                          {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                          {isVisible ? 'Visible' : 'Hidden'}
-                        </Badge>
+                  {/* Ship #208 — responsive row layout. Mobile: thumb +
+                      text stack horizontally as a unit, actions wrap to
+                      a full-width row below. sm+: actions column on
+                      right. Prior single-row flex overflowed 375-414px
+                      viewports because thumb+content+Switch+Edit+Delete
+                      summed beyond available width with no wrap. */}
+                  <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="flex h-14 w-20 sm:h-16 sm:w-24 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5">
+                        <PlayCircle className="h-6 w-6 text-primary" strokeWidth={1.8} />
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {t.duration}
-                        </span>
-                        {t.topics.slice(0, 3).map((topic) => (
-                          <span key={topic} className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" />
-                            {topic}
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-foreground">{t.title}</p>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {TUTORIAL_SERVICE_LABELS[t.serviceId] ?? t.serviceId}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px] gap-1',
+                              isVisible
+                                ? 'border-emerald-400/60 text-emerald-700 dark:text-emerald-400'
+                                : 'border-amber-400/60 text-amber-700 dark:text-amber-400',
+                            )}
+                          >
+                            {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                            {isVisible ? 'Visible' : 'Hidden'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {t.duration}
                           </span>
-                        ))}
-                        {t.topics.length > 3 && (
-                          <span className="text-[10px]">+{t.topics.length - 3} more</span>
-                        )}
+                          {t.topics.slice(0, 3).map((topic) => (
+                            <span key={topic} className="flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              {topic}
+                            </span>
+                          ))}
+                          {t.topics.length > 3 && (
+                            <span className="text-[10px]">+{t.topics.length - 3} more</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                    <div className="flex flex-row flex-wrap items-center gap-2 shrink-0 justify-end sm:flex-col sm:items-end">
                       <div className="flex items-center gap-2 px-2">
                         <Switch
                           checked={isVisible}
