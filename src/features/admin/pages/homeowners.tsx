@@ -517,8 +517,8 @@ export default function HomeownersPage() {
                                           if (proj.id.startsWith('cp-')) {
                                             const matched = MOCK_LEADS.find((l) => {
                                               if (l.homeowner_id !== proj.homeowner_id) return false
-                                              const leadPrefix = l.project.split(/[—-]/)[0].trim().toLowerCase()
-                                              const projPrefix = proj.project_name.split(/[—-]/)[0].trim().toLowerCase()
+                                              const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
+                                              const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()
                                               return leadPrefix === projPrefix || projPrefix.includes(leadPrefix) || leadPrefix.includes(projPrefix)
                                             })
                                             if (matched) resolvedId = matched.id
@@ -543,7 +543,31 @@ export default function HomeownersPage() {
                                     <TableRow
                                       key={proj.id}
                                       className="cursor-pointer hover:bg-muted/40"
-                                      onClick={() => setSelectedProjectId(proj.id)}
+                                      onClick={() => {
+                                        // Ship #152 P0 — flat-mode branch
+                                        // got missed by #151 replace_all
+                                        // (multi-line onClick pattern drift
+                                        // broke the single-line flat-mode
+                                        // match). Second instance of the
+                                        // replace_all-blindspot-on-multi-
+                                        // branch-render pattern I banked at
+                                        // #141 — applied replace_all but the
+                                        // CODE-SHAPE divergence between the
+                                        // two branches post-edit broke the
+                                        // symmetry. Post-edit grep is the
+                                        // right cheap-insurance discipline.
+                                        let resolvedId = proj.id
+                                        if (proj.id.startsWith('cp-')) {
+                                          const matched = MOCK_LEADS.find((l) => {
+                                            if (l.homeowner_id !== proj.homeowner_id) return false
+                                            const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
+                                            const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()
+                                            return leadPrefix === projPrefix || projPrefix.includes(leadPrefix) || leadPrefix.includes(projPrefix)
+                                          })
+                                          if (matched) resolvedId = matched.id
+                                        }
+                                        setSelectedProjectId(resolvedId)
+                                      }}
                                     >
                                       <TableCell className="text-xs font-medium max-w-[140px]">
                                         <div className="truncate">{proj.project_name}</div>
