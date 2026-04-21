@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GitBranch, Inbox, CheckCircle2, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck } from 'lucide-react'
+import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -100,16 +100,38 @@ export default function WorkflowPage() {
   const q = searchQuery.toLowerCase()
   const filtered = q ? allItems.filter(i => i.name.toLowerCase().includes(q) || i.project.toLowerCase().includes(q)) : allItems
 
+  // 5-column lifecycle aligned to vendor-dashboard ship #92 + /admin/workflow
+  // parity per kratos msg 1776741764224. Sold-age split via SOLD_TO_COMPLETED_DAYS
+  // (=90d, same threshold as vendor dashboard) separates currently-active
+  // ("Project Sold") from truly-completed ("Projects Completed").
+  const SOLD_TO_COMPLETED_DAYS = 90
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const now = Date.now()
+  const soldAgeDays = (soldAt?: string): number | null => {
+    if (!soldAt) return null
+    return (now - new Date(soldAt).getTime()) / DAY_MS
+  }
+
   const newLeads = filtered.filter(i => i.status === 'pending')
-  const confirmed = filtered.filter(i => i.status === 'approved')
-  const sold = filtered.filter(i => i.status === 'sold')
-  const archived = filtered.filter(i => i.status === 'declined')
+  const scheduledLeads = filtered.filter(i => i.status === 'approved')
+  const projectSold = filtered.filter(i => {
+    if (i.status !== 'sold') return false
+    const age = soldAgeDays(i.soldAt)
+    return age === null || age < SOLD_TO_COMPLETED_DAYS
+  })
+  const projectsCompleted = filtered.filter(i => {
+    if (i.status !== 'sold') return false
+    const age = soldAgeDays(i.soldAt)
+    return age !== null && age >= SOLD_TO_COMPLETED_DAYS
+  })
+  const cancelledProjects = filtered.filter(i => i.status === 'declined')
 
   const stages = [
-    { title: 'New Leads', icon: Inbox, color: 'bg-amber-500', borderColor: 'border-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/20', items: newLeads },
-    { title: 'Scheduled', icon: CheckCircle2, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: confirmed },
-    { title: 'Sold', icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: sold },
-    { title: 'Archived', icon: Archive, color: 'bg-slate-500', borderColor: 'border-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-950/20', items: archived },
+    { title: 'New Leads', subtitle: undefined, subtitleColor: undefined, icon: Inbox, color: 'bg-amber-500', borderColor: 'border-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/20', items: newLeads },
+    { title: 'Scheduled Leads', subtitle: undefined, subtitleColor: undefined, icon: CalendarCheck, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: scheduledLeads },
+    { title: 'Project Sold', subtitle: 'active', subtitleColor: 'text-emerald-600', icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: projectSold },
+    { title: 'Projects Completed', subtitle: undefined, subtitleColor: undefined, icon: Archive, color: 'bg-slate-500', borderColor: 'border-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-950/20', items: projectsCompleted },
+    { title: 'Cancelled Projects', subtitle: undefined, subtitleColor: undefined, icon: X, color: 'bg-destructive', borderColor: 'border-destructive/30', bgColor: 'bg-destructive/5 dark:bg-destructive/10', items: cancelledProjects },
   ]
 
   const container = {
@@ -144,20 +166,25 @@ export default function WorkflowPage() {
         </div>
       </motion.div>
 
-      {/* Pipeline Summary */}
+      {/* Pipeline Summary — 5 columns matching vendor dashboard lifecycle */}
       <motion.div variants={item}>
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {stages.map((stage, idx) => (
-            <div key={stage.title} className="flex items-center gap-2 sm:gap-4 flex-1">
+            <div key={stage.title} className="flex items-center gap-2 sm:gap-3 flex-1">
               <div className={cn('flex-1 rounded-xl border p-3 sm:p-4 text-center', stage.bgColor, stage.borderColor)}>
                 <div className={cn('inline-flex items-center justify-center rounded-lg p-2 mb-2', stage.color)}>
                   <stage.icon className="h-4 w-4 text-white" />
                 </div>
                 <p className="text-2xl font-bold font-heading">{stage.items.length}</p>
                 <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{stage.title}</p>
+                {stage.subtitle && (
+                  <p className={cn('text-[9px] font-semibold uppercase tracking-wider mt-0.5', stage.subtitleColor ?? 'text-muted-foreground')}>
+                    {stage.subtitle}
+                  </p>
+                )}
               </div>
               {idx < stages.length - 1 && (
-                <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0 hidden sm:block" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0 hidden lg:block" />
               )}
             </div>
           ))}
@@ -182,7 +209,14 @@ export default function WorkflowPage() {
                       <div className={cn('rounded-lg p-1.5', stage.color)}>
                         <stage.icon className="h-3.5 w-3.5 text-white" />
                       </div>
-                      <CardTitle className="text-sm font-heading">{stage.title}</CardTitle>
+                      <div className="flex flex-col">
+                        <CardTitle className="text-sm font-heading">{stage.title}</CardTitle>
+                        {stage.subtitle && (
+                          <span className={cn('text-[10px] font-semibold uppercase tracking-wider leading-none mt-0.5', stage.subtitleColor ?? 'text-muted-foreground')}>
+                            {stage.subtitle}
+                          </span>
+                        )}
+                      </div>
                       <Badge variant="secondary" className="text-xs">{stage.items.length}</Badge>
                     </div>
                     {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
