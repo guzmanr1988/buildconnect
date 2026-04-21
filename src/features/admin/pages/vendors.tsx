@@ -95,19 +95,57 @@ export default function VendorsPage() {
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
   const [resolveNote, setResolveNote] = useState('')
+  // Ship #172 (task_1776719975617_951) — data-edit form state. Populated
+  // from the effective vendor profile on openResolve so admin can tweak
+  // the fields in place. Only non-empty trimmed fields are committed on
+  // approve (see admin-moderation-store.applyVendorProfileEdit).
+  const [editName, setEditName] = useState('')
+  const [editCompany, setEditCompany] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [editEmail, setEditEmail] = useState('')
 
   const openResolve = (id: string, action: 'approve' | 'deny') => {
     setResolveRequestId(id)
     setResolveAction(action)
     setResolveNote('')
+    // Pre-fill the data-edit form with the vendor's current effective
+    // profile (raw MOCK_VENDOR + prior admin overrides) so the admin
+    // sees the current values and can edit in place. Deny action does
+    // not use the form so the pre-fill is harmless when hidden.
+    const req = changeRequests.find((r) => r.id === id)
+    if (req) {
+      const rawVendor = MOCK_VENDORS.find((v) => v.id === req.vendorId)
+      const override = vendorProfileOverrides[req.vendorId] ?? {}
+      setEditName(override.name ?? rawVendor?.name ?? '')
+      setEditCompany(override.company ?? rawVendor?.company ?? '')
+      setEditPhone(override.phone ?? rawVendor?.phone ?? '')
+      setEditAddress(override.address ?? rawVendor?.address ?? '')
+      setEditEmail(override.email ?? rawVendor?.email ?? '')
+    }
     setResolveDialogOpen(true)
   }
   const submitResolve = () => {
     if (!resolveRequestId) return
     const note = resolveNote.trim() || undefined
     if (resolveAction === 'approve') {
+      // Ship #172 — atomic commit: apply field edits before marking
+      // the request resolved so any downstream consumer that reads the
+      // request + vendor-profile together sees the matching state on
+      // the very next render. Store's applyVendorProfileEdit filters
+      // empty / whitespace-only fields so unchanged inputs are no-ops.
+      const req = changeRequests.find((r) => r.id === resolveRequestId)
+      if (req) {
+        applyVendorProfileEdit(req.vendorId, {
+          name: editName,
+          company: editCompany,
+          phone: editPhone,
+          address: editAddress,
+          email: editEmail,
+        })
+      }
       approveRequest(resolveRequestId, note)
-      toast.success('Request approved')
+      toast.success('Request approved + profile updated')
     } else {
       denyRequest(resolveRequestId, note)
       toast.success('Request denied')
@@ -121,6 +159,8 @@ export default function VendorsPage() {
   // instead of being trapped in local useState.
   const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
   const setVendorCommission = useAdminModerationStore((s) => s.setVendorCommission)
+  const vendorProfileOverrides = useAdminModerationStore((s) => s.vendorProfileOverrides)
+  const applyVendorProfileEdit = useAdminModerationStore((s) => s.applyVendorProfileEdit)
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
   const [verifiedVendors, setVerifiedVendors] = useState<Set<string>>(new Set())
   const [suspendTarget, setSuspendTarget] = useState<Vendor | null>(null)
@@ -178,7 +218,13 @@ export default function VendorsPage() {
   const isVerified = (vendor: Vendor) => vendor.verified || verifiedVendors.has(vendor.id)
 
   const vendorData = useMemo(() => {
-    return MOCK_VENDORS.map((vendor) => {
+    return MOCK_VENDORS.map((rawVendor) => {
+      // Ship #172 — merge per-vendor profile overrides so the admin card
+      // renders the effective post-approval state after a data-edit
+      // commit. Raw MOCK_VENDOR fields remain the fallback; override
+      // values win when present.
+      const override = vendorProfileOverrides[rawVendor.id] ?? {}
+      const vendor = { ...rawVendor, ...override }
       const rawLeads = MOCK_LEADS.filter((l) => l.vendor_id === vendor.id)
       // Apply vendor-side action overrides + admin-approved cancellations so
       // the per-vendor status counts reflect the full lifecycle.
@@ -205,7 +251,7 @@ export default function VendorsPage() {
 
       return { vendor, leads, closedSales, totalRevenue, statusCounts }
     })
-  }, [leadStatusOverrides, cancellationRequestsByLead])
+  }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides])
 
   return (
     <div className="space-y-6">
@@ -279,17 +325,85 @@ export default function VendorsPage() {
       )}
 
       <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">
               {resolveAction === 'approve' ? 'Approve Change Request' : 'Deny Change Request'}
             </DialogTitle>
             <DialogDescription>
               {resolveAction === 'approve'
-                ? 'Mark this request as approved. Actual profile edits happen side-channel for now.'
+                ? 'Edit the vendor profile fields below and commit. Changes land atomically with the approval.'
                 : 'Mark this request as denied. Vendor can re-submit if needed.'}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Show the vendor's original free-text request so the admin
+              sees the context while editing. Ship #172 — alongside the
+              form instead of separately, to tighten the read-edit loop. */}
+          {resolveRequestId && (() => {
+            const req = changeRequests.find((r) => r.id === resolveRequestId)
+            if (!req) return null
+            return (
+              <div className="rounded-lg border bg-muted/40 p-3 text-xs">
+                <p className="font-semibold text-foreground mb-1">
+                  {req.vendorCompany} · {req.vendorName}
+                </p>
+                <p className="text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                  {req.requestedChange}
+                </p>
+              </div>
+            )
+          })()}
+
+          {/* Ship #172 — data-edit form. Shown only on approve (deny
+              doesn't edit anything). Empty-string submits are filtered
+              by the store so the admin can leave untouched fields alone. */}
+          {resolveAction === 'approve' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Name</label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Company</label>
+                <Input
+                  value={editCompany}
+                  onChange={(e) => setEditCompany(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Phone</label>
+                <Input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Email</label>
+                <Input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-semibold">Address</label>
+                <Input
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2 py-2">
             <label className="text-xs font-semibold">Note to vendor (optional)</label>
             <Textarea
@@ -309,7 +423,7 @@ export default function VendorsPage() {
               className="w-full sm:w-auto"
               onClick={submitResolve}
             >
-              {resolveAction === 'approve' ? 'Approve' : 'Deny'}
+              {resolveAction === 'approve' ? 'Approve + Commit' : 'Deny'}
             </Button>
           </DialogFooter>
         </DialogContent>
