@@ -23,7 +23,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
 } from 'recharts'
@@ -307,26 +306,8 @@ export default function OverviewPage() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
-                    <RechartsTooltip
-                      formatter={(value: number, name: string) => {
-                        const labels: Record<string, string> = {
-                          commissionsPaid: 'Commissions Paid',
-                          pendingCommissions: 'Pending Commissions',
-                          memberships: 'Memberships',
-                          payouts: 'Payouts',
-                        }
-                        return [`$${value.toLocaleString()}`, labels[name] || name]
-                      }}
-                      contentStyle={{
-                        borderRadius: '0.75rem',
-                        border: '1px solid hsl(var(--border))',
-                        backgroundColor: 'hsl(var(--popover))',
-                        color: 'hsl(var(--popover-foreground))',
-                        fontSize: '12px',
-                        padding: '8px 12px',
-                      }}
-                      cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
-                    />
+                    {/* Tooltip removed per kratos msg 1776751586723 —
+                        pills below chart already convey the breakdown. */}
                     <Bar dataKey="commissionsPaid" stackId="tx" fill="url(#overviewCommPaidGrad)" radius={[0, 0, 0, 0]} />
                     <Bar dataKey="pendingCommissions" stackId="tx" fill="url(#overviewCommPendGrad)" radius={[0, 0, 0, 0]} />
                     <Bar dataKey="memberships" stackId="tx" fill="url(#overviewMemGrad)" radius={[0, 0, 0, 0]} />
@@ -334,27 +315,27 @@ export default function OverviewPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              {/* Category totals — compact pill row (ship #160 per kratos
-                  msg 1776751323161; 2-col grid was taking too much space). */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t text-[10px]">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">Paid</span>
+              {/* Category totals — compact pills, readable text (ship #161:
+                  font bumped 10px → 12px per Rodolfo; pill shape preserved). */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t text-[12px]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Paid</span>
                   <span className="text-muted-foreground">${transactionCategoryTotals.commissionsPaid.toLocaleString()} · {transactionCategoryTotals.pctCommissionsPaid}%</span>
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  <span className="text-amber-700 dark:text-amber-400 font-medium">Pending</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="text-amber-700 dark:text-amber-400 font-semibold">Pending</span>
                   <span className="text-muted-foreground">${transactionCategoryTotals.pendingCommissions.toLocaleString()} · {transactionCategoryTotals.pctPendingCommissions}%</span>
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                  <span className="text-blue-700 dark:text-blue-400 font-medium">Memberships</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1">
+                  <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  <span className="text-blue-700 dark:text-blue-400 font-semibold">Memberships</span>
                   <span className="text-muted-foreground">${transactionCategoryTotals.memberships.toLocaleString()} · {transactionCategoryTotals.pctMemberships}%</span>
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-                  <span className="text-purple-700 dark:text-purple-400 font-medium">Payouts</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 dark:bg-purple-900/20 px-2.5 py-1">
+                  <span className="h-2 w-2 rounded-full bg-purple-500" />
+                  <span className="text-purple-700 dark:text-purple-400 font-semibold">Payouts</span>
                   <span className="text-muted-foreground">${transactionCategoryTotals.payouts.toLocaleString()} · {transactionCategoryTotals.pctPayouts}%</span>
                 </span>
               </div>

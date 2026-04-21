@@ -46,7 +46,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
 } from 'recharts'
 import { TrendingUp, TrendingDown } from 'lucide-react'
@@ -393,26 +392,8 @@ export default function BankingPage() {
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip
-                        formatter={(value: number, name: string) => {
-                          const labelMap: Record<string, string> = {
-                            gmv: 'GMV',
-                            commission: 'Commission',
-                            payouts: 'Payouts',
-                            net: 'Net',
-                          }
-                          return [`$${value.toLocaleString()}`, labelMap[name] || name]
-                        }}
-                        contentStyle={{
-                          borderRadius: '0.75rem',
-                          border: '1px solid hsl(var(--border))',
-                          backgroundColor: 'hsl(var(--popover))',
-                          color: 'hsl(var(--popover-foreground))',
-                          fontSize: '12px',
-                          padding: '8px 12px',
-                        }}
-                        cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }}
-                      />
+                      {/* Tooltip removed per kratos msg 1776751586723 —
+                          legend + delta indicators convey context. */}
                       <Area type="monotone" dataKey="gmv" stroke="#3b82f6" strokeWidth={2} fill="url(#gradientGmv)" />
                       <Area type="monotone" dataKey="commission" stroke="#f59e0b" strokeWidth={2} fill="url(#gradientCommission)" />
                       <Area type="monotone" dataKey="net" stroke="#10b981" strokeWidth={2} fill="url(#gradientNet)" />

@@ -23,7 +23,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
 } from 'recharts'
 import {
@@ -227,21 +226,8 @@ export default function RevenuePage() {
                     axisLine={false}
                     tickLine={false}
                   />
-                  <Tooltip
-                    formatter={(value: number, name: string) => [
-                      `$${value.toLocaleString()}`,
-                      name === 'revenue' ? 'Total GMV' : 'Platform Commission',
-                    ]}
-                    contentStyle={{
-                      borderRadius: '0.75rem',
-                      border: '1px solid hsl(var(--border))',
-                      backgroundColor: 'hsl(var(--popover))',
-                      color: 'hsl(var(--popover-foreground))',
-                      fontSize: '12px',
-                      padding: '8px 12px',
-                    }}
-                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
-                  />
+                  {/* Tooltip removed per kratos msg 1776751586723 — legend
+                      below conveys series identity. */}
                   <Bar dataKey="revenue" radius={[6, 6, 0, 0]} name="revenue" fill="url(#revenueBarGradient)" />
                   <Bar dataKey="commission" radius={[6, 6, 0, 0]} fill="url(#commissionBarGradient)" name="commission" />
                 </BarChart>
