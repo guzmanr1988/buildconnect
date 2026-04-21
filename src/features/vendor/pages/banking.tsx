@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import {
   Table,
   TableBody,
@@ -29,6 +31,8 @@ import {
   PAYMENT_PURPOSE_LABELS,
   type VendorPaymentMethod,
 } from '@/stores/vendor-billing-store'
+import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
 
@@ -74,6 +78,18 @@ export default function VendorBanking() {
       (m) => m.purpose === 'commissions' || m.purpose === 'both',
     ),
   )
+
+  // Ship #21 — Account Rep Payments toggle (bottom of page). Shares
+  // state with the /vendor/account-reps header Switch via
+  // bankEnabledByVendor on useVendorEmployeesStore. Keys via
+  // useVendorScope specifically so both surfaces resolve the SAME
+  // map entry — keying by profile.id here would fragment state across
+  // the two surfaces for demo logins (useVendorScope reverse-maps
+  // profile.id → v-1/v-2/v-3 for apex/shield/paradise demos).
+  const { vendorId: payrollVendorId } = useVendorScope()
+  const bankEnabledMap = useVendorEmployeesStore((s) => s.bankEnabledByVendor)
+  const payrollBankEnabled = bankEnabledMap[payrollVendorId] ?? false
+  const setPayrollBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
@@ -376,6 +392,44 @@ export default function VendorBanking() {
               applies when paying via card; bank account (ACH) transfers
               are fee-free.
             </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Ship #21 — Account Rep Payments toggle. Shared state with
+          the header toggle on /vendor/account-reps via
+          bankEnabledByVendor + useVendorScope (same key source on
+          both surfaces). Flipping here updates the same map entry;
+          both surfaces auto-sync on next render via zustand
+          subscription. */}
+      <motion.div variants={item}>
+        <Card className="rounded-xl shadow-sm hover:shadow-md transition" data-vendor-banking-payroll-toggle>
+          <CardHeader>
+            <CardTitle className="font-heading">Account Rep Payments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border bg-muted/30 p-4">
+              <div className="space-y-1 min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Payroll integration</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Turn on to manage account rep bank details + payroll here. Turn off if you're using an outside payroll system — bank fields stay hidden on every account rep profile until re-enabled. Flipping this also updates the same toggle on your Account Reps tab. Any bank info already entered is preserved whether the toggle is on or off.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Switch
+                  id="banking-payroll-toggle"
+                  checked={payrollBankEnabled}
+                  onCheckedChange={(v) => {
+                    setPayrollBankEnabled(payrollVendorId, !!v)
+                    toast.success(v ? 'Payroll integration enabled' : 'Payroll integration disabled')
+                  }}
+                  data-vendor-banking-payroll-toggle-switch
+                />
+                <Label htmlFor="banking-payroll-toggle" className="text-xs font-medium cursor-pointer whitespace-nowrap">
+                  {payrollBankEnabled ? 'On' : 'Off'}
+                </Label>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </motion.div>
