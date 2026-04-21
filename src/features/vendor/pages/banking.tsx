@@ -2,14 +2,11 @@ import { useState, useMemo } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
   DollarSign, Wallet, Building2, AlertTriangle, CreditCard,
-  CheckCircle2, Clock, Landmark, Plus, ShieldCheck, CreditCard as CreditCardIcon,
+  CheckCircle2, Clock, Landmark, ArrowUpRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -22,8 +19,15 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
-import { MOCK_CLOSED_SALES, MOCK_BANK_ACCOUNTS, MOCK_VENDORS } from '@/lib/mock-data'
-import type { ClosedSale, BankAccount } from '@/types'
+import { MOCK_CLOSED_SALES, MOCK_VENDORS } from '@/lib/mock-data'
+import type { ClosedSale } from '@/types'
+import { useAuthStore } from '@/stores/auth-store'
+import {
+  useVendorBillingStore,
+  PAYMENT_METHOD_LABELS,
+} from '@/stores/vendor-billing-store'
+import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
+import { cn } from '@/lib/utils'
 
 const VENDOR_ID = 'v-1'
 
@@ -40,32 +44,23 @@ export default function VendorBanking() {
   const commPct = vendor.commission_pct
   const vendorPct = 100 - commPct
   const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
-  const mockAccount = MOCK_BANK_ACCOUNTS.find((b) => b.vendor_id === VENDOR_ID)
-  const [bankAccounts, setBankAccounts] = useState<(BankAccount & { purpose?: string })[]>(
-    mockAccount ? [{ ...mockAccount, purpose: 'both' }] : []
-  )
+
+  // Ship #188 (Rodolfo-direct 2026-04-21 pivot #10) — unified payment
+  // method reads from vendor-billing-store (same SoT as /vendor/membership
+  // and the signup payment dialog). Falls back to the hardcoded mock
+  // VENDOR_ID key when no profile is hydrated so the demo surface still
+  // renders correctly; real vendors key off their own profile.id matching
+  // what the signup flow wrote.
+  const profile = useAuthStore((s) => s.profile)
+  const billingVendorId = profile?.id ?? VENDOR_ID
+  const paymentMethod = useVendorBillingStore((s) => s.paymentMethodByVendor[billingVendorId])
+  const setPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
   const [payStep, setPayStep] = useState<1 | 2>(1)
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [paidSales, setPaidSales] = useState<Set<string>>(new Set())
-
-  // Cards
-  const [cards, setCards] = useState<{ id: string; name: string; last4: string; type: 'debit' | 'credit'; expiry: string }[]>([])
-  const [addCardOpen, setAddCardOpen] = useState(false)
-  const [cardName, setCardName] = useState('')
-  const [cardNumber, setCardNumber] = useState('')
-  const [cardExpiry, setCardExpiry] = useState('')
-  const [cardCvv, setCardCvv] = useState('')
-  const [cardType, setCardType] = useState<'debit' | 'credit'>('debit')
-
-  // Bank linking form
-  const [bankName, setBankName] = useState('')
-  const [accountHolder, setAccountHolder] = useState('')
-  const [routingNum, setRoutingNum] = useState('')
-  const [accountNum, setAccountNum] = useState('')
-  const [accountType, setAccountType] = useState<'checking' | 'savings'>('checking')
+  const [editPaymentOpen, setEditPaymentOpen] = useState(false)
 
   const totalSales = sales.reduce((s, x) => s + x.sale_amount, 0)
   const totalEarnings = sales.reduce((s, x) => s + x.vendor_share, 0)
@@ -203,191 +198,97 @@ export default function VendorBanking() {
         </Card>
       </motion.div>
 
-      {/* Bank Accounts Section */}
+      {/* Ship #188 — unified Payment Method card. Replaces the former
+          separate Bank Accounts + Debit/Credit Cards sections per
+          Rodolfo "merge together bank account and debit/credit card
+          payment like you did on membership". Reads from vendor-billing
+          -store (same SoT as /vendor/membership + signup dialog); Update
+          opens the same VendorPaymentDialog in non-blocking edit mode.
+          Vocabulary resolves via PAYMENT_METHOD_LABELS + paymentMethod
+          .brand per the post-#185 "Visa ****4242" shape. */}
       <motion.div variants={item}>
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="font-heading">Bank Accounts</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setLinkDialogOpen(true)} className="text-xs gap-1">
-                <Plus className="h-3 w-3" /> Add Account
-              </Button>
-            </div>
+            <CardTitle className="font-heading">Payment Method</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {bankAccounts.length === 0 ? (
-              <div className="text-center py-6">
-                <Landmark className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">No bank accounts linked yet</p>
-                <Button onClick={() => setLinkDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Link Account
-                </Button>
-              </div>
-            ) : (
-              bankAccounts.map((account, idx) => (
-                <div key={account.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
-                  <div className="rounded-xl bg-primary/10 p-3 shrink-0">
-                    <Landmark className="h-5 w-5 text-primary" />
+            {paymentMethod ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-xl shrink-0',
+                    paymentMethod.kind === 'checking'
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-primary/10 text-primary',
+                  )}>
+                    {paymentMethod.kind === 'checking' ? (
+                      <Landmark className="h-5 w-5" />
+                    ) : (
+                      <CreditCard className="h-5 w-5" />
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm">{account.bank_name}</p>
-                      <Badge variant="outline" className="text-[10px]">
-                        <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Linked
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{account.account_holder}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {account.account_type === 'checking' ? 'Checking' : 'Savings'} ****{account.account_last4}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {paymentMethod.kind === 'checking'
+                        ? PAYMENT_METHOD_LABELS[paymentMethod.kind]
+                        : paymentMethod.brand ?? PAYMENT_METHOD_LABELS[paymentMethod.kind]}
+                      <span className="ml-1.5 font-mono text-xs text-muted-foreground">
+                        •••• {paymentMethod.last4}
+                      </span>
                     </p>
-                    <div className="mt-2">
-                      <Select
-                        value={account.purpose || 'both'}
-                        onValueChange={(v) => {
-                          setBankAccounts((prev) => prev.map((a, i) => i === idx ? { ...a, purpose: v ?? undefined } : a))
-                        }}
-                      >
-                        <SelectTrigger className="h-7 text-[11px] w-auto min-w-[160px]">
-                          <SelectValue placeholder="Select purpose" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="subscription" className="text-xs">Subscription Payments</SelectItem>
-                          <SelectItem value="commission" className="text-xs">Commission Payments</SelectItem>
-                          <SelectItem value="both" className="text-xs">All Payments</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {paymentMethod.kind === 'checking'
+                        ? `${paymentMethod.bankName} · ${paymentMethod.holder}`
+                        : `${paymentMethod.holder}${paymentMethod.expiry ? ` · Exp ${paymentMethod.expiry}` : ''}`}
+                    </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-destructive hover:text-destructive shrink-0"
-                    onClick={() => setBankAccounts((prev) => prev.filter((_, i) => i !== idx))}
-                  >
-                    Remove
-                  </Button>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Debit/Credit Card Section */}
-      <motion.div variants={item}>
-        <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="font-heading">Debit / Credit Cards</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setAddCardOpen(true)} className="text-xs gap-1">
-                <Plus className="h-3 w-3" /> Add Card
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {cards.length === 0 ? (
-              <div className="text-center py-6">
-                <CreditCardIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">No cards added yet</p>
-                <Button variant="outline" onClick={() => setAddCardOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Card
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditPaymentOpen(true)}
+                  className="gap-1.5"
+                >
+                  Update
+                  <ArrowUpRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
-              cards.map((card) => (
-                <div key={card.id} className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
-                  <div className="rounded-xl bg-violet-500/10 p-3 shrink-0">
-                    <CreditCardIcon className="h-5 w-5 text-violet-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm">{card.name}</p>
-                      <Badge variant="secondary" className="text-[10px] capitalize">{card.type}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">**** **** **** {card.last4}</p>
-                    <p className="text-xs text-muted-foreground">Exp: {card.expiry}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-destructive hover:text-destructive shrink-0"
-                    onClick={() => setCards((prev) => prev.filter((c) => c.id !== card.id))}
-                  >
-                    Remove
-                  </Button>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed p-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">No payment method on file</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Add a card or checking account to pay membership + receive commission payouts.
+                  </p>
                 </div>
-              ))
+                <Button size="sm" onClick={() => setEditPaymentOpen(true)}>
+                  Add method
+                </Button>
+              </div>
             )}
             <p className="text-[11px] text-muted-foreground leading-relaxed pt-2 border-t border-border/50">
-              A processing fee of 3% per transaction will be applied to all payments made via debit or credit card. Bank account (ACH) transfers are fee-free.
+              Used for both your monthly membership and commission payouts. A
+              3% processing fee applies when paying via card; bank account
+              (ACH) transfers are fee-free.
             </p>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Add Card Dialog */}
-      <Dialog open={addCardOpen} onOpenChange={setAddCardOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Add Debit / Credit Card</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Cardholder Name</Label>
-              <Input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="Name on card" />
-            </div>
-            <div className="space-y-2">
-              <Label>Card Number</Label>
-              <Input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="1234 5678 9012 3456" maxLength={19} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label>Expiry</Label>
-                <Input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/YY" maxLength={5} />
-              </div>
-              <div className="space-y-2">
-                <Label>CVV</Label>
-                <Input value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" maxLength={4} type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={cardType} onValueChange={(v) => setCardType(v as 'debit' | 'credit')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="debit">Debit</SelectItem>
-                    <SelectItem value="credit">Credit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              A 3% processing fee applies to all card transactions.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddCardOpen(false)}>Cancel</Button>
-            <Button disabled={!cardName || !cardNumber || !cardExpiry || !cardCvv} onClick={() => {
-              setCards((prev) => [...prev, {
-                id: crypto.randomUUID(),
-                name: cardName,
-                last4: cardNumber.replace(/\s/g, '').slice(-4),
-                type: cardType,
-                expiry: cardExpiry,
-              }])
-              setCardName('')
-              setCardNumber('')
-              setCardExpiry('')
-              setCardCvv('')
-              setCardType('debit')
-              setAddCardOpen(false)
-            }}>
-              <CreditCardIcon className="h-4 w-4 mr-1" /> Add Card
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Ship #188 — unified Add/Update flow routes through
+          VendorPaymentDialog (shared with signup + membership). Mounted
+          non-blocking so Escape + overlay-click dismiss works in edit
+          mode. Dedicated Add Card + Link Bank Account dialogs removed. */}
+      <VendorPaymentDialog
+        open={editPaymentOpen}
+        onOpenChange={setEditPaymentOpen}
+        blocking={false}
+        initialKind={paymentMethod?.kind}
+        initialHolder={paymentMethod?.holder}
+        onSuccess={(method) => {
+          setPaymentMethod(billingVendorId, method)
+        }}
+      />
 
       {/* Pay Commission Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
@@ -433,9 +334,15 @@ export default function VendorBanking() {
                   </div>
                   <p className="text-lg font-bold font-heading">{fmt(payingSale.commission)}</p>
                   <p className="text-sm text-muted-foreground mt-1">will be sent to BuildConnect</p>
-                  {bankAccounts.length > 0 && (
+                  {/* Ship #188 — payment source now reads from the
+                      unified vendor-billing-store entry. Same
+                      vocabulary as the Payment Method card above +
+                      /vendor/membership. */}
+                  {paymentMethod && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      From {bankAccounts.find(a => a.purpose === 'commission' || a.purpose === 'both')?.bank_name || bankAccounts[0].bank_name} ****{bankAccounts.find(a => a.purpose === 'commission' || a.purpose === 'both')?.account_last4 || bankAccounts[0].account_last4}
+                      From {paymentMethod.kind === 'checking'
+                        ? `${paymentMethod.bankName ?? 'Checking'} ****${paymentMethod.last4}`
+                        : `${paymentMethod.brand ?? PAYMENT_METHOD_LABELS[paymentMethod.kind]} ****${paymentMethod.last4}`}
                     </p>
                   )}
                 </div>
@@ -451,70 +358,6 @@ export default function VendorBanking() {
         </DialogContent>
       </Dialog>
 
-      {/* Link Bank Account Dialog */}
-      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Link Bank Account</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Bank Name</Label>
-              <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Chase, Bank of America" />
-            </div>
-            <div className="space-y-2">
-              <Label>Account Holder Name</Label>
-              <Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="Legal name on account" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Routing Number</Label>
-                <Input value={routingNum} onChange={(e) => setRoutingNum(e.target.value)} placeholder="9 digits" maxLength={9} />
-              </div>
-              <div className="space-y-2">
-                <Label>Account Number</Label>
-                <Input value={accountNum} onChange={(e) => setAccountNum(e.target.value)} placeholder="Account number" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Account Type</Label>
-              <Select value={accountType} onValueChange={(v) => setAccountType(v as 'checking' | 'savings')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="checking">Checking</SelectItem>
-                  <SelectItem value="savings">Savings</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-            <Button disabled={!bankName || !accountHolder || !routingNum || !accountNum} onClick={() => {
-              setBankAccounts((prev) => [...prev, {
-                id: crypto.randomUUID(),
-                vendor_id: VENDOR_ID,
-                bank_name: bankName,
-                account_holder: accountHolder,
-                routing_last4: routingNum.slice(-4),
-                account_last4: accountNum.slice(-4),
-                account_type: accountType,
-                linked_at: new Date().toISOString(),
-                purpose: 'both',
-              }])
-              setBankName('')
-              setAccountHolder('')
-              setRoutingNum('')
-              setAccountNum('')
-              setAccountType('checking')
-              setLinkDialogOpen(false)
-            }}>
-              <Landmark className="h-4 w-4 mr-1" /> Link Account
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </motion.div>
   )
 }
