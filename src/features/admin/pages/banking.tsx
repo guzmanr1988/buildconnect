@@ -303,8 +303,8 @@ export default function BankingPage() {
               <KpiCard
                 title="Total Revenue"
                 value={`$${totalRevenue.toLocaleString()}`}
-                change="+18% this month"
-                trend="up"
+                change={`${trendDelta.up ? '+' : '-'}${trendDelta.pct}% vs prior month`}
+                trend={trendDelta.up ? 'up' : 'down'}
                 icon={DollarSign}
                 iconColor="bg-emerald-500"
               />

@@ -25,7 +25,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from 'recharts'
 import {
   MOCK_VENDORS,
@@ -46,8 +45,6 @@ const fadeUp = {
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
 }
-
-const CHART_COLORS = ['#f59e0b', '#3b82f6', '#06b6d4', '#10b981', '#ef4444']
 
 export default function RevenuePage() {
   // Phase 5: closed_sales fetched from Supabase at mount.
@@ -186,46 +183,75 @@ export default function RevenuePage() {
       <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              Revenue per Vendor
-            </CardTitle>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Revenue per Vendor
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Total GMV + platform commission side-by-side per vendor</p>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="h-72">
+            <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barGap={4}>
+                  <defs>
+                    <linearGradient id="revenueBarGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.55} />
+                    </linearGradient>
+                    <linearGradient id="commissionBarGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.55} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 11 }}
                     className="fill-muted-foreground"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
                   />
                   <YAxis
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 11 }}
                     className="fill-muted-foreground"
                     tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <Tooltip
                     formatter={(value: number, name: string) => [
                       `$${value.toLocaleString()}`,
-                      name === 'revenue' ? 'Total Revenue' : 'Commission (15%)',
+                      name === 'revenue' ? 'Total GMV' : 'Platform Commission',
                     ]}
                     contentStyle={{
                       borderRadius: '0.75rem',
                       border: '1px solid hsl(var(--border))',
                       backgroundColor: 'hsl(var(--popover))',
                       color: 'hsl(var(--popover-foreground))',
+                      fontSize: '12px',
+                      padding: '8px 12px',
                     }}
+                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
                   />
-                  <Bar dataKey="revenue" radius={[6, 6, 0, 0]} name="revenue">
-                    {chartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="commission" radius={[6, 6, 0, 0]} fill="#f59e0b" opacity={0.7} name="commission" />
+                  <Bar dataKey="revenue" radius={[6, 6, 0, 0]} name="revenue" fill="url(#revenueBarGradient)" />
+                  <Bar dataKey="commission" radius={[6, 6, 0, 0]} fill="url(#commissionBarGradient)" name="commission" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+            <div className="flex items-center justify-center gap-4 pt-3 border-t mt-3 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
+                <span className="text-muted-foreground">Total GMV</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
+                <span className="text-muted-foreground">Platform Commission</span>
+              </div>
             </div>
             {/* Total Revenue Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t">
