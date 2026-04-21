@@ -105,7 +105,7 @@ export const router = createBrowserRouter([
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
-          { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
+          { path: 'account-reps', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Account Reps' } },
           { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
           { path: 'messages', element: <VendorMessages />, handle: { title: 'Vendor · Messages' } },
           { path: 'profile', element: <VendorProfile />, handle: { title: 'Vendor · Profile' } },

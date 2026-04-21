@@ -22,7 +22,7 @@ const navItems = [
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
-  { to: '/vendor/employees', icon: UsersRound, label: 'Employees' },
+  { to: '/vendor/account-reps', icon: UsersRound, label: 'Account Reps' },
   { to: '/vendor/membership', icon: BadgeCheck, label: 'Membership' },
   { to: '/vendor/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/vendor/profile', icon: User, label: 'Profile' },

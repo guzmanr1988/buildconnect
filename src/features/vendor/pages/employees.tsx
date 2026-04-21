@@ -152,10 +152,10 @@ export default function VendorEmployeesPage() {
     }
     if (editingId) {
       updateEmployee(vendorId, editingId, form)
-      toast.success('Employee updated.')
+      toast.success('Account rep updated.')
     } else {
       addEmployee(vendorId, form)
-      toast.success('Employee added.')
+      toast.success('Account rep added.')
     }
     setFormOpen(false)
     setEditingId(null)
@@ -163,7 +163,7 @@ export default function VendorEmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Employees" description={`${employees.length} total · ${employees.filter((e) => e.status === 'active').length} active`}>
+      <PageHeader title="Account Reps" description={`${employees.length} total · ${employees.filter((e) => e.status === 'active').length} active`}>
         <div className="flex items-center gap-4 flex-wrap">
           {/* Payroll integration toggle — vendor-level flag controlling
               whether the per-employee Bank for Payments section appears
@@ -189,7 +189,7 @@ export default function VendorEmployeesPage() {
           </div>
           <Button onClick={openAdd} className="gap-1.5" data-employee-add>
             <Plus className="h-4 w-4" />
-            Add Employee
+            Add Account Rep
           </Button>
         </div>
       </PageHeader>
@@ -201,7 +201,7 @@ export default function VendorEmployeesPage() {
           <CardContent className="p-3 flex items-center gap-3">
             <Landmark className="h-4 w-4 text-muted-foreground shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Payroll integration is off — bank details hidden on all employees. Flip the toggle above if you want to manage pay here instead of an outside system.
+              Payroll integration is off — bank details hidden on all account reps. Flip the toggle above if you want to manage pay here instead of an outside system.
             </p>
           </CardContent>
         </Card>
@@ -223,7 +223,7 @@ export default function VendorEmployeesPage() {
           <CardContent className="p-10 text-center">
             <Users className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
-              {query.trim() ? 'No employees match your search.' : 'No employees on file yet. Add your crew to start tracking.'}
+              {query.trim() ? 'No account reps match your search.' : 'No account reps on file yet. Add your crew to start tracking.'}
             </p>
             {!query.trim() && (
               <Button onClick={openAdd} className="mt-4 gap-1.5">
@@ -427,7 +427,7 @@ export default function VendorEmployeesPage() {
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground italic">No bank account on file for this employee.</p>
+                      <p className="text-xs text-muted-foreground italic">No bank account on file for this account rep.</p>
                     )}
                   </section>
                 )}
@@ -486,7 +486,7 @@ export default function VendorEmployeesPage() {
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-heading">
-              {editingId ? 'Edit Employee' : 'Add Employee'}
+              {editingId ? 'Edit Account Rep' : 'Add Account Rep'}
             </DialogTitle>
             <DialogDescription>
               {editingId
@@ -516,7 +516,7 @@ export default function VendorEmployeesPage() {
                   <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="h-10 text-sm" placeholder="e.g. Installation" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Employee code</Label>
+                  <Label className="text-xs font-semibold">Account rep code</Label>
                   <Input value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} className="h-10 text-sm font-mono" />
                 </div>
                 <div className="space-y-1.5">
@@ -639,7 +639,7 @@ export default function VendorEmployeesPage() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">Cancel</Button>
             <Button onClick={submitForm} className="w-full sm:w-auto">
-              {editingId ? 'Save changes' : 'Add employee'}
+              {editingId ? 'Save changes' : 'Add account rep'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -648,7 +648,7 @@ export default function VendorEmployeesPage() {
       <Dialog open={!!deactivateTarget} onOpenChange={(o) => !o && setDeactivateTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading">Deactivate employee?</DialogTitle>
+            <DialogTitle className="font-heading">Deactivate account rep?</DialogTitle>
             <DialogDescription>
               {deactivateTarget && (
                 <>
@@ -680,7 +680,7 @@ export default function VendorEmployeesPage() {
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading text-destructive">Delete employee permanently?</DialogTitle>
+            <DialogTitle className="font-heading text-destructive">Delete account rep permanently?</DialogTitle>
             <DialogDescription>
               {deleteTarget && (
                 <>
