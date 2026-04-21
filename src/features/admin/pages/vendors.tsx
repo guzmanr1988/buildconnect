@@ -57,9 +57,6 @@ import {
   MOCK_CLOSED_SALES,
 } from '@/lib/mock-data'
 import type { LeadStatus, Vendor } from '@/types'
-import { useVendorBillingStore, PAYMENT_METHOD_LABELS } from '@/stores/vendor-billing-store'
-import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
-import { Landmark, CreditCard } from 'lucide-react'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -171,28 +168,6 @@ export default function VendorsPage() {
   const [messageDialogOpen, setMessageDialogOpen] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [messageSent, setMessageSent] = useState(false)
-
-  // Ship #200 — admin-side vendor bank edit state. editingBank tracks
-  // which vendor the admin is editing + which method (or null = add new).
-  // VendorPaymentDialog mount stays unconditional; open-state drives it.
-  const [bankEditorVendorId, setBankEditorVendorId] = useState<string | null>(null)
-  const [bankEditorMethodId, setBankEditorMethodId] = useState<string | null>(null)
-  const addVendorPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
-  const updateVendorPaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
-  const vendorPaymentMethodsByVendorRaw = useVendorBillingStore((s) => s.paymentMethodsByVendor)
-  const openBankEditor = (vendorId: string, methodId: string | null) => {
-    setBankEditorVendorId(vendorId)
-    setBankEditorMethodId(methodId)
-  }
-  const closeBankEditor = () => {
-    setBankEditorVendorId(null)
-    setBankEditorMethodId(null)
-  }
-  // Resolve the method being edited from the raw map — stable reads per
-  // banked selector discipline. Lookup happens at render, not in selector.
-  const editingBankMethod = bankEditorVendorId && bankEditorMethodId
-    ? (vendorPaymentMethodsByVendorRaw[bankEditorVendorId] ?? []).find((m) => m.id === bankEditorMethodId)
-    : undefined
 
   const handleSuspend = (vendor: Vendor) => {
     setSuspendTarget(vendor)
@@ -517,19 +492,6 @@ export default function VendorsPage() {
                     any prior-edited overrides from #130-#131 pre-
                     removal). Edit UI gone; computed values stay. */}
 
-                {/* Ship #200 (Rodolfo-direct pivot #18): admin-side Bank
-                    for Payments — matches the #199 Employees Bank
-                    section shape. Reads via useVendorBillingStore
-                    (same SoT as /vendor/banking + /vendor/membership +
-                    signup dialog — 5th consumer). Optional per Rodolfo's
-                    spec; empty state shows Add-bank affordance for
-                    admin to add on vendor's behalf. */}
-                <VendorBankAdminCard
-                  vendorId={vendor.id}
-                  vendorCompany={vendor.company}
-                  onEdit={(methodId) => openBankEditor(vendor.id, methodId)}
-                />
-
                 {/* Action Buttons */}
                 <div className="flex gap-2 mb-4">
                   <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => navigate(`/admin/messages?vendor=${vendor.id}`)}>
@@ -678,119 +640,6 @@ export default function VendorsPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Ship #200 — admin-side vendor bank editor. VendorPaymentDialog
-          reused (5th consumer of the shared component after signup +
-          membership + banking + homeowner-change-detail). Admin acts
-          on-behalf-of a specific vendor via the bankEditorVendorId
-          state; onSuccess routes through addPaymentMethod (add-mode)
-          or updatePaymentMethod (edit-mode) by methodId presence. */}
-      <VendorPaymentDialog
-        open={!!bankEditorVendorId}
-        onOpenChange={(o) => !o && closeBankEditor()}
-        blocking={false}
-        initialKind={editingBankMethod?.kind}
-        initialHolder={editingBankMethod?.holder}
-        initialPurpose={editingBankMethod?.purpose ?? 'both'}
-        onSuccess={(method) => {
-          if (bankEditorVendorId) {
-            if (bankEditorMethodId) {
-              updateVendorPaymentMethod(bankEditorVendorId, bankEditorMethodId, method)
-              toast.success('Vendor bank updated.')
-            } else {
-              addVendorPaymentMethod(bankEditorVendorId, method)
-              toast.success('Vendor bank added.')
-            }
-          }
-          closeBankEditor()
-        }}
-      />
-    </div>
-  )
-}
-
-// Ship #200 — admin-side vendor bank display card. Inline component to
-// keep the admin-vendor-surface scope self-contained. Reads per-vendor
-// methods via the shared store; renders masked summary + Edit button
-// when present, or empty-state + Add-bank button when optional-blank.
-// data-vendor-bank-* attributes provide probe scaffolding per banked
-// discipline.
-function VendorBankAdminCard({
-  vendorId,
-  vendorCompany,
-  onEdit,
-}: {
-  vendorId: string
-  vendorCompany: string
-  onEdit: (methodId: string | null) => void
-}) {
-  // Raw-map selector returns stable reference; per-vendor lookup at
-  // render-body per the banked post-#190 pattern (avoids ?? [] inside
-  // selector generating new-ref-per-render).
-  const paymentMethodsMap = useVendorBillingStore((s) => s.paymentMethodsByVendor)
-  const methods = paymentMethodsMap[vendorId] ?? []
-  const primary = methods[0]
-
-  return (
-    <div
-      className="rounded-lg border bg-muted/30 p-3 mb-4"
-      data-vendor-bank-card
-      data-vendor-bank-vendor-id={vendorId}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2">
-        <Landmark className="h-3 w-3" />
-        Bank for Payments
-        <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground/80 ml-1">(optional)</span>
-      </p>
-      {primary ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            {primary.kind === 'checking' ? (
-              <Landmark className="h-4 w-4 text-primary shrink-0" />
-            ) : (
-              <CreditCard className="h-4 w-4 text-primary shrink-0" />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground" data-vendor-bank-summary>
-                {primary.kind === 'checking'
-                  ? (primary.bankName ?? PAYMENT_METHOD_LABELS[primary.kind])
-                  : (primary.brand ?? PAYMENT_METHOD_LABELS[primary.kind])}
-                <span className="ml-1.5 font-mono text-xs text-muted-foreground">•••• {primary.last4}</span>
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate">
-                {primary.holder}
-                {methods.length > 1 && (
-                  <span className="ml-1.5">· +{methods.length - 1} more method{methods.length - 1 === 1 ? '' : 's'}</span>
-                )}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => onEdit(primary.id)}
-            data-vendor-bank-edit
-          >
-            Edit
-          </Button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground italic">
-            No bank account on file for {vendorCompany}.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => onEdit(null)}
-            data-vendor-bank-add
-          >
-            Add bank
-          </Button>
-        </div>
-      )}
     </div>
   )
 }
