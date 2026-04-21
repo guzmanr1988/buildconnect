@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
-  Package, ChevronDown, ChevronUp, User, MapPin, Calendar,
+  Package, ChevronDown, ChevronUp, ChevronRight, User, MapPin, Calendar,
   Download, ZoomIn,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,8 +14,10 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { deriveInitials } from '@/lib/initials'
+import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
 
 function fmt(n: number) {
@@ -59,6 +61,51 @@ export default function LeadInbox() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
 
+  // Ship #187 (Rodolfo-direct 2026-04-21) — group /vendor/leads by
+  // service_category. Empty categories hidden (vendors who don't
+  // service pool work shouldn't see an empty Pool section adding
+  // noise); multi-category vendors see all relevant category sections.
+  // All sections open by default so the vendor sees everything at
+  // once on arrival; click header to collapse. Within-category order
+  // preserves the existing leads-array sequence (homeownerLeads-first,
+  // then mockLeads, which matches the prior flat-list ordering).
+  const services = useCatalogStore((s) => s.services)
+  const categoryLabelFor = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const s of services) map[s.id] = s.name
+    return (id: string) => map[id] ?? id.replace(/_/g, ' ')
+  }, [services])
+
+  const groupedLeads = useMemo(() => {
+    const groups: Record<string, Lead[]> = {}
+    for (const l of leads) {
+      const cat = (l.service_category as unknown as string) ?? 'uncategorized'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(l)
+    }
+    return groups
+  }, [leads])
+
+  // Ordered list of category IDs with leads. Sort follows SERVICE_CATALOG
+  // ordering so vendor sees categories in the same order as /home +
+  // /admin/products. Unknown categories (not in catalog) tail the list.
+  const orderedCategoryIds = useMemo(() => {
+    const present = Object.keys(groupedLeads)
+    const catalogOrder: string[] = services.map((s) => s.id)
+    const known = catalogOrder.filter((id) => present.includes(id))
+    const unknown = present.filter((id) => !catalogOrder.includes(id))
+    return [...known, ...unknown]
+  }, [groupedLeads, services])
+
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
+  const toggleCategory = (id: string) =>
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
   function downloadIdDocument(dataUrl: string, customerName: string) {
     const ext = dataUrl.startsWith('data:image/png') ? 'png' : 'jpg'
     const link = document.createElement('a')
@@ -88,8 +135,47 @@ export default function LeadInbox() {
       {leads.length === 0 ? (
         <EmptyState icon={Package} title="No projects yet" description="Customer projects will appear here once leads are confirmed." />
       ) : (
-        <div className="grid gap-4">
-          {leads.map((lead) => {
+        <div className="grid gap-6">
+          {orderedCategoryIds.map((categoryId) => {
+            const categoryLeads = groupedLeads[categoryId]
+            const collapsed = collapsedCategories.has(categoryId)
+            return (
+              <section key={categoryId} className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(categoryId)}
+                  aria-expanded={!collapsed}
+                  aria-controls={`lead-category-panel-${categoryId}`}
+                  className="flex items-center gap-2 w-full text-left group"
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-4 w-4 text-muted-foreground transition-transform shrink-0',
+                      !collapsed && 'rotate-90',
+                    )}
+                    aria-hidden="true"
+                  />
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-foreground">
+                    {categoryLabelFor(categoryId)}
+                  </h2>
+                  <Badge variant="secondary" className="text-[11px]">
+                    {categoryLeads.length}
+                  </Badge>
+                  <div className="flex-1 border-t border-border/60 ml-2" aria-hidden="true" />
+                </button>
+                <AnimatePresence initial={false}>
+                {!collapsed && (
+                  <motion.div
+                    key={`panel-${categoryId}`}
+                    id={`lead-category-panel-${categoryId}`}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid gap-4">
+                      {categoryLeads.map((lead) => {
             const isExpanded = expandedId === lead.id
             const packEntries = Object.entries(lead.pack_items)
 
@@ -399,6 +485,13 @@ export default function LeadInbox() {
                   </AnimatePresence>
                 </Card>
               </motion.div>
+            )
+          })}
+                    </div>
+                  </motion.div>
+                )}
+                </AnimatePresence>
+              </section>
             )
           })}
         </div>
