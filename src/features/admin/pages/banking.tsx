@@ -41,14 +41,15 @@ import {
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import {
   MOCK_VENDORS,
   MOCK_TRANSACTIONS,
@@ -150,12 +151,60 @@ export default function BankingPage() {
   }, [sentProjects, vendorCommissionOverrides])
 
   const totalRevenue = baselineRevenue + mockCommission
-  const revenueChartData = useMemo(() => [
-    { month: 'Jan', revenue: 4200 },
-    { month: 'Feb', revenue: 6800 },
-    { month: 'Mar', revenue: 9100 },
-    { month: 'Apr', revenue: totalRevenue },
-  ], [totalRevenue])
+
+  // Revenue Trend redesign (ship #153 per kratos msg 1776749094611).
+  // Synthesize last-12-months monthly breakdown: GMV / Commission Revenue /
+  // Payouts / Net. Current month uses actual totalRevenue + mockCommission;
+  // prior months are deterministic-mock with growth-trend curve so the
+  // chart reads professionally. Range filter clips to 3m/6m/12m/YTD.
+  const [trendRange, setTrendRange] = useState<'3m' | '6m' | '12m' | 'YTD'>('6m')
+  const fullTrendData = useMemo(() => {
+    const now = new Date()
+    const months: { month: string; gmv: number; commission: number; payouts: number; net: number }[] = []
+    // 12 months backward from current, with smooth growth-curve + current-month
+    // using live data. Baseline ~$40k GMV at oldest month growing to ~$110k
+    // at current; commission tracks ~15% of GMV; payouts ~60% of commission.
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthLabel = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+      const growthFactor = 0.4 + (11 - i) * 0.06 // 0.4 → 1.06
+      const noise = 1 + ((i * 7 + 13) % 10) / 100 - 0.05 // ±5%
+      const gmv = Math.round(100000 * growthFactor * noise)
+      const commission = Math.round(gmv * 0.15)
+      const payouts = Math.round(commission * 0.6)
+      const net = commission - payouts
+      months.push({ month: monthLabel, gmv, commission, payouts, net })
+    }
+    // Override current month (i=0) with actual data from store + Supabase.
+    if (months.length > 0) {
+      const currentMonthGmv = Math.round(totalRevenue / 0.15)
+      const currentMonthCommission = totalRevenue
+      const currentMonthPayouts = Math.round(totalDisbursed)
+      months[months.length - 1] = {
+        ...months[months.length - 1],
+        gmv: currentMonthGmv,
+        commission: currentMonthCommission,
+        payouts: currentMonthPayouts,
+        net: currentMonthCommission - currentMonthPayouts,
+      }
+    }
+    return months
+  }, [totalRevenue])
+
+  const revenueChartData = useMemo(() => {
+    const n = fullTrendData.length
+    const sliceN = trendRange === '3m' ? 3 : trendRange === '6m' ? 6 : trendRange === '12m' ? 12 : new Date().getMonth() + 1
+    return fullTrendData.slice(Math.max(0, n - sliceN))
+  }, [fullTrendData, trendRange])
+
+  const trendDelta = useMemo(() => {
+    if (revenueChartData.length < 2) return { pct: 0, up: true }
+    const last = revenueChartData[revenueChartData.length - 1].commission
+    const prev = revenueChartData[revenueChartData.length - 2].commission
+    if (prev === 0) return { pct: 0, up: last >= 0 }
+    const pct = Math.round(((last - prev) / prev) * 100)
+    return { pct: Math.abs(pct), up: pct >= 0 }
+  }, [revenueChartData])
 
   const [bankForm, setBankForm] = useState({
     bankName: '',
@@ -278,35 +327,111 @@ export default function BankingPage() {
 
           <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
             <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-primary" />
-                  Revenue Trend
-                </CardTitle>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      Revenue Trend
+                    </CardTitle>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-2xl font-bold font-heading">${totalRevenue.toLocaleString()}</span>
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
+                          trendDelta.up
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                        )}
+                      >
+                        {trendDelta.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        {trendDelta.up ? '+' : '-'}{trendDelta.pct}%
+                      </span>
+                      <span className="text-xs text-muted-foreground">vs prior month</span>
+                    </div>
+                  </div>
+                  <Tabs value={trendRange} onValueChange={(v) => setTrendRange(v as typeof trendRange)} className="shrink-0">
+                    <TabsList className="h-8">
+                      <TabsTrigger value="3m" className="text-xs px-3">3M</TabsTrigger>
+                      <TabsTrigger value="6m" className="text-xs px-3">6M</TabsTrigger>
+                      <TabsTrigger value="12m" className="text-xs px-3">12M</TabsTrigger>
+                      <TabsTrigger value="YTD" className="text-xs px-3">YTD</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={revenueChartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="month" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
+                    <AreaChart data={revenueChartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="gradientGmv" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradientCommission" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.5} />
+                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gradientNet" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 11 }}
+                        className="fill-muted-foreground"
+                        axisLine={false}
+                        tickLine={false}
+                      />
                       <YAxis
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 11 }}
                         className="fill-muted-foreground"
                         tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                        axisLine={false}
+                        tickLine={false}
                       />
                       <Tooltip
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                        formatter={(value: number, name: string) => {
+                          const labelMap: Record<string, string> = {
+                            gmv: 'GMV',
+                            commission: 'Commission',
+                            payouts: 'Payouts',
+                            net: 'Net',
+                          }
+                          return [`$${value.toLocaleString()}`, labelMap[name] || name]
+                        }}
                         contentStyle={{
                           borderRadius: '0.75rem',
                           border: '1px solid hsl(var(--border))',
                           backgroundColor: 'hsl(var(--popover))',
                           color: 'hsl(var(--popover-foreground))',
+                          fontSize: '12px',
+                          padding: '8px 12px',
                         }}
+                        cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }}
                       />
-                      <Bar dataKey="revenue" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                    </BarChart>
+                      <Area type="monotone" dataKey="gmv" stroke="#3b82f6" strokeWidth={2} fill="url(#gradientGmv)" />
+                      <Area type="monotone" dataKey="commission" stroke="#f59e0b" strokeWidth={2} fill="url(#gradientCommission)" />
+                      <Area type="monotone" dataKey="net" stroke="#10b981" strokeWidth={2} fill="url(#gradientNet)" />
+                    </AreaChart>
                   </ResponsiveContainer>
+                </div>
+                <div className="flex items-center justify-center gap-4 pt-3 border-t mt-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
+                    <span className="text-muted-foreground">GMV</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
+                    <span className="text-muted-foreground">Commission</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+                    <span className="text-muted-foreground">Net</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
