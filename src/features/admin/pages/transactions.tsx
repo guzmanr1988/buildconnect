@@ -17,6 +17,7 @@ import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
+import { TransactionDetailDialog } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -66,6 +67,8 @@ export default function TransactionsPage() {
   // In-place project-detail Dialog (ship #140): opens on same surface
   // without navigating away.
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  // Transaction-detail Dialog (ship #143) for membership + payout rows.
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const refreshTransactions = () => {
     fetchAllTransactions()
       .then(setTransactions)
@@ -202,21 +205,25 @@ export default function TransactionsPage() {
                     </TableHeader>
                     <TableBody>
                       {grouped[cat.key].map((tx) => {
-                        // Commission-type rows resolve to a pipeline item on
-                        // /admin/workflow via either the mock-tx-<id> synth
-                        // (strip prefix) or a Supabase tx.id that maps 1:1
-                        // to a lead id. Other tx types (membership/payout)
-                        // don't have a per-project drill target — leave
-                        // non-clickable.
+                        // Row click routing (ship #143):
+                        // - Commission rows: open ProjectDetailDialog keyed
+                        //   on the resolved projectId (mock-tx-<id> stripped
+                        //   or Supabase id passed through).
+                        // - Membership + payout rows: open Transaction
+                        //   DetailDialog showing mock card/destination +
+                        //   linked vendor + subscription period (for
+                        //   membership).
                         const projectId = tx.type === 'commission'
                           ? (tx.id.startsWith('mock-tx-') ? tx.id.slice('mock-tx-'.length) : tx.id)
                           : null
-                        const clickable = projectId !== null
+                        const onRowClick = tx.type === 'commission' && projectId
+                          ? () => setSelectedProjectId(projectId)
+                          : () => setSelectedTransaction(tx)
                         return (
                         <TableRow
                           key={tx.id}
-                          className={clickable ? 'cursor-pointer hover:bg-muted/40' : undefined}
-                          onClick={clickable ? () => setSelectedProjectId(projectId!) : undefined}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={onRowClick}
                         >
                           <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
                           <TableCell className="font-medium">{tx.company}</TableCell>
@@ -262,6 +269,11 @@ export default function TransactionsPage() {
         open={!!selectedProjectId}
         onClose={() => setSelectedProjectId(null)}
         projectId={selectedProjectId}
+      />
+      <TransactionDetailDialog
+        open={!!selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+        transaction={selectedTransaction}
       />
     </div>
   )
