@@ -55,7 +55,15 @@ export default function VendorBanking() {
   // hydrated so demo surfaces render; real vendors key off profile.id.
   const profile = useAuthStore((s) => s.profile)
   const billingVendorId = profile?.id ?? VENDOR_ID
-  const paymentMethods = useVendorBillingStore((s) => s.paymentMethodsByVendor[billingVendorId] ?? [])
+  // Ship #190 — CRITICAL fix on top of #189: the `?? []` fallback
+  // INSIDE the zustand selector returns a new empty-array reference
+  // on every render when the map entry is undefined → React #185
+  // infinite-loop crash. Same defect class as #111 and the banked
+  // ZUSTAND-SELECTOR-STABLE-REFERENCE memory. Fix: select the
+  // possibly-undefined value (stable either way) and fall back to a
+  // fresh [] in render body where identity-instability is harmless.
+  const paymentMethodsRaw = useVendorBillingStore((s) => s.paymentMethodsByVendor[billingVendorId])
+  const paymentMethods = paymentMethodsRaw ?? []
   const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
   const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
   const removePaymentMethod = useVendorBillingStore((s) => s.removePaymentMethod)
