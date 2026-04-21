@@ -3,6 +3,7 @@ import { HomeownerLayout } from '@/components/layout/homeowner-layout'
 import { VendorLayout } from '@/components/layout/vendor-layout'
 import { AdminLayout } from '@/components/layout/admin-layout'
 import { RequireAuth } from '@/router/require-auth'
+import { RequireActiveMembership } from '@/router/require-active-membership'
 import { RootLayout } from '@/router/root-layout'
 
 // Auth
@@ -80,7 +81,17 @@ export const router = createBrowserRouter([
 
       {
         path: '/vendor',
-        element: <RequireAuth><VendorLayout /></RequireAuth>,
+        // Ship #181 — cancelled-membership guard nested inside RequireAuth.
+        // Login gate runs first; active-membership gate runs second and
+        // redirects every /vendor/* except /vendor/membership to the
+        // membership page when status=cancelled.
+        element: (
+          <RequireAuth>
+            <RequireActiveMembership>
+              <VendorLayout />
+            </RequireActiveMembership>
+          </RequireAuth>
+        ),
         handle: { title: 'Vendor · Dashboard' },
         children: [
           { index: true, element: <VendorDashboard /> },
