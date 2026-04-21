@@ -68,6 +68,9 @@ export default function TransactionsPage() {
   // In-place project-detail Dialog (ship #140): opens on same surface
   // without navigating away.
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  // Ship #148: for commission rows the fallback tx is kept so Dialog can
+  // synthesize a commission-view when projectId fails to resolve.
+  const [selectedCommissionTx, setSelectedCommissionTx] = useState<Transaction | null>(null)
   // Transaction-detail Dialog (ship #143) for membership + payout rows.
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const refreshTransactions = () => {
@@ -226,6 +229,7 @@ export default function TransactionsPage() {
                             const sp = sentProjects.find((p) => p.id === projectId)
                             resolvedAddress = sp?.homeowner?.address ?? null
                           } else {
+                            // Tier 2: sentProjects name+company match
                             const sp = sentProjects.find(
                               (p) =>
                                 p.homeowner?.name === tx.customer &&
@@ -235,6 +239,7 @@ export default function TransactionsPage() {
                               projectId = sp.id
                               resolvedAddress = sp.homeowner?.address ?? null
                             } else {
+                              // Tier 3: MOCK_LEADS homeowner_name+vendor_id match
                               const vendor = MOCK_VENDORS.find((v) => v.company === tx.company)
                               const lead = MOCK_LEADS.find(
                                 (l) =>
@@ -244,12 +249,41 @@ export default function TransactionsPage() {
                               if (lead) {
                                 projectId = lead.id
                                 resolvedAddress = lead.address
+                              } else if (tx.detail) {
+                                // Tier 4 (ship #148): detail-string match
+                                // against MOCK_LEADS.project. Apollo's dump
+                                // showed Supabase seed has tx.customer=null
+                                // so name-based tiers fail; tx.detail
+                                // carries the project description. Strip
+                                // "Commission on " prefix + fuzzy-match
+                                // against the full project-name field.
+                                const stripped = tx.detail.replace(/^Commission on /i, '').trim()
+                                const leadByDetail = MOCK_LEADS.find(
+                                  (l) =>
+                                    l.project === stripped ||
+                                    l.project.includes(stripped) ||
+                                    stripped.includes(l.project.split('—')[0].trim()),
+                                )
+                                if (leadByDetail) {
+                                  projectId = leadByDetail.id
+                                  resolvedAddress = leadByDetail.address
+                                }
                               }
                             }
                           }
                         }
-                        const onRowClick = tx.type === 'commission' && projectId
-                          ? () => setSelectedProjectId(projectId!)
+                        // Ship #148: commission rows ALWAYS open
+                        // ProjectDetailDialog with the source tx as
+                        // transactionFallback. If bridge resolves,
+                        // projectId drives full project-context rendering;
+                        // if bridge fails, transactionFallback lets Dialog
+                        // synthesize commission view from tx fields. No
+                        // empty-shell route for commission rows anymore.
+                        const onRowClick = tx.type === 'commission'
+                          ? () => {
+                              setSelectedProjectId(projectId)
+                              setSelectedCommissionTx(tx)
+                            }
                           : () => setSelectedTransaction(tx)
                         return (
                         <TableRow
@@ -305,9 +339,13 @@ export default function TransactionsPage() {
       ))}
 
       <ProjectDetailDialog
-        open={!!selectedProjectId}
-        onClose={() => setSelectedProjectId(null)}
+        open={!!selectedCommissionTx}
+        onClose={() => {
+          setSelectedCommissionTx(null)
+          setSelectedProjectId(null)
+        }}
         projectId={selectedProjectId}
+        transactionFallback={selectedCommissionTx}
       />
       <TransactionDetailDialog
         open={!!selectedTransaction}

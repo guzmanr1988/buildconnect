@@ -19,6 +19,20 @@ interface ProjectDetailDialogProps {
   open: boolean
   onClose: () => void
   projectId: string | null
+  // Ship #148 transaction-fallback: when projectId can't resolve to a
+  // sentProject or MOCK_LEAD (e.g. Supabase commission row with no
+  // homeowner context to bridge on), the caller may pass the source
+  // transaction so the Dialog can still render the Commission split +
+  // Linked Vendor — never an empty-context Dialog shell.
+  transactionFallback?: {
+    id: string
+    type: 'commission' | 'membership' | 'payout'
+    company: string
+    detail: string
+    customer?: string
+    amount: number
+    date: string
+  } | null
 }
 
 function fmtDate(iso?: string) {
@@ -26,15 +40,49 @@ function fmtDate(iso?: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function ProjectDetailDialog({ open, onClose, projectId }: ProjectDetailDialogProps) {
+export function ProjectDetailDialog({ open, onClose, projectId, transactionFallback }: ProjectDetailDialogProps) {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
 
+  // Resolve effective commission_pct for a given vendor company — inline
+  // because used twice below (selectedItem + commissionPct fallback).
+  const resolvePct = (company: string | undefined): number => {
+    if (!company) return 15
+    const v = MOCK_VENDORS.find((x) => x.company === company)
+    if (!v) return 15
+    return vendorCommissionOverrides[v.id] ?? v.commission_pct
+  }
+
   const selectedItem = useMemo(() => {
-    if (!projectId) return null
+    if (!projectId) {
+      // Ship #148 transaction-fallback: projectId didn't match any project/
+      // lead fixture; fall back to rendering the commission context from
+      // the transaction itself. Reverse the commission math to derive
+      // sale total from tx.amount + current commission_pct so the split
+      // renders correctly.
+      if (transactionFallback && transactionFallback.type === 'commission') {
+        const pct = resolvePct(transactionFallback.company)
+        const saleAmount = pct > 0 ? Math.round((transactionFallback.amount * 100) / pct) : transactionFallback.amount
+        const customerName = transactionFallback.customer || 'Customer'
+        return {
+          id: transactionFallback.id,
+          name: customerName,
+          project: transactionFallback.detail.replace(/^Commission on /i, '').trim(),
+          date: transactionFallback.date,
+          initials: customerName.split(' ').map((n) => n[0]).join('') || 'C',
+          vendor: transactionFallback.company,
+          rep: undefined as string | undefined,
+          status: 'sold' as const,
+          soldAt: transactionFallback.date,
+          saleAmount,
+          project_data: null as any,
+        }
+      }
+      return null
+    }
 
     // Prefer sentProjects (cart-created) match — richer data
     const sp = sentProjects.find((p) => p.id === projectId)
@@ -87,14 +135,10 @@ export function ProjectDetailDialog({ open, onClose, projectId }: ProjectDetailD
       saleAmount: closedSale?.sale_amount,
       project_data: null as any,
     }
-  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides])
 
-  const commissionPct = useMemo(() => {
-    if (!selectedItem?.vendor) return 15
-    const v = MOCK_VENDORS.find((x) => x.company === selectedItem.vendor)
-    if (!v) return 15
-    return vendorCommissionOverrides[v.id] ?? v.commission_pct
-  }, [selectedItem?.vendor, vendorCommissionOverrides])
+  const commissionPct = resolvePct(selectedItem?.vendor)
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
