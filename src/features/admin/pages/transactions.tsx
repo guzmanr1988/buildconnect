@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays, ChevronLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -88,19 +89,21 @@ export default function TransactionsPage() {
   // across tabs per Rodolfo's "all tabs" directive.
   const [monthFilter, setMonthFilter] = useState<string>('all')
 
-  // Build the 12-month options list: trailing 12 months from today,
-  // newest-first. Includes an 'All' option at the top.
-  const monthOptions = useMemo(() => {
-    const opts: { value: string; label: string }[] = [{ value: 'all', label: 'All time' }]
-    const now = new Date()
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-      opts.push({ value, label })
-    }
-    return opts
-  }, [])
+  // Ship #196 — year+month popover picker state + month-label helper.
+  // availableYears derivation lives below mockSoldTransactions since
+  // it depends on that memo (tsc caught the ordering at write-time).
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerYear, setPickerYear] = useState<number>(() => new Date().getFullYear())
+
+  const monthFilterLabel = useMemo(() => {
+    if (monthFilter === 'all') return 'All time'
+    const [y, m] = monthFilter.split('-').map(Number)
+    if (!y || !m) return 'All time'
+    const d = new Date(y, m - 1, 1)
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }, [monthFilter])
+
+  const MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   const toggleMonth = (catKey: string, monthKey: string) => {
     const k = `${catKey}-${monthKey}`
     setExpandedMonths((prev) => ({ ...prev, [k]: !(prev[k] ?? monthKey === currentMonthKey) }))
@@ -143,6 +146,19 @@ export default function TransactionsPage() {
         date: p.soldAt!,
       }))
   }, [sentProjects])
+
+  // Ship #196 — all years that have at least one transaction (merged
+  // mock + real + MOCK_TRANSACTIONS fixture), always includes the
+  // current year so Rodolfo can select forward-looking months even
+  // before any data lands. Sorted ascending.
+  const availableYears = useMemo(() => {
+    const years = new Set<number>()
+    years.add(new Date().getFullYear())
+    for (const tx of transactions) years.add(new Date(tx.date).getFullYear())
+    for (const tx of mockSoldTransactions) years.add(new Date(tx.date).getFullYear())
+    for (const tx of MOCK_TRANSACTIONS) years.add(new Date(tx.date).getFullYear())
+    return Array.from(years).sort((a, b) => a - b)
+  }, [transactions, mockSoldTransactions])
 
   const grouped = useMemo(() => {
     const result: Record<SectionKey, Transaction[]> = {
@@ -236,26 +252,104 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Transactions" description={`${unifiedTxCount} total transactions`}>
-        {/* Ship #193 — 12-month lookup picker. Applies uniformly to all
-            4 category sections (Commissions Paid / Pending / Memberships
-            / Payouts) per Rodolfo's "all tabs" directive. Defaults to
-            All time; selecting a month scopes every section to that
-            month only. */}
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <Select value={monthFilter} onValueChange={(v) => setMonthFilter(v ?? 'all')}>
-            <SelectTrigger className="h-9 w-[180px] text-sm" data-tx-month-filter="trigger">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Ship #196 (Rodolfo-direct amendment to #193) — year+month
+            popover picker. CalendarDays icon is now the interactive
+            trigger (Rodolfo's literal expectation: "click on calendar
+            icon to be able to select by year and month"). Single-picker
+            design covers both quick-access (recent months) + historical
+            (any year with data) in one UI. Filter applies uniformly
+            across all 4 category sections per #193 scope. */}
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2 text-sm font-medium"
+              data-tx-month-filter="trigger"
+            >
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              {monthFilterLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[280px] p-3" align="end">
+            <div className="space-y-3">
+              {/* All time reset — banks the #193 default as a one-click
+                  escape from any month filter regardless of year. */}
+              <Button
+                variant={monthFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                className="w-full text-xs"
+                onClick={() => {
+                  setMonthFilter('all')
+                  setPickerOpen(false)
+                }}
+              >
+                All time
+              </Button>
+
+              {/* Year navigation. Disabled at the bounds so Rodolfo
+                  can't chase empty years forward/back. */}
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={availableYears.indexOf(pickerYear) <= 0}
+                  onClick={() => {
+                    const idx = availableYears.indexOf(pickerYear)
+                    if (idx > 0) setPickerYear(availableYears[idx - 1])
+                  }}
+                  aria-label="Previous year"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span
+                  className="text-sm font-semibold font-heading tabular-nums"
+                  data-tx-year-filter={String(pickerYear)}
+                >
+                  {pickerYear}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={availableYears.indexOf(pickerYear) >= availableYears.length - 1}
+                  onClick={() => {
+                    const idx = availableYears.indexOf(pickerYear)
+                    if (idx >= 0 && idx < availableYears.length - 1) setPickerYear(availableYears[idx + 1])
+                  }}
+                  aria-label="Next year"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* 12-month grid. Highlights the currently-selected month
+                  when the year matches monthFilter's year. */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {MONTH_ABBREV.map((abbrev, i) => {
+                  const monthKey = `${pickerYear}-${String(i + 1).padStart(2, '0')}`
+                  const selected = monthFilter === monthKey
+                  return (
+                    <Button
+                      key={abbrev}
+                      variant={selected ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        setMonthFilter(monthKey)
+                        setPickerOpen(false)
+                      }}
+                      data-tx-month-button={monthKey}
+                    >
+                      {abbrev}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </PageHeader>
 
       {/* Summary KPI Row */}
