@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Phone, Mail, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -53,6 +54,7 @@ export default function WorkflowPage() {
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Cross-tab refetch: zustand updates within the same tab trigger re-renders
   // automatically, but vendor/homeowner actions from another tab only persist
@@ -122,6 +124,28 @@ export default function WorkflowPage() {
   }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
 
   const allItems = [...projectItems, ...mockItems]
+
+  // Deep-link auto-open (ship #139): cross-surface project drill-in
+  // navigates here with ?project=<id>. Resolve to a pipeline item and open
+  // the Dialog; strip the param after open so refreshing doesn't re-trigger.
+  useEffect(() => {
+    const projectId = searchParams.get('project')
+    if (!projectId || selectedItem) return
+    const item = allItems.find((i) => i.id === projectId)
+    if (item) {
+      const sp = sentProjects.find((p) => p.id === item.id)
+      setSelectedItem({ ...item, project_data: sp || null })
+      // Strip the param so the URL stays clean; close-dialog doesn't
+      // re-trigger the open.
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('project')
+        return next
+      }, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, allItems])
+
   // Multi-field search (ship #134): homeowner name / project / vendor
   // company / lead ID / rep name. Pipeline items don't carry phone or
   // address directly — that info lives on the source MOCK_LEADS /

@@ -494,7 +494,11 @@ export default function HomeownersPage() {
                                       </TableCell>
                                     </TableRow>,
                                     ...group.items.map((proj) => (
-                                      <TableRow key={proj.id}>
+                                      <TableRow
+                                        key={proj.id}
+                                        className="cursor-pointer hover:bg-muted/40"
+                                        onClick={() => navigate(`/admin/workflow?project=${encodeURIComponent(proj.id)}`)}
+                                      >
                                         <TableCell className="text-xs font-medium max-w-[140px]">
                                           <div className="truncate">{proj.project_name}</div>
                                           <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -509,7 +513,11 @@ export default function HomeownersPage() {
                                     )),
                                   ])
                                 : projects.map((proj) => (
-                                    <TableRow key={proj.id}>
+                                    <TableRow
+                                      key={proj.id}
+                                      className="cursor-pointer hover:bg-muted/40"
+                                      onClick={() => navigate(`/admin/workflow?project=${encodeURIComponent(proj.id)}`)}
+                                    >
                                       <TableCell className="text-xs font-medium max-w-[140px]">
                                         <div className="truncate">{proj.project_name}</div>
                                         <div className="text-[10px] text-muted-foreground mt-0.5">

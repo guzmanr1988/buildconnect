@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -60,6 +61,7 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 ]
 
 export default function TransactionsPage() {
+  const navigate = useNavigate()
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const refreshTransactions = () => {
@@ -197,8 +199,23 @@ export default function TransactionsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {grouped[cat.key].map((tx) => (
-                        <TableRow key={tx.id}>
+                      {grouped[cat.key].map((tx) => {
+                        // Commission-type rows resolve to a pipeline item on
+                        // /admin/workflow via either the mock-tx-<id> synth
+                        // (strip prefix) or a Supabase tx.id that maps 1:1
+                        // to a lead id. Other tx types (membership/payout)
+                        // don't have a per-project drill target — leave
+                        // non-clickable.
+                        const projectId = tx.type === 'commission'
+                          ? (tx.id.startsWith('mock-tx-') ? tx.id.slice('mock-tx-'.length) : tx.id)
+                          : null
+                        const clickable = projectId !== null
+                        return (
+                        <TableRow
+                          key={tx.id}
+                          className={clickable ? 'cursor-pointer hover:bg-muted/40' : undefined}
+                          onClick={clickable ? () => navigate(`/admin/workflow?project=${encodeURIComponent(projectId!)}`) : undefined}
+                        >
                           <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
                           <TableCell className="font-medium">{tx.company}</TableCell>
                           <TableCell className="text-muted-foreground max-w-[200px] truncate">{tx.detail}</TableCell>
@@ -218,7 +235,8 @@ export default function TransactionsPage() {
                             </span>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                       {/* Category Total Row */}
                       <TableRow className="bg-muted/30 border-t-2">
                         <TableCell colSpan={cat.isCommission ? 4 : 3} className="font-semibold text-right">
