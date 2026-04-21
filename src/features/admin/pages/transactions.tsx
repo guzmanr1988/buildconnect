@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,6 +16,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -61,9 +61,11 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 ]
 
 export default function TransactionsPage() {
-  const navigate = useNavigate()
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  // In-place project-detail Dialog (ship #140): opens on same surface
+  // without navigating away.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const refreshTransactions = () => {
     fetchAllTransactions()
       .then(setTransactions)
@@ -214,7 +216,7 @@ export default function TransactionsPage() {
                         <TableRow
                           key={tx.id}
                           className={clickable ? 'cursor-pointer hover:bg-muted/40' : undefined}
-                          onClick={clickable ? () => navigate(`/admin/workflow?project=${encodeURIComponent(projectId!)}`) : undefined}
+                          onClick={clickable ? () => setSelectedProjectId(projectId!) : undefined}
                         >
                           <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
                           <TableCell className="font-medium">{tx.company}</TableCell>
@@ -255,6 +257,12 @@ export default function TransactionsPage() {
           </Card>
         </motion.div>
       ))}
+
+      <ProjectDetailDialog
+        open={!!selectedProjectId}
+        onClose={() => setSelectedProjectId(null)}
+        projectId={selectedProjectId}
+      />
     </div>
   )
 }

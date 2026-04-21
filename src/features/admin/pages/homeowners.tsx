@@ -47,6 +47,7 @@ import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
+import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -148,6 +149,9 @@ export default function HomeownersPage() {
   // per kratos msg 1776742863870). Silent no-op when a homeowner's
   // sentProjects only surface one distinct address label.
   const [addressFilterByHomeowner, setAddressFilterByHomeowner] = useState<Record<string, string>>({})
+
+  // In-place project-detail Dialog (ship #140 replaces #139 navigate()).
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   const homeowners = useMemo(
     () =>
@@ -497,7 +501,7 @@ export default function HomeownersPage() {
                                       <TableRow
                                         key={proj.id}
                                         className="cursor-pointer hover:bg-muted/40"
-                                        onClick={() => navigate(`/admin/workflow?project=${encodeURIComponent(proj.id)}`)}
+                                        onClick={() => setSelectedProjectId(proj.id)}
                                       >
                                         <TableCell className="text-xs font-medium max-w-[140px]">
                                           <div className="truncate">{proj.project_name}</div>
@@ -580,6 +584,12 @@ export default function HomeownersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProjectDetailDialog
+        open={!!selectedProjectId}
+        onClose={() => setSelectedProjectId(null)}
+        projectId={selectedProjectId}
+      />
     </div>
   )
 }
