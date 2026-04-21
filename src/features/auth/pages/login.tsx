@@ -25,6 +25,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
 import { signIn } from '@/lib/auth'
+import { clearQAPersona } from '@/lib/qa-personas'
 import { cn } from '@/lib/utils'
 
 const loginSchema = z.object({
@@ -95,9 +96,22 @@ export function LoginPage() {
     }
   }, [isAuthenticated, profile, navigate])
 
+  // Ship #210 (Rodolfo-direct pivot #28): QA persona flag must be cleared
+  // before real-auth signIn. AuthBootstrap's isQaPersonaActive() guards
+  // bypass the SIGNED_IN event to protect persona state — correct
+  // contract for QA mode, but it swallows the hydration of a real login
+  // if the flag lingers past logout. Awaiting clearQAPersona serializes
+  // SIGNED_OUT→SIGNED_IN so the new session lands cleanly.
+  async function clearQaBeforeAuth() {
+    if (typeof window !== 'undefined' && localStorage.getItem('buildconnect-qa-persona-active')) {
+      await clearQAPersona()
+    }
+  }
+
   async function onSubmit(data: LoginFormData) {
     setIsLoading(true)
     try {
+      await clearQaBeforeAuth()
       await signIn(data.email, data.password)
       // AuthBootstrap's onAuthStateChange listener hydrates the store;
       // the useEffect above then navigates based on role.
@@ -115,6 +129,7 @@ export function LoginPage() {
     }
     setIsLoading(true)
     try {
+      await clearQaBeforeAuth()
       await signIn(email, password)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Demo sign-in failed'

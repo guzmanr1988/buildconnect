@@ -389,8 +389,18 @@ export function applyQAPersona(persona: QAPersona) {
 }
 
 // Wipe QA state + clear all store keys. Used by the "Exit QA" option in the
-// switcher to restore a clean unauthed browser session.
-export function clearQAPersona() {
+// switcher to restore a clean unauthed browser session, AND by the login
+// flow (#210) to guarantee QA state is gone before real-auth SIGNED_IN
+// fires so AuthBootstrap's isQaPersonaActive() bypass doesn't swallow the
+// hydration event.
+//
+// Ship #210: now async. supabase.auth.signOut() is awaited so SIGNED_OUT
+// drains via AuthBootstrap's listener BEFORE callers proceed — prevents
+// the fire-and-forget race where a late SIGNED_OUT could clobber a
+// subsequent SIGNED_IN from a new real-auth login. Existing fire-and-
+// forget callers ignoring the promise still work (non-breaking signature
+// change).
+export async function clearQAPersona(): Promise<void> {
   localStorage.removeItem('buildconnect-auth')
   localStorage.removeItem('buildconnect-cart')
   localStorage.removeItem('buildconnect-projects')
@@ -437,9 +447,11 @@ export function clearQAPersona() {
   // continues immediately; the SIGNED_OUT event fires async and triggers
   // AuthBootstrap's clearLocalSession (idempotent after our setState
   // reset above, not a loop — see feedback_auth_listener_reentrancy).
-  supabase.auth.signOut().catch((err) => {
+  try {
+    await supabase.auth.signOut()
+  } catch (err) {
     console.error('[qa-personas] supabase signOut on Exit failed:', err)
-  })
+  }
 }
 
 export function activeQAPersonaId(): string | null {

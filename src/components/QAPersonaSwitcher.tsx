@@ -47,8 +47,12 @@ export function QAPersonaSwitcher() {
     router.navigate('/home')
   }
 
-  const handleExit = () => {
-    clearQAPersona()
+  const handleExit = async () => {
+    // Ship #210: await clearQAPersona so SIGNED_OUT drains before we
+    // navigate. Prior fire-and-forget was defensible for Exit-QA (user-
+    // initiated, no follow-up real auth), but ordered-completion now
+    // matters for the shared clearQAPersona contract across all callers.
+    await clearQAPersona()
     setOpen(false)
     router.navigate('/login')
   }

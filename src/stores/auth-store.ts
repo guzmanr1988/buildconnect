@@ -42,9 +42,22 @@ export const useAuthStore = create<AuthState>()(
       clearLocalSession: () =>
         set({ session: null, profile: null, isAuthenticated: false, role: null }),
       logout: () => {
-        supabase.auth.signOut().catch((err) => {
-          console.error('[auth-store] supabase signOut failed:', err)
-        })
+        // Ship #210 (Rodolfo-direct pivot #28): detect QA persona active
+        // state first. QA personas have a synthetic access_token that
+        // Supabase can't validate — calling signOut against it can hang
+        // or timeout waiting for server-side validation, producing the
+        // "stays thinking after I log out" symptom. When QA is active,
+        // just clear the flag + in-memory state; no Supabase call needed
+        // because there's no real session to terminate.
+        const hadQa = typeof window !== 'undefined'
+          && !!localStorage.getItem('buildconnect-qa-persona-active')
+        if (hadQa) {
+          localStorage.removeItem('buildconnect-qa-persona-active')
+        } else {
+          supabase.auth.signOut().catch((err) => {
+            console.error('[auth-store] supabase signOut failed:', err)
+          })
+        }
         set({ session: null, profile: null, isAuthenticated: false, role: null })
       },
     }),
