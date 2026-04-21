@@ -334,36 +334,29 @@ export default function OverviewPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              {/* Category totals + percentages */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t text-[11px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-                    <span className="text-muted-foreground">Commissions Paid</span>
-                  </span>
-                  <span className="font-semibold">${transactionCategoryTotals.commissionsPaid.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctCommissionsPaid}%)</span></span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
-                    <span className="text-muted-foreground">Pending Commissions</span>
-                  </span>
-                  <span className="font-semibold">${transactionCategoryTotals.pendingCommissions.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctPendingCommissions}%)</span></span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
-                    <span className="text-muted-foreground">Memberships</span>
-                  </span>
-                  <span className="font-semibold">${transactionCategoryTotals.memberships.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctMemberships}%)</span></span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-purple-500" />
-                    <span className="text-muted-foreground">Payouts</span>
-                  </span>
-                  <span className="font-semibold">${transactionCategoryTotals.payouts.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctPayouts}%)</span></span>
-                </div>
+              {/* Category totals — compact pill row (ship #160 per kratos
+                  msg 1776751323161; 2-col grid was taking too much space). */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t text-[10px]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">Paid</span>
+                  <span className="text-muted-foreground">${transactionCategoryTotals.commissionsPaid.toLocaleString()} · {transactionCategoryTotals.pctCommissionsPaid}%</span>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  <span className="text-amber-700 dark:text-amber-400 font-medium">Pending</span>
+                  <span className="text-muted-foreground">${transactionCategoryTotals.pendingCommissions.toLocaleString()} · {transactionCategoryTotals.pctPendingCommissions}%</span>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-blue-700 dark:text-blue-400 font-medium">Memberships</span>
+                  <span className="text-muted-foreground">${transactionCategoryTotals.memberships.toLocaleString()} · {transactionCategoryTotals.pctMemberships}%</span>
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                  <span className="text-purple-700 dark:text-purple-400 font-medium">Payouts</span>
+                  <span className="text-muted-foreground">${transactionCategoryTotals.payouts.toLocaleString()} · {transactionCategoryTotals.pctPayouts}%</span>
+                </span>
               </div>
             </CardContent>
           </Card>
