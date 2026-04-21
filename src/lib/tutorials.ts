@@ -19,6 +19,15 @@ export interface Tutorial {
   topics: string[] // chip-style tags rendered on the card
   transcript: ReactNode | string // shown in dialog below the player
   videoUrl?: string
+  // Ship #24 — admin-managed fields. Optional on the base type so the
+  // static TUTORIALS seed below remains valid without per-entry edits;
+  // the store's seed transform fills in defaults (visible: true, current
+  // timestamps). Homeowner reads filter visible !== false (widen-reads
+  // for back-compat — missing field treated as visible).
+  thumbnailUrl?: string
+  visible?: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export const TUTORIALS: Tutorial[] = [

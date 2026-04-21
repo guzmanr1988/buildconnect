@@ -52,6 +52,7 @@ import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
 import ReportsPage from '@/features/admin/pages/reports'
 import AdminMessagesPage from '@/features/admin/pages/messages'
+import AdminTutorialsPage from '@/features/admin/pages/tutorials'
 
 export const router = createBrowserRouter([
   {
@@ -131,6 +132,7 @@ export const router = createBrowserRouter([
           { path: 'banking', element: <BankingPage />, handle: { title: 'Admin · Banking' } },
           { path: 'settings', element: <SettingsPage />, handle: { title: 'Admin · Settings' } },
           { path: 'bugs', element: <BugsPage />, handle: { title: 'Admin · Bug tracker' } },
+          { path: 'tutorials', element: <AdminTutorialsPage />, handle: { title: 'Admin · Video Tutorials' } },
           { path: 'workflow', element: <WorkflowPage />, handle: { title: 'Admin · Workflow' } },
           { path: 'products', element: <ProductsAdminPage />, handle: { title: 'Admin · Products' } },
           { path: 'users', element: <UsersPage />, handle: { title: 'Admin · Users' } },

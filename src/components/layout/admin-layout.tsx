@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -28,6 +28,7 @@ const navItems = [
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
   { to: '/admin/workflow', icon: GitBranch, label: 'Workflow' },
   { to: '/admin/products', icon: Package, label: 'Products' },
+  { to: '/admin/tutorials', icon: PlayCircle, label: 'Video Tutorials' },
   { to: '/admin/bugs', icon: Bug, label: 'Bug Tracker' },
 ]
 

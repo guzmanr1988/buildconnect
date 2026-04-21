@@ -13,11 +13,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
-  TUTORIALS,
   TUTORIAL_SERVICE_LABELS,
-  getTutorialsForService,
   type Tutorial,
 } from '@/lib/tutorials'
+import { useTutorialsStore } from '@/stores/tutorials-store'
 import { cn } from '@/lib/utils'
 
 export function HomeownerTutorialsPage() {
@@ -25,19 +24,35 @@ export function HomeownerTutorialsPage() {
   const serviceFilter = searchParams.get('service') ?? 'all'
   const [selected, setSelected] = useState<Tutorial | null>(null)
 
-  const visible = useMemo(
-    () => getTutorialsForService(serviceFilter === 'all' ? null : serviceFilter),
-    [serviceFilter],
+  // Ship #24 — tutorials are now admin-managed via useTutorialsStore
+  // (shared-state two-surfaces pattern — admin writes on /admin/tutorials,
+  // homeowner reads here). Filter visible !== false (widen-reads for
+  // pre-#24 persisted records that may lack the visibility field). The
+  // "general" tutorials are always appended in service-specific views
+  // per the pre-#24 getTutorialsForService behavior, so broadly-useful
+  // content still surfaces under every service filter.
+  const allTutorials = useTutorialsStore((s) => s.tutorials)
+  const visibleTutorials = useMemo(
+    () => allTutorials.filter((t) => t.visible !== false),
+    [allTutorials],
   )
+  const visible = useMemo(() => {
+    if (serviceFilter === 'all') return visibleTutorials
+    const specific = visibleTutorials.filter((t) => t.serviceId === serviceFilter)
+    const general = visibleTutorials.filter((t) => t.serviceId === 'general')
+    return [...specific, ...general]
+  }, [visibleTutorials, serviceFilter])
 
-  // Filter chips: distinct serviceIds from the full catalog + an "All" head.
+  // Filter chips: distinct serviceIds from the full visible catalog + an
+  // "All" head. Rebuilds if admin adds/hides categories — admin ships +
+  // homeowner sees the change on next render.
   const serviceChips = useMemo(() => {
-    const ids = Array.from(new Set(TUTORIALS.map((t) => t.serviceId)))
+    const ids = Array.from(new Set(visibleTutorials.map((t) => t.serviceId)))
     return [{ id: 'all', label: 'All' }, ...ids.map((id) => ({
       id,
       label: TUTORIAL_SERVICE_LABELS[id] ?? id,
     }))]
-  }, [])
+  }, [visibleTutorials])
 
   const setFilter = (id: string) => {
     if (id === 'all') {
