@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { MOCK_TRANSACTIONS } from '@/lib/mock-data'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
@@ -113,10 +114,18 @@ export default function TransactionsPage() {
     // Dedupe: if Supabase fetch returned a row with id matching our mock synth,
     // prefer the Supabase row (it's the authoritative version once the Tranche-2
     // closed_sales→transactions write path lands).
+    // Also merge MOCK_TRANSACTIONS payouts (ship #144): Supabase has membership
+    // + commission seeds but zero payout seeds, so the Payouts category would
+    // render empty without this fallback. Memberships untouched (Supabase owns
+    // the authoritative amounts).
     const supabaseIds = new Set(transactions.map((t) => t.id))
+    const mockPayouts = MOCK_TRANSACTIONS.filter(
+      (t) => t.type === 'payout' && !supabaseIds.has(t.id),
+    )
     const unified = [
       ...transactions,
       ...mockSoldTransactions.filter((t) => !supabaseIds.has(t.id)),
+      ...mockPayouts,
     ]
     for (const tx of unified) {
       if (tx.type === 'commission') {
