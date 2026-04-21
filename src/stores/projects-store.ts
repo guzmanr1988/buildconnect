@@ -45,6 +45,13 @@ export interface SentProject {
   // Confirm a new-lead modal; editable post-confirm via the confirmed-tab
   // edit flow. Visible to the homeowner on /home/appointments/:id.
   assignedRep?: VendorRep
+  // Timestamp when vendor transitioned this project into 'approved'.
+  // Written by updateStatus; homeowner timeline renders the value.
+  // Overwrites on re-approval (re-confirm after reschedule = latest time).
+  confirmedAt?: string
+  // Timestamp when vendor first picked the assignedRep. Overwrites on
+  // reassignment (semantically "when the currently-assigned rep was set").
+  repAssignedAt?: string
 }
 
 type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
@@ -80,6 +87,16 @@ interface ProjectsState {
   // cancelled lifecycle state per kratos msg 1776662371771 — Tranche-2
   // schema will diverge cancelled vs rejected).
   cancellationRequestsByLead: Record<string, CancellationRequest>
+  // Lead-id → vendor-confirm timestamp. Parallel to leadStatusOverrides
+  // for the mock-lead path (MOCK_LEADS rows w/o sentProject). Written
+  // whenever setLeadStatus(id, 'confirmed') fires; homeowner timeline on
+  // /home/appointments/:id reads this to render real times on the
+  // "Vendor confirmed visit" entry (previously empty per ship #72).
+  leadConfirmedAtByLead: Record<string, string>
+  // Lead-id → rep-assignment timestamp. Parallel to assignedRepByLead.
+  // Written whenever assignRepByLead fires; consumed by homeowner
+  // timeline on "Representative assigned" entry.
+  repAssignedAtByLead: Record<string, string>
   sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string) => void
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
@@ -102,6 +119,8 @@ export const useProjectsStore = create<ProjectsState>()(
       assignedRepByLead: {},
       leadStatusOverrides: {},
       cancellationRequestsByLead: {},
+      leadConfirmedAtByLead: {},
+      repAssignedAtByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument) => {
         set((state) => ({
@@ -124,7 +143,15 @@ export const useProjectsStore = create<ProjectsState>()(
       updateStatus: (id, status) => {
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
-            p.id === id ? { ...p, status } : p
+            p.id === id
+              ? {
+                  ...p,
+                  status,
+                  // Stamp confirmedAt on transition-to-approved. Overwrites
+                  // on re-approval (reschedule→approved again = latest time).
+                  ...(status === 'approved' ? { confirmedAt: new Date().toISOString() } : {}),
+                }
+              : p
           ),
         }))
       },
@@ -148,7 +175,7 @@ export const useProjectsStore = create<ProjectsState>()(
       assignRep: (id, rep) => {
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
-            p.id === id ? { ...p, assignedRep: rep } : p
+            p.id === id ? { ...p, assignedRep: rep, repAssignedAt: new Date().toISOString() } : p
           ),
         }))
       },
@@ -156,12 +183,18 @@ export const useProjectsStore = create<ProjectsState>()(
       assignRepByLead: (leadId, rep) => {
         set((state) => ({
           assignedRepByLead: { ...state.assignedRepByLead, [leadId]: rep },
+          repAssignedAtByLead: { ...state.repAssignedAtByLead, [leadId]: new Date().toISOString() },
         }))
       },
 
       setLeadStatus: (leadId, status) => {
         set((state) => ({
           leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: status },
+          // Stamp confirmed-at only on transition-to-confirmed. Other status
+          // flips (rejected / rescheduled / completed) leave the map alone.
+          ...(status === 'confirmed'
+            ? { leadConfirmedAtByLead: { ...state.leadConfirmedAtByLead, [leadId]: new Date().toISOString() } }
+            : {}),
         }))
       },
 
@@ -255,6 +288,8 @@ export const useProjectsStore = create<ProjectsState>()(
           assignedRepByLead: { ...(ps.assignedRepByLead ?? {}), ...(currentState.assignedRepByLead ?? {}) },
           leadStatusOverrides: { ...(ps.leadStatusOverrides ?? {}), ...(currentState.leadStatusOverrides ?? {}) },
           cancellationRequestsByLead: { ...(ps.cancellationRequestsByLead ?? {}), ...(currentState.cancellationRequestsByLead ?? {}) },
+          leadConfirmedAtByLead: { ...(ps.leadConfirmedAtByLead ?? {}), ...(currentState.leadConfirmedAtByLead ?? {}) },
+          repAssignedAtByLead: { ...(ps.repAssignedAtByLead ?? {}), ...(currentState.repAssignedAtByLead ?? {}) },
         }
       },
     }

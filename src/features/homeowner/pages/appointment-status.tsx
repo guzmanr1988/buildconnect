@@ -37,6 +37,8 @@ export function AppointmentStatusPage() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const leadConfirmedAtByLead = useProjectsStore((s) => s.leadConfirmedAtByLead)
+  const repAssignedAtByLead = useProjectsStore((s) => s.repAssignedAtByLead)
 
   // Two lookup paths:
   // 1. MOCK_LEADS (static fixtures L-0001..L-0005) — read by id match.
@@ -101,15 +103,39 @@ export function AppointmentStatusPage() {
   ]
   // Dynamic timeline entries appended when the lead is post-confirm AND has
   // an assigned rep. Two entries (per kratos msg 1776660496402): "Vendor
-  // confirmed visit" and "Representative assigned — <name>." Time field
-  // left empty since we don't persist a confirm-at timestamp yet; renderer
-  // omits the time line when falsy.
+  // confirmed visit" and "Representative assigned — <name>." Timestamps
+  // resolved per ship #166: mock-lead path reads from leadConfirmedAtByLead
+  // + repAssignedAtByLead maps; sentProject path reads .confirmedAt +
+  // .repAssignedAt fields. Falls back to empty for pre-#166 persisted
+  // entries — renderer omits the time line when falsy.
+  const matchedSentProject = sentProjects.find(
+    (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
+  )
+  const confirmedAtIso =
+    leadConfirmedAtByLead[lead.id] ?? matchedSentProject?.confirmedAt
+  const repAssignedAtIso =
+    repAssignedAtByLead[lead.id] ?? matchedSentProject?.repAssignedAt
+  function formatTimelineTime(iso: string | undefined): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
   const dynamicTimeline: { label: string; time: string; status: LeadStatus }[] = []
   if (lead.status === 'confirmed' && assignedRep) {
-    dynamicTimeline.push({ label: 'Vendor confirmed visit', time: '', status: 'confirmed' })
+    dynamicTimeline.push({
+      label: 'Vendor confirmed visit',
+      time: formatTimelineTime(confirmedAtIso),
+      status: 'confirmed',
+    })
     dynamicTimeline.push({
       label: `Representative assigned — ${assignedRep.name}`,
-      time: '',
+      time: formatTimelineTime(repAssignedAtIso),
       status: 'confirmed',
     })
   }
