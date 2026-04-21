@@ -9,6 +9,7 @@ import {
   type CancellationRequest,
 } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { supabase } from '@/lib/supabase'
 
 // QA personas for 2-week launch QA sweep. Each persona has a fully-seeded
 // starting state across auth + cart + projects stores so apollo (or any QA
@@ -422,6 +423,22 @@ export function clearQAPersona() {
     cancellationRequestsByLead: {},
     leadConfirmedAtByLead: {},
     repAssignedAtByLead: {},
+  })
+
+  // Ship #168 (task_1776716736651_418): fire-and-forget Supabase signOut
+  // on Exit. #167 already eliminated the ~900ms full-reload by moving
+  // Exit to SPA nav, which lands us well under the <300ms target. This
+  // signOut closes the remaining correctness gap: without it, any
+  // lingering `sb-<project>-auth-token` from a real pre-QA login stays
+  // live. Once AuthBootstrap's listener sees the next TOKEN_REFRESHED
+  // (or a SIGNED_IN race post-Exit), it would hydrate that session and
+  // /login's useEffect would redirect the user back to /home — exactly
+  // the opposite of what Exit implies. Non-blocking: nav to /login
+  // continues immediately; the SIGNED_OUT event fires async and triggers
+  // AuthBootstrap's clearLocalSession (idempotent after our setState
+  // reset above, not a loop — see feedback_auth_listener_reentrancy).
+  supabase.auth.signOut().catch((err) => {
+    console.error('[qa-personas] supabase signOut on Exit failed:', err)
   })
 }
 
