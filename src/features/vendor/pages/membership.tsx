@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { CheckCircle2, XCircle, CreditCard, Landmark, Wallet, Calendar, AlertTriangle, ArrowUpRight } from 'lucide-react'
+import { CheckCircle2, XCircle, CreditCard, Landmark, Calendar, AlertTriangle, ArrowUpRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -58,9 +58,10 @@ function fmtMoney(cents: number): string {
 }
 
 function methodIconFor(kind: VendorPaymentMethodKind) {
-  if (kind === 'credit_card') return CreditCard
-  if (kind === 'debit_card') return Wallet
-  return Landmark
+  // Ship #185 — unified 'card' kind (plus legacy credit_card/debit_card
+  // aliases for pre-#185 persisted entries) all use the card icon.
+  if (kind === 'checking') return Landmark
+  return CreditCard
 }
 
 export default function VendorMembershipPage() {
@@ -215,7 +216,15 @@ export default function VendorMembershipPage() {
                     })()}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">
-                        {PAYMENT_METHOD_LABELS[paymentMethod.kind]}
+                        {/* Ship #185 — brand overrides the generic
+                            "Card" label when detected at save time.
+                            "Visa ****4242" is the target shape Rodolfo
+                            called out. Checking or unknown-brand cards
+                            fall through to the PAYMENT_METHOD_LABELS
+                            entry ("Card" / "Checking Account"). */}
+                        {paymentMethod.kind === 'checking'
+                          ? PAYMENT_METHOD_LABELS[paymentMethod.kind]
+                          : paymentMethod.brand ?? PAYMENT_METHOD_LABELS[paymentMethod.kind]}
                         <span className="ml-1.5 font-mono text-xs text-muted-foreground">
                           •••• {paymentMethod.last4}
                         </span>

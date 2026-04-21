@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { CheckCircle2, CreditCard, Landmark, Wallet } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, CreditCard, Landmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
   Dialog,
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import {
-  PAYMENT_METHOD_LABELS,
+  detectCardBrand,
   type VendorPaymentMethod,
   type VendorPaymentMethodKind,
 } from '@/stores/vendor-billing-store'
@@ -51,18 +51,28 @@ export interface VendorPaymentDialogProps {
 
 type UIState = 'entering' | 'submitting' | 'success'
 
+// Type alias for the UI-visible kind after #185 merges credit+debit.
+// Writes only ever produce these two; legacy persisted values still
+// read via the back-compat aliases in PAYMENT_METHOD_LABELS.
+type UIKind = 'card' | 'checking'
+
+function normalizeInitialKind(kind: VendorPaymentMethodKind): UIKind {
+  if (kind === 'checking') return 'checking'
+  return 'card' // 'card', 'credit_card', 'debit_card' all land here
+}
+
 export function VendorPaymentDialog({
   open,
   onOpenChange,
   onSuccess,
   blocking = true,
-  initialKind = 'credit_card',
+  initialKind = 'card',
   initialHolder = '',
 }: VendorPaymentDialogProps) {
-  const [kind, setKind] = useState<VendorPaymentMethodKind>(initialKind)
+  const [kind, setKind] = useState<UIKind>(normalizeInitialKind(initialKind))
   const [uiState, setUIState] = useState<UIState>('entering')
 
-  // Credit / debit fields
+  // Card fields
   const [holder, setHolder] = useState(initialHolder)
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry] = useState('')
@@ -75,7 +85,7 @@ export function VendorPaymentDialog({
   // Reset state when dialog opens fresh.
   useEffect(() => {
     if (open) {
-      setKind(initialKind)
+      setKind(normalizeInitialKind(initialKind))
       setUIState('entering')
       setHolder(initialHolder)
       setCardNumber('')
@@ -87,18 +97,27 @@ export function VendorPaymentDialog({
     }
   }, [open, initialKind, initialHolder])
 
+  // Ship #185 — live card-brand detection. Recomputed on every
+  // cardNumber keystroke. Memoized so the render-time brand chip
+  // doesn't re-run the regex unnecessarily on unrelated re-renders.
+  const detectedBrand = useMemo(() => detectCardBrand(cardNumber), [cardNumber])
+
   // Validate + return the normalized method object. Null = form not
   // ready to submit. Very permissive validation since mock — just enough
   // to catch empty fields.
   function buildMethod(): VendorPaymentMethod | null {
-    if (kind === 'credit_card' || kind === 'debit_card') {
+    if (kind === 'card') {
       if (!holder.trim() || !cardNumber.trim() || !expiry.trim() || !cvv.trim()) return null
       const digits = cardNumber.replace(/\D/g, '')
       if (digits.length < 12) return null
       return {
-        kind,
+        kind: 'card',
         last4: digits.slice(-4),
         holder: holder.trim(),
+        // Snapshot brand at submit time; falls through to undefined if
+        // the number didn't match any known IIN prefix. Membership
+        // display treats absent brand as plain "Card" label.
+        brand: detectedBrand ?? undefined,
         expiry: expiry.trim(),
         addedAt: new Date().toISOString(),
       }
@@ -180,15 +199,15 @@ export function VendorPaymentDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <Tabs value={kind} onValueChange={(v) => setKind(v as VendorPaymentMethodKind)} className="mt-2">
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="credit_card" className="text-xs gap-1.5">
+            <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-2">
+              {/* Ship #185 — merged Credit Card + Debit Card into single
+                  'Card' tab per Rodolfo: "debit/credit merge them". The
+                  user-visible differentiator is the brand chip on the
+                  card-number input, not the credit-vs-debit toggle. */}
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="card" className="text-xs gap-1.5">
                   <CreditCard className="h-3.5 w-3.5" />
-                  Credit Card
-                </TabsTrigger>
-                <TabsTrigger value="debit_card" className="text-xs gap-1.5">
-                  <Wallet className="h-3.5 w-3.5" />
-                  Debit Card
+                  Card
                 </TabsTrigger>
                 <TabsTrigger value="checking" className="text-xs gap-1.5">
                   <Landmark className="h-3.5 w-3.5" />
@@ -196,22 +215,21 @@ export function VendorPaymentDialog({
                 </TabsTrigger>
               </TabsList>
 
-              {/* Credit + debit share the same form shape. */}
-              {(['credit_card', 'debit_card'] as const).map((k) => (
-                <TabsContent key={k} value={k} className="space-y-3 mt-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="vpd-holder" className="text-xs font-semibold">Name on card</Label>
-                    <Input
-                      id="vpd-holder"
-                      autoComplete="cc-name"
-                      value={holder}
-                      onChange={(e) => setHolder(e.target.value)}
-                      placeholder="First Last"
-                      className="h-10 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="vpd-card" className="text-xs font-semibold">Card number</Label>
+              <TabsContent value="card" className="space-y-3 mt-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="vpd-holder" className="text-xs font-semibold">Name on card</Label>
+                  <Input
+                    id="vpd-holder"
+                    autoComplete="cc-name"
+                    value={holder}
+                    onChange={(e) => setHolder(e.target.value)}
+                    placeholder="First Last"
+                    className="h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="vpd-card" className="text-xs font-semibold">Card number</Label>
+                  <div className="relative">
                     <Input
                       id="vpd-card"
                       autoComplete="cc-number"
@@ -219,37 +237,53 @@ export function VendorPaymentDialog({
                       value={cardNumber}
                       onChange={(e) => setCardNumber(e.target.value)}
                       placeholder="1234 5678 9012 3456"
+                      className={cn('h-10 text-sm font-mono tracking-wide', detectedBrand && 'pr-24')}
+                    />
+                    {/* Ship #185 — live brand chip inline-end of the
+                        number input. Updates as user types via the
+                        detectCardBrand IIN-prefix match. Hidden when no
+                        brand match yet, so empty/unknown prefixes don't
+                        render a bogus label. */}
+                    {detectedBrand && (
+                      <motion.span
+                        key={detectedBrand}
+                        initial={{ opacity: 0, x: 4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary"
+                      >
+                        {detectedBrand}
+                      </motion.span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vpd-expiry" className="text-xs font-semibold">Expires</Label>
+                    <Input
+                      id="vpd-expiry"
+                      autoComplete="cc-exp"
+                      inputMode="numeric"
+                      value={expiry}
+                      onChange={(e) => setExpiry(e.target.value)}
+                      placeholder="MM/YY"
                       className="h-10 text-sm font-mono tracking-wide"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="vpd-expiry" className="text-xs font-semibold">Expires</Label>
-                      <Input
-                        id="vpd-expiry"
-                        autoComplete="cc-exp"
-                        inputMode="numeric"
-                        value={expiry}
-                        onChange={(e) => setExpiry(e.target.value)}
-                        placeholder="MM/YY"
-                        className="h-10 text-sm font-mono tracking-wide"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="vpd-cvv" className="text-xs font-semibold">CVV</Label>
-                      <Input
-                        id="vpd-cvv"
-                        autoComplete="cc-csc"
-                        inputMode="numeric"
-                        value={cvv}
-                        onChange={(e) => setCvv(e.target.value)}
-                        placeholder="123"
-                        className="h-10 text-sm font-mono tracking-wide"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vpd-cvv" className="text-xs font-semibold">CVV</Label>
+                    <Input
+                      id="vpd-cvv"
+                      autoComplete="cc-csc"
+                      inputMode="numeric"
+                      value={cvv}
+                      onChange={(e) => setCvv(e.target.value)}
+                      placeholder="123"
+                      className="h-10 text-sm font-mono tracking-wide"
+                    />
                   </div>
-                </TabsContent>
-              ))}
+                </div>
+              </TabsContent>
 
               <TabsContent value="checking" className="space-y-3 mt-4">
                 <div className="space-y-1.5">
@@ -313,7 +347,11 @@ export function VendorPaymentDialog({
                     transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
                   />
                 ) : (
-                  <>Submit {PAYMENT_METHOD_LABELS[kind]}</>
+                  // Ship #185 — unified "Submit Payment" copy across
+                  // both remaining tabs per Rodolfo's "submit payment
+                  // for all 3 options" directive (three-tabs-collapsed-
+                  // to-two still gets the unified verb).
+                  'Submit Payment'
                 )}
               </Button>
               <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
