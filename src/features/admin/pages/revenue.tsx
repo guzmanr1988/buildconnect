@@ -35,6 +35,7 @@ import { fetchAllClosedSales } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { VendorSummaryDialog } from '@/components/shared/vendor-summary-dialog'
 import type { ClosedSale } from '@/types'
 
 const fadeUp = {
@@ -49,6 +50,8 @@ const fadeUp = {
 export default function RevenuePage() {
   // Phase 5: closed_sales fetched from Supabase at mount.
   const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
+  // Ship #155: per-vendor summary Dialog on row click.
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
   const refreshClosedSales = () => {
     fetchAllClosedSales()
       .then(setClosedSales)
@@ -94,13 +97,14 @@ export default function RevenuePage() {
   const vendorBreakdown = useMemo(() => {
     const map = new Map<
       string,
-      { company: string; totalRevenue: number; appShare: number; vendorShare: number; deals: number; subActive: boolean; commissionPct: number }
+      { vendorId: string; company: string; totalRevenue: number; appShare: number; vendorShare: number; deals: number; subActive: boolean; commissionPct: number }
     >()
 
     // Seed with the 3 featured demo vendors (mapped via DEMO_VENDOR_UUID_BY_MOCK_ID)
     // so they render even with zero sales.
     for (const vendor of MOCK_VENDORS) {
       map.set(vendor.id, {
+        vendorId: vendor.id,
         company: vendor.company,
         totalRevenue: 0,
         appShare: 0,
@@ -307,7 +311,11 @@ export default function RevenuePage() {
               </TableHeader>
               <TableBody>
                 {vendorBreakdown.map((v) => (
-                  <TableRow key={v.company}>
+                  <TableRow
+                    key={v.vendorId}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => setSelectedVendorId(v.vendorId)}
+                  >
                     <TableCell className="font-medium">{v.company}</TableCell>
                     <TableCell className="text-right font-semibold">
                       ${v.totalRevenue.toLocaleString()}
@@ -344,6 +352,13 @@ export default function RevenuePage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <VendorSummaryDialog
+        open={!!selectedVendorId}
+        onClose={() => setSelectedVendorId(null)}
+        vendorId={selectedVendorId}
+        closedSales={closedSales}
+      />
     </div>
   )
 }
