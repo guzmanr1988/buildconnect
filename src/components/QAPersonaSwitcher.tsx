@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { UserRound, LogOut, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +8,7 @@ import {
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { QA_PERSONAS, applyQAPersona, clearQAPersona, activeQAPersonaId } from '@/lib/qa-personas'
+import { router } from '@/router'
 
 // Floating QA persona switcher. Visible only when VITE_DEMO_MODE !== 'false'.
 // Lets apollo (or any QA operator) jump between 4 pre-seeded homeowner
@@ -17,7 +17,6 @@ import { QA_PERSONAS, applyQAPersona, clearQAPersona, activeQAPersonaId } from '
 // in the prod env.
 export function QAPersonaSwitcher() {
   const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
-  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -32,19 +31,26 @@ export function QAPersonaSwitcher() {
     if (!persona) return
     applyQAPersona(persona)
     // Ship #167 (task_1776717692862_738): SPA nav restored. AuthBootstrap
-    // now reads the qaPersonaActive flag inside each async callback, so the
-    // mount-snapshot staleness that regressed #103 no longer applies. The
-    // applyQAPersona() call above also setStates the in-memory stores so
-    // consumers render the fresh persona data without a reload (~42ms
-    // apply vs ~1-2s previously).
+    // now reads the qaPersonaActive flag inside each async callback, so
+    // the mount-snapshot staleness that regressed #103 no longer applies.
+    // applyQAPersona() also setStates the in-memory stores so consumers
+    // render fresh data without a reload (~42ms vs ~1-2s previously).
+    //
+    // Ship #169: use router.navigate() not the useNavigate() hook. This
+    // component renders as a sibling of <RouterProvider> in App.tsx (it
+    // sits alongside the router, not inside a route), so the hook would
+    // throw "useNavigate() may be used only in the context of a <Router>
+    // component." Apollo caught this on 2a787265 — same defect-class as
+    // the #104 revert, different hook-placement flavor. router.navigate()
+    // is the data-router imperative API and works from outside the tree.
     setOpen(false)
-    navigate('/home')
+    router.navigate('/home')
   }
 
   const handleExit = () => {
     clearQAPersona()
     setOpen(false)
-    navigate('/login')
+    router.navigate('/login')
   }
 
   const active = activeId ? QA_PERSONAS.find((p) => p.id === activeId) : null
