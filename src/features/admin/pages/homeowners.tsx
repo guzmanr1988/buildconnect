@@ -282,10 +282,26 @@ export default function HomeownersPage() {
             allProjects.map((p) => p.address_label ?? 'Primary')
           ))
           const showAddressFilter = distinctAddressLabels.length >= 2
+          // Ship #138: add 'All Properties' as first dropdown option; keep
+          // Primary as default for single-focus view.
+          const ALL_ADDRESSES = 'All Properties'
           const selectedAddress = addressFilterByHomeowner[homeowner.id] ?? 'Primary'
-          const projects = showAddressFilter
+          const projects = showAddressFilter && selectedAddress !== ALL_ADDRESSES
             ? allProjects.filter((p) => (p.address_label ?? 'Primary') === selectedAddress)
             : allProjects
+          // Grouped-by-address view when 'All Properties' is selected — small
+          // address subheader above each group so admin can visually distinguish
+          // which property each project belongs to.
+          const showGrouped = showAddressFilter && selectedAddress === ALL_ADDRESSES
+          const groupedProjects: { label: string; items: typeof projects }[] = showGrouped
+            ? distinctAddressLabels
+                .sort((a, b) => (a === 'Primary' ? -1 : b === 'Primary' ? 1 : a.localeCompare(b)))
+                .map((label) => ({
+                  label,
+                  items: projects.filter((p) => (p.address_label ?? 'Primary') === label),
+                }))
+                .filter((g) => g.items.length > 0)
+            : []
           return (
             <motion.div
               key={homeowner.id}
@@ -438,6 +454,7 @@ export default function HomeownersPage() {
                               className="flex-1 bg-background rounded border text-xs px-2 py-1"
                               aria-label={`Filter projects by address for ${homeowner.name}`}
                             >
+                              <option value={ALL_ADDRESSES}>{ALL_ADDRESSES}</option>
                               {distinctAddressLabels
                                 .sort((a, b) => (a === 'Primary' ? -1 : b === 'Primary' ? 1 : a.localeCompare(b)))
                                 .map((label) => (
@@ -466,33 +483,45 @@ export default function HomeownersPage() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {projects.map((proj) => (
-                                <TableRow key={proj.id}>
-                                  <TableCell className="text-xs font-medium max-w-[140px]">
-                                    <div className="truncate">
-                                      {proj.project_name}
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                                      {new Date(
-                                        proj.date_submitted
-                                      ).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                      })}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {proj.service_type}
-                                  </TableCell>
-                                  <TableCell>
-                                    <StatusBadge
-                                      status={proj.status}
-                                      className="text-[10px] px-2 py-0"
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {showGrouped
+                                ? groupedProjects.flatMap((group) => [
+                                    <TableRow key={`group-${group.label}`} className="bg-muted/30 hover:bg-muted/30">
+                                      <TableCell colSpan={3} className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-1.5">
+                                        <span className="flex items-center gap-1.5">
+                                          <MapPin className="h-3 w-3" />
+                                          {group.label} ({group.items.length})
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>,
+                                    ...group.items.map((proj) => (
+                                      <TableRow key={proj.id}>
+                                        <TableCell className="text-xs font-medium max-w-[140px]">
+                                          <div className="truncate">{proj.project_name}</div>
+                                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                                            {new Date(proj.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="text-xs">{proj.service_type}</TableCell>
+                                        <TableCell>
+                                          <StatusBadge status={proj.status} className="text-[10px] px-2 py-0" />
+                                        </TableCell>
+                                      </TableRow>
+                                    )),
+                                  ])
+                                : projects.map((proj) => (
+                                    <TableRow key={proj.id}>
+                                      <TableCell className="text-xs font-medium max-w-[140px]">
+                                        <div className="truncate">{proj.project_name}</div>
+                                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                                          {new Date(proj.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-xs">{proj.service_type}</TableCell>
+                                      <TableCell>
+                                        <StatusBadge status={proj.status} className="text-[10px] px-2 py-0" />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
                             </TableBody>
                           </Table>
                         )}
