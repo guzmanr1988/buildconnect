@@ -122,6 +122,22 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
             : 'pending'
     const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
     const closedSale = MOCK_CLOSED_SALES.find((c) => c.lead_id === l.id)
+    // Ship #150: synthesize minimal homeowner + selections context from
+    // MOCK_LEADS fields so Customer Info + Project Selections sections
+    // render on the lead-bridge path (apollo caught these missing on
+    // tx-row-opened Dialogs where bridge resolves to a MOCK_LEAD).
+    const syntheticProjectData = {
+      homeowner: {
+        name: l.homeowner_name,
+        phone: l.phone,
+        email: l.email,
+        address: l.address,
+      },
+      item: {
+        serviceName: l.project.split('—')[0].trim(),
+        selections: l.pack_items as Record<string, string[]>,
+      },
+    }
     return {
       id: l.id,
       name: l.homeowner_name,
@@ -133,7 +149,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       status: mappedStatus,
       soldAt: closedSale?.closed_at,
       saleAmount: closedSale?.sale_amount,
-      project_data: null as any,
+      project_data: syntheticProjectData as any,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides])
@@ -254,22 +270,42 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 </>
               )}
 
-              {/* Commission breakdown — mirrors vendor-banking shape; respects
-                  per-vendor commission_pct override. Gated on status==='sold'
-                  so internally-inconsistent seed data (pending/approved lead
-                  with a stray MOCK_CLOSED_SALES match) doesn't render a
-                  commission split on non-sold projects. Ship #142 P0. */}
-              {selectedItem.status === 'sold' && selectedItem.saleAmount && selectedItem.saleAmount > 0 && (() => {
+              {/* Commission breakdown — two render paths:
+                  (a) bridge-resolved project with status==='sold' + saleAmount
+                      (existing ship #142 status-gate guards against seed
+                      inconsistency on direct-project drill-in).
+                  (b) transaction-fallback context (ship #150): commission is
+                      source-of-truth from tx-row context — money flowed,
+                      render the split regardless of linked-project status.
+                      Uses transactionFallback.amount as authoritative
+                      commission figure; reverse-derives saleAmount via
+                      commissionPct. */}
+              {(() => {
+                const isTxContext = !!transactionFallback && transactionFallback.type === 'commission'
+                const statusGateHeld = selectedItem.status === 'sold' && selectedItem.saleAmount && selectedItem.saleAmount > 0
+                if (!isTxContext && !statusGateHeld) return null
+                return true
+              })() && (() => {
                 const vendorPct = 100 - commissionPct
-                const bcAmount = Math.round(selectedItem.saleAmount * (commissionPct / 100))
-                const vendorAmount = selectedItem.saleAmount - bcAmount
+                // Prefer selectedItem.saleAmount (bridge-resolved authoritative
+                // value). Fall back to reverse-derived saleAmount from
+                // transactionFallback.amount when the bridge resolved a lead
+                // with no associated sold amount (#150 — commission exists as
+                // fact even if project.status != sold).
+                const txAmount = transactionFallback?.type === 'commission' ? transactionFallback.amount : null
+                const saleAmount = (selectedItem.saleAmount && selectedItem.saleAmount > 0)
+                  ? selectedItem.saleAmount
+                  : (txAmount && commissionPct > 0 ? Math.round((txAmount * 100) / commissionPct) : 0)
+                if (saleAmount <= 0) return null
+                const bcAmount = Math.round(saleAmount * (commissionPct / 100))
+                const vendorAmount = saleAmount - bcAmount
                 return (
                   <div className="rounded-xl border p-4 space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission</h4>
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Sale Total</span>
-                        <span className="font-bold">${selectedItem.saleAmount.toLocaleString()}</span>
+                        <span className="font-bold">${saleAmount.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                         <span className="font-medium">Vendor's Share {vendorPct}%</span>
