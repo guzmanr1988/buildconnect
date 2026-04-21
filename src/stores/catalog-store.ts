@@ -91,6 +91,38 @@ interface CatalogState {
     subGroupId: string,
     subOptionId: string
   ) => Promise<void>
+
+  // Ship #175 (Rodolfo-direct 2026-04-21) — reorder via long-press-and-drag
+  // on admin/products. All four nested levels are reorderable; top-level
+  // services are intentionally NOT reorderable (per Rodolfos "only menus
+  // under the services" scope). fromIndex/toIndex are positions in the
+  // current array, not sort_order values. Local-only today — the Supabase
+  // sort_order column is read on hydrate but bulk-reorder write API is
+  // Tranche-2 (needs a per-table batch-update endpoint); for now the
+  // zustand persist middleware survives the reorder across reloads, which
+  // matches the mock-as-test-harness pattern for other admin edits.
+  reorderOptionGroups: (serviceId: string, fromIndex: number, toIndex: number) => void
+  reorderOptions: (
+    serviceId: string,
+    groupId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void
+  reorderSubGroups: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void
+  reorderSubOptions: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void
 }
 
 /* ---------------------------------------------------------------- */
@@ -439,6 +471,23 @@ const localRemoveSubOption = (
 })
 
 /* ---------------------------------------------------------------- */
+/* Reorder helpers (Ship #175)                                       */
+/* ---------------------------------------------------------------- */
+
+// Standard array move — returns a new array with the element at
+// fromIndex moved to toIndex. No-ops when indices are equal or when
+// either is out of range.
+function arrayMove<T>(arr: T[], from: number, to: number): T[] {
+  if (from === to) return arr
+  if (from < 0 || from >= arr.length) return arr
+  if (to < 0 || to >= arr.length) return arr
+  const next = arr.slice()
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
+}
+
+/* ---------------------------------------------------------------- */
 /* Store                                                             */
 /* ---------------------------------------------------------------- */
 
@@ -560,6 +609,91 @@ export const useCatalogStore = create<CatalogState>()(
           )
         )
       },
+
+      // Ship #175 — reorder actions. Pure local-state updates; no api.*
+      // call because vendor_option_prices / option-groups bulk-reorder
+      // endpoints aren't wired yet. zustand persist middleware keeps the
+      // reorder across reloads, matching the mock-as-test-harness pattern.
+      reorderOptionGroups: (serviceId, fromIndex, toIndex) =>
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.id === serviceId
+              ? { ...s, optionGroups: arrayMove(s.optionGroups, fromIndex, toIndex) }
+              : s
+          ),
+        })),
+
+      reorderOptions: (serviceId, groupId, fromIndex, toIndex) =>
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.id !== serviceId
+              ? s
+              : {
+                  ...s,
+                  optionGroups: s.optionGroups.map((g) =>
+                    g.id === groupId
+                      ? { ...g, options: arrayMove(g.options, fromIndex, toIndex) }
+                      : g
+                  ),
+                }
+          ),
+        })),
+
+      reorderSubGroups: (serviceId, groupId, optionId, fromIndex, toIndex) =>
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.id !== serviceId
+              ? s
+              : {
+                  ...s,
+                  optionGroups: s.optionGroups.map((g) =>
+                    g.id !== groupId
+                      ? g
+                      : {
+                          ...g,
+                          options: g.options.map((o) =>
+                            o.id !== optionId
+                              ? o
+                              : {
+                                  ...o,
+                                  subGroups: arrayMove(o.subGroups ?? [], fromIndex, toIndex),
+                                }
+                          ),
+                        }
+                  ),
+                }
+          ),
+        })),
+
+      reorderSubOptions: (serviceId, groupId, optionId, subGroupId, fromIndex, toIndex) =>
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.id !== serviceId
+              ? s
+              : {
+                  ...s,
+                  optionGroups: s.optionGroups.map((g) =>
+                    g.id !== groupId
+                      ? g
+                      : {
+                          ...g,
+                          options: g.options.map((o) =>
+                            o.id !== optionId
+                              ? o
+                              : {
+                                  ...o,
+                                  subGroups: (o.subGroups ?? []).map((sg) =>
+                                    sg.id !== subGroupId
+                                      ? sg
+                                      : { ...sg, options: arrayMove(sg.options, fromIndex, toIndex) }
+                                  ),
+                                }
+                          ),
+                        }
+                  ),
+                }
+          ),
+        })),
 
       removeSubOption: async (serviceId, groupId, optionId, subGroupId, subOptionId) => {
         await api.deleteSubOption(

@@ -39,6 +39,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { PageHeader } from '@/components/shared/page-header'
+import { ReorderableList } from '@/features/admin/components/reorderable-list'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import type { ServiceConfig, OptionGroup, ServiceCategory } from '@/types'
@@ -124,6 +125,11 @@ export default function ProductsAdminPage() {
     updateSubOption,
     removeSubOption,
     hydrateFromServer,
+    // Ship #175 — reorder actions for the 4 nested levels.
+    reorderOptionGroups,
+    reorderOptions,
+    reorderSubGroups,
+    reorderSubOptions,
   } = useCatalogStore()
 
   // Trigger server hydration on mount so admin sees fresh data from Supabase,
@@ -662,11 +668,27 @@ export default function ProductsAdminPage() {
                         <p className="text-sm text-muted-foreground italic pl-6">No option groups yet.</p>
                       )}
 
-                      {service.optionGroups.map((group) => {
+                      {/* Ship #175 — long-press + drag to reorder the option
+                          groups under this service. Top-level services are
+                          NOT wrapped per Rodolfos scope ("only menus under
+                          the services"). */}
+                      <ReorderableList
+                        items={service.optionGroups}
+                        keyFor={(g) => g.id}
+                        onReorder={(from, to) => reorderOptionGroups(service.id, from, to)}
+                        renderItem={(group, _gi, dragProps, dragState) => {
                         const groupKey = `${service.id}-${group.id}`
                         const groupOpen = openGroups.has(groupKey)
                         return (
-                        <Card key={group.id} className="rounded-lg border-dashed">
+                        <Card
+                          {...dragProps}
+                          className={cn(
+                            'rounded-lg border-dashed transition-all',
+                            dragState.isDragging && 'opacity-60 scale-[0.98] shadow-lg cursor-grabbing',
+                            dragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                            dragState.anyDragging && 'select-none',
+                          )}
+                        >
                           <CardContent className="p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <button
@@ -720,9 +742,21 @@ export default function ProductsAdminPage() {
                                 row compressed vertically. */}
                             {groupOpen && (
                             <div id={`group-panel-${groupKey}`} className="pl-6 space-y-2">
-                              {group.options.map((opt) => (
-                                <div key={opt.id} className="space-y-2">
-                                  <div className="flex items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt">
+                              <ReorderableList
+                                items={group.options}
+                                keyFor={(o) => o.id}
+                                onReorder={(from, to) => reorderOptions(service.id, group.id, from, to)}
+                                renderItem={(opt, _oi, optDragProps, optDragState) => (
+                                <div className="space-y-2">
+                                  <div
+                                    {...optDragProps}
+                                    className={cn(
+                                      'flex items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt',
+                                      optDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
+                                      optDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                      optDragState.anyDragging && 'select-none',
+                                    )}
+                                  >
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                       <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                                       <span className="truncate">{opt.label}</span>
@@ -771,8 +805,20 @@ export default function ProductsAdminPage() {
                                   {/* Sub-groups nested under this option */}
                                   {opt.subGroups && opt.subGroups.length > 0 && (
                                     <div className="ml-2 sm:ml-6 border-l-2 border-primary/20 pl-3 sm:pl-4 space-y-2 py-1">
-                                      {opt.subGroups.map((subGroup) => (
-                                        <div key={subGroup.id} className="space-y-1">
+                                      <ReorderableList
+                                        items={opt.subGroups}
+                                        keyFor={(sg) => sg.id}
+                                        onReorder={(from, to) => reorderSubGroups(service.id, group.id, opt.id, from, to)}
+                                        renderItem={(subGroup, _sgi, sgDragProps, sgDragState) => (
+                                        <div
+                                          {...sgDragProps}
+                                          className={cn(
+                                            'space-y-1 rounded-md transition-all',
+                                            sgDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
+                                            sgDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                            sgDragState.anyDragging && 'select-none',
+                                          )}
+                                        >
                                           <div className="flex items-center justify-between">
                                             <button
                                               type="button"
@@ -818,12 +864,23 @@ export default function ProductsAdminPage() {
                                               preventively bumped to space-y-1 (4px)
                                               as part of the same crowding fix, for
                                               consistency when a service like air-con
-                                              adds sub-groups under its addons. */}
+                                              adds sub-groups under its addons.
+                                              Ship #175: wrapped in ReorderableList so
+                                              long-press + drag reorders sub-options. */}
                                           {openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && <div className="pl-5 space-y-1">
-                                            {subGroup.options.map((subOpt) => (
+                                            <ReorderableList
+                                              items={subGroup.options}
+                                              keyFor={(so) => so.id}
+                                              onReorder={(from, to) => reorderSubOptions(service.id, group.id, opt.id, subGroup.id, from, to)}
+                                              renderItem={(subOpt, _soi, soDragProps, soDragState) => (
                                               <div
-                                                key={subOpt.id}
-                                                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt"
+                                                {...soDragProps}
+                                                className={cn(
+                                                  'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt',
+                                                  soDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
+                                                  soDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                                  soDragState.anyDragging && 'select-none',
+                                                )}
                                               >
                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                                   <GripVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
@@ -855,7 +912,8 @@ export default function ProductsAdminPage() {
                                                   </Button>
                                                 </div>
                                               </div>
-                                            ))}
+                                            )}
+                                            />
                                             <Button
                                               variant="ghost"
                                               size="sm"
@@ -867,11 +925,13 @@ export default function ProductsAdminPage() {
                                             </Button>
                                           </div>}
                                         </div>
-                                      ))}
+                                        )}
+                                        />
                                     </div>
                                   )}
                                 </div>
-                              ))}
+                                )}
+                                />
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -886,7 +946,8 @@ export default function ProductsAdminPage() {
                           </CardContent>
                         </Card>
                         )
-                      })}
+                      }}
+                      />
                     </div>
                   </CardContent>
                 </AccordionContent>
