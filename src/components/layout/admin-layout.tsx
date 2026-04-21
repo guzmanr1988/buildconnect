@@ -75,11 +75,17 @@ export function AdminLayout() {
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
       {!isMobile && (
-        <aside className="fixed inset-y-0 left-0 z-30 w-64 border-r bg-sidebar">
-          <div className="flex h-16 items-center border-b px-4">
+        <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r bg-sidebar">
+          {/* Ship #207 — flex column + scroll container on nav area so
+              sidebars with 16+ entries don't overflow the viewport on
+              shorter laptops. h-16 header pinned via shrink-0; nav
+              region takes remaining height and scrolls internally. */}
+          <div className="flex h-16 shrink-0 items-center border-b px-4">
             <Logo />
           </div>
-          <SidebarNav />
+          <div className="flex-1 overflow-y-auto">
+            <SidebarNav />
+          </div>
         </aside>
       )}
 
@@ -91,9 +97,14 @@ export function AdminLayout() {
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
-                  <div className="px-3 mb-3"><Logo /></div>
-                  <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+                <SheetContent side="left" className="sheet-floating flex w-52 flex-col p-0 pt-4">
+                  <div className="px-3 mb-3 shrink-0"><Logo /></div>
+                  {/* Ship #207 — scroll container on mobile sheet too,
+                      same rationale as desktop sidebar — 16+ nav entries
+                      can exceed viewport on shorter mobile devices. */}
+                  <div className="flex-1 overflow-y-auto">
+                    <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+                  </div>
                 </SheetContent>
               </Sheet>
             )}
