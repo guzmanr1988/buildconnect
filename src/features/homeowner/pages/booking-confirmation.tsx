@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, FileText, ArrowRight, Home } from 'lucide-react'
+import { CheckCircle2, FileText, ArrowRight, Home, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,6 +8,14 @@ import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 
 type BookingDetails = { service: string; vendor: string; date: string; time: string }
+type ConfirmationState = 'loading' | 'success' | 'refreshed' | 'incomplete'
+
+// Ship #213 — refresh-window for post-send re-mount. If preconditions
+// were already consumed by an earlier mount but a sentProject entry is
+// fresh (< 5min old), we assume this is a browser refresh of a real
+// successful confirmation, not a corrupted-flow fallback. Anything older
+// than this is treated as stale and triggers the explicit error state.
+const RECENT_SEND_WINDOW_MS = 5 * 60 * 1000
 
 export function BookingConfirmationPage() {
   const navigate = useNavigate()
@@ -15,11 +23,31 @@ export function BookingConfirmationPage() {
   const sendProject = useProjectsStore((s) => s.sendProject)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const [details, setDetails] = useState<BookingDetails | null>(null)
+  const [state, setState] = useState<ConfirmationState>('loading')
 
   useEffect(() => {
     const pendingItemStr = localStorage.getItem('buildconnect-pending-item')
     const contractorStr = localStorage.getItem('buildconnect-selected-contractor')
     const bookingStr = localStorage.getItem('buildconnect-selected-booking')
+
+    // Ship #213 diagnostic — extends #212 telemetry with branch-level
+    // logging on the confirmation useEffect. VITE_DEMO_MODE-gated.
+    // Reveals which precondition is missing and which branch fires so
+    // the Path-B flow gap maps to a specific failure signature.
+    const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+    const logDiag = (phase: string, extra: Record<string, unknown> = {}) => {
+      if (!isDemoMode) return
+      // eslint-disable-next-line no-console
+      console.log('[#212 leads-diag] booking-confirmation', phase, {
+        has_pendingItem: !!pendingItemStr,
+        has_selectedContractor: !!contractorStr,
+        has_selectedBooking: !!bookingStr,
+        sentProjects_length: sentProjects.length,
+        ...extra,
+      })
+    }
+
+    logDiag('MOUNT')
 
     if (pendingItemStr && contractorStr && bookingStr) {
       try {
@@ -37,6 +65,11 @@ export function BookingConfirmationPage() {
         })
 
         const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
+        logDiag('BRANCH=success (calling sendProject)', {
+          serviceName: pendingItem.serviceName,
+          vendor: contractor.company,
+          vendor_id: contractor.vendor_id,
+        })
         sendProject(pendingItem, contractor, booking, homeowner, idDoc)
         removeItem(pendingItem.id)
 
@@ -44,23 +77,74 @@ export function BookingConfirmationPage() {
         localStorage.removeItem('buildconnect-selected-contractor')
         localStorage.removeItem('buildconnect-selected-booking')
         localStorage.removeItem('buildconnect-homeowner-info')
+        setState('success')
         return
-      } catch {
-        // Fall through to store fallback on corrupted localStorage
+      } catch (err) {
+        logDiag('BRANCH=parse-failure', { error: String(err) })
+        // Fall through to detection branches below
       }
     }
 
-    // Post-navigation refresh or deep-link — pull the most recent sent project.
+    // Preconditions missing (or parse failed). Distinguish:
+    // (a) Browser-refresh-after-successful-send: latest sentProject is
+    //     fresh — show "refreshed" confirmation.
+    // (b) Incomplete flow: no recent sentProject — show explicit error
+    //     instead of silent stale-sentProject fallback that misleads
+    //     users into thinking the flow completed when it didn't (ship
+    //     #213 root-cause fix).
     const latest = sentProjects[sentProjects.length - 1]
-    if (latest) {
+    const latestAge = latest ? Date.now() - new Date(latest.sentAt).getTime() : Infinity
+    const isRecent = latest && latestAge < RECENT_SEND_WINDOW_MS
+
+    if (isRecent && latest) {
+      logDiag('BRANCH=refreshed (recent sentProject within window)', {
+        latestAgeMinutes: Math.round(latestAge / 60000),
+      })
       setDetails({
         service: latest.item.serviceName,
         vendor: latest.contractor.company,
         date: latest.booking.date,
         time: latest.booking.time,
       })
+      setState('refreshed')
+    } else {
+      logDiag('BRANCH=incomplete (preconditions missing, no recent send)', {
+        latestAgeMinutes: latest ? Math.round(latestAge / 60000) : null,
+      })
+      setState('incomplete')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ship #213 — explicit error state when preconditions are missing
+  // AND there's no recent successful send to fall back to. Prior code
+  // silently fell through to showing the LAST sentProject (stale), which
+  // masked the real-bug class where a user walks a partial flow and
+  // sees a confirmation-looking page for a project that never actually
+  // got sent. Now we surface the gap explicitly with a clear path to
+  // retry from the cart.
+  if (state === 'incomplete') {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+          <AlertTriangle className="h-10 w-10 text-amber-700 dark:text-amber-400" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold font-heading text-foreground">
+          Booking didn't complete
+        </h1>
+        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+          Your project wasn't sent to a contractor — looks like a step was missed. Start again from Projects: pick a contractor, then book a site visit.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button size="lg" onClick={() => navigate('/home/cart')} className="h-11 px-6">
+            Go to Projects
+          </Button>
+          <Button variant="outline" size="lg" onClick={() => navigate('/home')} className="h-11 px-6">
+            Browse services
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (!details) {
     return (

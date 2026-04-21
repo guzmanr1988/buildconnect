@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarDays, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MOCK_AVAILABLE_SLOTS } from '@/lib/mock-data'
@@ -24,6 +25,29 @@ export function BookingCalendarPage() {
   const [currentYear] = useState(2026)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
+
+  // Ship #213 — flow-guard. The booking flow requires the pending-item
+  // + selected-contractor LS keys to be populated BEFORE this page is
+  // reached (set by /home/cart handleSendToContractor and /home/vendor-
+  // compare respectively). If either is missing, the user skipped a
+  // step — route them back to /home/cart with a toast so the flow can
+  // re-enter cleanly instead of silently completing a bookings-without-
+  // contractor state that fails at /home/booking/confirmed.
+  useEffect(() => {
+    const hasPendingItem = !!localStorage.getItem('buildconnect-pending-item')
+    const hasContractor = !!localStorage.getItem('buildconnect-selected-contractor')
+    if (!hasPendingItem || !hasContractor) {
+      if ((import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false') {
+        // eslint-disable-next-line no-console
+        console.log('[#212 leads-diag] booking-calendar GUARD redirect', {
+          hasPendingItem,
+          hasContractor,
+        })
+      }
+      toast.info('Pick a contractor first — then choose a date.')
+      navigate('/home/cart', { replace: true })
+    }
+  }, [navigate])
 
   const availableDates = new Set(MOCK_AVAILABLE_SLOTS.map((s) => s.date))
   const daysInMonth = getDaysInMonth(currentYear, currentMonth)
