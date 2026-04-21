@@ -215,21 +215,16 @@ export default function TransactionsPage() {
                     <TableBody>
                       {grouped[cat.key].map((tx) => {
                         // Row click routing (ship #146 bug fix on #143):
-                        // - Commission rows resolve the project context via a
-                        //   3-tier bridge: (a) mock-tx-<sp.id> prefix strip,
-                        //   (b) match sentProjects by homeowner-name +
-                        //   vendor-company, (c) match MOCK_LEADS by
-                        //   homeowner_name + vendor-company. Without this
-                        //   bridge, Supabase UUIDs and tx-N ids don't match
-                        //   any sentProject.id / MOCK_LEADS.id and the
-                        //   Dialog opens empty (Rodolfo caught on pending
-                        //   commission row — kratos msg 1776747436781).
-                        // - Membership + payout rows: TransactionDetailDialog
-                        //   as before.
+                        // 3-tier bridge to find matching project/lead. Also
+                        // used by #147 to surface customer full name +
+                        // address inline on commission rows.
                         let projectId: string | null = null
+                        let resolvedAddress: string | null = null
                         if (tx.type === 'commission') {
                           if (tx.id.startsWith('mock-tx-')) {
                             projectId = tx.id.slice('mock-tx-'.length)
+                            const sp = sentProjects.find((p) => p.id === projectId)
+                            resolvedAddress = sp?.homeowner?.address ?? null
                           } else {
                             const sp = sentProjects.find(
                               (p) =>
@@ -238,6 +233,7 @@ export default function TransactionsPage() {
                             )
                             if (sp) {
                               projectId = sp.id
+                              resolvedAddress = sp.homeowner?.address ?? null
                             } else {
                               const vendor = MOCK_VENDORS.find((v) => v.company === tx.company)
                               const lead = MOCK_LEADS.find(
@@ -245,7 +241,10 @@ export default function TransactionsPage() {
                                   l.homeowner_name === tx.customer &&
                                   (vendor ? l.vendor_id === vendor.id : true),
                               )
-                              if (lead) projectId = lead.id
+                              if (lead) {
+                                projectId = lead.id
+                                resolvedAddress = lead.address
+                              }
                             }
                           }
                         }
@@ -262,7 +261,14 @@ export default function TransactionsPage() {
                           <TableCell className="font-medium">{tx.company}</TableCell>
                           <TableCell className="text-muted-foreground max-w-[200px] truncate">{tx.detail}</TableCell>
                           {cat.isCommission && (
-                            <TableCell className="text-sm">{tx.customer || '—'}</TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium text-foreground">{tx.customer || '—'}</div>
+                              {resolvedAddress && (
+                                <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[240px]">
+                                  {resolvedAddress}
+                                </div>
+                              )}
+                            </TableCell>
                           )}
                           <TableCell className="text-right font-semibold">{fmt(tx.amount)}</TableCell>
                           <TableCell className="text-muted-foreground">{fmtDate(tx.date)}</TableCell>
