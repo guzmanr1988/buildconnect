@@ -33,7 +33,7 @@ export interface QAPersona {
 
 const contractor: ContractorInfo = {
   name: 'Demo Vendor',
-  company: 'Paradise Pools Inc.',
+  company: 'Paradise Pools FL',
   rating: 4.8,
 }
 
