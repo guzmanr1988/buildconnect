@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserRound, LogOut, Users } from 'lucide-react'
+import { UserRound, LogOut, Users, TestTube2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -105,7 +105,24 @@ export function QAPersonaSwitcher() {
               </button>
             ))}
           </div>
-          <div className="pt-1 border-t border-border/60">
+          <div className="pt-1 border-t border-border/60 space-y-1">
+            {/* Ship #183 — vendor signup bypass trigger. Navigates to
+                /register?bypass=1 which synthesizes a fake vendor auth
+                session locally and opens the payment dialog without
+                hitting Supabase. Lets QA iterate the full signup →
+                payment → portal flow without the per-IP rate limit. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full gap-1.5 text-xs text-primary hover:text-primary hover:bg-primary/5"
+              onClick={() => {
+                setOpen(false)
+                router.navigate('/register?bypass=1')
+              }}
+            >
+              <TestTube2 className="h-3.5 w-3.5" />
+              Test vendor signup flow (bypass rate-limit)
+            </Button>
             <Button
               variant="ghost"
               size="sm"

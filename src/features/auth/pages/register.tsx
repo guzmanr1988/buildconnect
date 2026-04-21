@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, Wrench, Eye, EyeOff, Building2, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -54,7 +54,21 @@ const roles: { role: UserRole; label: string; description: string; icon: typeof 
 ]
 
 export function RegisterPage() {
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null)
+  const [searchParams] = useSearchParams()
+  // Ship #183 — Supabase-signup-bypass for testing. Gated behind
+  // VITE_DEMO_MODE so it disappears in prod builds. /register?bypass=1
+  // synthesizes a vendor auth session locally (no Supabase call) and
+  // pre-opens the payment dialog so Rodolfo + QA can iterate the
+  // signup → payment → portal flow without hitting the per-IP rate
+  // limit. Seeded via useState initializer below so the gate is TRUE
+  // on the first render, before any redirect useEffect can see
+  // gate=false with profile=set — same race-proof pattern as #179s
+  // sync-before-async, applied to initial state here.
+  const bypassActive = (() => {
+    const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+    return demoMode && searchParams.get('bypass') === '1'
+  })()
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(bypassActive ? 'vendor' : null)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   // Ship #182 — persistent form-level error banner. Toast clears too
@@ -66,7 +80,8 @@ export function RegisterPage() {
   // AuthBootstrap SIGNED_IN listener's downstream useEffect below sees
   // the gate before it would normally redirect. Homeowners skip this
   // entirely; only vendor signups route through the payment dialog.
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  // Ship #183 seeds this true when ?bypass=1 is present.
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(() => bypassActive)
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -99,6 +114,39 @@ export function RegisterPage() {
     if (profile.role === 'vendor' && paymentDialogOpen) return
     navigate(profile.role === 'vendor' ? '/vendor' : '/home', { replace: true })
   }, [isAuthenticated, profile, paymentDialogOpen, navigate])
+
+  // Ship #183 — bypass-mode auth synthesis. When mounted with
+  // ?bypass=1 under VITE_DEMO_MODE, stand up a fake vendor session
+  // locally (no Supabase round-trip) so the payment dialog flow can be
+  // exercised end-to-end without hitting the signup rate-limit. Runs
+  // once on mount; safe to re-navigate to the same URL because the
+  // `isAuthenticated` guard short-circuits when a session already
+  // exists. paymentDialogOpen is already TRUE from the useState
+  // initializer above, so the redirect effect's gate observes that
+  // synchronously on the render triggered by this effect's setState.
+  useEffect(() => {
+    if (!bypassActive || isAuthenticated) return
+    const stamp = Date.now()
+    const fakeId = `bypass-vendor-${stamp}`
+    const fakeEmail = `bypass-${stamp}@buildconnect.local`
+    useAuthStore.getState().setSession({
+      access_token: `bypass-token-${stamp}`,
+      user: { id: fakeId, email: fakeEmail },
+    })
+    useAuthStore.getState().setProfile({
+      id: fakeId,
+      email: fakeEmail,
+      name: 'Bypass Vendor',
+      role: 'vendor',
+      phone: '(305) 555-0000',
+      address: '123 Test Ln, Miami, FL 33131',
+      company: 'Bypass Test Co',
+      avatar_color: '#4f46e5',
+      initials: 'BV',
+    })
+    // Suggestively show the form in a 'submitting' tail so Rodolfo
+    // sees the dialog open without a manual Create-Account click.
+  }, [bypassActive, isAuthenticated])
 
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
