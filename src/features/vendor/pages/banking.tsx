@@ -104,8 +104,12 @@ export default function VendorBanking() {
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <PageHeader title="Banking & Commissions" description="Track sales, commissions, and payouts" />
 
-      {/* Summary KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary KPI Row — 2x2 at every width per Rodolfo-direct 2026-04-21
+          ship #176 ("make it 2x2 on the displayed numbers on top of unpaid
+          commissions"). Was grid-cols-1 → sm:grid-cols-2 → lg:grid-cols-4
+          (a 1x4 row on desktop); now stays 2 cols everywhere so the 4
+          tiles land in a clean 2x2 block. */}
+      <div className="grid grid-cols-2 gap-4">
         <motion.div variants={item}>
           <KpiCard title="Total Sales" value={fmt(totalSales)} icon={DollarSign} iconColor="bg-primary" />
         </motion.div>
