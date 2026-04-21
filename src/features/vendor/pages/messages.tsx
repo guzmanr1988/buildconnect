@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_MESSAGES, MOCK_LEADS, MOCK_HOMEOWNERS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { cn } from '@/lib/utils'
+import { deriveInitials } from '@/lib/initials'
 import type { Message, Lead } from '@/types'
 
 const VENDOR_ID = 'v-1'
@@ -208,7 +209,7 @@ export default function VendorMessages() {
                     )}
                   >
                     <AvatarInitials
-                      initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                      initials={deriveInitials(lead.homeowner_name)}
                       color="#64748b"
                       size="sm"
                     />
@@ -299,7 +300,7 @@ export default function VendorMessages() {
               {/* Chat Header */}
               <div className="flex items-center gap-3 p-4 border-b">
                 <AvatarInitials
-                  initials={activeLead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                  initials={deriveInitials(activeLead.homeowner_name)}
                   color="#64748b"
                   size="sm"
                 />

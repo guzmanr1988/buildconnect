@@ -22,6 +22,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
+import { deriveInitials } from '@/lib/initials'
 import type { Lead, Vendor, VendorRep } from '@/types'
 
 function fmt(n: number) {
@@ -101,7 +102,7 @@ export default function VendorDashboard() {
       address: profile.address ?? '',
       company: profile.company ?? profile.name,
       avatar_color: profile.avatar_color ?? '#3b82f6',
-      initials: profile.initials ?? profile.name.slice(0, 2).toUpperCase(),
+      initials: profile.initials ?? deriveInitials(profile.name),
       status: profile.status ?? 'active',
       created_at: profile.created_at ?? new Date().toISOString(),
       service_categories: [],
@@ -484,7 +485,7 @@ export default function VendorDashboard() {
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <AvatarInitials
-                initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                initials={deriveInitials(lead.homeowner_name)}
                 color="#64748b"
                 size="md"
               />

@@ -1,7 +1,14 @@
 import { cn } from '@/lib/utils'
+import { deriveInitials } from '@/lib/initials'
 
 interface AvatarInitialsProps {
-  initials: string
+  // Explicit initials override. When absent, falls back to deriving from
+  // `name` (preferred for rename-residue avoidance, ship #164).
+  initials?: string
+  // Name source for auto-derivation. Passing `name` instead of `initials`
+  // makes future renames of the underlying person/company Just Work — no
+  // stale initials field to update separately.
+  name?: string
   color: string
   size?: 'sm' | 'md' | 'lg'
   className?: string
@@ -18,12 +25,13 @@ const sizes = {
   lg: 'h-14 w-14 text-lg',
 }
 
-export function AvatarInitials({ initials, color, size = 'md', className, avatarUrl }: AvatarInitialsProps) {
+export function AvatarInitials({ initials, name, color, size = 'md', className, avatarUrl }: AvatarInitialsProps) {
+  const resolvedInitials = initials && initials.trim() ? initials : deriveInitials(name)
   if (avatarUrl) {
     return (
       <div
         role="img"
-        aria-label={`Avatar: ${initials}`}
+        aria-label={`Avatar: ${resolvedInitials}`}
         className={cn(
           'rounded-full overflow-hidden shrink-0 ring-1 ring-foreground/10 bg-muted',
           sizes[size],
@@ -50,7 +58,7 @@ export function AvatarInitials({ initials, color, size = 'md', className, avatar
       style={{ backgroundColor: color }}
     >
       {/* aria-hidden so axe color-contrast skips white-on-custom-bg: the role=img + aria-label above carries the a11y semantics (b-005 pattern on Mock avatar_color values that don't clear 4.5:1 against white). */}
-      <span aria-hidden="true">{initials}</span>
+      <span aria-hidden="true">{resolvedInitials}</span>
     </div>
   )
 }

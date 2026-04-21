@@ -53,7 +53,11 @@ export interface Profile {
   // 1776720343679). Mock-side for v1; Tranche-2 moves to Supabase Storage
   // bucket + image moderation.
   avatar_url?: string
-  initials: string
+  // Initials field is optional going forward. AvatarInitials auto-derives
+  // from name when initials is absent/empty (ship #164 per task_1776721365362
+  // _726; rename-residue prevention). Legacy fixtures may still hardcode
+  // initials as an explicit override — those continue to take precedence.
+  initials?: string
   status: 'active' | 'pending' | 'suspended'
   created_at: string
 }

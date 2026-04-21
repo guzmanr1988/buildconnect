@@ -17,6 +17,7 @@ import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
+import { deriveInitials } from '@/lib/initials'
 import type { Lead } from '@/types'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
@@ -122,7 +123,7 @@ export default function LeadInbox() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
                           <AvatarInitials
-                            initials={lead.homeowner_name.split(' ').map((n) => n[0]).join('')}
+                            initials={deriveInitials(lead.homeowner_name)}
                             color="#64748b"
                             size="md"
                           />

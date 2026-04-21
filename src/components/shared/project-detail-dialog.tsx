@@ -7,6 +7,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { deriveInitials } from '@/lib/initials'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -72,7 +73,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
           name: customerName,
           project: transactionFallback.detail.replace(/^Commission on /i, '').trim(),
           date: transactionFallback.date,
-          initials: customerName.split(' ').map((n) => n[0]).join('') || 'C',
+          initials: deriveInitials(customerName),
           vendor: transactionFallback.company,
           rep: undefined as string | undefined,
           status: 'sold' as const,
@@ -95,7 +96,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
         name: sp.homeowner?.name || 'Customer',
         project: sp.item.serviceName,
         date: sp.sentAt,
-        initials: (sp.homeowner?.name || 'C').split(' ').map((n) => n[0]).join(''),
+        initials: deriveInitials(sp.homeowner?.name || 'Customer'),
         vendor: sp.contractor?.company,
         rep: sp.assignedRep?.name,
         status: cancelApproved ? 'declined' : sp.status,
@@ -143,7 +144,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       name: l.homeowner_name,
       project: l.project.split('—')[0].trim(),
       date: l.received_at,
-      initials: l.homeowner_name.split(' ').map((n) => n[0]).join(''),
+      initials: deriveInitials(l.homeowner_name),
       vendor: vendor?.company ?? 'Unknown vendor',
       rep: assignedRepByLead[l.id]?.name,
       status: mappedStatus,

@@ -12,6 +12,7 @@ import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
+import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
 
 function fmtDate(iso: string) {
@@ -76,7 +77,7 @@ export default function WorkflowPage() {
       name: p.homeowner?.name || 'Customer',
       project: p.item.serviceName,
       date: p.sentAt,
-      initials: (p.homeowner?.name || 'C').split(' ').map(n => n[0]).join(''),
+      initials: deriveInitials(p.homeowner?.name || 'Customer'),
       vendor: p.contractor?.company,
       rep: p.assignedRep?.name,
       status: cancelApproved ? 'declined' : p.status,
@@ -115,7 +116,7 @@ export default function WorkflowPage() {
       name: l.homeowner_name,
       project: l.project.split('—')[0].trim(),
       date: l.received_at,
-      initials: l.homeowner_name.split(' ').map(n => n[0]).join(''),
+      initials: deriveInitials(l.homeowner_name),
       vendor: vendor?.company ?? 'Unknown vendor',
       rep: assignedRepByLead[l.id]?.name,
       status: mappedStatus,
