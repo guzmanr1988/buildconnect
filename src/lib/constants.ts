@@ -597,4 +597,8 @@ export const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; 
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', icon: '🚫' },
   rescheduled: { label: 'Rescheduled', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', icon: '🔄' },
   completed: { label: 'Completed', color: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400', icon: '☑️' },
+  // Ship #171 — distinct from rejected. Homeowner-initiated cancellation
+  // that the vendor approved; visually softer than red 'rejected' to
+  // signal "mutual outcome" rather than "vendor said no up front."
+  cancelled: { label: 'Cancelled', color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300', icon: '✕' },
 }

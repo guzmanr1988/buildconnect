@@ -180,10 +180,17 @@ export default function VendorDashboard() {
   // Lifecycle thresholds simplified to single sold→completed split (kratos msg
   // 1776693800134). Active Projects tile merged into Project Sold — the
   // "currently active" bucket is any sold/approved project that isn't
-  // aged-out to Completed yet. Cancelled Projects split out as its own tile
-  // for post-accept cancellation-flow outcomes (distinct from vendor-upfront-
-  // rejection, though both currently share status='rejected' until Tranche-2
-  // schema divergence lands).
+  // aged-out to Completed yet.
+  //
+  // Ship #171 (task_1776662387601_014) — Cancelled Projects vs Rejected
+  // Leads are now distinct tiles, reflecting the split 'cancelled' /
+  // 'rejected' lifecycle statuses. Homeowner-initiated, vendor-approved
+  // cancellations land in Cancelled; vendor-upfront rejections (no
+  // cancellation request on file) land in Rejected. Pre-#171 persisted
+  // leads that sit at status='rejected' AND carry an approved
+  // cancellationRequest are still surfaced as cancelled via the
+  // isCancelledLead predicate (read-path back-compat; no data migration
+  // needed).
   const SOLD_TO_COMPLETED_DAYS = 90
   const DAY_MS = 24 * 60 * 60 * 1000
   const now = Date.now()
@@ -192,18 +199,26 @@ export default function VendorDashboard() {
     return (now - new Date(l.soldAt).getTime()) / DAY_MS
   }
 
-  // Cancelled predicate — takes precedence over status-based routing. A
-  // post-accept cancellation-approved lead has BOTH status='rejected' (set by
-  // approveCancellation via leadStatusOverrides) AND a cancellationRequestsByLead
-  // entry with status='approved'. Vendor-upfront-rejected leads have status=
-  // 'rejected' WITHOUT a cancellation-approved entry — they route to Cancelled
-  // Projects as well for pre-launch (both are "deadened" leads); Tranche-2
-  // schema divergence will split them.
+  // Cancelled = homeowner-initiated, vendor-approved. Primary signal is
+  // status='cancelled' (ship #171 forward); pre-#171 entries are detected
+  // via the (status='rejected' + cancellationRequest.status='approved')
+  // conjunction. Having cancellationRequest.status='approved' alone also
+  // qualifies (covers any ordering race between the two state writes).
   const isCancelledLead = (l: Lead): boolean => {
+    if (l.status === 'cancelled') return true
     const cReq = cancellationRequestsByLead[l.id]
     if (cReq?.status === 'approved') return true
-    if (l.status === 'rejected') return true
     return false
+  }
+
+  // Rejected = vendor said no up front. Strictly status='rejected' with
+  // no approved cancellation request on file. A post-accept cancellation
+  // that somehow still sits at 'rejected' (pre-#171 data only) is caught
+  // by isCancelledLead above and short-circuited out of this bucket.
+  const isRejectedLead = (l: Lead): boolean => {
+    if (l.status !== 'rejected') return false
+    if (isCancelledLead(l)) return false
+    return true
   }
 
   // Lead categories
@@ -211,6 +226,7 @@ export default function VendorDashboard() {
   const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
   const projectSold = leads.filter((l) => {
     if (isCancelledLead(l)) return false
+    if (isRejectedLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
     // Currently-active bucket: either just-sold (no soldAt yet → treat as
@@ -219,18 +235,20 @@ export default function VendorDashboard() {
   })
   const projectsCompleted = leads.filter((l) => {
     if (isCancelledLead(l)) return false
+    if (isRejectedLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
     // Truly-completed: aged-out past the 90d threshold.
     return age !== null && age >= SOLD_TO_COMPLETED_DAYS
   })
   const cancelledProjects = leads.filter(isCancelledLead)
+  const rejectedLeads = leads.filter(isRejectedLead)
 
   // KPI calculations
   const activeLeads = leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled')
   const pipelineValue = activeLeads.reduce((sum, l) => sum + l.value, 0)
   const bookedThisMonth = confirmedLeads.length
-  const totalDecided = leads.filter((l) => ['confirmed', 'completed', 'rejected'].includes(l.status)).length
+  const totalDecided = leads.filter((l) => ['confirmed', 'completed', 'rejected', 'cancelled'].includes(l.status)).length
   const wins = leads.filter((l) => l.status === 'confirmed' || l.status === 'completed').length
   const winRate = totalDecided > 0 ? Math.round((wins / totalDecided) * 100) : 0
 
@@ -788,7 +806,7 @@ export default function VendorDashboard() {
         <LeadStatusTile
           title="Cancelled Projects"
           count={cancelledProjects.length}
-          color="bg-destructive"
+          color="bg-zinc-500"
           icon={X}
           open={openTile === 'cancelled'}
           onToggle={() => toggleTile('cancelled')}
@@ -798,6 +816,26 @@ export default function VendorDashboard() {
               <p className="text-sm text-muted-foreground py-4 text-center">No cancelled projects.</p>
             ) : (
               cancelledProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+            )}
+          </div>
+        </LeadStatusTile>
+        {/* Ship #171 — Rejected tile split out. Vendor-upfront rejections
+            now render separately from mutual-cancellation outcomes so the
+            vendor can tell at a glance which deadened leads they walked
+            away from vs which the homeowner canceled. */}
+        <LeadStatusTile
+          title="Rejected Leads"
+          count={rejectedLeads.length}
+          color="bg-destructive"
+          icon={X}
+          open={openTile === 'rejected'}
+          onToggle={() => toggleTile('rejected')}
+        >
+          <div className="grid gap-3">
+            {rejectedLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No rejected leads.</p>
+            ) : (
+              rejectedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
         </LeadStatusTile>

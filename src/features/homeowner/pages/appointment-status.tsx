@@ -30,6 +30,8 @@ const statusPulse: Record<string, string> = {
   rejected: 'bg-red-500',
   rescheduled: 'bg-blue-500',
   completed: 'bg-slate-500',
+  // Ship #171 — mutual-cancellation outcome; softer tone than red 'rejected'.
+  cancelled: 'bg-zinc-500',
 }
 
 export function AppointmentStatusPage() {

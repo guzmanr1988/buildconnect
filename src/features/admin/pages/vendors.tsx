@@ -185,7 +185,11 @@ export default function VendorsPage() {
       const leads = rawLeads.map((l) => {
         const cReq = cancellationRequestsByLead[l.id]
         const cancelApproved = cReq?.status === 'approved'
-        const effectiveStatus = cancelApproved ? 'rejected' : (leadStatusOverrides[l.id] ?? l.status)
+        // Ship #171 — cancellation-approved now surfaces as 'cancelled'
+        // rather than the reused 'rejected' bucket. Per-vendor status
+        // counts differentiate cancellations from rejections for admin
+        // visibility.
+        const effectiveStatus = cancelApproved ? 'cancelled' : (leadStatusOverrides[l.id] ?? l.status)
         return { ...l, status: effectiveStatus as LeadStatus }
       })
       const closedSales = MOCK_CLOSED_SALES.filter((c) => c.vendor_id === vendor.id)
@@ -457,7 +461,7 @@ export default function VendorsPage() {
 
                           {/* Status Summary */}
                           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
-                            {(['pending', 'confirmed', 'rejected', 'rescheduled', 'completed'] as LeadStatus[]).map(
+                            {(['pending', 'confirmed', 'rejected', 'cancelled', 'rescheduled', 'completed'] as LeadStatus[]).map(
                               (status) =>
                                 statusCounts[status] ? (
                                   <StatusBadge key={status} status={status} className="text-[10px]" />

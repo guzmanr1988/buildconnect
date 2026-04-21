@@ -54,7 +54,12 @@ export interface SentProject {
   repAssignedAt?: string
 }
 
-type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
+// Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
+// approveCancellation now writes 'cancelled' (was 'rejected' by #75 Phase A).
+// Pre-#171 persisted entries with status='rejected' + cancellationRequest.
+// status='approved' are still surfaced as cancelled via the vendor-dashboard
+// isCancelledLead predicate (back-compat read path).
+type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed' | 'cancelled'
 
 export interface CancellationRequest {
   requestedAt: string
@@ -227,9 +232,12 @@ export const useProjectsStore = create<ProjectsState>()(
                 status: 'approved',
               },
             },
-            // Cancellation-approved = lifecycle cancelled = reuses rejected
-            // bucket. Tranche-2 will diverge.
-            leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: 'rejected' },
+            // Ship #171 — cancellation-approved now writes 'cancelled'
+            // instead of reusing the 'rejected' bucket. Vendor-dashboard
+            // isCancelledLead predicate still surfaces pre-#171 persisted
+            // entries that sit at 'rejected' with an approved cancellation
+            // request, so no migration of old data is required.
+            leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: 'cancelled' },
           }
         })
       },

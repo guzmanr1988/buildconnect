@@ -1,6 +1,13 @@
 export type UserRole = 'homeowner' | 'vendor' | 'admin'
 
-export type LeadStatus = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
+// Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
+// Ship #75 Phase A collapsed homeowner-cancellation-approved into the
+// 'rejected' bucket because schema divergence was Tranche-2 work; now
+// reusing that bucket is no longer the default. New cancellations emit
+// 'cancelled'; pre-#171 persisted 'rejected' entries with
+// cancellationRequest.status='approved' are still surfaced as cancelled
+// via the vendor-dashboard isCancelledLead back-compat predicate.
+export type LeadStatus = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed' | 'cancelled'
 
 export type TransactionType = 'commission' | 'membership' | 'payout'
 

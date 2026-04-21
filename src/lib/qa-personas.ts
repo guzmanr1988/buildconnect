@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase'
 // vendor-side behavior is tested separately via existing demo vendor accounts
 // (apex-demo / shield-demo / paradise-demo).
 
-type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
+type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed' | 'cancelled'
 
 export interface QAPersona {
   id: 'qa-1-fresh' | 'qa-2-cart' | 'qa-3-approved' | 'qa-4-mixed-lifecycle'

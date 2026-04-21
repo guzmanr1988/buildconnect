@@ -70,6 +70,11 @@ export function HomeownerHome() {
     rejected: 'declined',
     completed: 'sold',
     rescheduled: 'pending',
+    // Ship #171 — 'cancelled' split from 'rejected'. From the homeowner's
+    // POV both outcomes land in the same "dead lead" Cancelled bucket on
+    // /home (the vendor-side split is the one that matters for bookkeeping),
+    // so both map to 'declined' in the LifecycleEntry status terminology.
+    cancelled: 'declined',
   }
   // Gate MOCK_LEADS to the profile whose id ACTUALLY matches the fixture's
   // homeowner_id. Previously had a `|| l.homeowner_id === 'ho-1'` fallback
@@ -117,10 +122,12 @@ export function HomeownerHome() {
     lifecycle.push(p)
   }
 
-  // Cancelled predicate — mirror vendor-side isCancelledLead logic. A lead
-  // lands in Cancelled when the cancellation-request flow completes with
-  // status='approved' OR leadStatusOverrides='rejected' (pre-Tranche-2
-  // schema divergence, rejected = cancelled bucket).
+  // Cancelled predicate — any lead whose LifecycleEntry status resolved to
+  // 'declined' OR that carries an approved cancellation-request entry.
+  // Post-#171 (task_1776662387601_014) the vendor dashboard splits
+  // cancelled-by-homeowner-approval from rejected-by-vendor, but from
+  // the homeowner's POV both dead-lead shapes share the /home Cancelled
+  // tile — so this predicate intentionally stays union-style.
   const isCancelled = (leadId: string, status: string): boolean => {
     const cReq = cancellationRequestsByLead[leadId]
     if (cReq?.status === 'approved') return true
