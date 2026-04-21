@@ -520,7 +520,7 @@ export default function HomeownersPage() {
                                     <TableRow
                                       key={proj.id}
                                       className="cursor-pointer hover:bg-muted/40"
-                                      onClick={() => navigate(`/admin/workflow?project=${encodeURIComponent(proj.id)}`)}
+                                      onClick={() => setSelectedProjectId(proj.id)}
                                     >
                                       <TableCell className="text-xs font-medium max-w-[140px]">
                                         <div className="truncate">{proj.project_name}</div>
