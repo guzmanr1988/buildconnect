@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  Settings, Percent, DollarSign, CalendarDays, Wrench, Eye, Layers,
+  Settings, Wrench, Eye, Layers,
   Banknote, Save, CheckCircle, Bell, Shield, Clock, MapPin, Building2,
   Mail, Phone, Key, Lock, Globe,
 } from 'lucide-react'
@@ -120,69 +120,20 @@ export default function SettingsPage() {
           </Card>
         </motion.div>
 
-        {/* Revenue Configuration */}
-        <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
-          <Card className="rounded-xl shadow-sm hover:shadow-md transition h-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-primary" />
-                Revenue Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Percent className="h-3.5 w-3.5 text-muted-foreground" />
-                  Default Commission % (new vendors)
-                </Label>
-                <Input
-                  aria-label="Default Commission percent for new vendors"
-                  type="number" min={1} max={50}
-                  value={ext.defaultCommission}
-                  onChange={(e) => setExt((p) => ({ ...p, defaultCommission: Number(e.target.value) }))}
-                />
-                <p className="text-xs text-muted-foreground">Applied automatically when adding a new vendor</p>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  Subscription Fee $/mo
-                </Label>
-                <Input
-                  aria-label="Subscription Fee dollars per month"
-                  type="number" min={0}
-                  value={settings.subscription_fee}
-                  onChange={(e) => setSettings((p) => ({ ...p, subscription_fee: Number(e.target.value) }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  Minimum Payout Threshold
-                </Label>
-                <Input
-                  aria-label="Minimum Payout Threshold"
-                  type="number" min={0}
-                  value={ext.minPayoutThreshold}
-                  onChange={(e) => setExt((p) => ({ ...p, minPayoutThreshold: Number(e.target.value) }))}
-                />
-                <p className="text-xs text-muted-foreground">Don't process payouts below this amount</p>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                  Payout Day (1-28)
-                </Label>
-                <Input
-                  aria-label="Payout Day of the month (1 to 28)"
-                  type="number" min={1} max={28}
-                  value={settings.payout_day}
-                  onChange={(e) => setSettings((p) => ({ ...p, payout_day: Number(e.target.value) }))}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+        {/* Ship #198 (Rodolfo-direct 2026-04-21 pivot #17): "I can still
+            see the revenue config in settings on admin" — platform-wide
+            Revenue Configuration card removed from /admin/settings.
+            Complements #195 (per-vendor Commission Fee removal on
+            /admin/vendors). Both surfaces now free of revenue-config
+            editing UI.
+
+            Back-compat: settings.subscription_fee + settings.payout_day
+            still flow from MOCK_SETTINGS to downstream consumers
+            (admin/reports / overview / revenue) via static reads — no
+            consumer was reading the editable state on this page, so
+            removing the editor breaks nothing. ext.defaultCommission +
+            ext.minPayoutThreshold were local-state-only and unreferenced
+            elsewhere. */}
 
         {/* Lead Management */}
         <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
