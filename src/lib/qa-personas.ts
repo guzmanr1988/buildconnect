@@ -1,6 +1,14 @@
 import type { Profile, VendorRep } from '@/types'
-import type { CartItem } from '@/stores/cart-store'
-import type { SentProject, ContractorInfo, BookingInfo, HomeownerInfo, CancellationRequest } from '@/stores/projects-store'
+import { useCartStore, type CartItem } from '@/stores/cart-store'
+import {
+  useProjectsStore,
+  type SentProject,
+  type ContractorInfo,
+  type BookingInfo,
+  type HomeownerInfo,
+  type CancellationRequest,
+} from '@/stores/projects-store'
+import { useAuthStore } from '@/stores/auth-store'
 
 // QA personas for 2-week launch QA sweep. Each persona has a fully-seeded
 // starting state across auth + cart + projects stores so apollo (or any QA
@@ -306,16 +314,13 @@ export const QA_PERSONAS: QAPersona[] = [
 // zustand-persist hydrates from the fresh state on next mount.
 export function applyQAPersona(persona: QAPersona) {
   // Auth
-  // REVERTED (kratos msg 1776717519163): ship #103 Zustand-setState-first
-  // approach caused a regression — AuthBootstrap's qaPersonaActive snapshot
-  // (captured at initial mount with [] deps) went stale after SPA nav, letting
-  // Supabase events clobber persona state. Back to explicit localStorage
-  // writes paired with window.location.href='/home' full reload — slower
-  // (~1-2s) but correct. Perf optimization filed as Tranche-2 task; the
-  // proper fix is to make AuthBootstrap read the flag inside its event
-  // handlers rather than snapshot at mount time. Also: setState is still
-  // called for in-memory freshness between localStorage write + reload, but
-  // the localStorage writes are the source-of-truth for reload rehydration.
+  // Ship #167 (task_1776717692862_738): AuthBootstrap now reads the
+  // qaPersonaActive flag inside its async callbacks (not at mount), so
+  // persona swaps can ride SPA nav without the Supabase-SIGNED_IN clobber
+  // that reverted #103. Source-of-truth remains localStorage (so a hard
+  // reload hydrates the same persona state), but we also setState() each
+  // persisted store so SPA-nav consumers see fresh data immediately —
+  // no window.location.href reload, ~42ms target vs ~1-2s before.
   localStorage.setItem('buildconnect-auth', JSON.stringify({
     state: {
       session: {
@@ -351,6 +356,35 @@ export function applyQAPersona(persona: QAPersona) {
   }))
 
   localStorage.setItem('buildconnect-qa-persona-active', persona.id)
+
+  // Ship #167: in-memory setState for SPA-nav freshness. Order matters —
+  // flag-active write above precedes store resets below so AuthBootstrap's
+  // isQaPersonaActive() check sees `true` if any callback fires mid-apply.
+  useAuthStore.setState({
+    session: {
+      access_token: `qa-fake-token-${persona.id}`,
+      user: { id: persona.profile.id, email: persona.profile.email },
+    },
+    profile: persona.profile,
+    isAuthenticated: true,
+    role: persona.profile.role,
+  })
+  useCartStore.setState({
+    items: persona.cart.items,
+    projectTitle: persona.cart.projectTitle ?? '',
+    notes: persona.cart.notes ?? '',
+    photos: [],
+    idDocument: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  })
+  useProjectsStore.setState({
+    sentProjects: persona.projects.sentProjects,
+    assignedRepByLead: persona.projects.assignedRepByLead,
+    leadStatusOverrides: persona.projects.leadStatusOverrides,
+    cancellationRequestsByLead: persona.projects.cancellationRequestsByLead,
+    // Ship #166 maps — personas don't seed timestamps, reset to empty.
+    leadConfirmedAtByLead: {},
+    repAssignedAtByLead: {},
+  })
 }
 
 // Wipe QA state + clear all store keys. Used by the "Exit QA" option in the
@@ -365,6 +399,30 @@ export function clearQAPersona() {
   localStorage.removeItem('buildconnect-selected-booking')
   localStorage.removeItem('buildconnect-homeowner-info')
   localStorage.removeItem('buildconnect-id-document')
+
+  // Ship #167: in-memory reset so SPA-nav Exit shows a clean unauthed
+  // state without requiring window.location.href reload.
+  useAuthStore.setState({
+    session: null,
+    profile: null,
+    isAuthenticated: false,
+    role: null,
+  })
+  useCartStore.setState({
+    items: [],
+    projectTitle: '',
+    notes: '',
+    photos: [],
+    idDocument: null,
+  })
+  useProjectsStore.setState({
+    sentProjects: [],
+    assignedRepByLead: {},
+    leadStatusOverrides: {},
+    cancellationRequestsByLead: {},
+    leadConfirmedAtByLead: {},
+    repAssignedAtByLead: {},
+  })
 }
 
 export function activeQAPersonaId(): string | null {

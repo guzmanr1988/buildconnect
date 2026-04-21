@@ -43,23 +43,31 @@ export function AuthBootstrap() {
     // session + Ana persona apply → vendor dashboard rendered Ana name
     // because Supabase session wasn't terminated). Skip Supabase hydrate
     // entirely in QA mode; the persona seed IS the session of record.
-    const qaPersonaActive = typeof window !== 'undefined' && !!localStorage.getItem('buildconnect-qa-persona-active')
+    //
+    // Ship #167: flag is read INSIDE each async callback, not snapshotted
+    // at effect mount. AuthBootstrap's useEffect has [] deps and never
+    // re-runs — a mount-time snapshot froze the flag value forever, so
+    // any persona switch via SPA nav (router.navigate) on a mount-snapshot
+    // of `false` was ignored by the hydrate callback. Reading at
+    // call-time picks up the live value. (See #103/#104 regression.)
+    const isQaPersonaActive = () =>
+      typeof window !== 'undefined' &&
+      !!localStorage.getItem('buildconnect-qa-persona-active')
 
-    if (!qaPersonaActive) {
-      supabase.auth.getSession().then(({ data }) => {
-        if (!mounted) return
-        const session = data.session
-        if (session?.user) {
-          hydrate(session.user.id, session.user.email ?? '', session.access_token)
-        }
-      })
-    }
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return
+      if (isQaPersonaActive()) return
+      const session = data.session
+      if (session?.user) {
+        hydrate(session.user.id, session.user.email ?? '', session.access_token)
+      }
+    })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return
       // QA persona bypass on listener too — prevents a late Supabase
       // SIGNED_IN / TOKEN_REFRESHED event from overwriting persona state.
-      if (qaPersonaActive) return
+      if (isQaPersonaActive()) return
       // Listener uses clearLocalSession — NEVER store.logout() — because
       // logout() calls supabase.auth.signOut() which re-fires SIGNED_OUT and
       // loops, freezing the main thread (iOS Safari / headless Chromium crash

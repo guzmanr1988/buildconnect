@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { UserRound, LogOut, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,6 +17,7 @@ import { QA_PERSONAS, applyQAPersona, clearQAPersona, activeQAPersonaId } from '
 // in the prod env.
 export function QAPersonaSwitcher() {
   const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -29,19 +31,20 @@ export function QAPersonaSwitcher() {
     const persona = QA_PERSONAS.find((p) => p.id === personaId)
     if (!persona) return
     applyQAPersona(persona)
-    // REVERTED to window.location.href full-reload per kratos msg
-    // 1776717519163 — ship #103 SPA-nav optimization caused a regression
-    // where AuthBootstrap's qaPersonaActive snapshot (captured at initial
-    // mount with [] deps) was stale after SPA nav, letting Supabase events
-    // clobber persona state. Full reload re-mounts AuthBootstrap with fresh
-    // flag read. Slower (~1-2s) but correct. Perf optimization filed as
-    // Tranche-2 task_1776716736651_418 plus a new task for the correct fix.
-    window.location.href = '/home'
+    // Ship #167 (task_1776717692862_738): SPA nav restored. AuthBootstrap
+    // now reads the qaPersonaActive flag inside each async callback, so the
+    // mount-snapshot staleness that regressed #103 no longer applies. The
+    // applyQAPersona() call above also setStates the in-memory stores so
+    // consumers render the fresh persona data without a reload (~42ms
+    // apply vs ~1-2s previously).
+    setOpen(false)
+    navigate('/home')
   }
 
   const handleExit = () => {
     clearQAPersona()
-    window.location.href = '/login'
+    setOpen(false)
+    navigate('/login')
   }
 
   const active = activeId ? QA_PERSONAS.find((p) => p.id === activeId) : null
@@ -108,8 +111,8 @@ export function QAPersonaSwitcher() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground text-center leading-snug">
-            Switching a persona reloads the app + hydrates auth + cart + projects
-            stores with that persona's seed. Gated by VITE_DEMO_MODE.
+            Switching a persona hydrates auth + cart + projects stores with that
+            persona's seed via SPA navigation. Gated by VITE_DEMO_MODE.
           </p>
         </div>
       </PopoverContent>
