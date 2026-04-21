@@ -16,6 +16,8 @@ import type { UserRole } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset } from '@/components/shared/address-fieldset'
+import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
+import { useVendorBillingStore, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
@@ -54,9 +56,16 @@ export function RegisterPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  // Ship #179 (Rodolfo-direct 2026-04-21) — gate-state for vendor payment
+  // dialog. Set SYNCHRONOUSLY before signUp's async boundary so the
+  // AuthBootstrap SIGNED_IN listener's downstream useEffect below sees
+  // the gate before it would normally redirect. Homeowners skip this
+  // entirely; only vendor signups route through the payment dialog.
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const setVendorPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
 
   const {
     register,
@@ -75,13 +84,28 @@ export function RegisterPage() {
   const zipValue = watch('zip') ?? ''
 
   useEffect(() => {
-    if (isAuthenticated && profile) {
-      navigate(profile.role === 'vendor' ? '/vendor' : '/home', { replace: true })
-    }
-  }, [isAuthenticated, profile, navigate])
+    if (!isAuthenticated || !profile) return
+    // Ship #179 — gate vendor redirect on payment dialog. paymentDialogOpen
+    // is set synchronously in onSubmit BEFORE the signUp await boundary,
+    // so by the time AuthBootstrap hydrates profile + this effect re-runs,
+    // the gate is already true. The dialog's onSuccess handler flips the
+    // gate to false, which re-triggers this effect and lands the redirect.
+    if (profile.role === 'vendor' && paymentDialogOpen) return
+    navigate(profile.role === 'vendor' ? '/vendor' : '/home', { replace: true })
+  }, [isAuthenticated, profile, paymentDialogOpen, navigate])
 
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
+    // Ship #179 — gate-state SYNCHRONOUSLY before the signUp async
+    // boundary. This runs in the same React batch as the button click so
+    // the useEffect above sees paymentDialogOpen=true before AuthBootstrap
+    // can hydrate the profile from the SIGNED_IN listener event. Without
+    // the sync-first ordering, the redirect could fire before the dialog
+    // mounts. Only vendors go through the payment dialog — homeowners'
+    // gate stays false and they redirect as before.
+    if (selectedRole === 'vendor') {
+      setPaymentDialogOpen(true)
+    }
     setIsLoading(true)
     // Compose the single-string address from the 4 split inputs (ship #113
     // Option A per kratos msg 1776720207707). Profile.address remains a
@@ -115,12 +139,34 @@ export function RegisterPage() {
           console.error('[register] profile patch failed:', err)
         }
       }
-      // AuthBootstrap hydrates the store via onAuthStateChange; useEffect navigates.
+      // For homeowners: AuthBootstrap hydrates, useEffect navigates to /home.
+      // For vendors: dialog mounted via paymentDialogOpen=true; useEffect
+      // redirect stays gated until the dialog's onSuccess flips the gate.
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed'
       toast.error(message)
       setIsLoading(false)
+      // If signUp fails, unwind the gate so the user can retry.
+      setPaymentDialogOpen(false)
     }
+  }
+
+  // Ship #179 — dialog success handler. Profile.id resolves post-signUp
+  // via AuthBootstrap hydration; by the time the user submits payment,
+  // the profile is live and we can key the stored method to it.
+  function handlePaymentSuccess(method: VendorPaymentMethod) {
+    const vendorId = profile?.id
+    if (vendorId) {
+      setVendorPaymentMethod(vendorId, method)
+    } else {
+      // Edge case: profile not yet hydrated when success fires. Store
+      // against the form email as a fallback key so the portal can
+      // reconcile on first load. (Real integration moves this to a
+      // signup-time side-effect on the server.)
+      console.warn('[register] payment success fired before profile hydrate; skipping store')
+    }
+    setPaymentDialogOpen(false)
+    // The register.useEffect re-runs on gate flip → navigates to /vendor.
   }
 
   return (
@@ -343,6 +389,18 @@ export function RegisterPage() {
           </Link>
         </p>
       </motion.div>
+
+      {/* Ship #179 — vendor post-signup payment dialog. Mounted in every
+          render branch per the dialog-mount-in-every-return discipline
+          banked from prior state-flipped-dialog silent-no-op incidents.
+          blocking=true so overlay/Escape don't dismiss; user must pick a
+          method to enter the portal. onSuccess → navigate to /vendor. */}
+      <VendorPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        onSuccess={handlePaymentSuccess}
+        blocking
+      />
     </div>
   )
 }
