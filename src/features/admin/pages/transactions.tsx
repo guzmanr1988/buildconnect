@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_TRANSACTIONS } from '@/lib/mock-data'
+import { MOCK_TRANSACTIONS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
@@ -214,19 +214,43 @@ export default function TransactionsPage() {
                     </TableHeader>
                     <TableBody>
                       {grouped[cat.key].map((tx) => {
-                        // Row click routing (ship #143):
-                        // - Commission rows: open ProjectDetailDialog keyed
-                        //   on the resolved projectId (mock-tx-<id> stripped
-                        //   or Supabase id passed through).
-                        // - Membership + payout rows: open Transaction
-                        //   DetailDialog showing mock card/destination +
-                        //   linked vendor + subscription period (for
-                        //   membership).
-                        const projectId = tx.type === 'commission'
-                          ? (tx.id.startsWith('mock-tx-') ? tx.id.slice('mock-tx-'.length) : tx.id)
-                          : null
+                        // Row click routing (ship #146 bug fix on #143):
+                        // - Commission rows resolve the project context via a
+                        //   3-tier bridge: (a) mock-tx-<sp.id> prefix strip,
+                        //   (b) match sentProjects by homeowner-name +
+                        //   vendor-company, (c) match MOCK_LEADS by
+                        //   homeowner_name + vendor-company. Without this
+                        //   bridge, Supabase UUIDs and tx-N ids don't match
+                        //   any sentProject.id / MOCK_LEADS.id and the
+                        //   Dialog opens empty (Rodolfo caught on pending
+                        //   commission row — kratos msg 1776747436781).
+                        // - Membership + payout rows: TransactionDetailDialog
+                        //   as before.
+                        let projectId: string | null = null
+                        if (tx.type === 'commission') {
+                          if (tx.id.startsWith('mock-tx-')) {
+                            projectId = tx.id.slice('mock-tx-'.length)
+                          } else {
+                            const sp = sentProjects.find(
+                              (p) =>
+                                p.homeowner?.name === tx.customer &&
+                                p.contractor?.company === tx.company,
+                            )
+                            if (sp) {
+                              projectId = sp.id
+                            } else {
+                              const vendor = MOCK_VENDORS.find((v) => v.company === tx.company)
+                              const lead = MOCK_LEADS.find(
+                                (l) =>
+                                  l.homeowner_name === tx.customer &&
+                                  (vendor ? l.vendor_id === vendor.id : true),
+                              )
+                              if (lead) projectId = lead.id
+                            }
+                          }
+                        }
                         const onRowClick = tx.type === 'commission' && projectId
-                          ? () => setSelectedProjectId(projectId)
+                          ? () => setSelectedProjectId(projectId!)
                           : () => setSelectedTransaction(tx)
                         return (
                         <TableRow
