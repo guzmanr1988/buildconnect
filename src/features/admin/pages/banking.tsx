@@ -58,6 +58,7 @@ import {
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -819,7 +820,7 @@ export default function BankingPage() {
                           <TableBody>
                             {txs.map((tx) => (
                               <TableRow key={tx.id}>
-                                <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
+                                <TableCell className="font-mono text-xs font-semibold">{formatTransactionId(tx.id, tx.type)}</TableCell>
                                 <TableCell>
                                   <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', TYPE_CONFIG[tx.type].className)}>
                                     {TYPE_CONFIG[tx.type].label}
