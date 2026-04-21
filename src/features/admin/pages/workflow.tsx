@@ -104,9 +104,12 @@ export default function WorkflowPage() {
     const mappedStatus = cancelApproved ? 'declined' : (mockStatusMap[rawStatus] ?? 'pending')
     const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
     // Bridge to MOCK_CLOSED_SALES so fixture-completed leads carry saleAmount
-    // + soldAt on the admin pipeline view. Without this bridge, the per-lead
-    // commission split would only render for sentProjects-derived entries.
+    // + soldAt on the admin pipeline view. Gate on mappedStatus === 'sold' so
+    // internally-inconsistent seed (closed_sale entry referencing a pending/
+    // confirmed lead — cs-3/L-0001 at rest) doesn't leak a saleAmount onto
+    // a non-sold pipeline item. Ship #142 P0 fix per kratos msg 1776745930680.
     const closedSale = MOCK_CLOSED_SALES.find((c) => c.lead_id === l.id)
+    const isSold = mappedStatus === 'sold'
     return {
       id: l.id,
       name: l.homeowner_name,
@@ -116,8 +119,8 @@ export default function WorkflowPage() {
       vendor: vendor?.company ?? 'Unknown vendor',
       rep: assignedRepByLead[l.id]?.name,
       status: mappedStatus,
-      soldAt: closedSale?.closed_at,
-      saleAmount: closedSale?.sale_amount,
+      soldAt: isSold ? closedSale?.closed_at : undefined,
+      saleAmount: isSold ? closedSale?.sale_amount : undefined,
       pendingCancel: cReq?.status === 'pending',
     }
   }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
@@ -338,7 +341,7 @@ export default function WorkflowPage() {
                           Cancel request pending
                         </Badge>
                       )}
-                      {lead.saleAmount && lead.saleAmount > 0 && (() => {
+                      {lead.status === 'sold' && lead.saleAmount && lead.saleAmount > 0 && (() => {
                         // Mirror vendor-banking display shape (kratos msg
                         // 1776742302054 P0): Sale Total / Vendor's Share <pct>%
                         // (emerald) / BuildConnect Commission <pct>% (amber).

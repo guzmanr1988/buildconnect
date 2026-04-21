@@ -211,10 +211,11 @@ export function ProjectDetailDialog({ open, onClose, projectId }: ProjectDetailD
               )}
 
               {/* Commission breakdown — mirrors vendor-banking shape; respects
-                  per-vendor commission_pct override. Renders on any sold lead
-                  with saleAmount regardless of sentProject vs MOCK_LEADS
-                  lineage. */}
-              {selectedItem.saleAmount && selectedItem.saleAmount > 0 && (() => {
+                  per-vendor commission_pct override. Gated on status==='sold'
+                  so internally-inconsistent seed data (pending/approved lead
+                  with a stray MOCK_CLOSED_SALES match) doesn't render a
+                  commission split on non-sold projects. Ship #142 P0. */}
+              {selectedItem.status === 'sold' && selectedItem.saleAmount && selectedItem.saleAmount > 0 && (() => {
                 const vendorPct = 100 - commissionPct
                 const bcAmount = Math.round(selectedItem.saleAmount * (commissionPct / 100))
                 const vendorAmount = selectedItem.saleAmount - bcAmount
