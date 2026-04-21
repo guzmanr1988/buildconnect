@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -87,11 +87,11 @@ export default function VendorCatalog() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.04 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0, transition: { duration: 0.15, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 overflow-x-hidden">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
   BadgeCheck, CreditCard, LogOut, Shield, MessageCircle,
@@ -69,11 +69,11 @@ export default function VendorProfile() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, User, MapPin, Calendar,
   Download, ZoomIn,
@@ -72,11 +72,11 @@ export default function LeadInbox() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
 
   return (

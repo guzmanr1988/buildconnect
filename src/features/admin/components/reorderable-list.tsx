@@ -21,6 +21,8 @@ import { useLongPressDrag } from '@/hooks/use-long-press-drag'
 export interface ReorderableDragProps {
   ref: (n: HTMLElement | null) => void
   onPointerDown: (e: React.PointerEvent) => void
+  'data-reorderable-row': 'true'
+  'data-reorderable-index': string
   style: { touchAction: 'none' }
 }
 

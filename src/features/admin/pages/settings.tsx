@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   Settings, Percent, DollarSign, CalendarDays, Wrench, Eye, Layers,
   Banknote, Save, CheckCircle, Bell, Shield, Clock, MapPin, Building2,
@@ -23,7 +23,7 @@ const fadeUp = {
     opacity: 1, y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })

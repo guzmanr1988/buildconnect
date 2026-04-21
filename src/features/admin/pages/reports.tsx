@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   FileText, DollarSign, ArrowDownToLine, Building2,
   TrendingUp, Users, Printer,
@@ -28,7 +28,7 @@ const fadeUp = {
     opacity: 1, y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)

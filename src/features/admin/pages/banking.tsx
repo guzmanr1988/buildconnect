@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
   Landmark,
@@ -69,7 +69,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 const baselineRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
 const pendingPayouts = MOCK_TRANSACTIONS

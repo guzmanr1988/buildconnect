@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Send, FileText, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -141,7 +141,7 @@ export default function VendorMessages() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { duration: 0.2, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">

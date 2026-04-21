@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
   MapPin,
@@ -106,7 +106,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 const statusColorMap: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',

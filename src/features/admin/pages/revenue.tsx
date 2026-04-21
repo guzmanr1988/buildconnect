@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   DollarSign,
   ArrowRight,
@@ -44,7 +44,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 export default function RevenuePage() {
   // Phase 5: closed_sales fetched from Supabase at mount.

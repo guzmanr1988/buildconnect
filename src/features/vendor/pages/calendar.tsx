@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -135,11 +135,11 @@ export default function VendorCalendar() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.04 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 8 },
     show: { opacity: 1, y: 0, transition: { duration: 0.15, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">

@@ -153,13 +153,18 @@ export function useLongPressDrag({
   )
 
   // A row that's currently draggable. Consumers spread these props on
-  // the element that represents the grabbable surface.
+  // the element that represents the grabbable surface. The
+  // `data-reorderable-row` + `data-reorderable-index` attributes give
+  // probe harnesses (Apollo matrix) a stable selector so the drag
+  // surface can be targeted independent of Tailwind class churn.
   const getRowProps = useCallback(
     (index: number) => ({
       ref: (n: HTMLElement | null) => {
         rowRefs.current[index] = n
       },
       onPointerDown: onPointerDown(index),
+      'data-reorderable-row': 'true' as const,
+      'data-reorderable-index': String(index),
       // touch-action: none on the row prevents iOS from hijacking the
       // long-press as a text-selection / magnifier gesture while we're
       // arming the drag. Desktop ignores it.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   Bug as BugIcon,
   Plus,
@@ -31,7 +31,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 const PRIORITY_CONFIG: Record<BugPriority, { label: string; icon: React.ElementType; className: string }> = {
   high: {

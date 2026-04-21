@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, Archive, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -187,11 +187,11 @@ export default function WorkflowPage() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">

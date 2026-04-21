@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
@@ -469,11 +469,11 @@ export default function VendorDashboard() {
   const container = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-  }
+  } satisfies Variants
   const item = {
     hidden: { opacity: 0, y: 12 },
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
-  }
+  } satisfies Variants
 
   function LeadCard({ lead }: { lead: Lead }) {
     const rep = getAssignedRepForLead(lead.id)

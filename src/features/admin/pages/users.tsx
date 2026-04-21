@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
   Search,
@@ -91,7 +91,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 const ROLE_TABS: { value: UserRole | 'all'; label: string; icon: React.ElementType }[] = [
   { value: 'all', label: 'All', icon: Users },

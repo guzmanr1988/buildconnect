@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import {
   DollarSign,
   TrendingUp,
@@ -48,7 +48,7 @@ const fadeUp = {
     y: 0,
     transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
   }),
-}
+} satisfies Variants
 
 // Vendors + homeowners still mock-backed — Phase 5 scope is analytics aggregation
 // against real closed_sales + transactions + leads, NOT vendor/homeowner profile
