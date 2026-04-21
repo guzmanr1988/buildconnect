@@ -128,9 +128,16 @@ export default function VendorDashboard() {
     [VENDOR_ID, mockVendorId]
   )
 
-  // Convert sent projects from homeowner side into lead-like objects
+  // Convert sent projects from homeowner side into lead-like objects.
+  // Ship #163 (task_1776665513851_505): filter sentProjects to only the
+  // ones whose contractor.company matches THIS vendor. Previously every
+  // vendor saw every sentProject regardless of who the contractor was —
+  // leaked cross-vendor data + didn't match Rodolfo's design intent.
+  // kratos msg 1776665480574 original framing.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
-  const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects.map((p) => ({
+  const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects
+    .filter((p) => p.contractor?.company && vendor?.company && p.contractor.company === vendor.company)
+    .map((p) => ({
     id: `L-${p.id.slice(0, 4).toUpperCase()}`,
     _projectId: p.id,
     homeowner_id: 'ho-current',
@@ -150,7 +157,7 @@ export default function VendorDashboard() {
     slot: p.sentAt,
     received_at: p.sentAt,
     soldAt: p.soldAt,
-  })), [sentProjects, VENDOR_ID])
+  })), [sentProjects, VENDOR_ID, vendor?.company])
 
   // Per-lead status overrides are now persisted via projects-store (ship #55 —
   // Rod-surfaced refresh-wipes-everything on Demo Vendor). Vendor actions

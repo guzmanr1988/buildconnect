@@ -37,6 +37,27 @@ const contractor: ContractorInfo = {
   rating: 4.8,
 }
 
+// Per-service contractors for qa-4 Miguel sentProjects (ship #163 per
+// task_1776665513851_505). Gives vendor-dashboard tests coverage across
+// distinct vendor scopes — contractor-scope filter in vendor/pages/
+// dashboard.tsx maps each sentProject to the vendor whose company matches,
+// so apex-demo sees only the roof, paradise-demo sees only the pool, etc.
+const roofContractor: ContractorInfo = {
+  name: 'Carlos Mendez',
+  company: 'Apex Roofing & Solar',
+  rating: 4.8,
+}
+const bathContractor: ContractorInfo = {
+  name: 'Priya Sharma',
+  company: 'Shield Impact Windows',
+  rating: 4.6,
+}
+const poolContractor: ContractorInfo = {
+  name: 'Demo Vendor',
+  company: 'Paradise Pools FL',
+  rating: 4.8,
+}
+
 const booking: BookingInfo = {
   date: '2026-05-15',
   time: '10:00 AM',
@@ -215,7 +236,7 @@ const PERSONA_4_MIXED: QAPersona = {
           addedAt: '2026-02-10T00:00:00.000Z',
         } as CartItem,
         status: 'sold',
-        contractor,
+        contractor: roofContractor,
         booking: { date: '2026-03-01', time: '9:00 AM' },
         homeowner: homeowner(PERSONA_4_PROFILE),
         sentAt: '2026-02-10T10:00:00.000Z',
@@ -233,7 +254,7 @@ const PERSONA_4_MIXED: QAPersona = {
           addedAt: '2026-04-01T00:00:00.000Z',
         } as CartItem,
         status: 'approved',
-        contractor,
+        contractor: bathContractor,
         booking: { date: '2026-05-20', time: '11:00 AM' },
         homeowner: homeowner(PERSONA_4_PROFILE),
         sentAt: '2026-04-01T11:00:00.000Z',
@@ -249,7 +270,7 @@ const PERSONA_4_MIXED: QAPersona = {
           addedAt: '2026-04-12T00:00:00.000Z',
         } as CartItem,
         status: 'approved',
-        contractor,
+        contractor: poolContractor,
         booking,
         homeowner: homeowner(PERSONA_4_PROFILE),
         sentAt: '2026-04-12T14:00:00.000Z',
