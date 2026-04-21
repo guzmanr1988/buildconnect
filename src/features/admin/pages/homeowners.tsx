@@ -136,6 +136,11 @@ export default function HomeownersPage() {
   // email is the stable bridge key).
   const sentProjects = useProjectsStore((s) => s.sentProjects)
 
+  // Per-homeowner "Showing projects at: <label>" address filter (ship #135
+  // per kratos msg 1776742863870). Silent no-op when a homeowner's
+  // sentProjects only surface one distinct address label.
+  const [addressFilterByHomeowner, setAddressFilterByHomeowner] = useState<Record<string, string>>({})
+
   const homeowners = useMemo(
     () =>
       HOMEOWNERS.map((h) => ({
@@ -232,13 +237,16 @@ export default function HomeownersPage() {
       {/* Homeowner Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filtered.map((homeowner, i) => {
-          const fixtureProjects = CUSTOMER_PROJECTS.filter(
-            (p) => p.homeowner_id === homeowner.id
-          )
+          const fixtureProjects: (CustomerProject & { address_label?: string })[] = CUSTOMER_PROJECTS
+            .filter((p) => p.homeowner_id === homeowner.id)
+            .map((p) => ({ ...p, address_label: 'Primary' }))
           // Merge sentProjects: cart-created projects where the homeowner
           // email matches (stable bridge to mock ho-N ids). Synthesize
           // CustomerProject rows so the existing renderer handles both.
-          const sentForHomeowner: CustomerProject[] = sentProjects
+          // Carry sp.item.address?.label through as address_label so the
+          // /admin/homeowners Other-Addresses filter can resolve against
+          // either path (ship #135).
+          const sentForHomeowner: (CustomerProject & { address_label?: string })[] = sentProjects
             .filter((sp) => sp.homeowner?.email === homeowner.email)
             .map((sp) => ({
               id: sp.id,
@@ -254,8 +262,22 @@ export default function HomeownersPage() {
                     : 'pending') as LeadStatus,
               date_submitted: sp.sentAt,
               contractor_assigned: sp.contractor?.company ?? 'Unassigned',
+              address_label: sp.item.address?.label ?? 'Primary',
             }))
-          const projects = [...sentForHomeowner, ...fixtureProjects]
+          const allProjects = [...sentForHomeowner, ...fixtureProjects]
+
+          // Distinct address labels across this homeowner's projects — used
+          // to decide whether to surface the Other-Addresses filter. Silent
+          // no-op if only one distinct label (per kratos spec 1776742863870:
+          // "If homeowner has no additional addresses, no UI surfaces").
+          const distinctAddressLabels = Array.from(new Set(
+            allProjects.map((p) => p.address_label ?? 'Primary')
+          ))
+          const showAddressFilter = distinctAddressLabels.length >= 2
+          const selectedAddress = addressFilterByHomeowner[homeowner.id] ?? 'Primary'
+          const projects = showAddressFilter
+            ? allProjects.filter((p) => (p.address_label ?? 'Primary') === selectedAddress)
+            : allProjects
           return (
             <motion.div
               key={homeowner.id}
@@ -390,6 +412,32 @@ export default function HomeownersPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
+                        {showAddressFilter && (
+                          <div className="mb-3 flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <label className="text-xs text-muted-foreground shrink-0" htmlFor={`addr-filter-${homeowner.id}`}>
+                              Showing projects at:
+                            </label>
+                            <select
+                              id={`addr-filter-${homeowner.id}`}
+                              value={selectedAddress}
+                              onChange={(e) =>
+                                setAddressFilterByHomeowner((prev) => ({
+                                  ...prev,
+                                  [homeowner.id]: e.target.value,
+                                }))
+                              }
+                              className="flex-1 bg-background rounded border text-xs px-2 py-1"
+                              aria-label={`Filter projects by address for ${homeowner.name}`}
+                            >
+                              {distinctAddressLabels
+                                .sort((a, b) => (a === 'Primary' ? -1 : b === 'Primary' ? 1 : a.localeCompare(b)))
+                                .map((label) => (
+                                  <option key={label} value={label}>{label}</option>
+                                ))}
+                            </select>
+                          </div>
+                        )}
                         {projects.length === 0 ? (
                           <p className="text-sm text-muted-foreground py-2">
                             No projects yet
