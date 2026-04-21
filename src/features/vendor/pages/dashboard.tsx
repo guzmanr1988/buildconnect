@@ -130,14 +130,17 @@ export default function VendorDashboard() {
   )
 
   // Convert sent projects from homeowner side into lead-like objects.
-  // Ship #163 (task_1776665513851_505): filter sentProjects to only the
-  // ones whose contractor.company matches THIS vendor. Previously every
-  // vendor saw every sentProject regardless of who the contractor was —
-  // leaked cross-vendor data + didn't match Rodolfo's design intent.
-  // kratos msg 1776665480574 original framing.
+  // Ship #163 + #165 vendor_id-FK hardening (task_1776731114470_226):
+  // prefer contractor.vendor_id FK (stable across rename); fall back to
+  // company-name match for legacy persisted entries that predate the FK.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
   const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects
-    .filter((p) => p.contractor?.company && vendor?.company && p.contractor.company === vendor.company)
+    .filter((p) => {
+      if (!vendor) return false
+      if (p.contractor?.vendor_id) return p.contractor.vendor_id === vendor.id
+      // Legacy fallback — pre-#165 persisted entries without vendor_id
+      return p.contractor?.company === vendor.company
+    })
     .map((p) => ({
     id: `L-${p.id.slice(0, 4).toUpperCase()}`,
     _projectId: p.id,
@@ -158,7 +161,7 @@ export default function VendorDashboard() {
     slot: p.sentAt,
     received_at: p.sentAt,
     soldAt: p.soldAt,
-  })), [sentProjects, VENDOR_ID, vendor?.company])
+  })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company])
 
   // Per-lead status overrides are now persisted via projects-store (ship #55 —
   // Rod-surfaced refresh-wipes-everything on Demo Vendor). Vendor actions

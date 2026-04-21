@@ -4,6 +4,13 @@ import type { CartItem } from './cart-store'
 import type { VendorRep } from '@/types'
 
 export interface ContractorInfo {
+  // Ship #165 per task_1776731114470_226 — vendor_id FK is the stable
+  // bridge key. Prefer it in all cross-surface lookups (was company-name
+  // matching, which breaks on fixture rename per #131 Paradise Pools Inc
+  // vs Paradise Pools FL catch). Optional for back-compat with pre-#165
+  // persisted entries; consumers should prefer vendor_id when present and
+  // fall back to company-match only when absent.
+  vendor_id?: string
   name: string
   company: string
   rating: number

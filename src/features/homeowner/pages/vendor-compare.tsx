@@ -219,6 +219,7 @@ export function VendorComparePage() {
                     className="mt-auto w-full h-11 text-sm font-medium"
                     onClick={() => {
                       localStorage.setItem('buildconnect-selected-contractor', JSON.stringify({
+                        vendor_id: vendor.id,
                         name: vendor.name,
                         company: vendor.company,
                         rating: vendor.rating,

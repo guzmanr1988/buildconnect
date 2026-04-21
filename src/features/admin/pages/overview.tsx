@@ -113,7 +113,10 @@ export default function OverviewPage() {
     // Use each vendor's effective commission_pct (admin override or default);
     // fall back to 15% if the vendor can't be resolved by company name.
     const mockComm = mockSoldSales.reduce((s, p) => {
-      const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
+      // Ship #165: prefer contractor.vendor_id FK over company-name match.
+      const vendor = p.contractor?.vendor_id
+        ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
+        : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
       const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
@@ -125,7 +128,10 @@ export default function OverviewPage() {
   // honored per vendor.
   const mockCommissions = useMemo<Transaction[]>(() => {
     return mockSoldSales.map((p) => {
-      const vendor = MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
+      // Ship #165: prefer contractor.vendor_id FK over company-name match.
+      const vendor = p.contractor?.vendor_id
+        ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
+        : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
       const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
       return {
         id: `mock-tx-${p.id}`,

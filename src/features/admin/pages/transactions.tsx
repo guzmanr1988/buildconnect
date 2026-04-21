@@ -298,18 +298,26 @@ export default function TransactionsPage() {
                             const sp = sentProjects.find((p) => p.id === projectId)
                             resolvedAddress = sp?.homeowner?.address ?? null
                           } else {
-                            // Tier 2: sentProjects name+company match
+                            // Tier 2: sentProjects name+vendor_id match
+                            // Ship #165: prefer contractor.vendor_id FK over
+                            // company-name match; fall back to company for
+                            // pre-#165 persisted entries.
                             const sp = sentProjects.find(
                               (p) =>
                                 p.homeowner?.name === tx.customer &&
-                                p.contractor?.company === tx.company,
+                                (p.contractor?.vendor_id
+                                  ? p.contractor.vendor_id === tx.vendor_id
+                                  : p.contractor?.company === tx.company),
                             )
                             if (sp) {
                               projectId = sp.id
                               resolvedAddress = sp.homeowner?.address ?? null
                             } else {
                               // Tier 3: MOCK_LEADS homeowner_name+vendor_id match
-                              const vendor = MOCK_VENDORS.find((v) => v.company === tx.company)
+                              // Ship #165: prefer tx.vendor_id FK.
+                              const vendor = tx.vendor_id
+                                ? MOCK_VENDORS.find((v) => v.id === tx.vendor_id)
+                                : MOCK_VENDORS.find((v) => v.company === tx.company)
                               const lead = MOCK_LEADS.find(
                                 (l) =>
                                   l.homeowner_name === tx.customer &&

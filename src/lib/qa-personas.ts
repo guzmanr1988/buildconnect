@@ -32,27 +32,30 @@ export interface QAPersona {
 }
 
 const contractor: ContractorInfo = {
+  vendor_id: 'v-3',
   name: 'Demo Vendor',
   company: 'Paradise Pools FL',
   rating: 4.8,
 }
 
-// Per-service contractors for qa-4 Miguel sentProjects (ship #163 per
-// task_1776665513851_505). Gives vendor-dashboard tests coverage across
-// distinct vendor scopes — contractor-scope filter in vendor/pages/
-// dashboard.tsx maps each sentProject to the vendor whose company matches,
-// so apex-demo sees only the roof, paradise-demo sees only the pool, etc.
+// Per-service contractors for qa-4 Miguel sentProjects (ship #163 +
+// ship #165 vendor_id FK per task_1776731114470_226). Each contractor
+// now carries vendor_id so the contractor-scope filter + admin
+// aggregations can bridge by FK instead of fragile company-name match.
 const roofContractor: ContractorInfo = {
+  vendor_id: 'v-1',
   name: 'Carlos Mendez',
   company: 'Apex Roofing & Solar',
   rating: 4.8,
 }
 const bathContractor: ContractorInfo = {
+  vendor_id: 'v-2',
   name: 'Priya Sharma',
   company: 'Shield Impact Windows',
   rating: 4.6,
 }
 const poolContractor: ContractorInfo = {
+  vendor_id: 'v-3',
   name: 'Demo Vendor',
   company: 'Paradise Pools FL',
   rating: 4.8,

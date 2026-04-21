@@ -82,8 +82,11 @@ export function AppointmentStatusPage() {
   const lead = leadStatusOverrides[baseLead.id]
     ? { ...baseLead, status: leadStatusOverrides[baseLead.id] }
     : baseLead
+  // Ship #165: prefer contractor.vendor_id FK over company-name match.
   const vendor = sentProject
-    ? MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company)
+    ? (sentProject.contractor?.vendor_id
+        ? MOCK_VENDORS.find((v) => v.id === sentProject.contractor!.vendor_id)
+        : MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company))
     : MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
   // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
   // Must be declared BEFORE baseTimeline/dynamicTimeline consumer block —

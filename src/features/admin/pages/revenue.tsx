@@ -133,7 +133,10 @@ export default function RevenuePage() {
     // (same vendor + same amount + same day), skip to avoid double-counting.
     for (const sp of sentProjects) {
       if (sp.status !== 'sold' || !sp.saleAmount || sp.saleAmount <= 0) continue
-      const entry = Array.from(map.values()).find((v) => v.company === sp.contractor?.company)
+      // Ship #165: prefer contractor.vendor_id FK over company-name match.
+      const entry = sp.contractor?.vendor_id
+        ? map.get(sp.contractor.vendor_id)
+        : Array.from(map.values()).find((v) => v.company === sp.contractor?.company)
       if (!entry) continue
       const commissionPct = entry.commissionPct / 100
       const platformFee = Math.round(sp.saleAmount * commissionPct)
