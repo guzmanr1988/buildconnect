@@ -194,26 +194,22 @@ export default function VendorDashboard() {
     return (now - new Date(l.soldAt).getTime()) / DAY_MS
   }
 
-  // Cancelled = homeowner-initiated, vendor-approved. Primary signal is
-  // status='cancelled' (ship #171 forward); pre-#171 entries are detected
-  // via the (status='rejected' + cancellationRequest.status='approved')
-  // conjunction. Having cancellationRequest.status='approved' alone also
-  // qualifies (covers any ordering race between the two state writes).
+  // Cancelled = any deal that didn't happen. Ship #184 (Rodolfo-direct
+  // 2026-04-21) collapsed the #171 rejected-vs-cancelled UI split back
+  // into one tile per his directive: 'in vendor rejected leads are the
+  // same as cancelled projects eliminate rejected leads'. The data model
+  // still carries the distinction (LeadStatus includes both 'rejected'
+  // and 'cancelled'; approveCancellation still writes 'cancelled' per
+  // #171), but the vendor-dashboard tile treats them as one bucket.
+  // Covers: status='cancelled' (homeowner-initiated, vendor-approved)
+  // OR status='rejected' (vendor-upfront rejection)
+  // OR cancellationRequest.status='approved' (pre-#171 persisted data +
+  // ordering-race defense against a partial state write).
   const isCancelledLead = (l: Lead): boolean => {
-    if (l.status === 'cancelled') return true
+    if (l.status === 'cancelled' || l.status === 'rejected') return true
     const cReq = cancellationRequestsByLead[l.id]
     if (cReq?.status === 'approved') return true
     return false
-  }
-
-  // Rejected = vendor said no up front. Strictly status='rejected' with
-  // no approved cancellation request on file. A post-accept cancellation
-  // that somehow still sits at 'rejected' (pre-#171 data only) is caught
-  // by isCancelledLead above and short-circuited out of this bucket.
-  const isRejectedLead = (l: Lead): boolean => {
-    if (l.status !== 'rejected') return false
-    if (isCancelledLead(l)) return false
-    return true
   }
 
   // Lead categories
@@ -221,7 +217,6 @@ export default function VendorDashboard() {
   const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
   const projectSold = leads.filter((l) => {
     if (isCancelledLead(l)) return false
-    if (isRejectedLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
     // Currently-active bucket: either just-sold (no soldAt yet → treat as
@@ -230,14 +225,12 @@ export default function VendorDashboard() {
   })
   const projectsCompleted = leads.filter((l) => {
     if (isCancelledLead(l)) return false
-    if (isRejectedLead(l)) return false
     if (l.status !== 'completed') return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
     // Truly-completed: aged-out past the 90d threshold.
     return age !== null && age >= SOLD_TO_COMPLETED_DAYS
   })
   const cancelledProjects = leads.filter(isCancelledLead)
-  const rejectedLeads = leads.filter(isRejectedLead)
 
   // KPI calculations
   const activeLeads = leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled')
@@ -317,7 +310,7 @@ export default function VendorDashboard() {
   // Section collapse state
   // Single-open accordion: at most one lead-status tile open at a time
   // (kratos msg 1776576047204). Null = all closed.
-  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled' | 'rejected'
+  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
   const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
   const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
@@ -796,10 +789,17 @@ export default function VendorDashboard() {
             )}
           </div>
         </LeadStatusTile>
+        {/* Ship #184 (Rodolfo-direct 2026-04-21): unified Cancelled
+            Projects tile — Rejected Leads tile eliminated per "in vendor
+            rejected leads are the same as cancelled projects eliminate
+            rejected leads". Icon color flipped zinc → destructive/red
+            since the unified bucket represents 'deals that didn't
+            happen' semantically, where the softer zinc was premised on
+            the #171 rejected-vs-cancelled split being user-visible. */}
         <LeadStatusTile
           title="Cancelled Projects"
           count={cancelledProjects.length}
-          color="bg-zinc-500"
+          color="bg-destructive"
           icon={X}
           open={openTile === 'cancelled'}
           onToggle={() => toggleTile('cancelled')}
@@ -809,26 +809,6 @@ export default function VendorDashboard() {
               <p className="text-sm text-muted-foreground py-4 text-center">No cancelled projects.</p>
             ) : (
               cancelledProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
-        {/* Ship #171 — Rejected tile split out. Vendor-upfront rejections
-            now render separately from mutual-cancellation outcomes so the
-            vendor can tell at a glance which deadened leads they walked
-            away from vs which the homeowner canceled. */}
-        <LeadStatusTile
-          title="Rejected Leads"
-          count={rejectedLeads.length}
-          color="bg-destructive"
-          icon={X}
-          open={openTile === 'rejected'}
-          onToggle={() => toggleTile('rejected')}
-        >
-          <div className="grid gap-3">
-            {rejectedLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No rejected leads.</p>
-            ) : (
-              rejectedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
             )}
           </div>
         </LeadStatusTile>

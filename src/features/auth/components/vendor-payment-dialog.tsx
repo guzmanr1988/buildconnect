@@ -145,15 +145,10 @@ export function VendorPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="sm:max-w-md max-h-[90vh] overflow-y-auto"
-        onInteractOutside={(e) => {
-          if (blocking && uiState !== 'success') e.preventDefault()
-        }}
-        onEscapeKeyDown={(e) => {
-          if (blocking && uiState !== 'success') e.preventDefault()
-        }}
-      >
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        {/* Dismiss-blocking handled via handleOpenChange above — Base UI
+            Dialog routes overlay-click + Escape through onOpenChange,
+            so the guard there is sufficient. */}
         {uiState === 'success' ? (
           <div className="flex flex-col items-center gap-4 py-10">
             <motion.div

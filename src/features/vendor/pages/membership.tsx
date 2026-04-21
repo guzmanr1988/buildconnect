@@ -321,17 +321,17 @@ export default function VendorMembershipPage() {
             <DialogTitle className="font-heading text-destructive">
               Cancel your membership?
             </DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>This will disable your vendor portal immediately.</p>
-                <p>
-                  You'll still be able to log in, but the portal sections —
-                  leads, calendar, banking, products, messages — will be
-                  locked until you reactivate.
-                </p>
-                <p>You can reactivate any time from this page.</p>
-              </div>
+            <DialogDescription>
+              This will disable your vendor portal immediately.
             </DialogDescription>
+            <div className="space-y-2 text-sm text-muted-foreground mt-2">
+              <p>
+                You'll still be able to log in, but the portal sections —
+                leads, calendar, banking, products, messages — will be
+                locked until you reactivate.
+              </p>
+              <p>You can reactivate any time from this page.</p>
+            </div>
           </DialogHeader>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="w-full sm:w-auto">

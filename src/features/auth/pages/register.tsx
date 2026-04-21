@@ -143,6 +143,8 @@ export function RegisterPage() {
       company: 'Bypass Test Co',
       avatar_color: '#4f46e5',
       initials: 'BV',
+      status: 'active',
+      created_at: new Date().toISOString(),
     })
     // Suggestively show the form in a 'submitting' tail so Rodolfo
     // sees the dialog open without a manual Create-Account click.
