@@ -138,9 +138,14 @@ export function BookingConfirmationPage() {
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <FileText className="h-5 w-5 text-primary" />
           </div>
+          {/* Ship #211 — vocabulary bridge per Rodolfo's mental model:
+              homeowner says "project", vendor nav says "Projects tab",
+              Rodolfo's framing says "lead". Using all three in one
+              sentence so the moment-of-lead-creation is unambiguous
+              regardless of which mental model the user holds. */}
           <p className="text-sm text-foreground text-left">
             <span className="font-medium">Project Pack</span>{' '}
-            <span className="text-muted-foreground">has been sent to {details.vendor} with your project details.</span>
+            <span className="text-muted-foreground">has been sent to {details.vendor} — it appears in their Projects tab as a new lead they'll review and confirm.</span>
           </p>
         </motion.div>
 
