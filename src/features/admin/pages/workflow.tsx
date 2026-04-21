@@ -11,6 +11,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { matchesSearch } from '@/lib/search-match'
 import { cn } from '@/lib/utils'
 
 function fmtDate(iso: string) {
@@ -121,8 +122,20 @@ export default function WorkflowPage() {
   }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
 
   const allItems = [...projectItems, ...mockItems]
-  const q = searchQuery.toLowerCase()
-  const filtered = q ? allItems.filter(i => i.name.toLowerCase().includes(q) || i.project.toLowerCase().includes(q)) : allItems
+  // Multi-field search (ship #134): homeowner name / project / vendor
+  // company / lead ID / rep name. Pipeline items don't carry phone or
+  // address directly — that info lives on the source MOCK_LEADS /
+  // sentProjects; omitted here for simplicity (workflow is a pipeline
+  // triage view, not a contact-lookup surface).
+  const filtered = searchQuery.trim()
+    ? allItems.filter((i) =>
+        matchesSearch({
+          query: searchQuery,
+          fields: [i.name, i.project, i.vendor, i.rep],
+          ids: [i.id],
+        }),
+      )
+    : allItems
 
   // 5-column lifecycle aligned to vendor-dashboard ship #92 + /admin/workflow
   // parity per kratos msg 1776741764224. Sold-age split via SOLD_TO_COMPLETED_DAYS
@@ -184,7 +197,7 @@ export default function WorkflowPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customers by name or project..."
+            placeholder="Search name, project, vendor, rep, or lead ID..."
             className="w-full h-10 pl-10 pr-4 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>

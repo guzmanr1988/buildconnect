@@ -40,6 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared/page-header'
+import { matchesSearch } from '@/lib/search-match'
 import type { UserRole } from '@/types'
 
 /* ------------------------------------------------------------------ */
@@ -151,9 +152,12 @@ export default function UsersPage() {
       list = list.filter((u) => u.role === roleFilter)
     }
     if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+      list = list.filter((u) =>
+        matchesSearch({
+          query: search,
+          fields: [u.name, u.email, u.role],
+          ids: [u.id],
+        }),
       )
     }
     return list
@@ -216,7 +220,7 @@ export default function UsersPage() {
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name or email..."
+            placeholder="Search name, email, role, or user ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"

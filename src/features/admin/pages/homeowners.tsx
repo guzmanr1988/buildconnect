@@ -46,6 +46,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { matchesSearch } from '@/lib/search-match'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -144,13 +145,24 @@ export default function HomeownersPage() {
     [homeownerStatusOverrides]
   )
 
+  // Multi-field search (ship #134) via shared matchesSearch util: name /
+  // email / phone (digits-normalized) / address / project-id (fixture
+  // CUSTOMER_PROJECTS + sentProject ids bridged via homeowner.email).
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    if (!q) return homeowners
-    return homeowners.filter(
-      (h) => h.name.toLowerCase().includes(q) || h.email.toLowerCase().includes(q)
-    )
-  }, [search, homeowners])
+    if (!search.trim()) return homeowners
+    return homeowners.filter((h) => {
+      const projectIds = [
+        ...CUSTOMER_PROJECTS.filter((p) => p.homeowner_id === h.id).map((p) => p.id),
+        ...sentProjects.filter((sp) => sp.homeowner?.email === h.email).map((sp) => sp.id),
+      ]
+      return matchesSearch({
+        query: search,
+        fields: [h.name, h.email, h.address],
+        phones: [h.phone],
+        ids: projectIds,
+      })
+    })
+  }, [search, homeowners, sentProjects])
 
   const handleMessage = (homeowner: { id: string; name: string }) => {
     navigate('/admin/messages', { state: { homeownerId: homeowner.id, homeownerName: homeowner.name } })
@@ -210,7 +222,7 @@ export default function HomeownersPage() {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name or email..."
+          placeholder="Search name, email, phone, address, or project ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"

@@ -11,6 +11,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { matchesSearch } from '@/lib/search-match'
 import { cn } from '@/lib/utils'
 import type { Vendor } from '@/types'
 
@@ -38,9 +39,13 @@ export default function AdminMessagesPage() {
 
   const filteredVendors = useMemo(() => {
     if (!searchQuery.trim()) return MOCK_VENDORS
-    const q = searchQuery.toLowerCase()
-    return MOCK_VENDORS.filter(
-      (v) => v.company.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)
+    return MOCK_VENDORS.filter((v) =>
+      matchesSearch({
+        query: searchQuery,
+        fields: [v.company, v.name, v.email, v.address],
+        phones: [v.phone],
+        ids: [v.id],
+      }),
     )
   }, [searchQuery])
 
@@ -105,7 +110,7 @@ export default function AdminMessagesPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search vendors..."
+                placeholder="Search company, name, email, phone, or address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 h-9"
