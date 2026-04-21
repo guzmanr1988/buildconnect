@@ -15,8 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import {
   detectCardBrand,
+  PAYMENT_PURPOSE_LABELS,
   type VendorPaymentMethod,
   type VendorPaymentMethodKind,
+  type VendorPaymentPurpose,
 } from '@/stores/vendor-billing-store'
 
 /*
@@ -38,15 +40,23 @@ const SUCCESS_DISPLAY_MS = 1500
 export interface VendorPaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: (method: VendorPaymentMethod) => void
+  // Ship #189 — caller decides add-vs-update-vs-signup by binding the
+  // appropriate store action to onSuccess. Dialog itself just produces
+  // a normalized method object without an id; store assigns id on add,
+  // preserves id on update.
+  onSuccess: (method: Omit<VendorPaymentMethod, 'id'>) => void
   // When true, dialog is in post-signup gating mode — pressing overlay
   // / Escape does nothing since the user MUST pick a method to enter the
-  // portal. Edit-mode (ship #180) will flip this false.
+  // portal. Edit-mode (ship #180+) flips this false.
   blocking?: boolean
   // Optional initial method — edit-mode pre-fills the last-used kind +
   // holder name (other fields require re-entry for security).
   initialKind?: VendorPaymentMethodKind
   initialHolder?: string
+  // Ship #189 — pre-fill the purpose selector when editing an existing
+  // method. Add mode defaults to 'both' per the safest-first-time
+  // heuristic.
+  initialPurpose?: VendorPaymentPurpose
 }
 
 type UIState = 'entering' | 'submitting' | 'success'
@@ -68,8 +78,10 @@ export function VendorPaymentDialog({
   blocking = true,
   initialKind = 'card',
   initialHolder = '',
+  initialPurpose = 'both',
 }: VendorPaymentDialogProps) {
   const [kind, setKind] = useState<UIKind>(normalizeInitialKind(initialKind))
+  const [purpose, setPurpose] = useState<VendorPaymentPurpose>(initialPurpose)
   const [uiState, setUIState] = useState<UIState>('entering')
 
   // Card fields
@@ -86,6 +98,7 @@ export function VendorPaymentDialog({
   useEffect(() => {
     if (open) {
       setKind(normalizeInitialKind(initialKind))
+      setPurpose(initialPurpose)
       setUIState('entering')
       setHolder(initialHolder)
       setCardNumber('')
@@ -95,7 +108,7 @@ export function VendorPaymentDialog({
       setRouting('')
       setAccount('')
     }
-  }, [open, initialKind, initialHolder])
+  }, [open, initialKind, initialHolder, initialPurpose])
 
   // Ship #185 — live card-brand detection. Recomputed on every
   // cardNumber keystroke. Memoized so the render-time brand chip
@@ -104,13 +117,15 @@ export function VendorPaymentDialog({
 
   // Validate + return the normalized method object. Null = form not
   // ready to submit. Very permissive validation since mock — just enough
-  // to catch empty fields.
-  function buildMethod(): VendorPaymentMethod | null {
+  // to catch empty fields. Ship #189: purpose snapshots from the
+  // segmented toggle; caller decides whether to add or update.
+  function buildMethod(): Omit<VendorPaymentMethod, 'id'> | null {
     if (kind === 'card') {
       if (!holder.trim() || !cardNumber.trim() || !expiry.trim() || !cvv.trim()) return null
       const digits = cardNumber.replace(/\D/g, '')
       if (digits.length < 12) return null
       return {
+        purpose,
         kind: 'card',
         last4: digits.slice(-4),
         holder: holder.trim(),
@@ -128,6 +143,7 @@ export function VendorPaymentDialog({
     const accountDigits = account.replace(/\D/g, '')
     if (routingDigits.length < 8 || accountDigits.length < 4) return null
     return {
+      purpose,
       kind: 'checking',
       last4: accountDigits.slice(-4),
       holder: holder.trim(),
@@ -198,6 +214,40 @@ export function VendorPaymentDialog({
                 You can change this later in your vendor portal.
               </DialogDescription>
             </DialogHeader>
+
+            {/* Ship #189 — purpose segmented toggle. Sits above the kind
+                tabs because 'what is this method for' is the decision
+                that frames 'what kind of method am I adding'. 3-way
+                segmented group (Membership / Commissions / Both); 'Both'
+                is the default for first-time setup. */}
+            <div
+              role="radiogroup"
+              aria-label="Payment method purpose"
+              className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+            >
+              {(['both', 'membership', 'commissions'] as const).map((p) => {
+                const selected = purpose === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    data-payment-purpose={p}
+                    data-payment-purpose-selected={selected ? 'true' : 'false'}
+                    onClick={() => setPurpose(p)}
+                    className={cn(
+                      'rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                      selected
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {PAYMENT_PURPOSE_LABELS[p]}
+                  </button>
+                )
+              })}
+            </div>
 
             <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-2">
               {/* Ship #185 — merged Credit Card + Debit Card into single

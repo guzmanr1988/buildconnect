@@ -24,6 +24,7 @@ import {
   PAYMENT_METHOD_LABELS,
   type VendorPaymentMethodKind,
 } from '@/stores/vendor-billing-store'
+import { useNavigate } from 'react-router-dom'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
 
@@ -72,8 +73,21 @@ export default function VendorMembershipPage() {
   const cancelMembership = useVendorMembershipStore((s) => s.cancelMembership)
   const membership = useVendorMembershipStore((s) => s.membershipByVendor[vendorId])
 
-  const paymentMethod = useVendorBillingStore((s) => s.paymentMethodByVendor[vendorId])
-  const setPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
+  // Ship #189 — membership displays the first method tagged 'membership'
+  // or 'both'. Update button edits that method in place. Full multi-
+  // method management lives on /vendor/banking; link below the Update
+  // button for users with >1 method on file.
+  const paymentMethod = useVendorBillingStore((s) =>
+    s.paymentMethodsByVendor[vendorId]?.find(
+      (m) => m.purpose === 'membership' || m.purpose === 'both',
+    ),
+  )
+  const totalMethodsOnFile = useVendorBillingStore(
+    (s) => s.paymentMethodsByVendor[vendorId]?.length ?? 0,
+  )
+  const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
+  const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
+  const navigate = useNavigate()
 
   // Seed an Active membership if none exists — real-world path is that
   // signup → #179 payment dialog commits both the payment method AND
@@ -257,7 +271,21 @@ export default function VendorMembershipPage() {
                 </div>
               )}
               <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
-                Used for both the monthly membership and commission payouts.
+                {totalMethodsOnFile > 1 ? (
+                  <>
+                    You have {totalMethodsOnFile} payment methods on file.{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/vendor/banking')}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Manage all methods in Banking
+                    </button>
+                    .
+                  </>
+                ) : (
+                  <>Used for your monthly membership. Commissions can route to a separate method — add one in Banking.</>
+                )}
               </p>
             </div>
           </CardContent>
@@ -354,16 +382,26 @@ export default function VendorMembershipPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Update payment method dialog (non-blocking edit mode, ship #180 D) */}
+      {/* Update / Add payment method dialog. Ship #189 — when a method
+          already serves membership, onSuccess updates it in place via
+          its id. When none exists yet, onSuccess adds a new method
+          defaulting to 'both' purpose so it covers commissions too
+          (users can refine on /vendor/banking). */}
       <VendorPaymentDialog
         open={editPaymentOpen}
         onOpenChange={setEditPaymentOpen}
         blocking={false}
         initialKind={paymentMethod?.kind}
         initialHolder={paymentMethod?.holder}
+        initialPurpose={paymentMethod?.purpose ?? 'both'}
         onSuccess={(method) => {
-          setPaymentMethod(vendorId, method)
-          toast.success('Payment method updated')
+          if (paymentMethod) {
+            updatePaymentMethod(vendorId, paymentMethod.id, method)
+            toast.success('Payment method updated')
+          } else {
+            addPaymentMethod(vendorId, method)
+            toast.success('Payment method added')
+          }
         }}
       />
     </div>

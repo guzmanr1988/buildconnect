@@ -18,6 +18,9 @@ import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset } from '@/components/shared/address-fieldset'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { useVendorBillingStore, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
+/* handlePaymentSuccess branches on add-vs-update via the store's new
+ * addPaymentMethod action; signup always adds (fresh account, no prior
+ * method). Ship #189 per Rodolfo pivot #11 data-model refactor. */
 import { useVendorMembershipStore } from '@/stores/vendor-membership-store'
 
 const registerSchema = z.object({
@@ -85,7 +88,7 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const setVendorPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
+  const addVendorPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
   const activateMembership = useVendorMembershipStore((s) => s.activateMembership)
 
   const {
@@ -218,10 +221,16 @@ export function RegisterPage() {
   // Ship #179 — dialog success handler. Profile.id resolves post-signUp
   // via AuthBootstrap hydration; by the time the user submits payment,
   // the profile is live and we can key the stored method to it.
-  function handlePaymentSuccess(method: VendorPaymentMethod) {
+  function handlePaymentSuccess(method: Omit<VendorPaymentMethod, 'id'>) {
     const vendorId = profile?.id
     if (vendorId) {
-      setVendorPaymentMethod(vendorId, method)
+      // Ship #189 — addPaymentMethod appends to the per-vendor array +
+      // generates the id server-side (store). Fresh signup always adds
+      // (no prior method). Purpose comes through from the dialog's
+      // segmented toggle; defaults to 'both' in add-mode so first-time
+      // setup covers membership + commissions without the user having
+      // to think about routing.
+      addVendorPaymentMethod(vendorId, method)
       // Ship #180 — activate the monthly membership atomically with the
       // payment-method commit. Billing day seeded from today so the
       // next charge lands one month from signup.

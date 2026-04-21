@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   DollarSign, Wallet, Building2, AlertTriangle, CreditCard,
   CheckCircle2, Clock, Landmark, ArrowUpRight,
@@ -25,6 +26,8 @@ import { useAuthStore } from '@/stores/auth-store'
 import {
   useVendorBillingStore,
   PAYMENT_METHOD_LABELS,
+  PAYMENT_PURPOSE_LABELS,
+  type VendorPaymentMethod,
 } from '@/stores/vendor-billing-store'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
@@ -45,22 +48,35 @@ export default function VendorBanking() {
   const vendorPct = 100 - commPct
   const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
 
-  // Ship #188 (Rodolfo-direct 2026-04-21 pivot #10) — unified payment
-  // method reads from vendor-billing-store (same SoT as /vendor/membership
-  // and the signup payment dialog). Falls back to the hardcoded mock
-  // VENDOR_ID key when no profile is hydrated so the demo surface still
-  // renders correctly; real vendors key off their own profile.id matching
-  // what the signup flow wrote.
+  // Ship #188 / #189 — payment methods are a list per vendor. Source
+  // is vendor-billing-store.paymentMethodsByVendor (post-#189 migrate
+  // wraps any pre-#189 single-method entry into the new array shape).
+  // Falls back to the hardcoded mock VENDOR_ID key when no profile is
+  // hydrated so demo surfaces render; real vendors key off profile.id.
   const profile = useAuthStore((s) => s.profile)
   const billingVendorId = profile?.id ?? VENDOR_ID
-  const paymentMethod = useVendorBillingStore((s) => s.paymentMethodByVendor[billingVendorId])
-  const setPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
+  const paymentMethods = useVendorBillingStore((s) => s.paymentMethodsByVendor[billingVendorId] ?? [])
+  const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
+  const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
+  const removePaymentMethod = useVendorBillingStore((s) => s.removePaymentMethod)
+  // Commission-source lookup for the Pay Commission dialog — first
+  // method whose purpose is 'commissions' or 'both'.
+  const commissionMethod = useVendorBillingStore((s) =>
+    s.paymentMethodsByVendor[billingVendorId]?.find(
+      (m) => m.purpose === 'commissions' || m.purpose === 'both',
+    ),
+  )
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
   const [payStep, setPayStep] = useState<1 | 2>(1)
   const [paidSales, setPaidSales] = useState<Set<string>>(new Set())
-  const [editPaymentOpen, setEditPaymentOpen] = useState(false)
+  // Ship #189 — dialog state tracks which method is being edited
+  // (null = add-new-mode). Separate deleteTarget state for the
+  // last-for-purpose confirmation.
+  const [editingMethodId, setEditingMethodId] = useState<string | null>(null)
+  const [methodDialogOpen, setMethodDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<VendorPaymentMethod | null>(null)
 
   const totalSales = sales.reduce((s, x) => s + x.sale_amount, 0)
   const totalEarnings = sales.reduce((s, x) => s + x.vendor_share, 0)
@@ -198,97 +214,241 @@ export default function VendorBanking() {
         </Card>
       </motion.div>
 
-      {/* Ship #188 — unified Payment Method card. Replaces the former
-          separate Bank Accounts + Debit/Credit Cards sections per
-          Rodolfo "merge together bank account and debit/credit card
-          payment like you did on membership". Reads from vendor-billing
-          -store (same SoT as /vendor/membership + signup dialog); Update
-          opens the same VendorPaymentDialog in non-blocking edit mode.
-          Vocabulary resolves via PAYMENT_METHOD_LABELS + paymentMethod
-          .brand per the post-#185 "Visa ****4242" shape. */}
+      {/* Ship #189 — payment methods as a list (extends #188 single
+          card). Each row = icon + kind/brand + masked last4 + purpose
+          chip + Edit + Delete. "Add another method" trailer. Reads
+          from vendor-billing-store.paymentMethodsByVendor (array). */}
       <motion.div variants={item}>
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
-            <CardTitle className="font-heading">Payment Method</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="font-heading">Payment Methods</CardTitle>
+              {paymentMethods.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingMethodId(null)
+                    setMethodDialogOpen(true)
+                  }}
+                  className="text-xs gap-1"
+                >
+                  <ArrowUpRight className="h-3 w-3" />
+                  Add another
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {paymentMethod ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={cn(
-                    'flex h-11 w-11 items-center justify-center rounded-xl shrink-0',
-                    paymentMethod.kind === 'checking'
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-primary/10 text-primary',
-                  )}>
-                    {paymentMethod.kind === 'checking' ? (
-                      <Landmark className="h-5 w-5" />
-                    ) : (
-                      <CreditCard className="h-5 w-5" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">
-                      {paymentMethod.kind === 'checking'
-                        ? PAYMENT_METHOD_LABELS[paymentMethod.kind]
-                        : paymentMethod.brand ?? PAYMENT_METHOD_LABELS[paymentMethod.kind]}
-                      <span className="ml-1.5 font-mono text-xs text-muted-foreground">
-                        •••• {paymentMethod.last4}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {paymentMethod.kind === 'checking'
-                        ? `${paymentMethod.bankName} · ${paymentMethod.holder}`
-                        : `${paymentMethod.holder}${paymentMethod.expiry ? ` · Exp ${paymentMethod.expiry}` : ''}`}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditPaymentOpen(true)}
-                  className="gap-1.5"
-                >
-                  Update
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ) : (
+            {paymentMethods.length === 0 ? (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed p-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">No payment method on file</p>
+                  <p className="text-sm font-medium text-foreground">No payment methods on file</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Add a card or checking account to pay membership + receive commission payouts.
                   </p>
                 </div>
-                <Button size="sm" onClick={() => setEditPaymentOpen(true)}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingMethodId(null)
+                    setMethodDialogOpen(true)
+                  }}
+                >
                   Add method
                 </Button>
               </div>
+            ) : (
+              paymentMethods.map((method) => {
+                const kindLabel =
+                  method.kind === 'checking'
+                    ? PAYMENT_METHOD_LABELS[method.kind]
+                    : method.brand ?? PAYMENT_METHOD_LABELS[method.kind]
+                const sub =
+                  method.kind === 'checking'
+                    ? `${method.bankName} · ${method.holder}`
+                    : `${method.holder}${method.expiry ? ` · Exp ${method.expiry}` : ''}`
+                return (
+                  <div
+                    key={method.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                        {method.kind === 'checking' ? (
+                          <Landmark className="h-5 w-5" />
+                        ) : (
+                          <CreditCard className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {kindLabel}
+                          <span className="ml-1.5 font-mono text-xs text-muted-foreground">
+                            •••• {method.last4}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{sub}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          'text-[10px] font-semibold',
+                          method.purpose === 'membership' && 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
+                          method.purpose === 'commissions' && 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+                          method.purpose === 'both' && 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                        )}
+                      >
+                        {PAYMENT_PURPOSE_LABELS[method.purpose]}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          setEditingMethodId(method.id)
+                          setMethodDialogOpen(true)
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-destructive hover:text-destructive"
+                        onClick={() => {
+                          // Ship #189 — delete confirmation only when
+                          // this is the last method covering its
+                          // purpose (orphan-prevention). Otherwise
+                          // single-click delete with toast undo.
+                          const wouldOrphanPurpose = (purp: 'membership' | 'commissions') => {
+                            if (method.purpose !== purp && method.purpose !== 'both') return false
+                            const remaining = paymentMethods.filter(
+                              (m) => m.id !== method.id && (m.purpose === purp || m.purpose === 'both'),
+                            )
+                            return remaining.length === 0
+                          }
+                          const orphans =
+                            wouldOrphanPurpose('membership') || wouldOrphanPurpose('commissions')
+                          if (orphans) {
+                            setDeleteTarget(method)
+                          } else {
+                            removePaymentMethod(billingVendorId, method.id)
+                            toast.success('Payment method removed', {
+                              action: {
+                                label: 'Undo',
+                                onClick: () => addPaymentMethod(billingVendorId, {
+                                  purpose: method.purpose,
+                                  kind: method.kind,
+                                  last4: method.last4,
+                                  holder: method.holder,
+                                  brand: method.brand,
+                                  expiry: method.expiry,
+                                  bankName: method.bankName,
+                                  routingLast4: method.routingLast4,
+                                  addedAt: method.addedAt,
+                                }),
+                              },
+                            })
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })
             )}
             <p className="text-[11px] text-muted-foreground leading-relaxed pt-2 border-t border-border/50">
-              Used for both your monthly membership and commission payouts. A
-              3% processing fee applies when paying via card; bank account
-              (ACH) transfers are fee-free.
+              Methods tagged Membership or Commissions route only that
+              payment type; All Payments covers both. A 3% processing fee
+              applies when paying via card; bank account (ACH) transfers
+              are fee-free.
             </p>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Ship #188 — unified Add/Update flow routes through
-          VendorPaymentDialog (shared with signup + membership). Mounted
-          non-blocking so Escape + overlay-click dismiss works in edit
-          mode. Dedicated Add Card + Link Bank Account dialogs removed. */}
+      {/* Ship #189 — single VendorPaymentDialog handles both Add and
+          Edit. When editingMethodId is set, pre-fills kind/holder/
+          purpose from that method; onSuccess branches to update. When
+          null, onSuccess branches to add. */}
       <VendorPaymentDialog
-        open={editPaymentOpen}
-        onOpenChange={setEditPaymentOpen}
+        open={methodDialogOpen}
+        onOpenChange={(open) => {
+          setMethodDialogOpen(open)
+          if (!open) setEditingMethodId(null)
+        }}
         blocking={false}
-        initialKind={paymentMethod?.kind}
-        initialHolder={paymentMethod?.holder}
+        initialKind={
+          editingMethodId
+            ? paymentMethods.find((m) => m.id === editingMethodId)?.kind
+            : undefined
+        }
+        initialHolder={
+          editingMethodId
+            ? paymentMethods.find((m) => m.id === editingMethodId)?.holder
+            : undefined
+        }
+        initialPurpose={
+          editingMethodId
+            ? paymentMethods.find((m) => m.id === editingMethodId)?.purpose
+            : 'both'
+        }
         onSuccess={(method) => {
-          setPaymentMethod(billingVendorId, method)
+          if (editingMethodId) {
+            updatePaymentMethod(billingVendorId, editingMethodId, method)
+          } else {
+            addPaymentMethod(billingVendorId, method)
+          }
         }}
       />
+
+      {/* Ship #189 — orphan-prevention confirmation. Fires only when
+          removing this method would leave zero coverage for either
+          Membership or Commissions flow. Non-orphaning deletes are
+          single-click with toast-undo per the banked discipline
+          (don't train users to click-through confirmation dialogs). */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-destructive">
+              Remove this payment method?
+            </DialogTitle>
+            <DialogDescription>
+              This is your only method covering{' '}
+              {deleteTarget?.purpose === 'both' ? 'membership and commissions' : deleteTarget?.purpose === 'membership' ? 'membership' : 'commissions'}.
+              Removing it will leave those flows without a payment source until
+              you add another.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setDeleteTarget(null)}
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (deleteTarget) {
+                  removePaymentMethod(billingVendorId, deleteTarget.id)
+                  toast.success('Payment method removed')
+                }
+                setDeleteTarget(null)
+              }}
+            >
+              Remove anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Pay Commission Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
@@ -334,15 +494,15 @@ export default function VendorBanking() {
                   </div>
                   <p className="text-lg font-bold font-heading">{fmt(payingSale.commission)}</p>
                   <p className="text-sm text-muted-foreground mt-1">will be sent to BuildConnect</p>
-                  {/* Ship #188 — payment source now reads from the
-                      unified vendor-billing-store entry. Same
-                      vocabulary as the Payment Method card above +
-                      /vendor/membership. */}
-                  {paymentMethod && (
+                  {/* Ship #189 — Pay Commission source reads the first
+                      method tagged 'commissions' or 'both'. If no such
+                      method exists, line is hidden (matches #188 empty
+                      state). */}
+                  {commissionMethod && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      From {paymentMethod.kind === 'checking'
-                        ? `${paymentMethod.bankName ?? 'Checking'} ****${paymentMethod.last4}`
-                        : `${paymentMethod.brand ?? PAYMENT_METHOD_LABELS[paymentMethod.kind]} ****${paymentMethod.last4}`}
+                      From {commissionMethod.kind === 'checking'
+                        ? `${commissionMethod.bankName ?? 'Checking'} ****${commissionMethod.last4}`
+                        : `${commissionMethod.brand ?? PAYMENT_METHOD_LABELS[commissionMethod.kind]} ****${commissionMethod.last4}`}
                     </p>
                   )}
                 </div>
