@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import type { ClosedSale } from '@/types'
 
@@ -52,8 +52,13 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
   const stats = useMemo(() => {
     if (!vendor) return null
     const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendor.id]
+    // Authoritative closed-sale source is Supabase closedSales. MOCK_CLOSED_
+    // SALES fixture duplicates the same rows for demo-seed purposes; adding
+    // it as a second aggregation source caused double-counting (ship #156
+    // bug fix — apollo caught Paradise Pools showing 2 deals × $65K when
+    // only 1 sale exists). sentProjects-sold is a distinct mock-side source
+    // (QA persona Mark-Sold actions) + doesn't overlap with closedSales.
     const vendorClosedSales = uuid ? closedSales.filter((c) => c.vendor_id === uuid) : []
-    const vendorMockClosed = MOCK_CLOSED_SALES.filter((c) => c.vendor_id === vendor.id)
     const vendorSentProjectsSold = sentProjects.filter(
       (p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.contractor?.company === vendor.company,
     )
@@ -62,26 +67,22 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
 
     const supabaseGmv = vendorClosedSales.reduce((s, c) => s + c.sale_amount, 0)
     const supabaseComm = vendorClosedSales.reduce((s, c) => s + c.commission, 0)
-    const mockGmv = vendorMockClosed.reduce((s, c) => s + c.sale_amount, 0) +
-      vendorSentProjectsSold.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
-    const mockComm = vendorMockClosed.reduce((s, c) => s + c.commission, 0) +
-      vendorSentProjectsSold.reduce((s, p) => s + Math.round((p.saleAmount ?? 0) * (effectivePct / 100)), 0)
+    const mockGmv = vendorSentProjectsSold.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
+    const mockComm = vendorSentProjectsSold.reduce((s, p) => s + Math.round((p.saleAmount ?? 0) * (effectivePct / 100)), 0)
 
     const totalGMV = supabaseGmv + mockGmv
     const totalCommission = supabaseComm + mockComm
-    const totalDeals = vendorClosedSales.length + vendorMockClosed.length + vendorSentProjectsSold.length
+    const totalDeals = vendorClosedSales.length + vendorSentProjectsSold.length
 
-    // Top projects — sort by sale amount, mix all sources
+    // Top projects — sort by sale amount, mix 2 sources
     type TopProject = { id: string; project: string; customer: string; amount: number; date: string }
     const topProjects: TopProject[] = [
       ...vendorClosedSales.map((c) => ({ id: c.id, project: c.project, customer: c.homeowner_name, amount: c.sale_amount, date: c.closed_at })),
-      ...vendorMockClosed.map((c) => ({ id: c.id, project: c.project, customer: c.homeowner_name, amount: c.sale_amount, date: c.closed_at })),
       ...vendorSentProjectsSold.map((p) => ({ id: p.id, project: p.item.serviceName, customer: p.homeowner?.name ?? 'Customer', amount: p.saleAmount ?? 0, date: p.soldAt ?? p.sentAt })),
     ].sort((a, b) => b.amount - a.amount).slice(0, 5)
 
     const lastActivityIso = [
       ...vendorClosedSales.map((c) => c.closed_at),
-      ...vendorMockClosed.map((c) => c.closed_at),
       ...vendorSentProjectsSold.map((p) => p.soldAt ?? p.sentAt),
     ].sort().reverse()[0]
 
@@ -97,12 +98,10 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
       }
       const monthCommission = [
         ...vendorClosedSales.filter((c) => inRange(c.closed_at)).map((c) => c.commission),
-        ...vendorMockClosed.filter((c) => inRange(c.closed_at)).map((c) => c.commission),
         ...vendorSentProjectsSold.filter((p) => p.soldAt && inRange(p.soldAt)).map((p) => Math.round((p.saleAmount ?? 0) * (effectivePct / 100))),
       ].reduce((s, v) => s + v, 0)
       const monthGmv = [
         ...vendorClosedSales.filter((c) => inRange(c.closed_at)).map((c) => c.sale_amount),
-        ...vendorMockClosed.filter((c) => inRange(c.closed_at)).map((c) => c.sale_amount),
         ...vendorSentProjectsSold.filter((p) => p.soldAt && inRange(p.soldAt)).map((p) => p.saleAmount ?? 0),
       ].reduce((s, v) => s + v, 0)
       monthlyData.push({
