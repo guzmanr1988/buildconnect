@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock } from 'lucide-react'
+import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -73,6 +73,21 @@ export default function TransactionsPage() {
   const [selectedCommissionTx, setSelectedCommissionTx] = useState<Transaction | null>(null)
   // Transaction-detail Dialog (ship #143) for membership + payout rows.
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  // Ship #159: month-grouping expand/collapse state per `${catKey}-${monthKey}`.
+  // Default state: current month expanded + prior months collapsed.
+  const currentMonthKey = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }, [])
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
+  const toggleMonth = (catKey: string, monthKey: string) => {
+    const k = `${catKey}-${monthKey}`
+    setExpandedMonths((prev) => ({ ...prev, [k]: !(prev[k] ?? monthKey === currentMonthKey) }))
+  }
+  const isMonthExpanded = (catKey: string, monthKey: string) => {
+    const k = `${catKey}-${monthKey}`
+    return expandedMonths[k] ?? monthKey === currentMonthKey
+  }
   const refreshTransactions = () => {
     fetchAllTransactions()
       .then(setTransactions)
@@ -162,6 +177,28 @@ export default function TransactionsPage() {
   const grandTotal = totals.commission + totals.membership + totals.payout
   const unifiedTxCount = grouped.commission_paid.length + grouped.commission_pending.length + grouped.membership.length + grouped.payout.length
 
+  // Ship #159: group a section's transactions by year-month, sort groups
+  // newest-first, sort rows within each group newest-first too. Returns
+  // array of { monthKey, monthLabel, txs, total, count }.
+  const groupByMonth = (txs: Transaction[]) => {
+    const byKey = new Map<string, { monthKey: string; monthLabel: string; txs: Transaction[] }>()
+    for (const tx of txs) {
+      const d = new Date(tx.date)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      if (!byKey.has(monthKey)) byKey.set(monthKey, { monthKey, monthLabel, txs: [] })
+      byKey.get(monthKey)!.txs.push(tx)
+    }
+    return Array.from(byKey.values())
+      .map((g) => ({
+        ...g,
+        txs: g.txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+        total: g.txs.reduce((s, t) => s + t.amount, 0),
+        count: g.txs.length,
+      }))
+      .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Transactions" description={`${unifiedTxCount} total transactions`} />
@@ -216,7 +253,39 @@ export default function TransactionsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {grouped[cat.key].map((tx) => {
+                      {groupByMonth(grouped[cat.key]).flatMap((group) => {
+                        const expanded = isMonthExpanded(cat.key, group.monthKey)
+                        const colSpan = cat.isCommission ? 7 : 6
+                        const headerRow = (
+                          <TableRow
+                            key={`${group.monthKey}-header`}
+                            className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+                            onClick={() => toggleMonth(cat.key, group.monthKey)}
+                          >
+                            <TableCell colSpan={colSpan} className="py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  {expanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                    {group.monthLabel}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {group.count} {group.count === 1 ? 'transaction' : 'transactions'}
+                                  </span>
+                                </div>
+                                <span className={cn('text-sm font-bold', cat.headerColor)}>
+                                  {fmt(group.total)}
+                                </span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                        if (!expanded) return [headerRow]
+                        const rows = group.txs.map((tx) => {
                         // Row click routing (ship #146 bug fix on #143):
                         // 3-tier bridge to find matching project/lead. Also
                         // used by #147 to surface customer full name +
@@ -318,6 +387,8 @@ export default function TransactionsPage() {
                           </TableCell>
                         </TableRow>
                         )
+                      })
+                      return [headerRow, ...rows]
                       })}
                       {/* Category Total Row */}
                       <TableRow className="bg-muted/30 border-t-2">
