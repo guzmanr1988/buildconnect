@@ -170,7 +170,7 @@ export function HomeownerProfilePage() {
               {profileEditing ? (
                 <AvatarUpload
                   avatarUrl={profile.avatar_url}
-                  initials={profile.initials}
+                  initials={profile.initials ?? ''}
                   color={profile.avatar_color}
                   size="lg"
                   onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}

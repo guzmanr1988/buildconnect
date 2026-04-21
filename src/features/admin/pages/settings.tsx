@@ -216,7 +216,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Commission Reminder Frequency</Label>
-                <Select value={ext.commissionReminderFreq} onValueChange={(val) => setExt((p) => ({ ...p, commissionReminderFreq: val }))}>
+                <Select value={ext.commissionReminderFreq} onValueChange={(val) => setExt((p) => ({ ...p, commissionReminderFreq: val ?? '' }))}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="daily">Daily</SelectItem>

@@ -317,7 +317,7 @@ export default function VendorDashboard() {
   // Section collapse state
   // Single-open accordion: at most one lead-status tile open at a time
   // (kratos msg 1776576047204). Null = all closed.
-  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
+  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled' | 'rejected'
   const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
   const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
 
@@ -1031,7 +1031,7 @@ export default function VendorDashboard() {
                       </label>
                       {vendor?.reps && vendor.reps.length > 0 ? (
                         <>
-                          <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+                          <Select value={selectedRepId} onValueChange={(value) => setSelectedRepId(value ?? '')}>
                             <SelectTrigger id="assign-rep" className="h-10 text-sm">
                               <SelectValue placeholder="Choose a rep for this lead…" />
                             </SelectTrigger>
@@ -1456,7 +1456,7 @@ export default function VendorDashboard() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             {vendor?.reps && vendor.reps.length > 0 ? (
-              <Select value={editRepChoice} onValueChange={setEditRepChoice}>
+              <Select value={editRepChoice} onValueChange={(value) => setEditRepChoice(value ?? '')}>
                 <SelectTrigger className="h-10 text-sm">
                   <SelectValue placeholder="Choose a rep…" />
                 </SelectTrigger>

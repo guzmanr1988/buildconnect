@@ -136,7 +136,7 @@ export default function VendorProfile() {
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row items-start gap-5">
               <AvatarUpload
-                initials={profile?.initials ?? vendor.initials}
+                initials={(profile?.initials ?? vendor.initials) ?? ''}
                 color={profile?.avatar_color ?? vendor.avatar_color}
                 avatarUrl={profile?.avatar_url}
                 size="lg"

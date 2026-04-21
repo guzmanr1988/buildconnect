@@ -3,7 +3,15 @@ import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
-function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
+// Accept Radix-style `type` and `collapsible` props for source-compat with
+// shadcn call sites. They are ignored at runtime (base-ui uses `multiple`
+// instead, and single-open non-collapsible is the default).
+type AccordionProps = AccordionPrimitive.Root.Props & {
+  type?: 'single' | 'multiple'
+  collapsible?: boolean
+}
+
+function Accordion({ className, type: _type, collapsible: _collapsible, ...props }: AccordionProps) {
   return (
     <AccordionPrimitive.Root
       data-slot="accordion"

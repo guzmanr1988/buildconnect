@@ -299,28 +299,28 @@ export default function LeadInbox() {
                               <div className="rounded-xl border bg-background p-4 space-y-3">
                                 <h4 className="text-sm font-semibold text-foreground">Add-on Details</h4>
                                 <div className="flex flex-col gap-2">
-                                  {sp.item.addonQuantities.ledCount > 0 && (
+                                  {(sp.item.addonQuantities.ledCount ?? 0) > 0 && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">LED Lighting</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.ledCount}</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.ledCount ?? 0}</span>
                                     </div>
                                   )}
-                                  {sp.item.addonQuantities.bubblerCount > 0 && (
+                                  {(sp.item.addonQuantities.bubblerCount ?? 0) > 0 && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Bubbler</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.bubblerCount}</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.bubblerCount ?? 0}</span>
                                     </div>
                                   )}
-                                  {sp.item.addonQuantities.laminarJets > 0 && (
+                                  {(sp.item.addonQuantities.laminarJets ?? 0) > 0 && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Laminar Jets</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.laminarJets}</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.laminarJets ?? 0}</span>
                                     </div>
                                   )}
-                                  {sp.item.addonQuantities.waterfalls > 0 && (
+                                  {(sp.item.addonQuantities.waterfalls ?? 0) > 0 && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Waterfalls</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.waterfalls}</span>
+                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.waterfalls ?? 0}</span>
                                     </div>
                                   )}
                                 </div>

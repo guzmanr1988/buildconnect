@@ -234,7 +234,11 @@ export default function BankingPage() {
     period: '',
   })
 
-  const [autoPayments, setAutoPayments] = useState([
+  type AutoPayment =
+    | { id: string; name: string; description: string; frequency: string; day: number; enabled: boolean; type: 'vendor'; totalPaid: number; amount?: number | undefined }
+    | { id: string; name: string; description: string; frequency: string; day: number; enabled: boolean; type: 'salary'; totalPaid: number; amount?: number | undefined }
+    | { id: string; name: string; description: string; frequency: string; day: number; enabled: boolean; type: 'collection'; totalPaid: number; amount?: number | undefined }
+  const [autoPayments, setAutoPayments] = useState<AutoPayment[]>([
     { id: 'ap-1', name: 'Vendor Payouts', description: 'Automatic monthly vendor payouts on the 15th', frequency: 'Monthly', day: 15, enabled: true, type: 'vendor' as const, totalPaid: 34425 },
     { id: 'ap-2', name: 'Salary — Jonathan Bode', description: 'CEO monthly salary payout', frequency: 'Monthly', day: 30, amount: 8500, enabled: true, type: 'salary' as const, totalPaid: 8500 },
     { id: 'ap-3', name: 'Membership Collection', description: 'Auto-collect vendor subscription fees on the 1st', frequency: 'Monthly', day: 1, enabled: false, type: 'collection' as const, totalPaid: 140 },
@@ -1152,7 +1156,7 @@ export default function BankingPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Frequency</Label>
-                    <Select value={newAP.frequency} onValueChange={(v) => setNewAP((p) => ({ ...p, frequency: v }))}>
+                    <Select value={newAP.frequency} onValueChange={(v) => setNewAP((p) => ({ ...p, frequency: v ?? '' }))}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Frequency" />
                       </SelectTrigger>
@@ -1215,7 +1219,7 @@ export default function BankingPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Frequency</Label>
-                <Select value={editForm.frequency} onValueChange={(val) => setEditForm((p) => ({ ...p, frequency: val }))}>
+                <Select value={editForm.frequency} onValueChange={(val) => setEditForm((p) => ({ ...p, frequency: val ?? '' }))}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Weekly">Weekly</SelectItem>

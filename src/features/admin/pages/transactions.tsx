@@ -110,13 +110,14 @@ export default function TransactionsPage() {
   const mockSoldTransactions = useMemo<Transaction[]>(() => {
     return sentProjects
       .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
-      .map((p) => ({
+      .map((p): Transaction => ({
         id: `mock-tx-${p.id}`,
         type: 'commission' as TransactionType,
         status: 'paid' as TransactionStatus,
+        vendor_id: p.contractor?.vendor_id ?? '',
         company: p.contractor?.company ?? 'Unknown vendor',
         detail: p.item.serviceName,
-        customer: p.homeowner?.name,
+        customer: p.homeowner?.name ?? '',
         amount: Math.round((p.saleAmount ?? 0) * 0.15),
         date: p.soldAt!,
       }))

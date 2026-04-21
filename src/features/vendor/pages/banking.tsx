@@ -244,7 +244,7 @@ export default function VendorBanking() {
                       <Select
                         value={account.purpose || 'both'}
                         onValueChange={(v) => {
-                          setBankAccounts((prev) => prev.map((a, i) => i === idx ? { ...a, purpose: v } : a))
+                          setBankAccounts((prev) => prev.map((a, i) => i === idx ? { ...a, purpose: v ?? undefined } : a))
                         }}
                       >
                         <SelectTrigger className="h-7 text-[11px] w-auto min-w-[160px]">

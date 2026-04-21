@@ -692,7 +692,7 @@ export function ServiceDetailPage() {
           <label htmlFor="address-select" className="block text-sm font-medium text-foreground mb-2">
             Which property is this for?
           </label>
-          <Select value={addressKey} onValueChange={setAddressKey}>
+          <Select value={addressKey} onValueChange={(value) => setAddressKey(value ?? '')}>
             <SelectTrigger id="address-select" className="h-11 text-sm">
               <SelectValue placeholder="Select a property" />
             </SelectTrigger>

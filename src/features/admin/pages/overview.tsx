@@ -126,7 +126,7 @@ export default function OverviewPage() {
   // Paid-Commissions + GMV stay visually aligned. Effective commission_pct
   // honored per vendor.
   const mockCommissions = useMemo<Transaction[]>(() => {
-    return mockSoldSales.map((p) => {
+    return mockSoldSales.map((p): Transaction => {
       // Ship #165: prefer contractor.vendor_id FK over company-name match.
       const vendor = p.contractor?.vendor_id
         ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
@@ -136,9 +136,10 @@ export default function OverviewPage() {
         id: `mock-tx-${p.id}`,
         type: 'commission',
         status: 'paid',
+        vendor_id: p.contractor?.vendor_id ?? vendor?.id ?? '',
         company: p.contractor?.company ?? 'Unknown vendor',
         detail: p.item.serviceName,
-        customer: p.homeowner?.name,
+        customer: p.homeowner?.name ?? '',
         amount: Math.round((p.saleAmount ?? 0) * pct),
         date: p.soldAt!,
       }

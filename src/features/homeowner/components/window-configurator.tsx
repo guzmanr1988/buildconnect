@@ -208,7 +208,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                       <div className="flex items-center gap-2">
                         <Select
                           value={entry.type}
-                          onValueChange={(v) => updateEntry(entry.id, 'type', v)}
+                          onValueChange={(v) => updateEntry(entry.id, 'type', v ?? '')}
                         >
                           <SelectTrigger className="h-8 text-xs flex-1 text-center [&>span]:text-center [&>span]:w-full">
                             <SelectValue />
@@ -246,7 +246,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                       <div className="flex items-center gap-2">
                         <Select
                           value={entry.frameColor}
-                          onValueChange={(v) => updateEntry(entry.id, 'frameColor', v)}
+                          onValueChange={(v) => updateEntry(entry.id, 'frameColor', v ?? '')}
                         >
                           <SelectTrigger className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full">
                             <SelectValue placeholder="Frame" />
@@ -264,7 +264,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                         </Select>
                         <Select
                           value={entry.glassColor}
-                          onValueChange={(v) => updateEntry(entry.id, 'glassColor', v)}
+                          onValueChange={(v) => updateEntry(entry.id, 'glassColor', v ?? '')}
                         >
                           <SelectTrigger className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full">
                             <SelectValue placeholder="Glass" />
@@ -291,7 +291,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                         </Select>
                         <Select
                           value={entry.glassType}
-                          onValueChange={(v) => updateEntry(entry.id, 'glassType', v)}
+                          onValueChange={(v) => updateEntry(entry.id, 'glassType', v ?? '')}
                         >
                           <SelectTrigger className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full">
                             <SelectValue placeholder="Type" />

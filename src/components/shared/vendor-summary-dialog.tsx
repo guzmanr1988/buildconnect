@@ -189,7 +189,7 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
                         <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} className="fill-muted-foreground" />
                         <YAxis hide />
                         <Tooltip
-                          formatter={(value: number, name: string) => [fmt(value), name === 'commission' ? 'Commission' : 'GMV']}
+                          formatter={(value, name) => [fmt(Number(value)), name === 'commission' ? 'Commission' : 'GMV']}
                           contentStyle={{
                             borderRadius: '0.5rem',
                             border: '1px solid hsl(var(--border))',

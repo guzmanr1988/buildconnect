@@ -109,7 +109,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
           <Select
             value={selection.color}
-            onValueChange={(v) => onChange({ ...selection, color: v })}
+            onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
           >
             <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
               <SelectValue placeholder="Select color" />
@@ -132,7 +132,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
           <Select
             value={selection.glass}
-            onValueChange={(v) => onChange({ ...selection, glass: v })}
+            onValueChange={(v) => onChange({ ...selection, glass: v ?? '' })}
           >
             <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
               <SelectValue placeholder="Select glass color" />
