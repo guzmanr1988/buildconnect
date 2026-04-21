@@ -30,6 +30,7 @@ import LeadInbox from '@/features/vendor/pages/lead-inbox'
 import VendorCalendar from '@/features/vendor/pages/calendar'
 import VendorCatalog from '@/features/vendor/pages/catalog'
 import VendorBanking from '@/features/vendor/pages/banking'
+import VendorMembership from '@/features/vendor/pages/membership'
 import VendorMessages from '@/features/vendor/pages/messages'
 import VendorProfile from '@/features/vendor/pages/profile'
 
@@ -91,6 +92,7 @@ export const router = createBrowserRouter([
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
+          { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
           { path: 'messages', element: <VendorMessages />, handle: { title: 'Vendor · Messages' } },
           { path: 'profile', element: <VendorProfile />, handle: { title: 'Vendor · Profile' } },
         ],

@@ -18,6 +18,7 @@ import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset } from '@/components/shared/address-fieldset'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { useVendorBillingStore, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
+import { useVendorMembershipStore } from '@/stores/vendor-membership-store'
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
@@ -66,6 +67,7 @@ export function RegisterPage() {
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const setVendorPaymentMethod = useVendorBillingStore((s) => s.setPaymentMethod)
+  const activateMembership = useVendorMembershipStore((s) => s.activateMembership)
 
   const {
     register,
@@ -158,6 +160,10 @@ export function RegisterPage() {
     const vendorId = profile?.id
     if (vendorId) {
       setVendorPaymentMethod(vendorId, method)
+      // Ship #180 — activate the monthly membership atomically with the
+      // payment-method commit. Billing day seeded from today so the
+      // next charge lands one month from signup.
+      activateMembership(vendorId)
     } else {
       // Edge case: profile not yet hydrated when success fires. Store
       // against the form email as a fallback key so the portal can
