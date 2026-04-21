@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion, type Variants } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -291,6 +291,20 @@ export default function TransactionsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Ship #194 (Rodolfo-direct amendment to #193) — smooth
+                  month-switch transition. AnimatePresence wrapping the
+                  section content with a key tied to monthFilter re-
+                  triggers exit→enter on filter change. Applied
+                  uniformly across all 4 category sections so the whole
+                  page cross-fades coherently when the lookup flips. */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${cat.key}-${monthFilter}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                >
               {grouped[cat.key].length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No {cat.title.toLowerCase()} yet</p>
               ) : (
@@ -467,6 +481,8 @@ export default function TransactionsPage() {
                   </Table>
                 </div>
               )}
+                </motion.div>
+              </AnimatePresence>
             </CardContent>
           </Card>
         </motion.div>
