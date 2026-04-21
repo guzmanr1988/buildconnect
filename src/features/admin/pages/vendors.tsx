@@ -9,7 +9,6 @@ import {
   Ban,
   Users,
   FileText,
-  Percent,
   Send,
   CheckCircle2,
   RotateCcw,
@@ -152,11 +151,13 @@ export default function VendorsPage() {
   }
 
   const navigate = useNavigate()
-  // Commission % overrides now persist in admin-moderation-store (ship #130)
-  // so edits ripple to revenue/reports/overview/banking via the shared store
-  // instead of being trapped in local useState.
-  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
-  const setVendorCommission = useAdminModerationStore((s) => s.setVendorCommission)
+  // Ship #195 — vendorCommissionOverrides + updateCommission removed
+  // from this page per Rodolfo's "remove revenue configuration from
+  // admin vendor settings". The store's setVendorCommission action
+  // stays intact (available to any future admin surface that
+  // reintroduces commission editing); downstream read paths via
+  // getVendorCommission continue to work unchanged for revenue /
+  // reports / overview / banking.
   const vendorProfileOverrides = useAdminModerationStore((s) => s.vendorProfileOverrides)
   const applyVendorProfileEdit = useAdminModerationStore((s) => s.applyVendorProfileEdit)
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
@@ -167,10 +168,6 @@ export default function VendorsPage() {
   const [messageDialogOpen, setMessageDialogOpen] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [messageSent, setMessageSent] = useState(false)
-
-  const updateCommission = (vendorId: string, pct: number) => {
-    setVendorCommission(vendorId, pct)
-  }
 
   const handleSuspend = (vendor: Vendor) => {
     setSuspendTarget(vendor)
@@ -485,22 +482,15 @@ export default function VendorsPage() {
                   </div>
                 </div>
 
-                {/* Commission % */}
-                <div className="flex items-center gap-2 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3">
-                  <Percent className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Commission Fee</span>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct}
-                      onChange={(e) => updateCommission(vendor.id, Number(e.target.value))}
-                      className="w-16 h-8 text-center text-sm font-bold"
-                    />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
-                  </div>
-                </div>
+                {/* Ship #195 (Rodolfo-direct 2026-04-21): "In vendors
+                    settings remove revenue configuration" — Commission
+                    Fee edit block removed from admin vendor cards.
+                    vendorCommissionOverrides store + the underlying
+                    getVendorCommission read path stay intact so
+                    admin/revenue + reports + overview + banking
+                    continue to show commission_pct correctly (including
+                    any prior-edited overrides from #130-#131 pre-
+                    removal). Edit UI gone; computed values stay. */}
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 mb-4">
