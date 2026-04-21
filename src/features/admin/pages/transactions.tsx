@@ -18,7 +18,7 @@ import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_TRANSACTIONS } from '@/lib/mock-data'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
-import { TransactionDetailDialog } from '@/components/shared/transaction-detail-dialog'
+import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
@@ -234,7 +234,7 @@ export default function TransactionsPage() {
                           className="cursor-pointer hover:bg-muted/40"
                           onClick={onRowClick}
                         >
-                          <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
+                          <TableCell className="font-mono text-xs font-semibold">{formatTransactionId(tx.id, tx.type)}</TableCell>
                           <TableCell className="font-medium">{tx.company}</TableCell>
                           <TableCell className="text-muted-foreground max-w-[200px] truncate">{tx.detail}</TableCell>
                           {cat.isCommission && (

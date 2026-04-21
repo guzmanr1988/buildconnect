@@ -24,6 +24,20 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Display-layer branded transaction ID per kratos msg 1776747090796.
+// Internal tx.id (Supabase UUID / mock tx-N) stays untouched for routing +
+// dedupe. UI shows BC<type-letter><4-digit> derived from the same hash used
+// by the mock-payment-method/destination so the branded ID is stable per
+// transaction. Format: BCC0001 (commission) / BCM0001 (membership) /
+// BCP0001 (payout).
+export function formatTransactionId(txId: string, txType: 'commission' | 'membership' | 'payout'): string {
+  const letter = txType === 'commission' ? 'C' : txType === 'membership' ? 'M' : 'P'
+  let hash = 0
+  for (let i = 0; i < txId.length; i++) hash = ((hash << 5) - hash) + txId.charCodeAt(i) | 0
+  const seq = String(Math.abs(hash) % 10000).padStart(4, '0')
+  return `BC${letter}${seq}`
+}
+
 // Deterministic mock payment-method derivation from tx.id — gives Rodolfo
 // something stable and realistic-looking to demo until Stripe wiring lands.
 // Hash → last4 digits; cycles through 3 card brands.
@@ -86,7 +100,7 @@ export function TransactionDetailDialog({ open, onClose, transaction }: Transact
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Transaction ID</span>
-                  <span className="font-mono text-xs">{transaction.id}</span>
+                  <span className="font-mono text-xs font-semibold">{formatTransactionId(transaction.id, transaction.type)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount</span>
@@ -142,6 +156,11 @@ export function TransactionDetailDialog({ open, onClose, transaction }: Transact
                       </div>
                       <p className="text-[11px] text-muted-foreground">Real Stripe PaymentMethod wiring lands in Tranche-2.</p>
                     </div>
+                    <div className="rounded-xl border p-4 space-y-1.5">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bank Statement Descriptor</h4>
+                      <p className="font-mono text-sm font-semibold">ORIG CO NAME: BUILDC</p>
+                      <p className="text-[11px] text-muted-foreground">This is what the vendor sees on their bank/card statement.</p>
+                    </div>
                   </>
                 )
               })()}
@@ -150,15 +169,22 @@ export function TransactionDetailDialog({ open, onClose, transaction }: Transact
               {transaction.type === 'payout' && (() => {
                 const dest = mockDestination(transaction.id)
                 return (
-                  <div className="rounded-xl border p-4 space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Destination Account</h4>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="font-medium">{dest.bankName} **** {dest.last4}</span>
-                      <Badge variant="outline" className="text-[10px] ml-auto">Mock</Badge>
+                  <>
+                    <div className="rounded-xl border p-4 space-y-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Destination Account</h4>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-medium">{dest.bankName} **** {dest.last4}</span>
+                        <Badge variant="outline" className="text-[10px] ml-auto">Mock</Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Real ACH destination wiring lands in Tranche-2.</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Real ACH destination wiring lands in Tranche-2.</p>
-                  </div>
+                    <div className="rounded-xl border p-4 space-y-1.5">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bank Statement Descriptor</h4>
+                      <p className="font-mono text-sm font-semibold">ORIG CO NAME: BUILDC</p>
+                      <p className="text-[11px] text-muted-foreground">This is what the vendor sees on their bank statement when payouts arrive.</p>
+                    </div>
+                  </>
                 )
               })()}
             </div>
