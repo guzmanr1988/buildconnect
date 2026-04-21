@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -22,6 +22,7 @@ const navItems = [
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
+  { to: '/vendor/employees', icon: UsersRound, label: 'Employees' },
   { to: '/vendor/membership', icon: BadgeCheck, label: 'Membership' },
   { to: '/vendor/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/vendor/profile', icon: User, label: 'Profile' },

@@ -34,6 +34,7 @@ import VendorBanking from '@/features/vendor/pages/banking'
 import VendorMembership from '@/features/vendor/pages/membership'
 import VendorMessages from '@/features/vendor/pages/messages'
 import VendorProfile from '@/features/vendor/pages/profile'
+import VendorEmployeesPage from '@/features/vendor/pages/employees'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -104,6 +105,7 @@ export const router = createBrowserRouter([
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
+          { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
           { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
           { path: 'messages', element: <VendorMessages />, handle: { title: 'Vendor · Messages' } },
           { path: 'profile', element: <VendorProfile />, handle: { title: 'Vendor · Profile' } },
