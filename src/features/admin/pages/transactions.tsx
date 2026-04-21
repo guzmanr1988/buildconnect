@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight } from 'lucide-react'
+import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -80,6 +81,26 @@ export default function TransactionsPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }, [])
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
+  // Ship #193 (Rodolfo-direct 2026-04-21) — 12-month lookup filter.
+  // 'all' = no filter (default). Any other value is a YYYY-MM key
+  // matching the month-grouping scheme from #159. Applies uniformly
+  // to all 4 transaction categories so the scope stays consistent
+  // across tabs per Rodolfo's "all tabs" directive.
+  const [monthFilter, setMonthFilter] = useState<string>('all')
+
+  // Build the 12-month options list: trailing 12 months from today,
+  // newest-first. Includes an 'All' option at the top.
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [{ value: 'all', label: 'All time' }]
+    const now = new Date()
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      opts.push({ value, label })
+    }
+    return opts
+  }, [])
   const toggleMonth = (catKey: string, monthKey: string) => {
     const k = `${catKey}-${monthKey}`
     setExpandedMonths((prev) => ({ ...prev, [k]: !(prev[k] ?? monthKey === currentMonthKey) }))
@@ -159,8 +180,20 @@ export default function TransactionsPage() {
     for (const key of Object.keys(result) as SectionKey[]) {
       result[key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     }
+    // Ship #193 — apply 12-month lookup filter uniformly across all
+    // category sections. 'all' bypasses; any other monthFilter value
+    // is a YYYY-MM key matching transaction.date's year-month.
+    if (monthFilter !== 'all') {
+      for (const key of Object.keys(result) as SectionKey[]) {
+        result[key] = result[key].filter((tx) => {
+          const d = new Date(tx.date)
+          const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          return monthKey === monthFilter
+        })
+      }
+    }
     return result
-  }, [transactions, mockSoldTransactions])
+  }, [transactions, mockSoldTransactions, monthFilter])
 
   const sectionTotals = useMemo(() => ({
     commission_paid: grouped.commission_paid.reduce((s, t) => s + t.amount, 0),
@@ -202,7 +235,28 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transactions" description={`${unifiedTxCount} total transactions`} />
+      <PageHeader title="Transactions" description={`${unifiedTxCount} total transactions`}>
+        {/* Ship #193 — 12-month lookup picker. Applies uniformly to all
+            4 category sections (Commissions Paid / Pending / Memberships
+            / Payouts) per Rodolfo's "all tabs" directive. Defaults to
+            All time; selecting a month scopes every section to that
+            month only. */}
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <Select value={monthFilter} onValueChange={(v) => setMonthFilter(v ?? 'all')}>
+            <SelectTrigger className="h-9 w-[180px] text-sm" data-tx-month-filter="trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </PageHeader>
 
       {/* Summary KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
