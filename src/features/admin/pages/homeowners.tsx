@@ -48,6 +48,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
+import { MOCK_LEADS } from '@/lib/mock-data'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -501,7 +502,29 @@ export default function HomeownersPage() {
                                       <TableRow
                                         key={proj.id}
                                         className="cursor-pointer hover:bg-muted/40"
-                                        onClick={() => setSelectedProjectId(proj.id)}
+                                        onClick={() => {
+                                          // Ship #151 P0 fix: CUSTOMER_PROJECTS
+                                          // fixture ids (cp-N) aren't in MOCK_
+                                          // LEADS/sentProjects so ProjectDetail
+                                          // Dialog can't resolve them. Bridge
+                                          // cp-N → matching MOCK_LEAD via
+                                          // homeowner_id + project-name prefix
+                                          // match (handles em-dash vs hyphen
+                                          // variance). sentProject synth rows
+                                          // pass through directly (sp.id in
+                                          // sentProjects).
+                                          let resolvedId = proj.id
+                                          if (proj.id.startsWith('cp-')) {
+                                            const matched = MOCK_LEADS.find((l) => {
+                                              if (l.homeowner_id !== proj.homeowner_id) return false
+                                              const leadPrefix = l.project.split(/[—-]/)[0].trim().toLowerCase()
+                                              const projPrefix = proj.project_name.split(/[—-]/)[0].trim().toLowerCase()
+                                              return leadPrefix === projPrefix || projPrefix.includes(leadPrefix) || leadPrefix.includes(projPrefix)
+                                            })
+                                            if (matched) resolvedId = matched.id
+                                          }
+                                          setSelectedProjectId(resolvedId)
+                                        }}
                                       >
                                         <TableCell className="text-xs font-medium max-w-[140px]">
                                           <div className="truncate">{proj.project_name}</div>
