@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Search,
   UserPlus,
@@ -10,6 +11,8 @@ import {
   Shield,
   Home,
   Briefcase,
+  KeyRound,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,6 +33,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
@@ -39,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/shared/page-header'
 import { matchesSearch } from '@/lib/search-match'
 import type { UserRole } from '@/types'
@@ -144,6 +149,52 @@ export default function UsersPage() {
     role: 'homeowner',
     status: 'active',
   })
+
+  // Reset-password dialog (ship #136 per kratos msg 1776743142043).
+  // Service-role-key is server-only so both paths are mock-stubbed client-
+  // side until a Supabase Edge Function lands (Tranche-2). UX shape is real;
+  // wiring is not.
+  const [resetTarget, setResetTarget] = useState<MockUser | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetTab, setResetTab] = useState<'link' | 'password'>('link')
+  const [resetNewPassword, setResetNewPassword] = useState('')
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('')
+
+  function openResetPassword(user: MockUser) {
+    setResetTarget(user)
+    setResetTab('link')
+    setResetNewPassword('')
+    setResetConfirmPassword('')
+    setResetOpen(true)
+  }
+
+  function submitResetLink() {
+    if (!resetTarget) return
+    // Mock stub: in Tranche-2, call a Supabase Edge Function that uses the
+    // service-role key to fire supabase.auth.admin.resetPasswordForEmail.
+    toast.success(`Reset link sent to ${resetTarget.email} (mock)`, {
+      description: 'Tranche-2: wire to Supabase Edge Function with service-role.',
+    })
+    setResetOpen(false)
+  }
+
+  function submitResetPassword() {
+    if (!resetTarget) return
+    if (resetNewPassword.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+    // Mock stub: in Tranche-2, call Supabase Edge Function that fires
+    // supabase.auth.admin.updateUserById({ password }) with service-role key.
+    toast.success(`Password reset for ${resetTarget.email} (mock)`, {
+      description: 'Tranche-2: wire to Supabase Edge Function with service-role.',
+    })
+    setResetOpen(false)
+  }
 
   /* ---- Filtered list ---- */
   const filtered = useMemo(() => {
@@ -290,14 +341,24 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title="Edit">
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}>
                               <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openResetPassword(user)}
+                              title="Reset password"
+                              aria-label={`Reset password for ${user.name}`}
+                            >
+                              <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => toggleStatus(user.id)}
                               title={user.status === 'suspended' ? 'Activate' : 'Suspend'}
+                              aria-label={user.status === 'suspended' ? `Activate ${user.name}` : `Suspend ${user.name}`}
                             >
                               {user.status === 'suspended' ? (
                                 <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
@@ -444,6 +505,81 @@ export default function UsersPage() {
               Cancel
             </Button>
             <Button onClick={addUser}>Create User</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- Reset Password Dialog (ship #136) ---- */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-amber-600" />
+              Reset Password
+            </DialogTitle>
+            {resetTarget && (
+              <DialogDescription>
+                Reset the password for <span className="font-medium text-foreground">{resetTarget.name}</span> ({resetTarget.email}).
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <Tabs value={resetTab} onValueChange={(v) => setResetTab(v as 'link' | 'password')} className="mt-2">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="link" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                Send Reset Link
+              </TabsTrigger>
+              <TabsTrigger value="password" className="gap-1.5">
+                <KeyRound className="h-3.5 w-3.5" />
+                Set New Password
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="link" className="space-y-3 py-4">
+              <p className="text-sm text-muted-foreground">
+                An email with a password-reset link will be sent to the user. They can set their own new password from the link.
+              </p>
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <span className="font-semibold">Demo note:</span> v1 stubs this with a toast. Production wiring (Supabase Edge Function + service-role key) is a Tranche-2 task.
+              </div>
+              <Button onClick={submitResetLink} className="w-full gap-2">
+                <Mail className="h-4 w-4" />
+                Send Reset Link
+              </Button>
+            </TabsContent>
+            <TabsContent value="password" className="space-y-3 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-new-password">New password</Label>
+                <Input
+                  id="reset-new-password"
+                  type="password"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reset-confirm-password">Confirm password</Label>
+                <Input
+                  id="reset-confirm-password"
+                  type="password"
+                  value={resetConfirmPassword}
+                  onChange={(e) => setResetConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <span className="font-semibold">Demo note:</span> v1 stubs this with a toast. Production wiring (Supabase Edge Function + service-role key) is a Tranche-2 task.
+              </div>
+              <Button onClick={submitResetPassword} className="w-full gap-2">
+                <KeyRound className="h-4 w-4" />
+                Set New Password
+              </Button>
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
