@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/stores/auth-store'
-import { signUp } from '@/lib/auth'
+import { signUp, friendlyAuthError } from '@/lib/auth'
 import { updateVendor } from '@/lib/api/vendors'
 import type { UserRole } from '@/types'
 import { cn } from '@/lib/utils'
@@ -57,6 +57,10 @@ export function RegisterPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  // Ship #182 — persistent form-level error banner. Toast clears too
+  // quickly for rate-limit messages where the user needs to read + wait;
+  // inline banner stays until the next submit attempt or role switch.
+  const [formError, setFormError] = useState<string | null>(null)
   // Ship #179 (Rodolfo-direct 2026-04-21) — gate-state for vendor payment
   // dialog. Set SYNCHRONOUSLY before signUp's async boundary so the
   // AuthBootstrap SIGNED_IN listener's downstream useEffect below sees
@@ -98,6 +102,8 @@ export function RegisterPage() {
 
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
+    // Clear any prior form error at retry — fresh attempt, fresh state.
+    setFormError(null)
     // Ship #179 — gate-state SYNCHRONOUSLY before the signUp async
     // boundary. This runs in the same React batch as the button click so
     // the useEffect above sees paymentDialogOpen=true before AuthBootstrap
@@ -145,7 +151,13 @@ export function RegisterPage() {
       // For vendors: dialog mounted via paymentDialogOpen=true; useEffect
       // redirect stays gated until the dialog's onSuccess flips the gate.
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed'
+      // Ship #182 — map raw Supabase errors to plain-English copy. Raw
+      // messages like "email rate limit exceeded" read as broken; the
+      // mapped message tells the user what happened AND whether retry
+      // is useful. Persistent banner via formError lets the user read
+      // at their pace instead of chasing a toast that dismisses.
+      const message = friendlyAuthError(err)
+      setFormError(message)
       toast.error(message)
       setIsLoading(false)
       // If signUp fails, unwind the gate so the user can retry.
@@ -367,6 +379,19 @@ export function RegisterPage() {
                   <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
                 )}
               </div>
+
+              {/* Ship #182 — persistent form-level error banner. Shows
+                  friendlyAuthError-mapped copy; stays visible until next
+                  submit attempt so the user can read rate-limit / retry
+                  guidance at their own pace. */}
+              {formError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+                >
+                  {formError}
+                </div>
+              )}
 
               <Button
                 type="submit"
