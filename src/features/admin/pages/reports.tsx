@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  FileText, DollarSign, CreditCard, ArrowDownToLine, Building2,
+  FileText, DollarSign, ArrowDownToLine, Building2,
   TrendingUp, Users, Printer,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'

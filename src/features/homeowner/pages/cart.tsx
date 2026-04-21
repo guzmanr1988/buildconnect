@@ -1,17 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Save, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
-import type { ServiceCategory } from '@/types'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -47,8 +44,8 @@ const ICON_GRADIENTS: Record<string, string> = {
 
 export function CartPage() {
   const navigate = useNavigate()
-  const { items, notes, photos, idDocument, removeItem, updateItem, setNotes, addPhoto, removePhoto, setIdDocument, clearCart } = useCartStore()
-  const { sentProjects, sendProject, removeProject } = useProjectsStore()
+  const { items, idDocument, removeItem, updateItem, setIdDocument } = useCartStore()
+  const { sentProjects } = useProjectsStore()
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const requestCancellation = useProjectsStore((s) => s.requestCancellation)
 
@@ -132,20 +129,6 @@ export function CartPage() {
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`
     : items.map(i => i.serviceName).join(', ')
 
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files
-    if (!files) return
-    Array.from(files).forEach((file) => {
-      if (photos.length >= 20) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') addPhoto(reader.result)
-      }
-      reader.readAsDataURL(file)
-    })
-    e.target.value = ''
-  }
-
   function getBusinessDaysSince(sentAt: string): number {
     const sent = new Date(sentAt)
     const now = new Date()
@@ -161,11 +144,6 @@ export function CartPage() {
 
   function canCancel(sentAt: string): boolean {
     return getBusinessDaysSince(sentAt) <= 3
-  }
-
-  const handleSaveDraft = () => {
-    // TODO: Save to Supabase as draft
-    alert('Project saved as draft!')
   }
 
   const handleSendToContractor = (item: typeof items[0]) => {

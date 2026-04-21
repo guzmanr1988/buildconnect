@@ -30,7 +30,7 @@ const SEED: AdminMessage[] = [
 
 export const useAdminMessagesStore = create<AdminMessagesState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       messages: SEED,
       addMessage: (msg) => {
         const newMsg: AdminMessage = {

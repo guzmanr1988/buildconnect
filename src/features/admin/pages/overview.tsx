@@ -24,7 +24,6 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
-  Legend,
 } from 'recharts'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Building2, User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
+  User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
   BadgeCheck, CreditCard, LogOut, Shield, MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,14 +12,12 @@ import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
-import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
-import { cn } from '@/lib/utils'
 
 const VENDOR_ID = 'v-1'
 

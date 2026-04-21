@@ -39,7 +39,6 @@ interface GarageDoorConfiguratorProps {
 }
 
 export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDoorConfiguratorProps) {
-  const isDouble = selection.type === 'double_garage'
   const isComplete = selection.type && selection.color && selection.glass && selection.size
 
   return (

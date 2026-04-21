@@ -140,8 +140,6 @@ export function HomeownerHome() {
       (p) => (p.status === 'pending' || p.status === 'approved') && !isCancelled(p.leadId, p.status)
     )
   )
-  const upcoming = upcomingAll.slice(0, 3)
-
   const activeProjects = sortByRecent(
     lifecycle.filter((p) => {
       if (isCancelled(p.leadId, p.status)) return false

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Save, Send, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, X } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -117,7 +117,6 @@ export function ServiceDetailPage() {
   )
 
   const addItem = useCartStore((s) => s.addItem)
-  const updateItem = useCartStore((s) => s.updateItem)
   const removeItem = useCartStore((s) => s.removeItem)
   const cartItems = useCartStore((s) => s.items)
   const cartCount = cartItems.length

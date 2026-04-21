@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   DollarSign, Wallet, Building2, AlertTriangle, CreditCard,
-  CheckCircle2, Clock, Landmark, Plus, ShieldCheck, CreditCard as CreditCardIcon, Trash2,
+  CheckCircle2, Clock, Landmark, Plus, ShieldCheck, CreditCard as CreditCardIcon,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,9 +22,7 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
-import { StatusBadge } from '@/components/shared/status-badge'
 import { MOCK_CLOSED_SALES, MOCK_BANK_ACCOUNTS, MOCK_VENDORS } from '@/lib/mock-data'
-import { cn } from '@/lib/utils'
 import type { ClosedSale, BankAccount } from '@/types'
 
 const VENDOR_ID = 'v-1'

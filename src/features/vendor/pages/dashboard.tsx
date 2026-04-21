@@ -5,9 +5,9 @@ import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Trash2, Hammer,
+  UserCheck, Pencil, Trash2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { MOCK_VENDORS, MOCK_LEADS, MOCK_CLOSED_SALES, MOCK_AVAILABLE_SLOTS } from '@/lib/mock-data'
+import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -124,11 +124,6 @@ export default function VendorDashboard() {
     () => (mockVendorId ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
     [VENDOR_ID, mockVendorId]
   )
-  const closedSales = useMemo(
-    () => (mockVendorId ? MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID) : []),
-    [VENDOR_ID, mockVendorId]
-  )
-
   // Convert sent projects from homeowner side into lead-like objects.
   // Ship #163 + #165 vendor_id-FK hardening (task_1776731114470_226):
   // prefer contractor.vendor_id FK (stable across rename); fall back to
@@ -351,8 +346,6 @@ export default function VendorDashboard() {
       setCancelReviewLeadId('')
     }
   }, [cancelReviewOpen, cancelReviewLeadId])
-
-  const selectedSlot = MOCK_AVAILABLE_SLOTS.find((s) => s.date === rescheduleDate)
 
   const openLead = (lead: Lead) => {
     setSelected(lead)

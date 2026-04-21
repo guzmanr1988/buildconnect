@@ -2,10 +2,9 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, User, MapPin, Calendar,
-  Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Warehouse,
-  Download, X, ZoomIn,
+  Download, ZoomIn,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -16,22 +15,8 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorScope } from '@/lib/vendor-scope'
-import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Lead } from '@/types'
-
-const SERVICE_ICONS: Record<string, React.ElementType> = {
-  roofing: Home,
-  windows_doors: Wind,
-  pool: Droplets,
-  driveways: Car,
-  pergolas: Tent,
-  air_conditioning: Thermometer,
-  kitchen: UtensilsCrossed,
-  bathroom: Bath,
-  wall_paneling: PanelTop,
-  garage: Warehouse,
-}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)

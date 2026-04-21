@@ -7,9 +7,7 @@ import {
   MessageSquare,
   ShieldCheck,
   Ban,
-  ChevronDown,
   Users,
-  DollarSign,
   FileText,
   Percent,
   Send,
@@ -165,7 +163,7 @@ export default function VendorsPage() {
   const [verifiedVendors, setVerifiedVendors] = useState<Set<string>>(new Set())
   const [suspendTarget, setSuspendTarget] = useState<Vendor | null>(null)
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false)
-  const [messageTarget, setMessageTarget] = useState<Vendor | null>(null)
+  const [messageTarget] = useState<Vendor | null>(null)
   const [messageDialogOpen, setMessageDialogOpen] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [messageSent, setMessageSent] = useState(false)
@@ -192,13 +190,6 @@ export default function VendorsPage() {
       })
     }
     setSuspendDialogOpen(false)
-  }
-
-  const handleMessage = (vendor: Vendor) => {
-    setMessageTarget(vendor)
-    setMessageText('')
-    setMessageSent(false)
-    setMessageDialogOpen(true)
   }
 
   const sendMessage = () => {

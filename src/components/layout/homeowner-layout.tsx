@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Palette, MessageCircle, User, ShoppingCart, CheckCircle2, X, HelpCircle, PlayCircle } from 'lucide-react'
+import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -7,7 +7,6 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { NotificationBell, type NotificationItem } from '@/components/shared/notification-bell'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
-import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -25,7 +24,6 @@ export function HomeownerLayout() {
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
   const navigate = useNavigate()
-  const cartCount = useCartStore((s) => s.items.length)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
   const notifications: NotificationItem[] = approvedProjects.map((p) => ({

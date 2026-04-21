@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, MapPin, Archive, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
+import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, Archive, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
@@ -17,15 +17,6 @@ import { cn } from '@/lib/utils'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-interface PipelineItem {
-  id: string
-  name: string
-  project: string
-  date: string
-  initials: string
-  vendor?: string
 }
 
 export default function WorkflowPage() {
