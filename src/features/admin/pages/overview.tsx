@@ -15,7 +15,18 @@ import {
   Home,
   CheckCircle2,
   Clock,
+  BarChart3,
 } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -141,8 +152,59 @@ export default function OverviewPage() {
     { key: 'financing_enabled', label: 'Financing Options', icon: Banknote },
   ]
 
-  const vendorPct = 85
-  const platformPct = 15
+  // 4-category transactions chart data (ship #158): Commissions Paid /
+  // Pending Commissions / Memberships / Payouts by last-6-months. Replaces
+  // the prior flat-85/15 Revenue Split which was misleading because per-
+  // vendor commission_pct varies.
+  const transactionChartData = useMemo(() => {
+    const now = new Date()
+    const months: {
+      month: string
+      commissionsPaid: number
+      pendingCommissions: number
+      memberships: number
+      payouts: number
+    }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+      const inRange = (iso: string) => {
+        const t = new Date(iso).getTime()
+        return t >= d.getTime() && t < end.getTime()
+      }
+      const monthTxs = MOCK_TRANSACTIONS.filter((t) => inRange(t.date))
+      months.push({
+        month: d.toLocaleDateString('en-US', { month: 'short' }),
+        commissionsPaid: monthTxs.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
+        pendingCommissions: monthTxs.filter((t) => t.type === 'commission' && t.status === 'pending').reduce((s, t) => s + t.amount, 0),
+        memberships: monthTxs.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0),
+        payouts: monthTxs.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0),
+      })
+    }
+    return months
+  }, [MOCK_TRANSACTIONS])
+
+  const transactionCategoryTotals = useMemo(() => {
+    const allTotal = transactionChartData.reduce((s, m) => s + m.commissionsPaid + m.pendingCommissions + m.memberships + m.payouts, 0)
+    const by = transactionChartData.reduce(
+      (acc, m) => ({
+        commissionsPaid: acc.commissionsPaid + m.commissionsPaid,
+        pendingCommissions: acc.pendingCommissions + m.pendingCommissions,
+        memberships: acc.memberships + m.memberships,
+        payouts: acc.payouts + m.payouts,
+      }),
+      { commissionsPaid: 0, pendingCommissions: 0, memberships: 0, payouts: 0 },
+    )
+    const pct = (n: number) => (allTotal > 0 ? Math.round((n / allTotal) * 100) : 0)
+    return {
+      ...by,
+      allTotal,
+      pctCommissionsPaid: pct(by.commissionsPaid),
+      pctPendingCommissions: pct(by.pendingCommissions),
+      pctMemberships: pct(by.memberships),
+      pctPayouts: pct(by.payouts),
+    }
+  }, [transactionChartData])
 
   return (
     <div className="space-y-6">
@@ -210,46 +272,98 @@ export default function OverviewPage() {
 
       {/* Revenue Split + Platform Health */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Split */}
+        {/* Transactions Breakdown — 4-category stacked bar chart, last 6 months */}
         <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible">
           <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-primary" />
-                Revenue Split
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Transactions Breakdown
               </CardTitle>
+              <p className="text-xs text-muted-foreground">Last 6 months · ${transactionCategoryTotals.allTotal.toLocaleString()} total</p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Vendor Share</span>
-                <span className="font-semibold">{vendorPct}%</span>
+            <CardContent className="space-y-3">
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={transactionChartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="overviewCommPaidGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.55} />
+                      </linearGradient>
+                      <linearGradient id="overviewCommPendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.55} />
+                      </linearGradient>
+                      <linearGradient id="overviewMemGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.55} />
+                      </linearGradient>
+                      <linearGradient id="overviewPayoutGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#a855f7" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#a855f7" stopOpacity={0.55} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                    <RechartsTooltip
+                      formatter={(value: number, name: string) => {
+                        const labels: Record<string, string> = {
+                          commissionsPaid: 'Commissions Paid',
+                          pendingCommissions: 'Pending Commissions',
+                          memberships: 'Memberships',
+                          payouts: 'Payouts',
+                        }
+                        return [`$${value.toLocaleString()}`, labels[name] || name]
+                      }}
+                      contentStyle={{
+                        borderRadius: '0.75rem',
+                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: 'hsl(var(--popover))',
+                        color: 'hsl(var(--popover-foreground))',
+                        fontSize: '12px',
+                        padding: '8px 12px',
+                      }}
+                      cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
+                    />
+                    <Bar dataKey="commissionsPaid" stackId="tx" fill="url(#overviewCommPaidGrad)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="pendingCommissions" stackId="tx" fill="url(#overviewCommPendGrad)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="memberships" stackId="tx" fill="url(#overviewMemGrad)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="payouts" stackId="tx" fill="url(#overviewPayoutGrad)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <div className="relative h-4 w-full rounded-full bg-muted overflow-hidden">
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-blue-500 transition-all"
-                  style={{ width: `${vendorPct}%` }}
-                />
-                <div
-                  className="absolute inset-y-0 right-0 rounded-full bg-amber-500 transition-all"
-                  style={{ width: `${platformPct}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-blue-500" />
-                  <span className="text-muted-foreground">Vendor ({vendorPct}%)</span>
+              {/* Category totals + percentages */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+                    <span className="text-muted-foreground">Commissions Paid</span>
+                  </span>
+                  <span className="font-semibold">${transactionCategoryTotals.commissionsPaid.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctCommissionsPaid}%)</span></span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-amber-500" />
-                  <span className="text-muted-foreground">Platform ({platformPct}%)</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />
+                    <span className="text-muted-foreground">Pending Commissions</span>
+                  </span>
+                  <span className="font-semibold">${transactionCategoryTotals.pendingCommissions.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctPendingCommissions}%)</span></span>
                 </div>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-3 text-center text-sm">
-                <span className="text-muted-foreground">
-                  Total GMV <span className="font-semibold text-foreground">${totalGMV.toLocaleString()}</span>
-                  {' '}&middot;{' '}
-                  Platform Earnings <span className="font-semibold text-amber-700 dark:text-amber-400">${appRevenue.toLocaleString()}</span>
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
+                    <span className="text-muted-foreground">Memberships</span>
+                  </span>
+                  <span className="font-semibold">${transactionCategoryTotals.memberships.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctMemberships}%)</span></span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-purple-500" />
+                    <span className="text-muted-foreground">Payouts</span>
+                  </span>
+                  <span className="font-semibold">${transactionCategoryTotals.payouts.toLocaleString()} <span className="text-muted-foreground">({transactionCategoryTotals.pctPayouts}%)</span></span>
+                </div>
               </div>
             </CardContent>
           </Card>
