@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Clock,
   BarChart3,
+  RotateCcw,
 } from 'lucide-react'
 import {
   BarChart,
@@ -86,6 +87,10 @@ export default function OverviewPage() {
   // and synthesize commission rows for the transaction-totals card. Phase 2b
   // admin-SoT per kratos msg 1776725252468.
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  // Ship #192 — admin visibility of reschedule activity. Selector
+  // returns the raw map (stable reference under reducer writes);
+  // derivation into sorted list happens in render body.
+  const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
@@ -452,6 +457,92 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Ship #192 — reschedule activity visibility. Per Rodolfo ship
+          #191 spec "make sure that this activity is also shown on admin
+          side where the appointment lands". Reads rescheduleRequestsByLead
+          from projects-store and surfaces the 8 most recent entries
+          sorted by most-recent action (resolvedAt for closed, requestedAt
+          for pending). Status color-coded to match the homeowner/vendor
+          banner palette (amber = awaiting, emerald = approved, red =
+          rejected). Empty-state hidden — no noise when there's nothing
+          to show. */}
+      {(() => {
+        const entries = Object.entries(rescheduleRequestsMap).map(([leadId, req]) => ({
+          leadId,
+          req,
+          timestamp: req.resolvedAt ?? req.requestedAt,
+        }))
+        if (entries.length === 0) return null
+        entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        const recent = entries.slice(0, 8)
+        return (
+          <motion.div custom={8} variants={fadeUp} initial="hidden" animate="visible">
+            <Card className="rounded-xl">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold font-heading flex items-center gap-2">
+                    <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                    Reschedule Activity
+                  </h3>
+                  <span className="text-[11px] text-muted-foreground">
+                    {entries.length} total
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {recent.map(({ leadId, req, timestamp }) => {
+                    const statusLabel =
+                      req.status === 'pending'
+                        ? (req.requestedBy === 'homeowner' ? 'Homeowner proposed' : 'Vendor proposed')
+                        : req.status === 'approved'
+                          ? 'Approved'
+                          : 'Kept original'
+                    const statusClasses =
+                      req.status === 'pending'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                        : req.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                    return (
+                      <div
+                        key={leadId + '-' + timestamp}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap', statusClasses)}>
+                            {statusLabel}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              Lead {leadId}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {req.proposedDate} · {req.proposedTime}
+                              {req.originalDate && req.originalTime && (
+                                <span className="ml-1.5">
+                                  (was {req.originalDate} · {req.originalTime})
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          {new Date(timestamp).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )
+      })()}
     </div>
   )
 }
