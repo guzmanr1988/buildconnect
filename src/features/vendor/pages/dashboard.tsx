@@ -1146,7 +1146,14 @@ export default function VendorDashboard() {
                                   : null}
                               </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            {/* Ship #230 — alignItemWithTrigger=false so the
+                                menu drops BELOW the trigger instead of
+                                anchoring the selected item on top of the
+                                trigger (base-ui default, macOS-native feel).
+                                Post-#229 name-only trigger + name+title
+                                options had mismatched heights that made the
+                                overlay read as visual overlap. */}
+                            <SelectContent alignItemWithTrigger={false}>
                               {accountReps.map((rep) => (
                                 <SelectItem key={rep.id} value={rep.id}>
                                   <span className="font-medium">{rep.name}</span>
@@ -1577,7 +1584,9 @@ export default function VendorDashboard() {
                       : null}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                {/* Ship #230 — alignItemWithTrigger=false, same rationale
+                    as the Assign dropdown above. */}
+                <SelectContent alignItemWithTrigger={false}>
                   {accountReps.map((rep) => (
                     <SelectItem key={rep.id} value={rep.id}>
                       <span className="font-medium">{rep.name}</span>
