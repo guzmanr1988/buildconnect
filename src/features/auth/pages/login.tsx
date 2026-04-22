@@ -370,7 +370,12 @@ export function LoginPage() {
               <Separator className="flex-1" />
             </div>
 
-            <div className="flex flex-col gap-2">
+            {/* Ship #215 — 2-column grid on sm+ so the 6 demo tiles
+                (Homeowner + 3 vendor-scoped + Generic Vendor + Admin)
+                fit in 3 rows instead of a 6-deep vertical stack that
+                overflowed the form panel on shorter viewports. Mobile
+                stays single-column for readability. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {demoAccounts.map((demo, i) => (
                 <motion.div
                   key={demo.role}
