@@ -17,14 +17,6 @@ const statusTimeline: Record<string, { label: string; time: string; status: Lead
   'L-0001': [
     { label: 'Lead submitted', time: 'Apr 7, 2:22 PM', status: 'pending' },
   ],
-  'L-0002': [
-    { label: 'Lead submitted', time: 'Apr 8, 9:45 AM', status: 'pending' },
-  ],
-  'L-0004': [
-    { label: 'Lead submitted', time: 'Apr 5, 11:30 AM', status: 'pending' },
-    { label: 'Visit confirmed', time: 'Apr 5, 2:00 PM', status: 'confirmed' },
-    { label: 'Vendor requested reschedule', time: 'Apr 6, 9:00 AM', status: 'rescheduled' },
-  ],
 }
 
 const statusPulse: Record<string, string> = {

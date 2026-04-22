@@ -35,21 +35,19 @@ export const MOCK_VENDORS: Vendor[] = [
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
 
 // ─── Leads ───
+// Ship #233 — demo-mode seed trimmed to v-1 entries only so admin workflow
+// count matches vendor view. Per Rodolfo directive (option C): "admin has to
+// show the same as vendor." MOCK_VENDORS, MOCK_CATALOG, MOCK_TRANSACTIONS
+// kept intact — those drive marketplace-browse + cross-vendor admin surfaces
+// which still need multi-vendor data to render meaningfully.
 export const MOCK_LEADS: Lead[] = [
   { id: 'L-0001', homeowner_id: 'ho-1', vendor_id: 'v-1', project: 'Full Roof Replacement — Barrel Tile', value: 28500, status: 'pending', slot: '2026-04-14T09:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['barrel_tile'], service_type: ['replace'], addons: ['gutters'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-07T14:22:00Z' },
-  { id: 'L-0002', homeowner_id: 'ho-2', vendor_id: 'v-2', project: 'Impact Windows — Full Home', value: 42000, status: 'pending', slot: '2026-04-15T10:00:00Z', permit_choice: true, service_category: 'windows_doors', pack_items: { glass_type: ['impact_plus'], products: ['single_hung', 'sliding', 'entry'], scope: ['full'] }, sq_ft: 2400, financing: true, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-04-08T09:45:00Z' },
-  { id: 'L-0003', homeowner_id: 'ho-3', vendor_id: 'v-3', project: 'Resort Pool with Spa & LED', value: 65000, status: 'confirmed', slot: '2026-04-16T11:00:00Z', permit_choice: true, service_category: 'pool', pack_items: { model: ['16x32'], paver: ['travertine'], addons: ['spa', 'led'] }, sq_ft: 3200, financing: false, address: '910 Princeton Blvd, Homestead, FL 33032', phone: '(954) 555-0303', email: 'sarah@email.com', homeowner_name: 'Sarah Chen', received_at: '2026-04-06T16:10:00Z' },
-  { id: 'L-0004', homeowner_id: 'ho-1', vendor_id: 'v-4', project: 'Paver Driveway — Full Install', value: 18500, status: 'rescheduled', slot: '2026-04-18T09:00:00Z', permit_choice: false, service_category: 'driveways', pack_items: { surface: ['pavers'], scope: ['full'], addons: ['border', 'lighting'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-05T11:30:00Z' },
   { id: 'L-0005', homeowner_id: 'ho-2', vendor_id: 'v-1', project: 'Metal Roof + Solar Prep', value: 35000, status: 'pending', slot: '2026-04-17T14:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['metal'], service_type: ['replace'], addons: ['solar_prep', 'insulation'] }, sq_ft: 2400, financing: true, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-04-09T08:15:00Z' },
-  { id: 'L-0006', homeowner_id: 'ho-3', vendor_id: 'v-5', project: 'Central AC 3 Ton + Smart Thermostat', value: 8900, status: 'confirmed', slot: '2026-04-14T14:00:00Z', permit_choice: false, service_category: 'air_conditioning', pack_items: { system: ['central_3'], addons: ['thermostat'] }, sq_ft: 3200, financing: false, address: '910 Princeton Blvd, Homestead, FL 33032', phone: '(954) 555-0303', email: 'sarah@email.com', homeowner_name: 'Sarah Chen', received_at: '2026-04-08T13:00:00Z' },
-  { id: 'L-0007', homeowner_id: 'ho-1', vendor_id: 'v-3', project: 'Louvered Pergola 12×16', value: 22000, status: 'rejected', slot: '2026-04-19T10:00:00Z', permit_choice: false, service_category: 'pergolas', pack_items: { structure: ['louvered'], size: ['12x16'], addons: ['fans'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-04T15:45:00Z' },
-  { id: 'L-0008', homeowner_id: 'ho-2', vendor_id: 'v-4', project: 'Stamped Concrete Driveway', value: 12000, status: 'completed', slot: '2026-04-10T09:00:00Z', permit_choice: false, service_category: 'driveways', pack_items: { surface: ['stamped'], scope: ['full'], addons: ['drainage'] }, sq_ft: 2400, financing: false, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-03-28T10:00:00Z' },
 ]
 
 // ─── Closed Sales ───
+// Ship #233 — trimmed to v-1 entries only to match MOCK_LEADS trim.
 export const MOCK_CLOSED_SALES: ClosedSale[] = [
-  { id: 'cs-1', lead_id: 'L-0008', vendor_id: 'v-4', homeowner_id: 'ho-2', sale_amount: 12000, vendor_share: 10200, commission: 1800, commission_paid: true, commission_paid_at: '2026-04-12T10:00:00Z', closed_at: '2026-04-10T15:00:00Z', homeowner_name: 'James Thompson', project: 'Stamped Concrete Driveway' },
-  { id: 'cs-2', lead_id: 'L-0003', vendor_id: 'v-3', homeowner_id: 'ho-3', sale_amount: 65000, vendor_share: 55250, commission: 9750, commission_paid: false, closed_at: '2026-04-09T12:00:00Z', homeowner_name: 'Sarah Chen', project: 'Resort Pool with Spa & LED' },
   { id: 'cs-3', lead_id: 'L-0001', vendor_id: 'v-1', homeowner_id: 'ho-1', sale_amount: 28500, vendor_share: 24225, commission: 4275, commission_paid: false, closed_at: '2026-04-08T16:00:00Z', homeowner_name: 'Maria Rodriguez', project: 'Full Roof Replacement — Barrel Tile' },
 ]
 
@@ -68,13 +66,12 @@ export const MOCK_CATALOG: CatalogItem[] = [
 ]
 
 // ─── Messages ───
+// Ship #233 — trimmed m-5/m-6 (L-0002 thread) after MOCK_LEADS trim.
 export const MOCK_MESSAGES: Message[] = [
   { id: 'm-1', lead_id: 'L-0001', sender_id: 'ho-1', content: 'Hi, I wanted to confirm the barrel tile option includes removal of the old roof?', message_type: 'text', created_at: '2026-04-07T15:00:00Z' },
   { id: 'm-2', lead_id: 'L-0001', sender_id: 'v-1', content: 'Yes absolutely! Full tear-off, new underlayment, and barrel tile installation are all included. I\'ll also handle the permit filing.', message_type: 'text', created_at: '2026-04-07T15:12:00Z' },
   { id: 'm-3', lead_id: 'L-0001', sender_id: 'v-1', content: '', message_type: 'quote', quote_data: { items: [{ name: 'Barrel Tile Roof (2,100 sq ft)', price: 18375 }, { name: 'Tear-off & Disposal', price: 4200 }, { name: 'Gutter Installation', price: 3600 }, { name: 'Permit & Inspection', price: 2325 }], total: 28500 }, created_at: '2026-04-07T15:15:00Z' },
   { id: 'm-4', lead_id: 'L-0001', sender_id: 'ho-1', content: 'That looks great! See you on the 14th.', message_type: 'text', created_at: '2026-04-07T15:30:00Z' },
-  { id: 'm-5', lead_id: 'L-0002', sender_id: 'ho-2', content: 'Do you offer financing for the full home impact window package?', message_type: 'text', created_at: '2026-04-08T10:00:00Z' },
-  { id: 'm-6', lead_id: 'L-0002', sender_id: 'v-2', content: 'Yes! We partner with GreenSky for 0% APR for 18 months on qualifying orders over $20,000.', message_type: 'text', created_at: '2026-04-08T10:08:00Z' },
 ]
 
 // ─── Transactions ───
