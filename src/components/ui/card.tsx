@@ -5,14 +5,21 @@ import { cn } from "@/lib/utils"
 function Card({
   className,
   size = "default",
+  flat = false,
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> & { size?: "default" | "sm"; flat?: boolean }) {
+  // Ship #245 — floating-card effect applied by default platform-wide per
+  // Rodolfo directive. `flat` opt-out escape hatch for surfaces that
+  // shouldn't lift (dialog-internal cards, static KPI tiles, info panels).
+  // #246 follow-up will sweep and tag `flat` on specific surfaces after
+  // Rodolfo field-tests which surfaces feel wrong with the float.
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        !flat && "shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 ease-out",
         className
       )}
       {...props}
