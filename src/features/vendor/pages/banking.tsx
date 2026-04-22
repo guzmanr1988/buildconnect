@@ -25,6 +25,8 @@ import { PageHeader } from '@/components/shared/page-header'
 import { MOCK_CLOSED_SALES, MOCK_VENDORS } from '@/lib/mock-data'
 import type { ClosedSale } from '@/types'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import {
   useVendorBillingStore,
   PAYMENT_METHOD_LABELS,
@@ -37,8 +39,6 @@ import { useVendorScope } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
 
-const VENDOR_ID = 'v-1'
-
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 }
@@ -48,10 +48,57 @@ function fmtDate(iso: string) {
 }
 
 export default function VendorBanking() {
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
-  const commPct = vendor.commission_pct
+  // Ship #234 — swap VENDOR_ID='v-1' hardcode for useVendorScope so banking
+  // keys the SAME vendor as dashboard/lead-inbox/profile/messages. Resolves
+  // the LS-alias-first, UUID-map-second, profile.id-fallback chain per the
+  // banked useVendorScope discipline. Previously banking was v-1-only and
+  // invisible to v-2..v-5 demo vendors.
+  const { vendorId: VENDOR_ID } = useVendorScope()
+  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID) ?? MOCK_VENDORS[0]
+
+  // Ship #234 — admin commission-% override propagation. Matches the
+  // admin/overview resolveCommissionPct pattern (admin/overview.tsx
+  // lines 101-125). When admin edits a vendor's commission % on
+  // /admin/vendors, vendor banking KPIs + live-sale synthesis pick up
+  // the new rate on next render via zustand subscription.
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const commPct = vendorCommissionOverrides[VENDOR_ID] ?? vendor.commission_pct
   const vendorPct = 100 - commPct
-  const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
+
+  // Ship #234 — merge vendor-mark-sold (sentProjects status='sold') into
+  // the closed-sales pipeline so vendor banking surfaces QA flow revenue,
+  // not only the static MOCK_CLOSED_SALES fixture. Synthesizes ClosedSale-
+  // shape rows from sentProjects with commission computed via the current
+  // effective rate. Matches admin/overview mockSoldSales pattern.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const sales = useMemo<ClosedSale[]>(() => {
+    const fixture = MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID)
+    const live = sentProjects
+      .filter((p) =>
+        p.contractor?.vendor_id === VENDOR_ID
+          && p.status === 'sold'
+          && typeof p.saleAmount === 'number'
+          && p.saleAmount > 0,
+      )
+      .map<ClosedSale>((p) => {
+        const saleAmount = p.saleAmount as number
+        const commission = Math.round(saleAmount * (commPct / 100))
+        return {
+          id: `live-${p.id}`,
+          lead_id: `L-${p.id.slice(0, 4).toUpperCase()}`,
+          vendor_id: VENDOR_ID,
+          homeowner_id: 'live',
+          sale_amount: saleAmount,
+          vendor_share: saleAmount - commission,
+          commission,
+          commission_paid: false,
+          closed_at: p.soldAt ?? p.sentAt,
+          homeowner_name: p.homeowner?.name ?? 'Customer',
+          project: p.item?.serviceName ?? '',
+        }
+      })
+    return [...fixture, ...live]
+  }, [sentProjects, VENDOR_ID, commPct])
 
   // Ship #188 / #189 — payment methods are a list per vendor. Source
   // is vendor-billing-store.paymentMethodsByVendor (post-#189 migrate
