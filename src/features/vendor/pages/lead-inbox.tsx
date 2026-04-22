@@ -11,6 +11,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -281,7 +282,7 @@ export default function LeadInbox() {
                             <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 break-words">{lead.project}</p>
                             <div className="flex items-center gap-3 mt-2 flex-wrap">
-                              <StatusBadge status={lead.status} />
+                              <StatusBadge status={lead.status} label={resolveLeadStatusLabel(lead)} />
                               <span className="text-xs text-muted-foreground">{fmtDate(lead.received_at)}</span>
                             </div>
                           </div>

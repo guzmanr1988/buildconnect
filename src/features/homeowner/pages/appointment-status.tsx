@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -207,7 +208,7 @@ export function AppointmentStatusPage() {
                     ? 'Scheduled - Pending Approval'
                     : lead.status === 'confirmed'
                       ? 'Approved'
-                      : undefined
+                      : resolveLeadStatusLabel({ status: lead.status, soldAt: sentProject?.soldAt })
                 }
               />
             </div>

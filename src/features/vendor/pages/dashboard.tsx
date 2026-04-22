@@ -17,6 +17,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Separator } from '@/components/ui/separator'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
@@ -539,7 +540,11 @@ export default function VendorDashboard() {
                   <span className="text-sm font-bold">{fmt(lead.value)}</span>
                   <StatusBadge
                     status={lead.status}
-                    label={isCancelledLead(lead) && lead.status === 'rejected' ? 'Cancelled' : undefined}
+                    label={
+                      isCancelledLead(lead) && lead.status === 'rejected'
+                        ? 'Cancelled'
+                        : resolveLeadStatusLabel(lead as Lead & { soldAt?: string })
+                    }
                   />
                   {hasPendingCancel && (
                     <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] font-semibold gap-1">
@@ -788,9 +793,7 @@ export default function VendorDashboard() {
           </div>
         </LeadStatusTile>
         <LeadStatusTile
-          title="Project Sold"
-          subtitle="active"
-          subtitleColor="text-emerald-600"
+          title="Sold, Active"
           count={projectSold.length}
           color="bg-primary"
           icon={Handshake}
@@ -858,7 +861,11 @@ export default function VendorDashboard() {
                 <div className="flex items-center gap-2">
                   <StatusBadge
                     status={selected.status}
-                    label={isCancelledLead(selected) && selected.status === 'rejected' ? 'Cancelled' : undefined}
+                    label={
+                      isCancelledLead(selected) && selected.status === 'rejected'
+                        ? 'Cancelled'
+                        : resolveLeadStatusLabel(selected as Lead & { soldAt?: string })
+                    }
                   />
                   <span className="text-xs text-muted-foreground">{selected.id}</span>
                 </div>

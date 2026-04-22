@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -263,7 +264,7 @@ export default function VendorCalendar() {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm font-bold">{fmtTime(lead.slot)}</span>
-                        <StatusBadge status={lead.status} />
+                        <StatusBadge status={lead.status} label={resolveLeadStatusLabel(lead)} />
                       </div>
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-muted-foreground shrink-0" />

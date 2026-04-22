@@ -201,7 +201,7 @@ export default function WorkflowPage() {
   const stages = [
     { title: 'New Leads', subtitle: undefined, subtitleColor: undefined, icon: Inbox, color: 'bg-amber-500', borderColor: 'border-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/20', items: newLeads },
     { title: 'Scheduled Leads', subtitle: undefined, subtitleColor: undefined, icon: CalendarCheck, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: scheduledLeads },
-    { title: 'Project Sold', subtitle: 'active', subtitleColor: 'text-emerald-600', icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: projectSold },
+    { title: 'Sold, Active', subtitle: undefined, subtitleColor: undefined, icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: projectSold },
     { title: 'Projects Completed', subtitle: undefined, subtitleColor: undefined, icon: Archive, color: 'bg-slate-500', borderColor: 'border-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-950/20', items: projectsCompleted },
     { title: 'Cancelled Projects', subtitle: undefined, subtitleColor: undefined, icon: X, color: 'bg-destructive', borderColor: 'border-destructive/30', bgColor: 'bg-destructive/5 dark:bg-destructive/10', items: cancelledProjects },
   ]
