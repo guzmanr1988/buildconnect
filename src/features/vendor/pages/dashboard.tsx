@@ -1140,7 +1140,7 @@ export default function VendorDashboard() {
                                   for picking context. SelectValue children
                                   override the default (mirror-SelectItem-
                                   children) render. */}
-                              <SelectValue placeholder="Choose an account representative for this lead…">
+                              <SelectValue placeholder="Choose an account representative…">
                                 {selectedRepId
                                   ? accountReps.find((r) => r.id === selectedRepId)?.name
                                   : null}
