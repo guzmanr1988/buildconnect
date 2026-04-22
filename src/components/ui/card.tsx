@@ -19,7 +19,14 @@ function Card({
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        !flat && "shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 ease-out",
+        // Ship #247 — pointer-fine gate on transform utilities. :active
+        // fires on touchstart on touch devices, and the resulting scale
+        // transform interferes with the browser's scroll-gesture detection
+        // on horizontal-swipe containers (Rodolfo-surfaced mobile regression
+        // post-#245). Tailwind v4 pointer-fine: variant gates to
+        // mouse/trackpad only; touch devices see the shadow-md baseline
+        // without any transform, so swipe gestures pass through unblocked.
+        !flat && "shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]",
         className
       )}
       {...props}

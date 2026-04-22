@@ -292,7 +292,7 @@ export function CartPage() {
               const Icon = SERVICE_ICONS[project.item.serviceId] || ShoppingCart
               const gradient = ICON_GRADIENTS[project.item.serviceId] || 'from-blue-400 to-blue-600'
               return (
-                <div key={project.id} className="rounded-xl border bg-card p-4 shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 ease-out">
+                <div key={project.id} className="rounded-xl border bg-card p-4 shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       'flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br shadow-sm shrink-0',
@@ -454,7 +454,7 @@ export function CartPage() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.1 + i * 0.05 }}
-              className="rounded-xl border bg-card p-5 shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 ease-out"
+              className="rounded-xl border bg-card p-5 shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
@@ -705,7 +705,7 @@ export function CartPage() {
               return (
                 <div
                   key={project.id}
-                  className="rounded-xl border bg-card p-4 shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] transition-all duration-200 ease-out"
+                  className="rounded-xl border bg-card p-4 shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]"
                 >
                   <div className="flex items-center gap-3">
                     <div className={cn(
