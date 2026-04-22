@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -268,14 +268,25 @@ export function CartPage() {
                 Sent to Contractor
                 <Badge variant="secondary" className="text-xs">{sentProjects.length}</Badge>
               </h2>
-              {sentExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', sentExpanded && 'rotate-180')} />
             </button>
           ) : (
             <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
               Sent to Contractor
             </h2>
           )}
-          {(!shouldCollapseSent || sentExpanded) && (
+          {/* Ship #243 — CSS grid-template-rows collapse animation (idiom
+              0fr → 1fr with inner overflow-hidden). Library-free, bypasses
+              the framer-motion measurement-chain-fragility class entirely
+              per #228 lesson. Fully expanded when under-threshold via
+              isSentOpen computed on the collapsed bool. */}
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows] duration-200 ease-out',
+              (!shouldCollapseSent || sentExpanded) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+            )}
+          >
+            <div className="overflow-hidden">
           <div className="flex flex-col gap-3">
             {sentProjects.map((project) => {
               const Icon = SERVICE_ICONS[project.item.serviceId] || ShoppingCart
@@ -377,7 +388,8 @@ export function CartPage() {
               )
             })}
           </div>
-          )}
+            </div>
+          </div>
         </div>
         {cancelDialogJsx}
       </div>
@@ -670,14 +682,22 @@ export function CartPage() {
                 Sent to Contractor
                 <Badge variant="secondary" className="text-xs">{sentProjects.length}</Badge>
               </h2>
-              {sentExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', sentExpanded && 'rotate-180')} />
             </button>
           ) : (
             <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
               Sent to Contractor
             </h2>
           )}
-          {(!shouldCollapseSent || sentExpanded) && (
+          {/* Ship #243 — CSS grid-template-rows collapse animation. See
+              first branch for full rationale. */}
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows] duration-200 ease-out',
+              (!shouldCollapseSent || sentExpanded) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+            )}
+          >
+            <div className="overflow-hidden">
           <div className="flex flex-col gap-3">
             {sentProjects.map((project) => {
               const Icon = SERVICE_ICONS[project.item.serviceId] || ShoppingCart
@@ -767,7 +787,8 @@ export function CartPage() {
               )
             })}
           </div>
-          )}
+            </div>
+          </div>
         </motion.div>
       )}
       {/* View Summary Sheet */}
