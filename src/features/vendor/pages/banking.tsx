@@ -37,6 +37,8 @@ import { useVendorScope } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
 
+const VENDOR_ID = 'v-1'
+
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 }
@@ -46,21 +48,10 @@ function fmtDate(iso: string) {
 }
 
 export default function VendorBanking() {
-  // Ship #219 — replace hardcoded VENDOR_ID='v-1' + MOCK_VENDORS.find(!)
-  // pattern that crashed post-#217 when v-1 was removed from fixtures.
-  // Resolves via useVendorScope (UUID-map → email-match) with
-  // MOCK_VENDORS[0] ultimate fallback. Same pattern as #218 profile.tsx
-  // fix. Non-null-assertion-on-hardcoded-find class: 2nd instance of
-  // the latent-crash-tied-to-fixture-invariant pattern that #217
-  // exposed across the codebase.
-  const { vendorId: VENDOR_ID } = useVendorScope()
-  const profileEmail = useAuthStore((s) => s.profile?.email)
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)
-    ?? MOCK_VENDORS.find((v) => v.email === profileEmail)
-    ?? MOCK_VENDORS[0]
+  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
   const commPct = vendor.commission_pct
   const vendorPct = 100 - commPct
-  const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [VENDOR_ID])
+  const sales = useMemo(() => MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID), [])
 
   // Ship #188 / #189 — payment methods are a list per vendor. Source
   // is vendor-billing-store.paymentMethodsByVendor (post-#189 migrate
