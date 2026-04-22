@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { PageHeader } from '@/components/shared/page-header'
 import { MOCK_SETTINGS } from '@/lib/mock-data'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { AppSettings } from '@/types'
 
 const fadeUp = {
@@ -28,6 +29,9 @@ const fadeUp = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
   const [saved, setSaved] = useState(false)
+  // Ship #246 — Match Radius binding from admin-moderation-store.
+  const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
+  const setMatchRadius = useAdminModerationStore((s) => s.setMatchRadius)
 
   // Extended settings state
   const [ext, setExt] = useState({
@@ -331,6 +335,47 @@ export default function SettingsPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Ship #246 — Match Radius (geo-match Phase 1). Platform-wide
+          distance filter on vendor-compare; admin tunable 5-300 miles,
+          default 60. Persisted via admin-moderation-store. */}
+      <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible">
+        <Card className="rounded-xl hover:shadow-md transition">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-primary" />
+              Match Radius
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Homeowners only see contractors within this distance of their address on the vendor-compare step.
+              Adjust to control the local-match tightness.
+            </p>
+            <div className="flex items-end gap-4 flex-wrap">
+              <div className="space-y-2">
+                <Label htmlFor="match-radius" className="text-sm font-medium">Radius (miles)</Label>
+                <Input
+                  id="match-radius"
+                  type="number"
+                  min={5}
+                  max={300}
+                  step={5}
+                  value={matchRadiusMiles}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    if (Number.isFinite(n)) setMatchRadius(n)
+                  }}
+                  className="w-28"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground pb-2">
+                Range 5–300 miles. Current: <span className="font-semibold text-foreground">{matchRadiusMiles} mi</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Feature Flags */}
       <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible">

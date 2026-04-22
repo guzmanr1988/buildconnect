@@ -9,6 +9,9 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useCartStore } from '@/stores/cart-store'
+import { useAuthStore } from '@/stores/auth-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { haversineMiles } from '@/lib/geo-distance'
 import {
   computeVendorTotal,
   formatPriceCents,
@@ -18,13 +21,45 @@ import {
 } from '@/lib/api/pricing'
 import { cn } from '@/lib/utils'
 
-// Feature the first 3 mock vendors (Apex / Shield / Paradise) that have been
-// bridged to real Supabase profiles + seeded vendor_option_prices rows.
-const featuredVendors = MOCK_VENDORS.slice(0, 3)
-
 export function VendorComparePage() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
+  const profile = useAuthStore((s) => s.profile)
+  const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
+
+  // Ship #246 — geo-match Phase 1 filter.
+  // Category match: vendor covers at least one service_category the
+  //   homeowner has in cart (cartItems.serviceId).
+  // Distance match: haversine(vendor, homeowner) <= admin matchRadiusMiles.
+  //   If homeowner has no lat/lng on profile (unseeded demo addresses,
+  //   new signups pre-geocoding), distance filter falls through permissive
+  //   — the empty-state messaging surfaces this case. Tranche-2 geocoding
+  //   replaces the demo-seeded lat/lng with real coords and the fall-through
+  //   narrows to "geocoding failed" edge cases only.
+  const cartCategories = useMemo<Set<string>>(
+    () => new Set(cartItems.map((i) => i.serviceId)),
+    [cartItems],
+  )
+  const hasHomeownerCoord =
+    typeof profile?.latitude === 'number' && typeof profile?.longitude === 'number'
+
+  const featuredVendors = useMemo(() => {
+    const base = MOCK_VENDORS.filter((v) => {
+      // If cart is non-empty, only include vendors covering at least one
+      // cart category. Empty cart → skip category filter (let them browse).
+      if (cartCategories.size > 0) {
+        const covers = v.service_categories.some((c) => cartCategories.has(c))
+        if (!covers) return false
+      }
+      // Distance filter — only applies when homeowner has lat/lng.
+      if (hasHomeownerCoord && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
+        const miles = haversineMiles(profile!.latitude, profile!.longitude, v.latitude, v.longitude)
+        if (miles > matchRadiusMiles) return false
+      }
+      return true
+    })
+    return base
+  }, [cartCategories, hasHomeownerCoord, profile, matchRadiusMiles])
 
   const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
   const [loading, setLoading] = useState(true)
@@ -76,9 +111,11 @@ export function VendorComparePage() {
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
       : null
-    const highestRated = featuredVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+    const highestRated = featuredVendors.length > 0
+      ? featuredVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+      : null
     return { bestPrice, highestRated }
-  }, [totalsByVendor])
+  }, [totalsByVendor, featuredVendors])
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,6 +131,26 @@ export function VendorComparePage() {
       {fetchError && (
         <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200">
           Could not load vendor pricing: {fetchError}. Showing vendor list without totals.
+        </div>
+      )}
+
+      {/* Ship #246 — empty-state when geo+category filter yields zero.
+          Differentiates the "no coverage in your area" case from a generic
+          "no vendors" state so the homeowner knows to adjust radius (via
+          admin) or pick a different project category. */}
+      {featuredVendors.length === 0 && (
+        <div className="rounded-xl border border-dashed p-8 text-center space-y-2">
+          <p className="text-base font-semibold text-foreground">No contractors in your area</p>
+          {hasHomeownerCoord ? (
+            <p className="text-sm text-muted-foreground">
+              No contractors within {matchRadiusMiles} miles of your address match the selected services.
+              Try expanding the radius in admin Settings or adjusting the services in your project.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Add your address to your profile so we can match you with local contractors.
+            </p>
+          )}
         </div>
       )}
 

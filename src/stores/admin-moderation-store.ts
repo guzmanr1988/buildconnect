@@ -33,6 +33,12 @@ interface AdminModerationState {
   // kratos msg 1776730432379 (Rodolfos admin-sets-vendor-commission-% ask).
   vendorCommissionOverrides: Record<string, number>
   vendorProfileOverrides: Record<string, VendorProfileOverride>
+  // Ship #246 — platform-wide vendor-match distance radius (miles).
+  // Applies to homeowner vendor-compare filter: only contractors within
+  // this radius of the homeowner's address are shown. Admin tunable
+  // via /admin/settings Match Radius card. Default 60 miles.
+  matchRadiusMiles: number
+  setMatchRadius: (miles: number) => void
   suspendHomeowner: (id: string) => void
   reactivateHomeowner: (id: string) => void
   getHomeownerStatus: (id: string, defaultStatus: HomeownerStatus) => HomeownerStatus
@@ -53,6 +59,12 @@ export const useAdminModerationStore = create<AdminModerationState>()(
       homeownerStatusOverrides: {},
       vendorCommissionOverrides: {},
       vendorProfileOverrides: {},
+      matchRadiusMiles: 60,
+
+      setMatchRadius: (miles) => {
+        const clamped = Math.max(5, Math.min(300, Math.round(miles)))
+        set({ matchRadiusMiles: clamped })
+      },
 
       suspendHomeowner: (id) =>
         set((state) => ({

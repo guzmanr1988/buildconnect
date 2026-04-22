@@ -48,6 +48,12 @@ export interface Profile {
   role: UserRole
   phone: string
   address: string
+  // Ship #246 — geo-match Phase 1. Optional lat/lng for distance filter
+  // on vendor-compare. Fixture-seeded for demo vendors/homeowners; real
+  // values land when Tranche-2 geocoding goes live (Supabase Edge Fn +
+  // Mapbox/Google). Missing coord → unfiltered-by-distance fall-through.
+  latitude?: number
+  longitude?: number
   // Additional properties beyond the primary address. A homeowner managing
   // multiple properties can reach them from the per-service configurator
   // address selector. Zustand-only / mock-bridged for now — Supabase JSONB
@@ -87,6 +93,9 @@ export interface Lead {
   email: string
   homeowner_name: string
   received_at: string
+  // Ship #246 — geo-match Phase 1; optional demo-seeded lat/lng.
+  latitude?: number
+  longitude?: number
 }
 
 export interface ClosedSale {
