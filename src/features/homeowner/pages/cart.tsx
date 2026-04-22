@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -67,6 +67,16 @@ export function CartPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelDialogLeadId, setCancelDialogLeadId] = useState<string>('')
   const [cancelReason, setCancelReason] = useState<string>('')
+
+  // Ship #242 — collapse the "Sent to Contractor" section when the list
+  // gets long. Under the threshold, render inline as-before; at/above
+  // threshold, render a clickable header that toggles expand/collapse.
+  // Plain conditional render (no framer-motion height:auto) per the
+  // measurement-chain-fragility lesson banked at #228 — the collapse
+  // animation is skipped in favor of reliable re-expand.
+  const SENT_COLLAPSE_THRESHOLD = 4
+  const shouldCollapseSent = sentProjects.length >= SENT_COLLAPSE_THRESHOLD
+  const [sentExpanded, setSentExpanded] = useState(false)
 
   const openCancelDialog = (leadId: string) => {
     console.log('[homeowner-cancel] OPEN_FIRED layer=sync leadId=', leadId)
@@ -247,9 +257,25 @@ export function CartPage() {
           </Button>
         </div>
         <div className="pt-4 border-t">
-          <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
-            Sent to Contractor
-          </h2>
+          {shouldCollapseSent ? (
+            <button
+              type="button"
+              onClick={() => setSentExpanded((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 mb-4 text-left hover:bg-muted/40 rounded-lg -mx-2 px-2 py-1.5 transition"
+              aria-expanded={sentExpanded}
+            >
+              <h2 className="text-lg font-semibold font-heading text-foreground flex items-center gap-2">
+                Sent to Contractor
+                <Badge variant="secondary" className="text-xs">{sentProjects.length}</Badge>
+              </h2>
+              {sentExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          ) : (
+            <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
+              Sent to Contractor
+            </h2>
+          )}
+          {(!shouldCollapseSent || sentExpanded) && (
           <div className="flex flex-col gap-3">
             {sentProjects.map((project) => {
               const Icon = SERVICE_ICONS[project.item.serviceId] || ShoppingCart
@@ -351,6 +377,7 @@ export function CartPage() {
               )
             })}
           </div>
+          )}
         </div>
         {cancelDialogJsx}
       </div>
@@ -632,9 +659,25 @@ export function CartPage() {
           transition={{ duration: 0.4, delay: 0.3 }}
           className="pt-6 border-t"
         >
-          <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
-            Sent to Contractor
-          </h2>
+          {shouldCollapseSent ? (
+            <button
+              type="button"
+              onClick={() => setSentExpanded((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 mb-4 text-left hover:bg-muted/40 rounded-lg -mx-2 px-2 py-1.5 transition"
+              aria-expanded={sentExpanded}
+            >
+              <h2 className="text-lg font-semibold font-heading text-foreground flex items-center gap-2">
+                Sent to Contractor
+                <Badge variant="secondary" className="text-xs">{sentProjects.length}</Badge>
+              </h2>
+              {sentExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          ) : (
+            <h2 className="text-lg font-semibold font-heading text-foreground mb-4">
+              Sent to Contractor
+            </h2>
+          )}
+          {(!shouldCollapseSent || sentExpanded) && (
           <div className="flex flex-col gap-3">
             {sentProjects.map((project) => {
               const Icon = SERVICE_ICONS[project.item.serviceId] || ShoppingCart
@@ -724,6 +767,7 @@ export function CartPage() {
               )
             })}
           </div>
+          )}
         </motion.div>
       )}
       {/* View Summary Sheet */}
