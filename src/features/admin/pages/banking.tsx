@@ -676,10 +676,20 @@ export default function BankingPage() {
           <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
             <Card className="rounded-xl shadow-sm hover:shadow-md transition">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ArrowDownToLine className="h-4 w-4 text-primary" />
-                  Deposit History
-                </CardTitle>
+                {/* Ship #236 — demo-data label per math-linkage audit.
+                    depositHistory is a hardcoded fixture (no real deposit
+                    log store exists yet); tile displays sample entries
+                    until Tranche 2 wires the action log. Label is honest
+                    UX — admin sees at a glance what's real vs seeded. */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="flex items-center gap-2">
+                    <ArrowDownToLine className="h-4 w-4 text-primary" />
+                    Deposit History
+                  </CardTitle>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    Demo data · Tranche 2 pending
+                  </span>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-lg border">
@@ -778,10 +788,16 @@ export default function BankingPage() {
           <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
             <Card className="rounded-xl shadow-sm hover:shadow-md transition">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ArrowUpFromLine className="h-4 w-4 text-primary" />
-                  Disbursement History
-                </CardTitle>
+                {/* Ship #236 — demo-data label (see Deposit History comment). */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="flex items-center gap-2">
+                    <ArrowUpFromLine className="h-4 w-4 text-primary" />
+                    Disbursement History
+                  </CardTitle>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    Demo data · Tranche 2 pending
+                  </span>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-lg border">
@@ -889,10 +905,16 @@ export default function BankingPage() {
           <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible">
             <Card className="rounded-xl shadow-sm hover:shadow-md transition">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  Salary Payout History
-                </CardTitle>
+                {/* Ship #236 — demo-data label (see Deposit History comment). */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    Salary Payout History
+                  </CardTitle>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    Demo data · Tranche 2 pending
+                  </span>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-lg border">
