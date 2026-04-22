@@ -20,10 +20,10 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
-import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Lead, Vendor, VendorRep } from '@/types'
@@ -81,23 +81,17 @@ export default function VendorDashboard() {
     }
   }, [profile, navigate])
 
-  // Resolve which MOCK_VENDORS fixture (if any) this authed vendor maps to.
-  // The 3 featured demo vendors (apex-demo / shield-demo / paradise-demo
-  // seeded by scripts/seed-vendor-prices.mjs) have their Supabase UUIDs in
-  // DEMO_VENDOR_UUID_BY_MOCK_ID — reverse-lookup gives the mock-id ('v-1' /
-  // 'v-2' / 'v-3') for fixture display. Any other vendor account (e.g. the
-  // original vendor@buildc.net demo) resolves to null → display the authed
-  // profile directly with zero mock-lead fixtures.
-  const mockVendorId = useMemo(() => {
-    if (!profile) return null
-    const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(([, uuid]) => uuid === profile.id)
-    return entry ? entry[0] : null
-  }, [profile])
-
-  // VENDOR_ID for filtering mock-data queries: the mock-id when mapped; the
-  // real profile.id otherwise (in which case the filters return empty because
-  // no MOCK_LEADS row has that vendor_id).
-  const VENDOR_ID = mockVendorId ?? profile?.id ?? ''
+  // Ship #225 — swapped dashboard's inline mockVendorId computation to
+  // useVendorScope hook. Prior inline did UUID-map lookup ONLY, missing
+  // the #222 LS-alias that routes generic Vendor demo login to 'v-1'.
+  // Result: dashboard's accountReps + mockLeads + vendor resolution all
+  // computed 'VENDOR_ID = profile.id' (Supabase UUID) for Vendor demo,
+  // and the account-reps dropdown landed empty because SEED_EMPLOYEES
+  // is keyed on 'v-1' not the UUID. useVendorScope has the LS-alias +
+  // email-match + UUID-map chain already wired, so swapping here unifies
+  // the resolver across dashboard + lead-inbox + banking + calendar.
+  // Single-resolver-for-vendor-scope.
+  const { mockVendorId, vendorId: VENDOR_ID } = useVendorScope()
 
   // Ship #224 — Account Rep list for the assign-rep dropdown. Reads
   // active employees from useVendorEmployeesStore keyed by VENDOR_ID,
