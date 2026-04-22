@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { MOCK_TRANSACTIONS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
@@ -131,21 +132,35 @@ export default function TransactionsPage() {
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
+  // Ship #235 — admin commission-% override propagation on mock-synthesized
+  // transaction rows. Previously hardcoded 0.15 (15%) regardless of the
+  // per-vendor override. Matches admin/overview resolveCommissionPct pattern.
+  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+
   const mockSoldTransactions = useMemo<Transaction[]>(() => {
     return sentProjects
       .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
-      .map((p): Transaction => ({
-        id: `mock-tx-${p.id}`,
-        type: 'commission' as TransactionType,
-        status: 'paid' as TransactionStatus,
-        vendor_id: p.contractor?.vendor_id ?? '',
-        company: p.contractor?.company ?? 'Unknown vendor',
-        detail: p.item.serviceName,
-        customer: p.homeowner?.name ?? '',
-        amount: Math.round((p.saleAmount ?? 0) * 0.15),
-        date: p.soldAt!,
-      }))
-  }, [sentProjects])
+      .map((p): Transaction => {
+        const vendorId = p.contractor?.vendor_id
+        const vendor = vendorId
+          ? MOCK_VENDORS.find((v) => v.id === vendorId)
+          : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
+        const effectivePct = vendor
+          ? (vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct)
+          : 15
+        return {
+          id: `mock-tx-${p.id}`,
+          type: 'commission' as TransactionType,
+          status: 'paid' as TransactionStatus,
+          vendor_id: p.contractor?.vendor_id ?? '',
+          company: p.contractor?.company ?? 'Unknown vendor',
+          detail: p.item.serviceName,
+          customer: p.homeowner?.name ?? '',
+          amount: Math.round((p.saleAmount ?? 0) * (effectivePct / 100)),
+          date: p.soldAt!,
+        }
+      })
+  }, [sentProjects, vendorCommissionOverrides])
 
   // Ship #196 — all years that have at least one transaction (merged
   // mock + real + MOCK_TRANSACTIONS fixture), always includes the
