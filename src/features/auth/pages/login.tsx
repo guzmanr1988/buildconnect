@@ -54,50 +54,21 @@ const demoAccounts = [
     icon: Home,
     gradient: 'from-blue-500 to-blue-600',
   },
-  // Ship #214 — vendor demo accounts aligned with the 3 featured mock
-  // vendors (Apex / Shield / Paradise) whose Supabase UUIDs are mapped
-  // in DEMO_VENDOR_UUID_BY_MOCK_ID. Homeowner demo flows target these 3
-  // via vendor-compare; logging in with a matching demo account shows
-  // the correctly-scoped sentProjects on both dashboard tiles and
-  // /vendor/projects list. Previous single generic "Vendor" button
-  // (vendor@buildc.net) was NOT mapped to any mock-vendor-id, so its
-  // dashboard tiles stayed 0 regardless of homeowner-side sends —
-  // mismatch diagnosed in leads-empty arc.
-  {
-    role: 'vendor' as const,
-    email: 'apex@vendor.com',
-    password: import.meta.env.VITE_DEMO_APEX_PW as string | undefined,
-    label: 'Apex (Roofing & Solar)',
-    desc: 'Demo vendor — receives Apex-scoped leads',
-    icon: Wrench,
-    gradient: 'from-amber-500 to-orange-500',
-  },
-  {
-    role: 'vendor' as const,
-    email: 'shield@vendor.com',
-    password: import.meta.env.VITE_DEMO_SHIELD_PW as string | undefined,
-    label: 'Shield (Impact Windows)',
-    desc: 'Demo vendor — receives Shield-scoped leads',
-    icon: Wrench,
-    gradient: 'from-sky-500 to-blue-500',
-  },
-  {
-    role: 'vendor' as const,
-    email: 'paradise@vendor.com',
-    password: import.meta.env.VITE_DEMO_PARADISE_PW as string | undefined,
-    label: 'Paradise (Pools FL)',
-    desc: 'Demo vendor — receives Paradise-scoped leads',
-    icon: Wrench,
-    gradient: 'from-cyan-500 to-teal-500',
-  },
+  // Ship #216 — rolled back the Apex/Shield/Paradise vendor-specific
+  // demo buttons added in #214. Rodolfo: "the demo login have a bunch
+  // of vendors outside" — vendor-specific demos shouldn't sit on the
+  // public-facing login. Generic Vendor button retained for role-based
+  // demo access; per-vendor leads-flow testing via email/password form
+  // with actual Supabase creds (Apex/Shield/Paradise backend accounts
+  // still exist, just not button-exposed).
   {
     role: 'vendor' as const,
     email: 'vendor@buildc.net',
     password: import.meta.env.VITE_DEMO_VENDOR_PW as string | undefined,
-    label: 'Generic Vendor',
-    desc: 'Unscoped demo — no pre-assigned leads',
+    label: 'Vendor',
+    desc: 'Manage leads & sales',
     icon: Wrench,
-    gradient: 'from-stone-500 to-stone-600',
+    gradient: 'from-amber-500 to-orange-500',
   },
   {
     role: 'admin' as const,
@@ -370,12 +341,11 @@ export function LoginPage() {
               <Separator className="flex-1" />
             </div>
 
-            {/* Ship #215 — 2-column grid on sm+ so the 6 demo tiles
-                (Homeowner + 3 vendor-scoped + Generic Vendor + Admin)
-                fit in 3 rows instead of a 6-deep vertical stack that
-                overflowed the form panel on shorter viewports. Mobile
-                stays single-column for readability. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* Ship #216 — reverted #215's 2-col grid now that the tile
+                count is back to 3 (Homeowner / Vendor / Admin). Vertical
+                flex stack fits cleanly in the form panel without the
+                6-tile overflow that motivated the grid. */}
+            <div className="flex flex-col gap-2">
               {demoAccounts.map((demo, i) => (
                 <motion.div
                   key={demo.role}
