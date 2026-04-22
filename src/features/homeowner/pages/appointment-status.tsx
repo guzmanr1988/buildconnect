@@ -80,27 +80,56 @@ export function AppointmentStatusPage() {
   const sentProject = !mockLead
     ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
     : undefined
-  const baseLead = mockLead
-    ?? (sentProject && {
-      id: `L-${sentProject.id.slice(0, 4).toUpperCase()}`,
-      homeowner_id: 'ho-current',
-      vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
-      project: sentProject.item.serviceName,
-      value: 0,
-      status: sentProjectStatusMap[sentProject.status] ?? 'pending',
-      slot: sentProject.sentAt,
-      permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),
-      service_category: sentProject.item.serviceId as LeadStatus & string,
-      pack_items: sentProject.item.selections,
-      sq_ft: 0,
-      financing: Object.values(sentProject.item.selections ?? {}).flat().includes('financed'),
-      address: sentProject.homeowner?.address || 'Pending site visit',
-      phone: sentProject.homeowner?.phone || '',
-      email: sentProject.homeowner?.email || '',
-      homeowner_name: sentProject.homeowner?.name || 'You',
-      received_at: sentProject.sentAt,
-    } as unknown as typeof MOCK_LEADS[number])
-    ?? MOCK_LEADS[0]
+  // Ship #220 — dropped the `?? MOCK_LEADS[0]` last-resort fallback. That
+  // pattern worked pre-#217 when MOCK_LEADS was pre-seeded; post-#217 the
+  // fixture is empty so MOCK_LEADS[0] is undefined, and downstream
+  // `baseLead.id` accesses crashed on any /home/appointments/<unknown-id>
+  // URL. Same latent-crash-tied-to-fixture-invariant class as the
+  // MOCK_VENDORS.find(!) pattern fixed in #218+#219, expanded to
+  // empty-array-indexed-as-non-empty. Now explicitly null when nothing
+  // resolves, with an empty-state render below.
+  const baseLead: typeof MOCK_LEADS[number] | undefined = mockLead
+    ?? (sentProject
+      ? ({
+          id: `L-${sentProject.id.slice(0, 4).toUpperCase()}`,
+          homeowner_id: 'ho-current',
+          vendor_id: 'v-1', // display-only; real vendor lookup lives on sentProject.contractor
+          project: sentProject.item.serviceName,
+          value: 0,
+          status: sentProjectStatusMap[sentProject.status] ?? 'pending',
+          slot: sentProject.sentAt,
+          permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),
+          service_category: sentProject.item.serviceId as LeadStatus & string,
+          pack_items: sentProject.item.selections,
+          sq_ft: 0,
+          financing: Object.values(sentProject.item.selections ?? {}).flat().includes('financed'),
+          address: sentProject.homeowner?.address || 'Pending site visit',
+          phone: sentProject.homeowner?.phone || '',
+          email: sentProject.homeowner?.email || '',
+          homeowner_name: sentProject.homeowner?.name || 'You',
+          received_at: sentProject.sentAt,
+        } as unknown as typeof MOCK_LEADS[number])
+      : undefined)
+
+  if (!baseLead) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+          <Calendar className="h-10 w-10 text-muted-foreground/60" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold font-heading text-foreground">
+          Appointment not found
+        </h1>
+        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+          We couldn't find an appointment matching this link. It may have been removed or the URL may be stale.
+        </p>
+        <Button asChild size="lg" className="h-11 px-6">
+          <Link to="/home">Back to home</Link>
+        </Button>
+      </div>
+    )
+  }
+
   // Apply lead-status override (Phase C persist) on top of whatever we resolved.
   const lead = leadStatusOverrides[baseLead.id]
     ? { ...baseLead, status: leadStatusOverrides[baseLead.id] }
