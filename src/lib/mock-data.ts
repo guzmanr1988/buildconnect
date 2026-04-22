@@ -7,59 +7,51 @@ export const MOCK_HOMEOWNERS: Profile[] = [
   { id: 'ho-3', email: 'sarah@email.com', name: 'Sarah Chen', role: 'homeowner', phone: '(954) 555-0303', address: '910 Princeton Blvd, Homestead, FL 33032', avatar_color: '#ec4899', initials: 'SC', status: 'active', created_at: '2026-02-20T09:15:00Z' },
 ]
 
-// Ship #217 — collapsed to ONE demo vendor per Rodolfo directive: "one
-// process to know it works how it should and that everything is linked
-// homeowner to vendor and admin see all data make it work". Single mock
-// vendor tied to the Vendor demo login (vendor@buildc.net) via email-
-// match fallback in useVendorScope. Homeowner vendor-compare shows this
-// one card; vendor demo login sees the sentProject; admin workflow sees
-// everything. Clean end-to-end linkage. Pre-#217 5-vendor fixture
-// (Apex/Shield/Paradise/Elite/Cool Breeze) collapsed into this entry.
 export const MOCK_VENDORS: Vendor[] = [
-  {
-    id: 'v-demo',
-    email: 'vendor@buildc.net',
-    name: 'Sage Demo Contractor',
-    role: 'vendor',
-    phone: '(305) 555-1000',
-    address: '1 Sage Plaza, Miami, FL 33131',
-    company: 'Sage Demo Contractors',
-    avatar_color: '#0ea5e9',
-    initials: 'SD',
-    status: 'active',
-    created_at: '2026-01-01T00:00:00Z',
-    service_categories: ['roofing', 'windows_doors', 'pool', 'driveways', 'pergolas', 'air_conditioning', 'bathroom', 'kitchen'],
-    rating: 4.8,
-    response_time: '~2 hours',
-    verified: true,
-    financing_available: true,
-    total_reviews: 42,
-    commission_pct: 15,
-    reps: [
-      { id: 'v-demo-rep-1', name: 'Demo Project Manager', role: 'Project Manager', phone: '(305) 555-2001' },
-      { id: 'v-demo-rep-2', name: 'Demo Site Lead', role: 'Site Lead', phone: '(305) 555-2002' },
-    ],
-  },
+  { id: 'v-1', email: 'apex@vendor.com', name: 'Carlos Mendez', role: 'vendor', phone: '(305) 555-1001', address: '100 NW 7th St, Miami, FL 33136', company: 'Apex Roofing & Solar', avatar_color: '#f59e0b', initials: 'AM', status: 'active', created_at: '2025-11-01T08:00:00Z', service_categories: ['roofing', 'air_conditioning'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 127, commission_pct: 15, reps: [
+    { id: 'v-1-rep-1', name: 'Luis Ortega', role: 'Senior Project Manager', phone: '(305) 555-2001' },
+    { id: 'v-1-rep-2', name: 'Marco DeLeon', role: 'Roofing Lead', phone: '(305) 555-2002' },
+    { id: 'v-1-rep-3', name: 'Jennifer Alvarez', role: 'Solar Specialist', phone: '(305) 555-2003' },
+  ] },
+  { id: 'v-2', email: 'shield@vendor.com', name: 'Tony Rivera', role: 'vendor', phone: '(786) 555-1002', address: '200 SW 8th St, Miami, FL 33130', company: 'Shield Impact Windows', avatar_color: '#3b82f6', initials: 'TR', status: 'active', created_at: '2025-12-10T09:00:00Z', service_categories: ['windows_doors'], rating: 4.9, response_time: '~1 hour', verified: true, financing_available: true, total_reviews: 89, commission_pct: 15, reps: [
+    { id: 'v-2-rep-1', name: 'Roberto Silva', role: 'Senior Installation Lead', phone: '(786) 555-2004' },
+    { id: 'v-2-rep-2', name: 'Patricia Gomez', role: 'Project Coordinator', phone: '(786) 555-2005' },
+  ] },
+  { id: 'v-3', email: 'paradise@vendor.com', name: 'Ana Martinez', role: 'vendor', phone: '(305) 555-1003', address: '300 Brickell Ave, Miami, FL 33131', company: 'Paradise Pools FL', avatar_color: '#06b6d4', initials: 'PM', status: 'active', created_at: '2025-12-20T10:00:00Z', service_categories: ['pool', 'pergolas'], rating: 4.7, response_time: '~3 hours', verified: true, financing_available: false, total_reviews: 64, commission_pct: 10, reps: [
+    { id: 'v-3-rep-1', name: 'Diego Ramirez', role: 'Pool Design Lead', phone: '(305) 555-2006' },
+    { id: 'v-3-rep-2', name: 'Sofia Herrera', role: 'Project Manager', phone: '(305) 555-2007' },
+    { id: 'v-3-rep-3', name: 'Miguel Santos', role: 'Construction Supervisor', phone: '(305) 555-2008' },
+  ] },
+  { id: 'v-4', email: 'elite@vendor.com', name: 'David Kim', role: 'vendor', phone: '(954) 555-1004', address: '400 Las Olas Blvd, Ft Lauderdale, FL 33301', company: 'Elite Paving Co', avatar_color: '#10b981', initials: 'EP', status: 'active', created_at: '2026-01-05T11:00:00Z', service_categories: ['driveways', 'pergolas'], rating: 4.6, response_time: '~4 hours', verified: true, financing_available: false, total_reviews: 43, commission_pct: 15, reps: [
+    { id: 'v-4-rep-1', name: 'Kevin Park', role: 'Site Lead', phone: '(954) 555-2009' },
+    { id: 'v-4-rep-2', name: 'Antonio Reyes', role: 'Paver Foreman', phone: '(954) 555-2010' },
+  ] },
+  { id: 'v-5', email: 'coolbreeze@vendor.com', name: 'Mike Johnson', role: 'vendor', phone: '(305) 555-1005', address: '500 Bird Rd, Miami, FL 33155', company: 'Cool Breeze HVAC', avatar_color: '#ef4444', initials: 'CB', status: 'pending', created_at: '2026-03-01T12:00:00Z', service_categories: ['air_conditioning'], rating: 4.5, response_time: '~2 hours', verified: false, financing_available: true, total_reviews: 21, commission_pct: 10, reps: [
+    { id: 'v-5-rep-1', name: 'Brian Walsh', role: 'HVAC Technician', phone: '(305) 555-2011' },
+    { id: 'v-5-rep-2', name: 'Jessica Tran', role: 'Installation Coordinator', phone: '(305) 555-2012' },
+  ] },
 ]
 
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
 
 // ─── Leads ───
-// Ship #217 — cleared pre-seeded fixture leads per Rodolfo's "wipe out
-// every other lead clean so I can have one process to know it works how
-// it should" directive. Prior 8 fixture leads tied to v-1..v-5 vendors
-// no longer scope-valid now that MOCK_VENDORS collapsed to v-demo.
-// Empty array means no phantom-fixture-notifications fire (addresses the
-// feedback_seeded_fixture_notification_mask class at the data layer).
-// Rodolfo tests the flow end-to-end by creating a fresh lead via the
-// homeowner flow → it's the ONLY lead in the system, easy to verify it
-// lands on vendor + admin surfaces correctly.
-export const MOCK_LEADS: Lead[] = []
+export const MOCK_LEADS: Lead[] = [
+  { id: 'L-0001', homeowner_id: 'ho-1', vendor_id: 'v-1', project: 'Full Roof Replacement — Barrel Tile', value: 28500, status: 'pending', slot: '2026-04-14T09:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['barrel_tile'], service_type: ['replace'], addons: ['gutters'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-07T14:22:00Z' },
+  { id: 'L-0002', homeowner_id: 'ho-2', vendor_id: 'v-2', project: 'Impact Windows — Full Home', value: 42000, status: 'pending', slot: '2026-04-15T10:00:00Z', permit_choice: true, service_category: 'windows_doors', pack_items: { glass_type: ['impact_plus'], products: ['single_hung', 'sliding', 'entry'], scope: ['full'] }, sq_ft: 2400, financing: true, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-04-08T09:45:00Z' },
+  { id: 'L-0003', homeowner_id: 'ho-3', vendor_id: 'v-3', project: 'Resort Pool with Spa & LED', value: 65000, status: 'confirmed', slot: '2026-04-16T11:00:00Z', permit_choice: true, service_category: 'pool', pack_items: { model: ['16x32'], paver: ['travertine'], addons: ['spa', 'led'] }, sq_ft: 3200, financing: false, address: '910 Princeton Blvd, Homestead, FL 33032', phone: '(954) 555-0303', email: 'sarah@email.com', homeowner_name: 'Sarah Chen', received_at: '2026-04-06T16:10:00Z' },
+  { id: 'L-0004', homeowner_id: 'ho-1', vendor_id: 'v-4', project: 'Paver Driveway — Full Install', value: 18500, status: 'rescheduled', slot: '2026-04-18T09:00:00Z', permit_choice: false, service_category: 'driveways', pack_items: { surface: ['pavers'], scope: ['full'], addons: ['border', 'lighting'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-05T11:30:00Z' },
+  { id: 'L-0005', homeowner_id: 'ho-2', vendor_id: 'v-1', project: 'Metal Roof + Solar Prep', value: 35000, status: 'pending', slot: '2026-04-17T14:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['metal'], service_type: ['replace'], addons: ['solar_prep', 'insulation'] }, sq_ft: 2400, financing: true, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-04-09T08:15:00Z' },
+  { id: 'L-0006', homeowner_id: 'ho-3', vendor_id: 'v-5', project: 'Central AC 3 Ton + Smart Thermostat', value: 8900, status: 'confirmed', slot: '2026-04-14T14:00:00Z', permit_choice: false, service_category: 'air_conditioning', pack_items: { system: ['central_3'], addons: ['thermostat'] }, sq_ft: 3200, financing: false, address: '910 Princeton Blvd, Homestead, FL 33032', phone: '(954) 555-0303', email: 'sarah@email.com', homeowner_name: 'Sarah Chen', received_at: '2026-04-08T13:00:00Z' },
+  { id: 'L-0007', homeowner_id: 'ho-1', vendor_id: 'v-3', project: 'Louvered Pergola 12×16', value: 22000, status: 'rejected', slot: '2026-04-19T10:00:00Z', permit_choice: false, service_category: 'pergolas', pack_items: { structure: ['louvered'], size: ['12x16'], addons: ['fans'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-04T15:45:00Z' },
+  { id: 'L-0008', homeowner_id: 'ho-2', vendor_id: 'v-4', project: 'Stamped Concrete Driveway', value: 12000, status: 'completed', slot: '2026-04-10T09:00:00Z', permit_choice: false, service_category: 'driveways', pack_items: { surface: ['stamped'], scope: ['full'], addons: ['drainage'] }, sq_ft: 2400, financing: false, address: '5678 Kendall Dr, Miami, FL 33156', phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-03-28T10:00:00Z' },
+]
 
 // ─── Closed Sales ───
-// Ship #217 — same rationale as MOCK_LEADS above. Pre-seeded closed
-// sales tied to v-1/v-3/v-4 vendors no longer scope-valid. Clean slate.
-export const MOCK_CLOSED_SALES: ClosedSale[] = []
+export const MOCK_CLOSED_SALES: ClosedSale[] = [
+  { id: 'cs-1', lead_id: 'L-0008', vendor_id: 'v-4', homeowner_id: 'ho-2', sale_amount: 12000, vendor_share: 10200, commission: 1800, commission_paid: true, commission_paid_at: '2026-04-12T10:00:00Z', closed_at: '2026-04-10T15:00:00Z', homeowner_name: 'James Thompson', project: 'Stamped Concrete Driveway' },
+  { id: 'cs-2', lead_id: 'L-0003', vendor_id: 'v-3', homeowner_id: 'ho-3', sale_amount: 65000, vendor_share: 55250, commission: 9750, commission_paid: false, closed_at: '2026-04-09T12:00:00Z', homeowner_name: 'Sarah Chen', project: 'Resort Pool with Spa & LED' },
+  { id: 'cs-3', lead_id: 'L-0001', vendor_id: 'v-1', homeowner_id: 'ho-1', sale_amount: 28500, vendor_share: 24225, commission: 4275, commission_paid: false, closed_at: '2026-04-08T16:00:00Z', homeowner_name: 'Maria Rodriguez', project: 'Full Roof Replacement — Barrel Tile' },
+]
 
 // ─── Catalog Items ───
 export const MOCK_CATALOG: CatalogItem[] = [

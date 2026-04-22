@@ -422,30 +422,6 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: 'buildconnect-projects',
-      // Ship #217 — bumped persist version to 1 to force-wipe pre-#217
-      // state on hydration. Rodolfo directive: "wipe out every other
-      // lead clean so I can have one process to know it works how it
-      // should". With MOCK_VENDORS collapsed to a single v-demo vendor,
-      // any pre-existing sentProjects with contractor.vendor_id='v-1'
-      // through 'v-5' are now scope-orphaned. Clean slate matches the
-      // "every other lead" directive at the stored-state layer.
-      version: 1,
-      migrate: (persistedState: unknown, version: number) => {
-        // Any pre-version-1 state (which has no version marker) gets
-        // reset to the initial shape. Fresh start.
-        if (version < 1) {
-          return {
-            sentProjects: [],
-            assignedRepByLead: {},
-            leadStatusOverrides: {},
-            cancellationRequestsByLead: {},
-            rescheduleRequestsByLead: {},
-            leadConfirmedAtByLead: {},
-            repAssignedAtByLead: {},
-          } as Partial<ProjectsState>
-        }
-        return persistedState as Partial<ProjectsState>
-      },
       // Hydration-race guard: default zustand-persist shallow-merge makes
       // persistedState override currentState entirely. If a sentProject gets
       // written (e.g. booking-confirmation.useEffect → sendProject) BEFORE

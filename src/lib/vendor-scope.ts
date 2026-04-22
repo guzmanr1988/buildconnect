@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
-import { MOCK_VENDORS } from '@/lib/mock-data'
 
 /**
  * Set of mock-vendor ids that MOCK_LEADS + MOCK_CLOSED_SALES fixtures are
@@ -39,27 +38,11 @@ export function useVendorScope(): {
   const profile = useAuthStore((s) => s.profile)
   return useMemo(() => {
     if (!profile) return { mockVendorId: null, vendorId: '', isMock: false }
-    // Primary: UUID-mapped mock vendor via DEMO_VENDOR_UUID_BY_MOCK_ID.
-    // Seeded for the Apex/Shield/Paradise demo vendors pre-#217.
     const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(
       ([, uuid]) => uuid === profile.id
     )
-    if (entry) {
-      const mockVendorId = entry[0]
-      return { mockVendorId, vendorId: mockVendorId, isMock: true }
-    }
-    // Ship #217 fallback: email-match against MOCK_VENDORS. Added so
-    // the single v-demo vendor linked to vendor@buildc.net demo login
-    // resolves correctly without requiring its real Supabase UUID in
-    // the DEMO_VENDOR_UUID_BY_MOCK_ID map (that map is auto-generated
-    // by scripts/seed-vendor-prices.mjs and only contains the
-    // originally-seeded demo vendor UUIDs — adding v-demo to it
-    // requires a separate Bode action if desired, but the email-match
-    // fallback makes the demo-vendor flow work without it).
-    const byEmail = MOCK_VENDORS.find((v) => v.email === profile.email)
-    if (byEmail) {
-      return { mockVendorId: byEmail.id, vendorId: byEmail.id, isMock: true }
-    }
-    return { mockVendorId: null, vendorId: profile.id, isMock: false }
+    const mockVendorId = entry ? entry[0] : null
+    const vendorId = mockVendorId ?? profile.id
+    return { mockVendorId, vendorId, isMock: !!mockVendorId }
   }, [profile])
 }
