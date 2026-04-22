@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_BUGS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
@@ -59,17 +60,49 @@ export function AdminLayout() {
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // Admin notifications = open bugs awaiting triage. Simple proxy for
-  // "something needs admin attention" until a richer admin-events stream
-  // lands (Tranche-2). Bell now renders on admin too — previously missing.
+  // Admin notifications = open bugs + cross-role activity (god-view).
+  // Ship #240 — extended beyond bug-only to surface platform-wide
+  // reschedule + cancellation activity. No scoping filter since admin
+  // sees ALL vendors + homeowners by design. To extend with future
+  // event-types, add a filter-and-map block and concat into
+  // `notifications`.
   const openBugs = MOCK_BUGS.filter((b) => b.status === 'open')
-  const notifications: NotificationItem[] = openBugs.map((b) => ({
-    id: b.id,
-    title: `Open bug · ${b.priority}`,
-    description: b.description,
-    icon: AlertCircle,
-    iconColor: b.priority === 'high' ? 'text-red-500' : b.priority === 'medium' ? 'text-amber-500' : 'text-muted-foreground',
-  }))
+  const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
+  const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
+
+  const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)
+    .filter(([, r]) => r.status === 'pending')
+    .map(([leadId, r]) => ({
+      id: `admin-reschedule-${leadId}-${r.requestedBy}`,
+      title: r.requestedBy === 'vendor' ? 'Vendor proposed reschedule' : 'Homeowner proposed reschedule',
+      description: `${leadId} · ${r.proposedDate} · ${r.proposedTime}`,
+      icon: RotateCcw,
+      iconColor: 'text-amber-600',
+      tint: 'bg-amber-50/50 dark:bg-amber-950/20',
+    }))
+
+  const cancellationNotifications: NotificationItem[] = Object.entries(cancellationRequestsMap)
+    .filter(([, c]) => c.status === 'pending')
+    .map(([leadId, c]) => ({
+      id: `admin-cancel-${leadId}`,
+      title: 'Cancellation pending review',
+      description: `${leadId}${c.reason ? ' · ' + c.reason : ''}`,
+      icon: XIcon,
+      iconColor: 'text-destructive',
+      tint: 'bg-destructive/5',
+    }))
+
+  const notifications: NotificationItem[] = [
+    ...openBugs.map((b) => ({
+      id: b.id,
+      title: `Open bug · ${b.priority}`,
+      description: b.description,
+      icon: AlertCircle,
+      iconColor: b.priority === 'high' ? 'text-red-500' : b.priority === 'medium' ? 'text-amber-500' : 'text-muted-foreground',
+    })),
+    ...rescheduleNotifications,
+    ...cancellationNotifications,
+  ]
 
   return (
     <div className="min-h-screen bg-background">

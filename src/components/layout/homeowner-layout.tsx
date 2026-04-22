@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle } from 'lucide-react'
+import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle, RotateCcw, X as XIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -25,15 +27,128 @@ export function HomeownerLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
+  const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
-  const notifications: NotificationItem[] = approvedProjects.map((p) => ({
-    id: p.id,
-    title: 'Project Approved!',
-    description: `Congratulations! The vendor has approved your ${p.item.serviceName} request. Your project is booked.`,
-    icon: CheckCircle2,
-    iconColor: 'text-emerald-500',
-    tint: 'bg-emerald-50/50 dark:bg-emerald-950/20',
-  }))
+
+  // Ship #240 — cross-role notification event derivations (homeowner
+  // perspective). Pattern is "derive from state" (option A): filter
+  // projects-store maps to events relevant TO this homeowner (their
+  // sentProjects). To extend with future event types, add a filter-and-
+  // map block here and concat into `notifications`.
+  const RECENT_RESOLVED_WINDOW_MS = 24 * 60 * 60 * 1000
+  const myLeadIds = new Set<string>(
+    sentProjects.map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`),
+  )
+
+  const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)
+    .filter(([leadId]) => myLeadIds.has(leadId))
+    .flatMap(([leadId, r]) => {
+      // Vendor-initiated pending reschedule — needs homeowner action
+      if (r.status === 'pending' && r.requestedBy === 'vendor') {
+        return [{
+          id: `reschedule-${leadId}-v-pending`,
+          title: 'Vendor proposed a new time',
+          description: `New time: ${r.proposedDate} · ${r.proposedTime}`,
+          icon: RotateCcw,
+          iconColor: 'text-amber-600',
+          tint: 'bg-amber-50/50 dark:bg-amber-950/20',
+        }]
+      }
+      // Homeowner-initiated resolved recently — informational
+      if (r.requestedBy === 'homeowner' && r.resolvedAt) {
+        const age = Date.now() - new Date(r.resolvedAt).getTime()
+        if (age > RECENT_RESOLVED_WINDOW_MS) return []
+        if (r.status === 'approved') {
+          return [{
+            id: `reschedule-${leadId}-h-approved`,
+            title: 'Vendor approved your new time',
+            description: `${r.proposedDate} · ${r.proposedTime}`,
+            icon: CheckCircle2,
+            iconColor: 'text-emerald-600',
+            tint: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+          }]
+        }
+        if (r.status === 'rejected') {
+          return [{
+            id: `reschedule-${leadId}-h-rejected`,
+            title: 'Vendor kept the original time',
+            description: 'Your reschedule request was declined.',
+            icon: XIcon,
+            iconColor: 'text-muted-foreground',
+            tint: 'bg-muted/30',
+          }]
+        }
+      }
+      return []
+    })
+
+  const cancellationNotifications: NotificationItem[] = Object.entries(cancellationRequestsMap)
+    .filter(([leadId]) => myLeadIds.has(leadId))
+    .flatMap(([leadId, c]) => {
+      // Vendor decision on homeowner's cancellation request — informational
+      if (c.status === 'approved' || c.status === 'denied') {
+        // Treat as recent if no explicit timestamp — the cancellation
+        // store shape doesn't carry resolvedAt yet, so we surface any
+        // resolved cancellation until the homeowner sees it (cleared on
+        // their navigation away from the project).
+        return [{
+          id: `cancel-${leadId}-${c.status}`,
+          title: c.status === 'approved' ? 'Cancellation approved' : 'Cancellation denied',
+          description: c.status === 'approved'
+            ? 'Your cancellation was accepted — the project is closed.'
+            : 'The vendor did not approve the cancellation.',
+          icon: c.status === 'approved' ? CheckCircle2 : XIcon,
+          iconColor: c.status === 'approved' ? 'text-emerald-600' : 'text-destructive',
+          tint: c.status === 'approved' ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : 'bg-destructive/5',
+        }]
+      }
+      return []
+    })
+
+  const notifications: NotificationItem[] = [
+    ...approvedProjects.map((p) => ({
+      id: p.id,
+      title: 'Project Approved!',
+      description: `Congratulations! The vendor has approved your ${p.item.serviceName} request. Your project is booked.`,
+      icon: CheckCircle2,
+      iconColor: 'text-emerald-500',
+      tint: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+    })),
+    ...rescheduleNotifications,
+    ...cancellationNotifications,
+  ]
+
+  // Ship #240 — delta-detection toast pattern extended from vendor-layout
+  // (ship #108) to homeowner side per Rodolfo's "for both vendor and
+  // homeowner" directive. Composite IDs (reschedule-<leadId>-<flag>,
+  // cancel-<leadId>-<status>) mean a status flip creates a new seen-set
+  // key → toast fires on the transition. Prevents spam on mount via
+  // firstRenderRef.
+  const LAST_SEEN_KEY = 'buildconnect-homeowner-last-seen-notification-ids'
+  const firstRenderRef = useRef(true)
+  useEffect(() => {
+    const currentIds = new Set(notifications.map((n) => n.id))
+    let seenIds: Set<string>
+    try {
+      const raw = localStorage.getItem(LAST_SEEN_KEY)
+      seenIds = new Set<string>(raw ? JSON.parse(raw) : [])
+    } catch {
+      seenIds = new Set<string>()
+    }
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false
+      localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
+      return
+    }
+    const newOnes = notifications.filter((n) => !seenIds.has(n.id))
+    for (const n of newOnes) {
+      toast(n.title, { description: n.description })
+    }
+    if (newOnes.length > 0) {
+      localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
+    }
+  }, [notifications])
 
   return (
     <div className="min-h-screen bg-background">

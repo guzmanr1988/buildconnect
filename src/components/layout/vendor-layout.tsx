@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, RotateCcw, CheckCircle2, X as XIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
+import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_LEADS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { cn } from '@/lib/utils'
@@ -67,14 +68,97 @@ export function VendorLayout() {
   const pendingLeads = MOCK_LEADS.filter(
     (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
   )
-  const notifications: NotificationItem[] = pendingLeads.map((l) => ({
-    id: l.id,
-    title: 'New Lead',
-    description: `${l.homeowner_name} — ${l.project}`,
-    icon: InboxIcon,
-    iconColor: 'text-primary',
-    tint: 'bg-primary/5',
-  }))
+
+  // Ship #240 — cross-role notification event derivations. Pattern is
+  // "derive from state" (option A): each event-type filters the relevant
+  // projects-store map and synthesizes NotificationItems. Scoped to this
+  // vendor's leads via myLeadIds so cross-vendor events don't leak on
+  // multi-vendor demo sessions. To extend with future event types
+  // (new payment received, new review posted, etc.), add a new
+  // filter-and-map block here and concat into `notifications`.
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
+  const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
+  const RECENT_RESOLVED_WINDOW_MS = 24 * 60 * 60 * 1000 // 24h — resolved events surface briefly then drop off
+
+  const myLeadIds = new Set<string>([
+    ...MOCK_LEADS.filter((l) => l.vendor_id === vendorIdForLeads).map((l) => l.id),
+    ...sentProjects
+      .filter((p) => p.contractor?.vendor_id === vendorIdForLeads)
+      .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`),
+  ])
+
+  const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)
+    .filter(([leadId]) => myLeadIds.has(leadId))
+    .flatMap(([leadId, r]) => {
+      // Homeowner-initiated pending reschedule — needs vendor action
+      if (r.status === 'pending' && r.requestedBy === 'homeowner') {
+        return [{
+          id: `reschedule-${leadId}-h-pending`,
+          title: 'Homeowner requested reschedule',
+          description: `New time: ${r.proposedDate} · ${r.proposedTime}`,
+          icon: RotateCcw,
+          iconColor: 'text-amber-600',
+          tint: 'bg-amber-50/50 dark:bg-amber-950/20',
+        }]
+      }
+      // Vendor-initiated resolved recently — informational
+      if (r.requestedBy === 'vendor' && r.resolvedAt) {
+        const age = Date.now() - new Date(r.resolvedAt).getTime()
+        if (age > RECENT_RESOLVED_WINDOW_MS) return []
+        if (r.status === 'approved') {
+          return [{
+            id: `reschedule-${leadId}-v-approved`,
+            title: 'Homeowner approved your new time',
+            description: `${r.proposedDate} · ${r.proposedTime}`,
+            icon: CheckCircle2,
+            iconColor: 'text-emerald-600',
+            tint: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+          }]
+        }
+        if (r.status === 'rejected') {
+          return [{
+            id: `reschedule-${leadId}-v-rejected`,
+            title: 'Homeowner kept the original time',
+            description: 'Your reschedule proposal was declined.',
+            icon: XIcon,
+            iconColor: 'text-muted-foreground',
+            tint: 'bg-muted/30',
+          }]
+        }
+      }
+      return []
+    })
+
+  const cancellationNotifications: NotificationItem[] = Object.entries(cancellationRequestsMap)
+    .filter(([leadId]) => myLeadIds.has(leadId))
+    .flatMap(([leadId, c]) => {
+      // Homeowner-initiated pending cancellation — needs vendor action
+      if (c.status === 'pending') {
+        return [{
+          id: `cancel-${leadId}-pending`,
+          title: 'Cancellation requested',
+          description: c.reason ?? 'Homeowner wants to cancel this project.',
+          icon: XIcon,
+          iconColor: 'text-destructive',
+          tint: 'bg-destructive/5',
+        }]
+      }
+      return []
+    })
+
+  const notifications: NotificationItem[] = [
+    ...pendingLeads.map((l) => ({
+      id: l.id,
+      title: 'New Lead',
+      description: `${l.homeowner_name} — ${l.project}`,
+      icon: InboxIcon,
+      iconColor: 'text-primary',
+      tint: 'bg-primary/5',
+    })),
+    ...rescheduleNotifications,
+    ...cancellationNotifications,
+  ]
 
   // New-lead toast delta detection (ship #108 Phase C per kratos msg
   // 1776718477775). Compare current notification IDs to last-seen set in
