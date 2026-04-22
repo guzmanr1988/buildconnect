@@ -129,7 +129,7 @@ export function LoginPage() {
     }
   }
 
-  async function demoLogin(email: string, password: string | undefined) {
+  async function demoLogin(email: string, password: string | undefined, role: 'homeowner' | 'vendor' | 'admin') {
     if (!password) {
       toast.error('Demo credentials not configured for this build')
       return
@@ -137,6 +137,18 @@ export function LoginPage() {
     setIsLoading(true)
     try {
       await clearQaBeforeAuth()
+      // Ship #222 — Vendor demo button aliases to mock vendor 'v-1' (Apex)
+      // for the session so useVendorScope resolves to v-1 → strict filter
+      // matches the homeowner-created sentProjects whose contractor.vendor_id
+      // was written as 'v-1' when the homeowner picked Apex on vendor-compare.
+      // Without this alias, generic Vendor demo had no vendor_id mapping and
+      // saw no leads (the leads-empty symptom that triggered the arc).
+      // Cleared on Homeowner/Admin login so roles don't leak the alias.
+      if (role === 'vendor') {
+        localStorage.setItem('buildconnect-demo-mock-vendor-id', 'v-1')
+      } else {
+        localStorage.removeItem('buildconnect-demo-mock-vendor-id')
+      }
       await signIn(email, password)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Demo sign-in failed'
@@ -355,13 +367,13 @@ export function LoginPage() {
                 >
                   <Card
                     className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/20 active:scale-[0.99]"
-                    onClick={() => !isLoading && demoLogin(demo.email, demo.password)}
+                    onClick={() => !isLoading && demoLogin(demo.email, demo.password, demo.role)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (!isLoading && (e.key === 'Enter' || e.key === ' ')) {
                         e.preventDefault()
-                        demoLogin(demo.email, demo.password)
+                        demoLogin(demo.email, demo.password, demo.role)
                       }
                     }}
                     aria-label={`Sign in as demo ${demo.label}`}

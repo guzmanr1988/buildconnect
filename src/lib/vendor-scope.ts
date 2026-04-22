@@ -38,6 +38,18 @@ export function useVendorScope(): {
   const profile = useAuthStore((s) => s.profile)
   return useMemo(() => {
     if (!profile) return { mockVendorId: null, vendorId: '', isMock: false }
+    // Ship #222 — demo-alias LS override (priority-0, before UUID map).
+    // Vendor demo login handler in login.tsx sets 'buildconnect-demo-
+    // mock-vendor-id' = 'v-1' so the generic Vendor demo account
+    // resolves to Apex scope for this session. Lets Vendor demo see
+    // leads that homeowners send to Apex on vendor-compare. Cleared on
+    // Homeowner/Admin demo login so the alias doesn't leak cross-role.
+    if (typeof window !== 'undefined') {
+      const demoAlias = localStorage.getItem('buildconnect-demo-mock-vendor-id')
+      if (demoAlias && MOCK_VENDOR_IDS.has(demoAlias)) {
+        return { mockVendorId: demoAlias, vendorId: demoAlias, isMock: true }
+      }
+    }
     const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(
       ([, uuid]) => uuid === profile.id
     )
