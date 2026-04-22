@@ -17,16 +17,26 @@ import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import { useAuthStore } from '@/stores/auth-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
-
-const VENDOR_ID = 'v-1'
 
 export default function VendorProfile() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
   const updateProfile = useAuthStore((s) => s.updateProfile)
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  // Ship #218 — roll-forward fix for #217 regression. Prior code used
+  // hardcoded VENDOR_ID='v-1' + MOCK_VENDORS.find(v.id===VENDOR_ID)!
+  // which crashed with 'undefined is not an object' on
+  // vendor.service_categories after #217 collapsed MOCK_VENDORS (v-1
+  // no longer exists). Now resolves via useVendorScope (UUID-map →
+  // email-match fallback) then MOCK_VENDORS[0] as ultimate fallback.
+  // Matches the vendor-resolution pattern used in dashboard.tsx +
+  // lead-inbox.tsx (post-#214 scope alignment).
+  const { vendorId: VENDOR_ID } = useVendorScope()
+  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)
+    ?? MOCK_VENDORS.find((v) => v.email === profile?.email)
+    ?? MOCK_VENDORS[0]
   const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
   // Zustand-selector-returns-new-array-every-render = React error #185
   // infinite loop (ship #111 regression caught by apollo 1776720418731).
