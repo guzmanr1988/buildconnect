@@ -281,6 +281,15 @@ export default function VendorDashboard() {
 
   // Sheet / dialog state
   const [selected, setSelected] = useState<Lead | null>(null)
+  // Ship #238 — capture-first state for sub-dialog handlers (reschedule +
+  // reject). The Layer 5 bulletproof-close useEffect (line 362-368) wipes
+  // `selected` when sheetOpen flips false; sub-dialogs that open via
+  // `setSheetOpen(false)` were silently no-op'ing on Confirm because the
+  // handler's `if (selected)` guard saw null. Banked sync-before-await
+  // discipline: capture at click-time, don't read async. Single shared
+  // state covers both sub-dialog flows since only one is ever open at a
+  // time. Cleared on dialog close to avoid stale carry-over.
+  const [subDialogLead, setSubDialogLead] = useState<Lead | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [rescheduleOpen, setRescheduleOpen] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
@@ -1266,6 +1275,12 @@ export default function VendorDashboard() {
                         variant="destructive"
                         className="flex-1"
                         onClick={() => {
+                          // Ship #238 — capture selected BEFORE closing the
+                          // sheet. Layer 5 cleanup races to null out
+                          // `selected` on next render; subDialogLead is the
+                          // stable handle for the sub-dialog's Confirm
+                          // handler to read.
+                          setSubDialogLead(selected)
                           setRejectionReason('')
                           setRejectDialogOpen(true)
                           // Close the main modal so the reject-reason sub-dialog owns the foreground.
@@ -1279,6 +1294,10 @@ export default function VendorDashboard() {
                       variant="outline"
                       className="w-full"
                       onClick={() => {
+                        // Ship #238 — capture-first. See reject-button
+                        // handler above for the full rationale (Layer 5
+                        // useEffect vs sub-dialog handler race).
+                        setSubDialogLead(selected)
                         setRescheduleOpen(true)
                         // Close the main modal so the reschedule sub-dialog owns the foreground.
                         setSheetOpen(false)
@@ -1340,7 +1359,11 @@ export default function VendorDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancel</Button>
             <Button disabled={!rescheduleDate || !rescheduleTime} onClick={() => {
-              if (selected) {
+              // Ship #238 — read from subDialogLead (captured at click-time
+              // on the Reschedule button), not `selected` (which Layer 5
+              // nulled when the main sheet closed).
+              const lead = subDialogLead
+              if (lead) {
                 // Ship #191 (Rodolfo-direct pivot #12) — branch by lead
                 // status. Pre-approval (pending / rescheduled): vendor
                 // reschedule still acts as first-acceptance at a new
@@ -1348,19 +1371,19 @@ export default function VendorDashboard() {
                 // needed since nothing was agreed yet). Post-approval
                 // (confirmed): creates a RescheduleRequest so the
                 // homeowner can approve / counter / reject.
-                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                if (selected.status === 'confirmed') {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                if (lead.status === 'confirmed') {
                   requestReschedule(
-                    selected.id,
+                    lead.id,
                     'vendor',
                     rescheduleDate,
                     rescheduleTime,
-                    selected.slot.split('T')[0],
-                    selected.slot.split('T')[1]?.slice(0, 5) ?? '',
+                    lead.slot.split('T')[0],
+                    lead.slot.split('T')[1]?.slice(0, 5) ?? '',
                   )
                   toast.success('New time sent to homeowner for approval.')
                 } else {
-                  setLeadStatus(selected.id, 'confirmed')
+                  setLeadStatus(lead.id, 'confirmed')
                   if (sp) {
                     updateProjectBooking(sp.id, { date: rescheduleDate, time: rescheduleTime })
                     updateProjectStatus(sp.id, 'approved')
@@ -1371,6 +1394,7 @@ export default function VendorDashboard() {
               setRescheduleOpen(false)
               setRescheduleDate('')
               setRescheduleTime('')
+              setSubDialogLead(null)
             }}>
               Confirm Reschedule
             </Button>
@@ -1405,10 +1429,14 @@ export default function VendorDashboard() {
               variant="destructive"
               disabled={!rejectionReason.trim()}
               onClick={() => {
-                if (selected) {
+                // Ship #238 — capture-first (see subDialogLead comment at
+                // state declaration). Reading from `selected` here silently
+                // no-op''d after the main sheet closed.
+                const lead = subDialogLead
+                if (lead) {
                   // Always flip the lead-status override so mock-leads move too.
-                  setLeadStatus(selected.id, 'rejected')
-                  const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                  setLeadStatus(lead.id, 'rejected')
+                  const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
                   if (sp) {
                     updateProjectStatus(sp.id, 'declined')
                     // Store rejection reason
@@ -1420,6 +1448,7 @@ export default function VendorDashboard() {
                   }
                 }
                 setRejectDialogOpen(false)
+                setSubDialogLead(null)
               }}
             >
               Submit
