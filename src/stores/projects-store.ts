@@ -366,6 +366,14 @@ export const useProjectsStore = create<ProjectsState>()(
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
+          // Ship #239 — approval atomically transitions the lead to
+          // confirmed across BOTH shape-equivalent status stores:
+          //   · leadStatusOverrides covers MOCK_LEADS entries
+          //   · sentProjects.status covers homeowner-created flow
+          // Unified with #239's drop of vendor-reschedule first-acceptance
+          // optimization: pending leads that get approved via reschedule
+          // must transition to confirmed as part of the approval. Confirmed
+          // leads stay confirmed (idempotent map-write).
           return {
             rescheduleRequestsByLead: {
               ...state.rescheduleRequestsByLead,
@@ -375,6 +383,15 @@ export const useProjectsStore = create<ProjectsState>()(
                 resolvedAt: new Date().toISOString(),
               },
             },
+            leadStatusOverrides: {
+              ...state.leadStatusOverrides,
+              [leadId]: 'confirmed',
+            },
+            sentProjects: state.sentProjects.map((p) =>
+              `L-${p.id.slice(0, 4).toUpperCase()}` === leadId && p.status === 'pending'
+                ? { ...p, status: 'approved' }
+                : p
+            ),
           }
         }),
 

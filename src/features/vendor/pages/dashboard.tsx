@@ -1364,32 +1364,29 @@ export default function VendorDashboard() {
               // nulled when the main sheet closed).
               const lead = subDialogLead
               if (lead) {
-                // Ship #191 (Rodolfo-direct pivot #12) — branch by lead
-                // status. Pre-approval (pending / rescheduled): vendor
-                // reschedule still acts as first-acceptance at a new
-                // time (confirms + sets slot, no homeowner negotiation
-                // needed since nothing was agreed yet). Post-approval
-                // (confirmed): creates a RescheduleRequest so the
-                // homeowner can approve / counter / reject.
-                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
-                if (lead.status === 'confirmed') {
-                  requestReschedule(
-                    lead.id,
-                    'vendor',
-                    rescheduleDate,
-                    rescheduleTime,
-                    lead.slot.split('T')[0],
-                    lead.slot.split('T')[1]?.slice(0, 5) ?? '',
-                  )
-                  toast.success('New time sent to homeowner for approval.')
-                } else {
-                  setLeadStatus(lead.id, 'confirmed')
-                  if (sp) {
-                    updateProjectBooking(sp.id, { date: rescheduleDate, time: rescheduleTime })
-                    updateProjectStatus(sp.id, 'approved')
-                  }
-                  toast.success('Lead confirmed at new time.')
-                }
+                // Ship #239 — UNIFIED vendor-reschedule flow. Regardless of
+                // lead status (pending / confirmed / rescheduled), the
+                // reschedule goes through as a RescheduleRequest awaiting
+                // homeowner approval. Previously (Ship #191) the pre-
+                // approval branch applied a "first-acceptance" optimization:
+                // pending lead + vendor reschedule → silent
+                // confirm+updateBooking, assuming "nothing was agreed yet
+                // so no negotiation needed." Rodolfo's mental model
+                // (2026-04-22) corrects that prior: the homeowner-picked
+                // time IS a preference; silently moving it violates
+                // consent. Every vendor-proposed time change now
+                // round-trips through homeowner approval — approveReschedule
+                // transitions the lead to confirmed on approval (handled
+                // atomically in the store action).
+                requestReschedule(
+                  lead.id,
+                  'vendor',
+                  rescheduleDate,
+                  rescheduleTime,
+                  lead.slot.split('T')[0],
+                  lead.slot.split('T')[1]?.slice(0, 5) ?? '',
+                )
+                toast.success('New time sent to homeowner for approval.')
               }
               setRescheduleOpen(false)
               setRescheduleDate('')
