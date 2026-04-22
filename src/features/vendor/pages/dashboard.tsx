@@ -139,13 +139,18 @@ export default function VendorDashboard() {
   // prefer contractor.vendor_id FK (stable across rename); fall back to
   // company-name match for legacy persisted entries that predate the FK.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
+  // Ship #223 — aligned to lead-inbox.tsx permissive shape (no
+  // contractor-vendor-id filter). Prior strict filter diverged from
+  // lead-inbox's permissive read, causing dashboard 'New Leads' tile
+  // to reject sentProjects whose contractor.vendor_id didn't match
+  // the Vendor-demo's aliased vendor.id — while /vendor/projects tab
+  // showed them. Rodolfo's expectation (confirmed directly): Vendor
+  // demo sees leads regardless of which contractor the homeowner
+  // picked (Apex / Shield / Paradise — "they all should work").
+  // Cross-vendor-visibility intentionally loose in demo mode; post-
+  // launch re-approach (task_1776818232208_731) lifts to shared helper
+  // with strict scope once real vendor accounts are wired.
   const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects
-    .filter((p) => {
-      if (!vendor) return false
-      if (p.contractor?.vendor_id) return p.contractor.vendor_id === vendor.id
-      // Legacy fallback — pre-#165 persisted entries without vendor_id
-      return p.contractor?.company === vendor.company
-    })
     .map((p) => ({
     id: `L-${p.id.slice(0, 4).toUpperCase()}`,
     _projectId: p.id,
