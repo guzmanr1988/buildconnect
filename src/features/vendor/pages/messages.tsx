@@ -12,11 +12,11 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_MESSAGES, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
+import { useAuthStore } from '@/stores/auth-store'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Message } from '@/types'
-
-const VENDOR_ID = 'v-1'
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -37,7 +37,16 @@ const QUICK_REPLIES = [
 ]
 
 export default function VendorMessages() {
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  // Ship #219 — replace hardcoded VENDOR_ID='v-1' + MOCK_VENDORS.find(!)
+  // pattern that crashed post-#217. Resolves via useVendorScope (UUID-
+  // map → email-match) with MOCK_VENDORS[0] ultimate fallback. Same
+  // pattern as banking.tsx + profile.tsx. 3rd instance of the latent-
+  // crash-tied-to-fixture-invariant class exposed by #217.
+  const { vendorId: VENDOR_ID } = useVendorScope()
+  const profileEmail = useAuthStore((s) => s.profile?.email)
+  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)
+    ?? MOCK_VENDORS.find((v) => v.email === profileEmail)
+    ?? MOCK_VENDORS[0]
 
   // Admin messages from shared store — single hook call to avoid hook count issues
   const adminStore = useAdminMessagesStore()
