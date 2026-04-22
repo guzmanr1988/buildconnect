@@ -234,15 +234,23 @@ export default function LeadInbox() {
                   </Badge>
                   <div className="flex-1 border-t border-border/60 ml-2" aria-hidden="true" />
                 </button>
-                <AnimatePresence initial={false}>
+                {/* Ship #228 — replaced AnimatePresence + motion.div
+                    height-auto animation with plain conditional render.
+                    Framer-motion's height:auto re-measurement on
+                    re-entry (exit → entry cycle) was failing when the
+                    panel contained nested motion.divs (per-lead cards),
+                    leaving the panel stuck at exit state (height:0,
+                    opacity:0) on re-expand — visible as 'roofing
+                    disappears and doesn't come back without refresh'
+                    per Rodolfo report. Plain conditional render is
+                    instant (no collapse animation) but state-correct.
+                    Trade-off: losing the smooth height-animate on
+                    collapse in exchange for reliable re-expand. Per-
+                    lead inner expand animation preserved (that one
+                    works). */}
                 {!collapsed && (
-                  <motion.div
-                    key={`panel-${categoryId}`}
+                  <div
                     id={`lead-category-panel-${categoryId}`}
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                     className="overflow-hidden"
                   >
                     <div className="grid gap-4">
@@ -559,9 +567,8 @@ export default function LeadInbox() {
             )
           })}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-                </AnimatePresence>
               </section>
             )
           })}
