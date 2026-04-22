@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, ChevronRight, User, MapPin, Calendar,
-  Download, ZoomIn,
+  Download, ZoomIn, Phone, Mail,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -271,7 +271,34 @@ export default function LeadInbox() {
                           />
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
-                            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 break-words">{lead.project}</p>
+                            {/* Ship #227 — customer contact row. Surfaces
+                                phone + email inline at the collapsed-card
+                                level so vendor sees contact info without
+                                expanding. Falls back to 'Contact info
+                                unavailable' only when BOTH fields are
+                                missing/placeholder; otherwise shows
+                                whichever is present. */}
+                            {(lead.phone && lead.phone !== '—') || (lead.email && lead.email !== '—') ? (
+                              <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-muted-foreground">
+                                {lead.phone && lead.phone !== '—' && (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <Phone className="h-3 w-3 shrink-0" />
+                                    {lead.phone}
+                                  </span>
+                                )}
+                                {lead.email && lead.email !== '—' && (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <Mail className="h-3 w-3 shrink-0" />
+                                    {lead.email}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic mt-0.5">
+                                Contact info unavailable
+                              </p>
+                            )}
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words">{lead.project}</p>
                             <div className="flex items-center gap-3 mt-2 flex-wrap">
                               <StatusBadge status={lead.status} />
                               <span className="text-xs text-muted-foreground">{fmtDate(lead.received_at)}</span>
