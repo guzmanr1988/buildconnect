@@ -1135,7 +1135,16 @@ export default function VendorDashboard() {
                         <>
                           <Select value={selectedRepId} onValueChange={(value) => setSelectedRepId(value ?? '')}>
                             <SelectTrigger id="assign-rep" className="h-10 text-sm">
-                              <SelectValue placeholder="Choose an account rep for this lead…" />
+                              {/* Ship #229 — selected-state shows name only;
+                                  dropdown options below retain name + title
+                                  for picking context. SelectValue children
+                                  override the default (mirror-SelectItem-
+                                  children) render. */}
+                              <SelectValue placeholder="Choose an account rep for this lead…">
+                                {selectedRepId
+                                  ? accountReps.find((r) => r.id === selectedRepId)?.name
+                                  : null}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {accountReps.map((rep) => (
@@ -1560,7 +1569,13 @@ export default function VendorDashboard() {
             {accountReps.length > 0 ? (
               <Select value={editRepChoice} onValueChange={(value) => setEditRepChoice(value ?? '')}>
                 <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="Choose an account rep…" />
+                  {/* Ship #229 — same name-only selected-display pattern as
+                      the assign-rep dropdown. Options below keep name+title. */}
+                  <SelectValue placeholder="Choose an account rep…">
+                    {editRepChoice
+                      ? accountReps.find((r) => r.id === editRepChoice)?.name
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {accountReps.map((rep) => (
