@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -23,6 +23,7 @@ import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Lead, Vendor, VendorRep } from '@/types'
@@ -62,6 +63,16 @@ export default function VendorDashboard() {
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approveCancellation = useProjectsStore((s) => s.approveCancellation)
   const denyCancellation = useProjectsStore((s) => s.denyCancellation)
+  // Ship #224 — Account Rep dropdown data source. Reads the vendor's
+  // active account reps from useVendorEmployeesStore (same store that
+  // backs the Account Reps tab at /vendor/account-reps). Filters to
+  // status='active' so inactive/on-leave reps don't appear as
+  // assignable. Mapped to VendorRep shape so the existing
+  // assignProjectRep / assignRepByLead actions accept them
+  // unchanged. Replaces the prior vendor.reps (MOCK_VENDORS-scoped)
+  // source per Rodolfo's "open list from account rep tab to select"
+  // directive.
+  const employeesMap = useVendorEmployeesStore((s) => s.employeesByVendor)
 
   // Auth guard — redirect unauth'd or non-vendor roles to /login.
   useEffect(() => {
@@ -87,6 +98,24 @@ export default function VendorDashboard() {
   // real profile.id otherwise (in which case the filters return empty because
   // no MOCK_LEADS row has that vendor_id).
   const VENDOR_ID = mockVendorId ?? profile?.id ?? ''
+
+  // Ship #224 — Account Rep list for the assign-rep dropdown. Reads
+  // active employees from useVendorEmployeesStore keyed by VENDOR_ID,
+  // maps to VendorRep shape so existing assignRepByLead / assignRep
+  // actions accept them unchanged. Empty when vendor has no active
+  // account reps; dropdown then surfaces an empty-state linking to
+  // /vendor/account-reps for add.
+  const accountReps: VendorRep[] = useMemo(() => {
+    const roster = employeesMap[VENDOR_ID] ?? []
+    return roster
+      .filter((e) => e.status === 'active')
+      .map((e) => ({
+        id: e.id,
+        name: `${e.firstName} ${e.lastName}`,
+        role: e.title,
+        phone: e.phone,
+      }))
+  }, [employeesMap, VENDOR_ID])
 
   // Vendor display-data: from MOCK_VENDORS fixture when mapped, synthesized
   // from profile when not. Role-gate the synthesis — a homeowner profile
@@ -271,15 +300,13 @@ export default function VendorDashboard() {
   // post-confirm swap dialog opened from the confirmed-tab LeadCard.
   const [selectedRepId, setSelectedRepId] = useState<string>('')
   // Fallback path: when the authed vendor has no reps[] on file (e.g. Demo
-  // Vendor that's not mapped to a MOCK_VENDOR), the selector hides and a
-  // free-form name input takes its place. Typed name is used to build an
-  // ad-hoc VendorRep on Confirm. Keeps the flow unblocked for vendors who
-  // haven't configured reps yet.
-  const [adhocRepName, setAdhocRepName] = useState<string>('')
+  // Ship #224 — adhocRepName / editAdhocRepName state removed with the
+  // free-form text-input fallback. Dropdown is now the sole input for
+  // both Assign and Change Account Rep flows (per Rodolfo directive
+  // "instead of typing the name open list from account rep tab").
   const [editRepOpen, setEditRepOpen] = useState(false)
   const [editRepLeadId, setEditRepLeadId] = useState<string>('')
   const [editRepChoice, setEditRepChoice] = useState<string>('')
-  const [editAdhocRepName, setEditAdhocRepName] = useState<string>('')
   // Cancellation-request review dialog (Phase B).
   const [cancelReviewOpen, setCancelReviewOpen] = useState(false)
   const [cancelReviewLeadId, setCancelReviewLeadId] = useState<string>('')
@@ -342,7 +369,6 @@ export default function VendorDashboard() {
       console.log('[vendor-confirm] LAYER5_CLEANUP sheetOpen=false, forcing selected=null')
       setSelected(null)
       setSelectedRepId('')
-      setAdhocRepName('')
     }
   }, [sheetOpen, selected])
 
@@ -363,7 +389,6 @@ export default function VendorDashboard() {
     // reflects reality if the modal is reopened pre-confirm.
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
     setSelectedRepId(sp?.assignedRep?.id ?? '')
-    setAdhocRepName('')
     setSheetOpen(true)
   }
 
@@ -380,13 +405,11 @@ export default function VendorDashboard() {
   const openEditRep = (leadId: string) => {
     const current = getAssignedRepForLead(leadId)
     setEditRepLeadId(leadId)
+    // Ship #224 — prior flow pre-populated editAdhocRepName for adhoc
+    // or no-reps-on-file cases. With dropdown-only input, only the
+    // existing rep.id (if it's in accountReps) matters. Match by id
+    // when possible; otherwise empty string (user picks from list).
     setEditRepChoice(current?.id ?? '')
-    // If current rep is adhoc OR vendor has no reps on file, pre-populate the
-    // free-form input with the current name so the fallback UX shows what's
-    // already assigned.
-    setEditAdhocRepName(
-      current && (!vendor?.reps?.length || current.id.startsWith('adhoc-')) ? current.name : ''
-    )
     setEditRepOpen(true)
   }
 
@@ -463,12 +486,10 @@ export default function VendorDashboard() {
 
   const handleSaveEditRep = () => {
     if (!editRepLeadId) return
-    const rep: VendorRep | undefined =
-      vendor?.reps && vendor.reps.length > 0
-        ? vendor.reps.find((r) => r.id === editRepChoice)
-        : editAdhocRepName.trim()
-          ? { id: `adhoc-${crypto.randomUUID()}`, name: editAdhocRepName.trim() }
-          : undefined
+    // Ship #224 — rep resolution via accountReps (useVendorEmployeesStore)
+    // instead of vendor.reps (MOCK_VENDORS) + adhoc-text path. Dropdown
+    // is the sole input; no fallback.
+    const rep: VendorRep | undefined = accountReps.find((r) => r.id === editRepChoice)
     if (!rep) return
     assignRepByLead(editRepLeadId, rep)
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === editRepLeadId)
@@ -1103,24 +1124,27 @@ export default function VendorDashboard() {
                   </>
                 ) : (
                   <>
-                    {/* Assign Representative — required before Confirm can fire.
-                        Two UIs: dropdown when vendor has reps on file, free-form
-                        name input as fallback when reps[] is empty (e.g. Demo
-                        Vendor path). */}
+                    {/* Ship #224 — Assign Account Rep. Dropdown reads
+                        active account reps from useVendorEmployeesStore
+                        (same data as /vendor/account-reps). Adhoc-text-
+                        input fallback removed per Rodolfo directive
+                        ("instead of typing ... open list from account
+                        rep tab to select"). Empty-state directs user
+                        to the Account Reps tab to add one. */}
                     <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                       <label htmlFor="assign-rep" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                         <UserCheck className="h-3.5 w-3.5 text-primary" />
-                        Assign Representative
+                        Assign Account Rep
                         <span className="text-destructive">*</span>
                       </label>
-                      {vendor?.reps && vendor.reps.length > 0 ? (
+                      {accountReps.length > 0 ? (
                         <>
                           <Select value={selectedRepId} onValueChange={(value) => setSelectedRepId(value ?? '')}>
                             <SelectTrigger id="assign-rep" className="h-10 text-sm">
-                              <SelectValue placeholder="Choose a rep for this lead…" />
+                              <SelectValue placeholder="Choose an account rep for this lead…" />
                             </SelectTrigger>
                             <SelectContent>
-                              {vendor.reps.map((rep) => (
+                              {accountReps.map((rep) => (
                                 <SelectItem key={rep.id} value={rep.id}>
                                   <span className="font-medium">{rep.name}</span>
                                   {rep.role && (
@@ -1132,39 +1156,24 @@ export default function VendorDashboard() {
                           </Select>
                           {!selectedRepId && (
                             <p className="text-[11px] text-muted-foreground">
-                              Pick a rep before confirming so the homeowner knows who's coming out.
+                              Pick an account rep before confirming so the homeowner knows who's coming out.
                             </p>
                           )}
                         </>
                       ) : (
-                        <>
-                          <input
-                            id="assign-rep"
-                            type="text"
-                            value={adhocRepName}
-                            onChange={(e) => setAdhocRepName(e.target.value)}
-                            placeholder="Enter the rep's name"
-                            className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
-                            name="rep-name-no-autofill"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="words"
-                            spellCheck={false}
-                          />
-                          <p className="text-[11px] text-muted-foreground">
-                            No reps on file yet. Type the rep's name — you can add a full roster later in Profile.
-                          </p>
-                        </>
+                        <p className="text-[11px] text-muted-foreground">
+                          No account reps on file yet.{' '}
+                          <Link to="/vendor/account-reps" className="text-primary font-medium underline-offset-2 hover:underline">
+                            Add one in the Account Reps tab
+                          </Link>
+                          {' '}before confirming this lead.
+                        </p>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        disabled={
-                          vendor?.reps && vendor.reps.length > 0
-                            ? !selectedRepId
-                            : !adhocRepName.trim()
-                        }
+                        disabled={!selectedRepId}
                         onClick={(e) => {
                           // BULLETPROOF close — 3rd recurrence on Rodolfo's side
                           // despite ship #63 defensive hardening, #65 state-first
@@ -1195,17 +1204,11 @@ export default function VendorDashboard() {
 
                           try {
                             const selectedLeadId = selected.id
-                            const rep: VendorRep | undefined =
-                              vendor?.reps && vendor.reps.length > 0
-                                ? vendor.reps.find((r) => r.id === selectedRepId)
-                                : adhocRepName.trim()
-                                  ? {
-                                      id: typeof crypto !== 'undefined' && crypto.randomUUID
-                                        ? `adhoc-${crypto.randomUUID()}`
-                                        : `adhoc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                                      name: adhocRepName.trim(),
-                                    }
-                                  : undefined
+                            // Ship #224 — rep resolution via accountReps
+                            // (useVendorEmployeesStore) instead of
+                            // vendor.reps (MOCK_VENDORS). Adhoc-text
+                            // path removed.
+                            const rep: VendorRep | undefined = accountReps.find((r) => r.id === selectedRepId)
                             const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selectedLeadId)
                             if (rep) {
                               assignRepByLead(selectedLeadId, rep)
@@ -1219,7 +1222,6 @@ export default function VendorDashboard() {
                             // Layer 2 close — GUARANTEED execution.
                             console.log('[vendor-confirm] CONFIRM_FIRED layer=finally')
                             setSelectedRepId('')
-                            setAdhocRepName('')
                             setSelected(null)
                             setSheetOpen(false)
                           }
@@ -1551,20 +1553,23 @@ export default function VendorDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Rep Dialog — post-confirm rep swap, opened from LeadCard pencil. */}
+      {/* Edit Rep Dialog — post-confirm rep swap, opened from LeadCard pencil.
+          Ship #224 — label + data source aligned with Assign Account Rep flow:
+          'Change Representative' → 'Change Account Rep', dropdown from
+          useVendorEmployeesStore, adhoc-text fallback dropped. */}
       <Dialog open={editRepOpen} onOpenChange={setEditRepOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading">Change Representative</DialogTitle>
+            <DialogTitle className="font-heading">Change Account Rep</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            {vendor?.reps && vendor.reps.length > 0 ? (
+            {accountReps.length > 0 ? (
               <Select value={editRepChoice} onValueChange={(value) => setEditRepChoice(value ?? '')}>
                 <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="Choose a rep…" />
+                  <SelectValue placeholder="Choose an account rep…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vendor.reps.map((rep) => (
+                  {accountReps.map((rep) => (
                     <SelectItem key={rep.id} value={rep.id}>
                       <span className="font-medium">{rep.name}</span>
                       {rep.role && (
@@ -1575,31 +1580,22 @@ export default function VendorDashboard() {
                 </SelectContent>
               </Select>
             ) : (
-              <input
-                type="text"
-                value={editAdhocRepName}
-                onChange={(e) => setEditAdhocRepName(e.target.value)}
-                placeholder="Enter the rep's name"
-                className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm"
-                name="edit-rep-name-no-autofill"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="words"
-                spellCheck={false}
-              />
+              <p className="text-[11px] text-muted-foreground">
+                No account reps on file yet.{' '}
+                <Link to="/vendor/account-reps" className="text-primary font-medium underline-offset-2 hover:underline">
+                  Add one in the Account Reps tab
+                </Link>
+                {' '}to assign.
+              </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              The homeowner will see the new rep the next time they open this appointment.
+              The homeowner will see the new account rep the next time they open this appointment.
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditRepOpen(false)}>Cancel</Button>
             <Button
-              disabled={
-                vendor?.reps && vendor.reps.length > 0
-                  ? !editRepChoice
-                  : !editAdhocRepName.trim()
-              }
+              disabled={!editRepChoice}
               onClick={handleSaveEditRep}
             >
               Save
