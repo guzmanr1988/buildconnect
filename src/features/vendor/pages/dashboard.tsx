@@ -1128,7 +1128,7 @@ export default function VendorDashboard() {
                     <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                       <label htmlFor="assign-rep" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                         <UserCheck className="h-3.5 w-3.5 text-primary" />
-                        Assign Account Rep
+                        Account Representative
                         <span className="text-destructive">*</span>
                       </label>
                       {accountReps.length > 0 ? (
@@ -1140,7 +1140,7 @@ export default function VendorDashboard() {
                                   for picking context. SelectValue children
                                   override the default (mirror-SelectItem-
                                   children) render. */}
-                              <SelectValue placeholder="Choose an account rep for this lead…">
+                              <SelectValue placeholder="Choose an account representative for this lead…">
                                 {selectedRepId
                                   ? accountReps.find((r) => r.id === selectedRepId)?.name
                                   : null}
@@ -1166,13 +1166,13 @@ export default function VendorDashboard() {
                           </Select>
                           {!selectedRepId && (
                             <p className="text-[11px] text-muted-foreground">
-                              Pick an account rep before confirming so the homeowner knows who's coming out.
+                              Pick an account representative before confirming so the homeowner knows who's coming out.
                             </p>
                           )}
                         </>
                       ) : (
                         <p className="text-[11px] text-muted-foreground">
-                          No account reps on file yet.{' '}
+                          No account representatives on file yet.{' '}
                           <Link to="/vendor/account-reps" className="text-primary font-medium underline-offset-2 hover:underline">
                             Add one in the Account Reps tab
                           </Link>
@@ -1570,7 +1570,7 @@ export default function VendorDashboard() {
       <Dialog open={editRepOpen} onOpenChange={setEditRepOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading">Change Account Rep</DialogTitle>
+            <DialogTitle className="font-heading">Change Account Representative</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             {accountReps.length > 0 ? (
@@ -1578,7 +1578,7 @@ export default function VendorDashboard() {
                 <SelectTrigger className="h-10 text-sm">
                   {/* Ship #229 — same name-only selected-display pattern as
                       the assign-rep dropdown. Options below keep name+title. */}
-                  <SelectValue placeholder="Choose an account rep…">
+                  <SelectValue placeholder="Choose an account representative…">
                     {editRepChoice
                       ? accountReps.find((r) => r.id === editRepChoice)?.name
                       : null}
@@ -1599,7 +1599,7 @@ export default function VendorDashboard() {
               </Select>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                No account reps on file yet.{' '}
+                No account representatives on file yet.{' '}
                 <Link to="/vendor/account-reps" className="text-primary font-medium underline-offset-2 hover:underline">
                   Add one in the Account Reps tab
                 </Link>
@@ -1607,7 +1607,7 @@ export default function VendorDashboard() {
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              The homeowner will see the new account rep the next time they open this appointment.
+              The homeowner will see the new account representative the next time they open this appointment.
             </p>
           </div>
           <DialogFooter>
