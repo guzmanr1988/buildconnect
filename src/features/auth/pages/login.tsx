@@ -54,14 +54,50 @@ const demoAccounts = [
     icon: Home,
     gradient: 'from-blue-500 to-blue-600',
   },
+  // Ship #214 — vendor demo accounts aligned with the 3 featured mock
+  // vendors (Apex / Shield / Paradise) whose Supabase UUIDs are mapped
+  // in DEMO_VENDOR_UUID_BY_MOCK_ID. Homeowner demo flows target these 3
+  // via vendor-compare; logging in with a matching demo account shows
+  // the correctly-scoped sentProjects on both dashboard tiles and
+  // /vendor/projects list. Previous single generic "Vendor" button
+  // (vendor@buildc.net) was NOT mapped to any mock-vendor-id, so its
+  // dashboard tiles stayed 0 regardless of homeowner-side sends —
+  // mismatch diagnosed in leads-empty arc.
+  {
+    role: 'vendor' as const,
+    email: 'apex@vendor.com',
+    password: import.meta.env.VITE_DEMO_APEX_PW as string | undefined,
+    label: 'Apex (Roofing & Solar)',
+    desc: 'Demo vendor — receives Apex-scoped leads',
+    icon: Wrench,
+    gradient: 'from-amber-500 to-orange-500',
+  },
+  {
+    role: 'vendor' as const,
+    email: 'shield@vendor.com',
+    password: import.meta.env.VITE_DEMO_SHIELD_PW as string | undefined,
+    label: 'Shield (Impact Windows)',
+    desc: 'Demo vendor — receives Shield-scoped leads',
+    icon: Wrench,
+    gradient: 'from-sky-500 to-blue-500',
+  },
+  {
+    role: 'vendor' as const,
+    email: 'paradise@vendor.com',
+    password: import.meta.env.VITE_DEMO_PARADISE_PW as string | undefined,
+    label: 'Paradise (Pools FL)',
+    desc: 'Demo vendor — receives Paradise-scoped leads',
+    icon: Wrench,
+    gradient: 'from-cyan-500 to-teal-500',
+  },
   {
     role: 'vendor' as const,
     email: 'vendor@buildc.net',
     password: import.meta.env.VITE_DEMO_VENDOR_PW as string | undefined,
-    label: 'Vendor',
-    desc: 'Manage leads & sales',
+    label: 'Generic Vendor',
+    desc: 'Unscoped demo — no pre-assigned leads',
     icon: Wrench,
-    gradient: 'from-amber-500 to-orange-500',
+    gradient: 'from-stone-500 to-stone-600',
   },
   {
     role: 'admin' as const,

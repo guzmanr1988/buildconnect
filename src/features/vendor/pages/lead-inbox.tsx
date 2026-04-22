@@ -12,13 +12,14 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_LEADS } from '@/lib/mock-data'
+import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope } from '@/lib/vendor-scope'
+import { useAuthStore } from '@/stores/auth-store'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
-import type { Lead } from '@/types'
+import type { Lead, Vendor } from '@/types'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -30,7 +31,44 @@ function fmtDate(iso: string) {
 
 export default function LeadInbox() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+  const { vendorId: VENDOR_ID, mockVendorId, isMock } = useVendorScope()
+  const profile = useAuthStore((s) => s.profile)
+
+  // Ship #214 — align lead-inbox scope with dashboard. Prior permissive
+  // behavior (map all sentProjects without filter, stamp vendor_id =
+  // VENDOR_ID) caused cross-vendor bleed: every vendor saw every
+  // homeowner's sentProject regardless of who it was actually sent to.
+  // Correct launch semantic = strict match by contractor.vendor_id
+  // (with company fallback for legacy pre-#165 entries that pre-date
+  // the vendor_id FK). Same filter shape as
+  // src/features/vendor/pages/dashboard.tsx homeownerLeads.
+  const vendor: Vendor | null = useMemo(() => {
+    if (mockVendorId) {
+      const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
+      if (m) return m
+    }
+    if (!profile || profile.role !== 'vendor') return null
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      role: 'vendor',
+      phone: profile.phone ?? '',
+      address: profile.address ?? '',
+      company: profile.company ?? profile.name,
+      avatar_color: profile.avatar_color ?? '#3b82f6',
+      initials: profile.initials ?? deriveInitials(profile.name),
+      status: profile.status ?? 'active',
+      created_at: profile.created_at ?? new Date().toISOString(),
+      service_categories: [],
+      rating: 0,
+      response_time: '—',
+      verified: false,
+      financing_available: false,
+      total_reviews: 0,
+      commission_pct: 15,
+    }
+  }, [mockVendorId, profile])
 
   // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
   // Log vendor-side read snapshot on every sentProjects mutation so we
@@ -42,6 +80,8 @@ export default function LeadInbox() {
     // eslint-disable-next-line no-console
     console.log('[#212 leads-diag] lead-inbox READ snapshot:', {
       current_VENDOR_ID: VENDOR_ID,
+      resolved_vendor_id: vendor?.id,
+      resolved_vendor_company: vendor?.company,
       isMock,
       sentProjects_length: sentProjects.length,
       entries: sentProjects.slice(0, 10).map((p) => ({
@@ -54,32 +94,39 @@ export default function LeadInbox() {
         sentAt: p.sentAt,
       })),
     })
-  }, [sentProjects, VENDOR_ID, isMock])
+  }, [sentProjects, VENDOR_ID, isMock, vendor?.id, vendor?.company])
   const mockLeads = useMemo(
     () => (isMock ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
     [VENDOR_ID, isMock]
   )
 
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
-  const homeownerLeads: Lead[] = useMemo(() => sentProjects.map((p) => ({
-    id: `L-${p.id.slice(0, 4).toUpperCase()}`,
-    homeowner_id: 'ho-current',
-    vendor_id: VENDOR_ID,
-    homeowner_name: p.homeowner?.name || 'New Customer',
-    project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
-    status: (statusMap[p.status] || 'pending') as Lead['status'],
-    value: 0,
-    address: p.homeowner?.address || 'Pending site visit',
-    phone: p.homeowner?.phone || '—',
-    email: p.homeowner?.email || '—',
-    sq_ft: 0,
-    service_category: p.item.serviceId as any,
-    permit_choice: Object.values(p.item.selections).flat().includes('permit'),
-    financing: Object.values(p.item.selections).flat().includes('financed'),
-    pack_items: p.item.selections,
-    slot: p.sentAt,
-    received_at: p.sentAt,
-  })), [sentProjects])
+  const homeownerLeads: Lead[] = useMemo(() => sentProjects
+    .filter((p) => {
+      if (!vendor) return false
+      if (p.contractor?.vendor_id) return p.contractor.vendor_id === vendor.id
+      // Legacy fallback — pre-#165 persisted entries without vendor_id FK
+      return p.contractor?.company === vendor.company
+    })
+    .map((p) => ({
+      id: `L-${p.id.slice(0, 4).toUpperCase()}`,
+      homeowner_id: 'ho-current',
+      vendor_id: VENDOR_ID,
+      homeowner_name: p.homeowner?.name || 'New Customer',
+      project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+      status: (statusMap[p.status] || 'pending') as Lead['status'],
+      value: 0,
+      address: p.homeowner?.address || 'Pending site visit',
+      phone: p.homeowner?.phone || '—',
+      email: p.homeowner?.email || '—',
+      sq_ft: 0,
+      service_category: p.item.serviceId as any,
+      permit_choice: Object.values(p.item.selections).flat().includes('permit'),
+      financing: Object.values(p.item.selections).flat().includes('financed'),
+      pack_items: p.item.selections,
+      slot: p.sentAt,
+      received_at: p.sentAt,
+    })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company])
 
   const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
   const [expandedId, setExpandedId] = useState<string | null>(null)
