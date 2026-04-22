@@ -554,14 +554,12 @@ export default function VendorEmployeesPage() {
                   <Label className="text-xs font-semibold">Title</Label>
                   <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="h-10 text-sm" placeholder="e.g. Lead Roofer" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Department</Label>
-                  <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="h-10 text-sm" placeholder="e.g. Installation" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Account rep code</Label>
-                  <Input value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} className="h-10 text-sm font-mono" />
-                </div>
+                {/* Ship #226 — removed Department + Account rep code
+                    fields from the form per Rodolfo directive. Fields
+                    remain in the VendorEmployee type + store + detail
+                    view for back-compat with seeded/pre-existing records
+                    (no data migration); new records write the defaults
+                    from blankEmployee() without user entry. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">Start date</Label>
                   <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="h-10 text-sm" />
@@ -604,23 +602,12 @@ export default function VendorEmployeesPage() {
               </div>
             </section>
 
-            <section className="space-y-3">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emergency Contact</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Name</Label>
-                  <Input value={form.emergencyContactName ?? ''} onChange={(e) => setForm({ ...form, emergencyContactName: e.target.value })} className="h-10 text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Relationship</Label>
-                  <Input value={form.emergencyContactRelationship ?? ''} onChange={(e) => setForm({ ...form, emergencyContactRelationship: e.target.value })} className="h-10 text-sm" placeholder="e.g. Spouse" />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs font-semibold">Phone</Label>
-                  <Input value={form.emergencyContactPhone ?? ''} onChange={(e) => setForm({ ...form, emergencyContactPhone: e.target.value })} className="h-10 text-sm" />
-                </div>
-              </div>
-            </section>
+            {/* Ship #226 — removed Emergency Contact section from the
+                form per Rodolfo directive. Detail view's Emergency
+                Contact block still renders for records where the data
+                is populated (seeded reps Miguel/Ricardo have it), but
+                new records won't ask for it in the form. Type/schema
+                retained for back-compat. */}
 
             {/* Bank section gated by toggle — hidden entirely when
                 Payroll integration is off. Data persists on record
