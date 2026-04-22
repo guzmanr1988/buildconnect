@@ -239,20 +239,7 @@ export function BookingConfirmationPage() {
             variant="outline"
             size="lg"
             className="flex-1 h-12 gap-2 text-sm font-semibold rounded-xl"
-            onClick={() => {
-              // Ship #220 — previously hardcoded to /home/appointments/L-0001
-              // which pre-#217 resolved to a seeded MOCK_LEAD. Post-#217
-              // MOCK_LEADS is empty so L-0001 no longer exists; the
-              // navigation landed on appointment-status with baseLead
-              // undefined and crashed. Now routes to the actual just-
-              // created sentProject's L-XXXX (first-4-chars-of-UUID
-              // uppercased, matching booking-confirmation's id scheme).
-              const latest = sentProjects[sentProjects.length - 1]
-              const leadId = latest
-                ? `L-${latest.id.slice(0, 4).toUpperCase()}`
-                : null
-              navigate(leadId ? `/home/appointments/${leadId}` : '/home')
-            }}
+            onClick={() => navigate('/home/appointments/L-0001')}
           >
             View Status
             <ArrowRight className="h-4 w-4" />
