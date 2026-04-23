@@ -1182,7 +1182,7 @@ export default function VendorDashboard() {
                           </Select>
                           {!selectedRepId && (
                             <p className="text-[11px] text-muted-foreground">
-                              Pick an account representative before confirming so the homeowner knows who's coming out.
+                              Pick an account representative before confirming or rescheduling so the homeowner knows who's coming out.
                             </p>
                           )}
                         </>
@@ -1293,6 +1293,13 @@ export default function VendorDashboard() {
                     <Button
                       variant="outline"
                       className="w-full"
+                      // Ship #249 — rep-gate mirrors the Confirm button (line ~1202).
+                      // Pre-#249 vendor could reschedule a pending lead without
+                      // assigning a rep; homeowner would approve → lead flipped
+                      // to confirmed via #239 atomic approveReschedule →
+                      // scheduled-without-rep state. Gate-at-source matches
+                      // Rodolfo's mental model "pick rep first, then act."
+                      disabled={!selectedRepId}
                       onClick={() => {
                         // Ship #238 — capture-first. See reject-button
                         // handler above for the full rationale (Layer 5
@@ -1364,6 +1371,15 @@ export default function VendorDashboard() {
               // nulled when the main sheet closed).
               const lead = subDialogLead
               if (lead) {
+                // Ship #249 — persist rep-assign alongside the reschedule
+                // request. Button-gate (disabled={!selectedRepId} on the
+                // Reschedule trigger) guarantees selectedRepId is set here;
+                // but we still need to commit the assignment to store so
+                // the post-approve-reschedule transition to "scheduled"
+                // carries the rep. Pre-#249 the Reschedule path bypassed
+                // rep-assign entirely — Rodolfo-surfaced gap.
+                const rep = accountReps.find((r) => r.id === selectedRepId)
+                if (rep) assignRepByLead(lead.id, rep)
                 // Ship #239 — UNIFIED vendor-reschedule flow. Regardless of
                 // lead status (pending / confirmed / rescheduled), the
                 // reschedule goes through as a RescheduleRequest awaiting
@@ -1392,6 +1408,7 @@ export default function VendorDashboard() {
               setRescheduleDate('')
               setRescheduleTime('')
               setSubDialogLead(null)
+              setSelectedRepId('')
             }}>
               Confirm Reschedule
             </Button>
