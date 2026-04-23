@@ -13,7 +13,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope } from '@/lib/vendor-scope'
@@ -96,9 +97,11 @@ export default function LeadInbox() {
       })),
     })
   }, [sentProjects, VENDOR_ID, isMock, vendor?.id, vendor?.company])
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const effectiveMockLeads = useEffectiveMockLeads()
   const mockLeads = useMemo(
-    () => (isMock ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
-    [VENDOR_ID, isMock]
+    () => (isMock ? effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID) : []),
+    [VENDOR_ID, isMock, effectiveMockLeads]
   )
 
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }

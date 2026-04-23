@@ -19,7 +19,8 @@ import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { MOCK_TRANSACTIONS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_TRANSACTIONS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
@@ -66,6 +67,8 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 ]
 
 export default function TransactionsPage() {
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
   // In-place project-detail Dialog (ship #140): opens on same surface
@@ -496,7 +499,7 @@ export default function TransactionsPage() {
                               const vendor = tx.vendor_id
                                 ? MOCK_VENDORS.find((v) => v.id === tx.vendor_id)
                                 : MOCK_VENDORS.find((v) => v.company === tx.company)
-                              const lead = MOCK_LEADS.find(
+                              const lead = mockLeads.find(
                                 (l) =>
                                   l.homeowner_name === tx.customer &&
                                   (vendor ? l.vendor_id === vendor.id : true),
@@ -513,7 +516,7 @@ export default function TransactionsPage() {
                                 // "Commission on " prefix + fuzzy-match
                                 // against the full project-name field.
                                 const stripped = tx.detail.replace(/^Commission on /i, '').trim()
-                                const leadByDetail = MOCK_LEADS.find(
+                                const leadByDetail = mockLeads.find(
                                   (l) =>
                                     l.project === stripped ||
                                     l.project.includes(stripped) ||

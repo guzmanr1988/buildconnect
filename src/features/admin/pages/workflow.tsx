@@ -8,7 +8,8 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
@@ -24,6 +25,9 @@ export default function WorkflowPage() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
+  const mockClosedSales = useEffectiveMockClosedSales()
 
   // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
   // Log admin-workflow read snapshot on sentProjects mutation so we
@@ -111,7 +115,7 @@ export default function WorkflowPage() {
     rejected: 'declined',
     rescheduled: 'pending',
   }
-  const mockItems = useMemo(() => MOCK_LEADS.map((l) => {
+  const mockItems = useMemo(() => mockLeads.map((l) => {
     const rawStatus = leadStatusOverrides[l.id] ?? l.status
     const cReq = cancellationRequestsByLead[l.id]
     const cancelApproved = cReq?.status === 'approved'
@@ -122,7 +126,7 @@ export default function WorkflowPage() {
     // internally-inconsistent seed (closed_sale entry referencing a pending/
     // confirmed lead — cs-3/L-0001 at rest) doesn't leak a saleAmount onto
     // a non-sold pipeline item. Ship #142 P0 fix per kratos msg 1776745930680.
-    const closedSale = MOCK_CLOSED_SALES.find((c) => c.lead_id === l.id)
+    const closedSale = mockClosedSales.find((c) => c.lead_id === l.id)
     const isSold = mappedStatus === 'sold'
     return {
       id: l.id,
@@ -137,7 +141,7 @@ export default function WorkflowPage() {
       saleAmount: isSold ? closedSale?.sale_amount : undefined,
       pendingCancel: cReq?.status === 'pending',
     }
-  }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead])
+  }), [assignedRepByLead, leadStatusOverrides, cancellationRequestsByLead, mockLeads, mockClosedSales])
 
   const allItems = [...projectItems, ...mockItems]
 

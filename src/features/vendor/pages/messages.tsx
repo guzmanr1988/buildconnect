@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_MESSAGES, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads, useEffectiveMockMessages } from '@/lib/mock-data-effective'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
@@ -38,6 +39,9 @@ const QUICK_REPLIES = [
 
 export default function VendorMessages() {
   const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
+  const mockMessages = useEffectiveMockMessages()
 
   // Admin messages from shared store — single hook call to avoid hook count issues
   const adminStore = useAdminMessagesStore()
@@ -45,9 +49,9 @@ export default function VendorMessages() {
   const addAdminMessage = adminStore.addMessage
 
   // Get all leads for this vendor that have messages
-  const vendorLeads = useMemo(() => MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID), [])
+  const vendorLeads = useMemo(() => mockLeads.filter((l) => l.vendor_id === VENDOR_ID), [mockLeads])
   const leadIds = useMemo(() => new Set(vendorLeads.map((l) => l.id)), [vendorLeads])
-  const relevantMessages = useMemo(() => MOCK_MESSAGES.filter((m) => leadIds.has(m.lead_id)), [leadIds])
+  const relevantMessages = useMemo(() => mockMessages.filter((m) => leadIds.has(m.lead_id)), [leadIds, mockMessages])
 
   // Group messages by lead
   const threadLeads = useMemo(() => {

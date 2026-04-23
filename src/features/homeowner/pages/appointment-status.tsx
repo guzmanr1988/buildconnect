@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
-import { MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
-import type { LeadStatus } from '@/types'
+import type { Lead, LeadStatus } from '@/types'
 
 const statusTimeline: Record<string, { label: string; time: string; status: LeadStatus }[]> = {
   'L-0001': [
@@ -32,6 +33,8 @@ const statusPulse: Record<string, string> = {
 
 export function AppointmentStatusPage() {
   const { id } = useParams<{ id: string }>()
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
@@ -69,7 +72,7 @@ export function AppointmentStatusPage() {
     declined: 'rejected',
     sold: 'completed',
   }
-  const mockLead = MOCK_LEADS.find((l) => l.id === id)
+  const mockLead = mockLeads.find((l) => l.id === id)
   const sentProject = !mockLead
     ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
     : undefined
@@ -92,8 +95,8 @@ export function AppointmentStatusPage() {
       email: sentProject.homeowner?.email || '',
       homeowner_name: sentProject.homeowner?.name || 'You',
       received_at: sentProject.sentAt,
-    } as unknown as typeof MOCK_LEADS[number])
-    ?? MOCK_LEADS[0]
+    } as unknown as Lead)
+    ?? mockLeads[0]
   // Apply lead-status override (Phase C persist) on top of whatever we resolved.
   const lead = leadStatusOverrides[baseLead.id]
     ? { ...baseLead, status: leadStatusOverrides[baseLead.id] }

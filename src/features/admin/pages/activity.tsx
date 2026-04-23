@@ -13,7 +13,13 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_LEADS, MOCK_VENDORS, MOCK_HOMEOWNERS, MOCK_MESSAGES, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import {
+  useEffectiveMockLeads,
+  useEffectiveMockClosedSales,
+  useEffectiveMockMessages,
+  useEffectiveMockHomeowners,
+} from '@/lib/mock-data-effective'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
 
@@ -85,6 +91,12 @@ export default function AdminActivityPage() {
   const rescheduleRequestsByLead = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
 
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
+  const mockClosedSales = useEffectiveMockClosedSales()
+  const mockMessages = useEffectiveMockMessages()
+  const mockHomeowners = useEffectiveMockHomeowners()
+
   const [selectedVendorId, setSelectedVendorId] = useState<string>('all')
   const [selectedHomeownerId, setSelectedHomeownerId] = useState<string>('all')
   const [enabledTypes, setEnabledTypes] = useState<Set<EventType>>(new Set(ALL_EVENT_TYPES))
@@ -95,7 +107,7 @@ export default function AdminActivityPage() {
     const out: ActivityEvent[] = []
 
     // 1. Lead submissions — MOCK_LEADS.received_at (fixture) + sentProjects.sentAt (runtime)
-    MOCK_LEADS.forEach((l) => {
+    mockLeads.forEach((l) => {
       const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
       out.push({
         id: `submit-${l.id}`,
@@ -132,7 +144,7 @@ export default function AdminActivityPage() {
     // 2. Lead confirmed
     Object.entries(leadConfirmedAtByLead).forEach(([leadId, at]) => {
       if (!at) return
-      const mockLead = MOCK_LEADS.find((l) => l.id === leadId)
+      const mockLead = mockLeads.find((l) => l.id === leadId)
       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
       const vendor = mockLead
         ? MOCK_VENDORS.find((v) => v.id === mockLead.vendor_id)
@@ -160,7 +172,7 @@ export default function AdminActivityPage() {
       if (!at) return
       const rep = assignedRepByLead[leadId]
       if (!rep) return
-      const mockLead = MOCK_LEADS.find((l) => l.id === leadId)
+      const mockLead = mockLeads.find((l) => l.id === leadId)
       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
       const vendor = mockLead
         ? MOCK_VENDORS.find((v) => v.id === mockLead.vendor_id)
@@ -185,7 +197,7 @@ export default function AdminActivityPage() {
     // 4+5. Reschedule events
     Object.entries(rescheduleRequestsByLead).forEach(([leadId, r]) => {
       if (!r) return
-      const mockLead = MOCK_LEADS.find((l) => l.id === leadId)
+      const mockLead = mockLeads.find((l) => l.id === leadId)
       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
       const vendor = mockLead
         ? MOCK_VENDORS.find((v) => v.id === mockLead.vendor_id)
@@ -229,7 +241,7 @@ export default function AdminActivityPage() {
     // 6. Cancellation requested
     Object.entries(cancellationRequestsByLead).forEach(([leadId, c]) => {
       if (!c) return
-      const mockLead = MOCK_LEADS.find((l) => l.id === leadId)
+      const mockLead = mockLeads.find((l) => l.id === leadId)
       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId)
       const vendor = mockLead
         ? MOCK_VENDORS.find((v) => v.id === mockLead.vendor_id)
@@ -271,7 +283,7 @@ export default function AdminActivityPage() {
         description: `${vendor?.company ?? p.contractor?.company ?? 'Vendor'} sold "${p.item.serviceName}" to ${p.homeowner?.name ?? 'homeowner'}${p.saleAmount ? ` for $${p.saleAmount.toLocaleString()}` : ''}`,
       })
     })
-    MOCK_CLOSED_SALES.forEach((cs) => {
+    mockClosedSales.forEach((cs) => {
       const vendor = MOCK_VENDORS.find((v) => v.id === cs.vendor_id)
       out.push({
         id: `sold-cs-${cs.id}`,
@@ -288,8 +300,8 @@ export default function AdminActivityPage() {
     })
 
     // 8. Messages (seeded only — runtime messages land with follow-up ship)
-    MOCK_MESSAGES.forEach((m) => {
-      const lead = MOCK_LEADS.find((l) => l.id === m.lead_id)
+    mockMessages.forEach((m) => {
+      const lead = mockLeads.find((l) => l.id === m.lead_id)
       const vendorSender = MOCK_VENDORS.find((v) => v.id === m.sender_id)
       const isVendor = !!vendorSender
       const actorName = isVendor
@@ -312,7 +324,7 @@ export default function AdminActivityPage() {
     })
 
     return out.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  }, [sentProjects, leadConfirmedAtByLead, repAssignedAtByLead, assignedRepByLead, rescheduleRequestsByLead, cancellationRequestsByLead])
+  }, [sentProjects, leadConfirmedAtByLead, repAssignedAtByLead, assignedRepByLead, rescheduleRequestsByLead, cancellationRequestsByLead, mockLeads, mockClosedSales, mockMessages])
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -398,7 +410,7 @@ export default function AdminActivityPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All homeowners</SelectItem>
-                  {MOCK_HOMEOWNERS.map((h) => (
+                  {mockHomeowners.map((h) => (
                     <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
                   ))}
                 </SelectContent>

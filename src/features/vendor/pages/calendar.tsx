@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_LEADS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -52,6 +52,8 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 export default function VendorCalendar() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
   const now = new Date()
   const [currentMonth, setCurrentMonth] = useState(now.getMonth())
   const [currentYear, setCurrentYear] = useState(now.getFullYear())
@@ -82,12 +84,12 @@ export default function VendorCalendar() {
   const mockConfirmed = useMemo(
     () => (
       isMock
-        ? MOCK_LEADS.filter(
+        ? mockLeads.filter(
             (l) => l.vendor_id === VENDOR_ID && ['confirmed', 'rescheduled'].includes(l.status)
           )
         : []
     ),
-    [VENDOR_ID, isMock]
+    [VENDOR_ID, isMock, mockLeads]
   )
 
   const leads = useMemo(

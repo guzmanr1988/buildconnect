@@ -52,11 +52,11 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Input } from '@/components/ui/input'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import {
-  MOCK_VENDORS,
-  MOCK_LEADS,
-  MOCK_CLOSED_SALES,
-} from '@/lib/mock-data'
+  useEffectiveMockLeads,
+  useEffectiveMockClosedSales,
+} from '@/lib/mock-data-effective'
 import type { LeadStatus, Vendor } from '@/types'
 
 const fadeUp = {
@@ -89,6 +89,9 @@ export default function VendorsPage() {
   // reflects vendor state changes.
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
+  const mockClosedSales = useEffectiveMockClosedSales()
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
@@ -216,7 +219,7 @@ export default function VendorsPage() {
       // values win when present.
       const override = vendorProfileOverrides[rawVendor.id] ?? {}
       const vendor = { ...rawVendor, ...override }
-      const rawLeads = MOCK_LEADS.filter((l) => l.vendor_id === vendor.id)
+      const rawLeads = mockLeads.filter((l) => l.vendor_id === vendor.id)
       // Apply vendor-side action overrides + admin-approved cancellations so
       // the per-vendor status counts reflect the full lifecycle.
       const leads = rawLeads.map((l) => {
@@ -229,7 +232,7 @@ export default function VendorsPage() {
         const effectiveStatus = cancelApproved ? 'cancelled' : (leadStatusOverrides[l.id] ?? l.status)
         return { ...l, status: effectiveStatus as LeadStatus }
       })
-      const closedSales = MOCK_CLOSED_SALES.filter((c) => c.vendor_id === vendor.id)
+      const closedSales = mockClosedSales.filter((c) => c.vendor_id === vendor.id)
       const totalRevenue = closedSales.reduce((s, c) => s + c.sale_amount, 0)
 
       const statusCounts = leads.reduce(
@@ -242,7 +245,7 @@ export default function VendorsPage() {
 
       return { vendor, leads, closedSales, totalRevenue, statusCounts }
     })
-  }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides])
+  }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides, mockLeads, mockClosedSales])
 
   return (
     <div className="space-y-6">

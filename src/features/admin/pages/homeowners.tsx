@@ -47,7 +47,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
-import { MOCK_LEADS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -129,6 +129,13 @@ export default function HomeownersPage() {
   const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
   const suspendHomeowner = useAdminModerationStore((s) => s.suspendHomeowner)
   const reactivateHomeowner = useAdminModerationStore((s) => s.reactivateHomeowner)
+  // Ship #250 — demoDataHidden flag gates raw fixture arrays on user-visible
+  // surfaces. CUSTOMER_PROJECTS is a local fixture (not the shared mock-data
+  // one) so we gate it inline here instead of through a shared hook.
+  const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
+
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
 
   // Cross-tab rehydrate: admin-moderation + projects both persist to LS but
   // don't auto-sync across tabs. Rehydrate on focus so status changes +
@@ -153,6 +160,13 @@ export default function HomeownersPage() {
   // In-place project-detail Dialog (ship #140 replaces #139 navigate()).
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
+  // Ship #250 — gate the local CUSTOMER_PROJECTS fixture behind the
+  // demoDataHidden flag the same way the shared mock fixtures are gated.
+  const effectiveCustomerProjects = useMemo(
+    () => (demoDataHidden ? [] : CUSTOMER_PROJECTS),
+    [demoDataHidden]
+  )
+
   const homeowners = useMemo(
     () =>
       HOMEOWNERS.map((h) => ({
@@ -169,7 +183,7 @@ export default function HomeownersPage() {
     if (!search.trim()) return homeowners
     return homeowners.filter((h) => {
       const projectIds = [
-        ...CUSTOMER_PROJECTS.filter((p) => p.homeowner_id === h.id).map((p) => p.id),
+        ...effectiveCustomerProjects.filter((p) => p.homeowner_id === h.id).map((p) => p.id),
         ...sentProjects.filter((sp) => sp.homeowner?.email === h.email).map((sp) => sp.id),
       ]
       return matchesSearch({
@@ -179,7 +193,7 @@ export default function HomeownersPage() {
         ids: projectIds,
       })
     })
-  }, [search, homeowners, sentProjects])
+  }, [search, homeowners, sentProjects, effectiveCustomerProjects])
 
   const handleMessage = (homeowner: { id: string; name: string }) => {
     navigate('/admin/messages', { state: { homeownerId: homeowner.id, homeownerName: homeowner.name } })
@@ -249,7 +263,7 @@ export default function HomeownersPage() {
       {/* Homeowner Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filtered.map((homeowner, i) => {
-          const fixtureProjects: (CustomerProject & { address_label?: string })[] = CUSTOMER_PROJECTS
+          const fixtureProjects: (CustomerProject & { address_label?: string })[] = effectiveCustomerProjects
             .filter((p) => p.homeowner_id === homeowner.id)
             .map((p) => ({ ...p, address_label: p.address_label ?? 'Primary' }))
           // Merge sentProjects: cart-created projects where the homeowner
@@ -514,7 +528,7 @@ export default function HomeownersPage() {
                                           // sentProjects).
                                           let resolvedId = proj.id
                                           if (proj.id.startsWith('cp-')) {
-                                            const matched = MOCK_LEADS.find((l) => {
+                                            const matched = mockLeads.find((l) => {
                                               if (l.homeowner_id !== proj.homeowner_id) return false
                                               const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
                                               const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()
@@ -557,7 +571,7 @@ export default function HomeownersPage() {
                                         // right cheap-insurance discipline.
                                         let resolvedId = proj.id
                                         if (proj.id.startsWith('cp-')) {
-                                          const matched = MOCK_LEADS.find((l) => {
+                                          const matched = mockLeads.find((l) => {
                                             if (l.homeowner_id !== proj.homeowner_id) return false
                                             const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
                                             const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { MOCK_MESSAGES, MOCK_LEADS, MOCK_VENDORS, MOCK_HOMEOWNERS } from '@/lib/mock-data'
+import { MOCK_VENDORS, MOCK_HOMEOWNERS } from '@/lib/mock-data'
+import { useEffectiveMockLeads, useEffectiveMockMessages } from '@/lib/mock-data-effective'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -15,12 +16,17 @@ import type { Message } from '@/types'
 const quickReplies = ['Sounds good!', "I'll confirm shortly", 'Can you send details?', "What's the timeline?"]
 
 export function HomeownerMessagesPage() {
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  // MOCK_HOMEOWNERS[0] kept as no-auth profile fallback (identity-shim,
+  // not rendered seed data).
+  const mockLeads = useEffectiveMockLeads()
+  const mockMessages = useEffectiveMockMessages()
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const isMobile = useMobile()
-  const userLeads = MOCK_LEADS.filter((l) => l.homeowner_id === profile.id)
+  const userLeads = mockLeads.filter((l) => l.homeowner_id === profile.id)
   const [selectedLeadId, setSelectedLeadId] = useState(isMobile ? '' : userLeads[0]?.id || '')
   const [newMessage, setNewMessage] = useState('')
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES)
+  const [messages, setMessages] = useState<Message[]>(mockMessages)
   const [showTyping, setShowTyping] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 

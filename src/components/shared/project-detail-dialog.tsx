@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { MOCK_LEADS, MOCK_VENDORS, MOCK_CLOSED_SALES } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { deriveInitials } from '@/lib/initials'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
@@ -58,6 +59,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   const leadConfirmedAtByLead = useProjectsStore((s) => s.leadConfirmedAtByLead)
   const repAssignedAtByLead = useProjectsStore((s) => s.repAssignedAtByLead)
   const rescheduleRequestsByLead = useProjectsStore((s) => s.rescheduleRequestsByLead)
+  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
+  const mockClosedSales = useEffectiveMockClosedSales()
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -128,7 +132,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     }
 
     // Fall back to MOCK_LEADS fixture path
-    const l = MOCK_LEADS.find((x) => x.id === projectId)
+    const l = mockLeads.find((x) => x.id === projectId)
     if (!l) return null
     const rawStatus = leadStatusOverrides[l.id] ?? l.status
     const cReq = cancellationRequestsByLead[l.id]
@@ -143,7 +147,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
             ? 'declined'
             : 'pending'
     const vendor = MOCK_VENDORS.find((v) => v.id === l.vendor_id)
-    const closedSale = MOCK_CLOSED_SALES.find((c) => c.lead_id === l.id)
+    const closedSale = mockClosedSales.find((c) => c.lead_id === l.id)
     // Ship #150: synthesize minimal homeowner + selections context from
     // MOCK_LEADS fields so Customer Info + Project Selections sections
     // render on the lead-bridge path (apollo caught these missing on
@@ -185,7 +189,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       _idDocument: undefined,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides, leadConfirmedAtByLead, repAssignedAtByLead, rescheduleRequestsByLead])
+  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides, leadConfirmedAtByLead, repAssignedAtByLead, rescheduleRequestsByLead, mockLeads, mockClosedSales])
 
   const commissionPct = resolvePct(selectedItem?.vendor)
 

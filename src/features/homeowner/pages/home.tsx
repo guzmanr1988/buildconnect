@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
-import { MOCK_HOMEOWNERS, MOCK_LEADS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_HOMEOWNERS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
@@ -24,6 +25,11 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 const ACTIVE_TO_COMPLETED_DAYS = 30
 
 export function HomeownerHome() {
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  // MOCK_HOMEOWNERS[0] is kept as the no-auth profile fallback (default-
+  // user shim, not rendered seed data) — scope of the flag is the lead
+  // list, not the identity-fallback.
+  const mockLeads = useEffectiveMockLeads()
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const navigate = useNavigate()
 
@@ -84,7 +90,7 @@ export function HomeownerHome() {
   // useVendorScope. Dropping the fallback: MOCK_HOMEOWNERS[0] default-profile
   // path still matches because profile.id is already 'ho-1' in that case, so
   // the fallback was redundant AND leaking.
-  const mockLeadsAsEntries: LifecycleEntry[] = MOCK_LEADS
+  const mockLeadsAsEntries: LifecycleEntry[] = mockLeads
     .filter((l) => l.homeowner_id === profile.id)
     .map((l) => {
       const overrideStatus = leadStatusOverrides[l.id]

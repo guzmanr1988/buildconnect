@@ -39,6 +39,15 @@ interface AdminModerationState {
   // via /admin/settings Match Radius card. Default 60 miles.
   matchRadiusMiles: number
   setMatchRadius: (miles: number) => void
+  // Ship #250 — demo-data visibility flag. When true, all seeded
+  // fixture reads (MOCK_LEADS / MOCK_CLOSED_SALES / MOCK_MESSAGES /
+  // MOCK_HOMEOWNERS / CUSTOMER_PROJECTS) return [] across user-visible
+  // surfaces via the useEffective* hooks. Clear Demo Data sets this
+  // true; Restore Demo Data sets false. Persisted so the flag survives
+  // page refresh (so Rodolfo's cleared state doesn't un-clear on
+  // reload).
+  demoDataHidden: boolean
+  setDemoDataHidden: (hidden: boolean) => void
   suspendHomeowner: (id: string) => void
   reactivateHomeowner: (id: string) => void
   getHomeownerStatus: (id: string, defaultStatus: HomeownerStatus) => HomeownerStatus
@@ -65,6 +74,9 @@ export const useAdminModerationStore = create<AdminModerationState>()(
         const clamped = Math.max(5, Math.min(300, Math.round(miles)))
         set({ matchRadiusMiles: clamped })
       },
+
+      demoDataHidden: false,
+      setDemoDataHidden: (hidden) => set({ demoDataHidden: hidden }),
 
       suspendHomeowner: (id) =>
         set((state) => ({

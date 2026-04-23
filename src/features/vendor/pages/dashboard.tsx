@@ -20,9 +20,11 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
-import { MOCK_VENDORS, MOCK_LEADS } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useAuthStore } from '@/stores/auth-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -154,9 +156,13 @@ export default function VendorDashboard() {
   // generic Demo Vendor account) see only their own sentProjects — Rod
   // P0 2026-04-20: DV was inheriting Maria L-0001 + James L-0005 as its
   // own leads via the filter match when mockVendorId was null.
+  // Ship #250 — read through useEffectiveMockLeads hook so demoDataHidden
+  // flag zero-outs seeded fixture leads after Clear Demo Data. Pre-#250
+  // direct MOCK_LEADS import couldn't be cleared at runtime.
+  const effectiveMockLeads = useEffectiveMockLeads()
   const mockLeads = useMemo(
-    () => (mockVendorId ? MOCK_LEADS.filter((l) => l.vendor_id === VENDOR_ID) : []),
-    [VENDOR_ID, mockVendorId]
+    () => (mockVendorId ? effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID) : []),
+    [VENDOR_ID, mockVendorId, effectiveMockLeads]
   )
   // Convert sent projects from homeowner side into lead-like objects.
   // Ship #163 + #165 vendor_id-FK hardening (task_1776731114470_226):
@@ -322,6 +328,13 @@ export default function VendorDashboard() {
   // 'false' in prod env when real users sign in.
   const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
   const [clearDemoDialogOpen, setClearDemoDialogOpen] = useState(false)
+  // Ship #250 — demoDataHidden flag + setter. Clear Demo Data sets true
+  // (hides seeded fixtures across 14 user-visible surfaces); Restore Demo
+  // Data sets false. Existing zustand wipes stay unchanged — the flag is
+  // additive coverage for STATIC fixture imports (MOCK_LEADS etc.) that
+  // the pre-#250 handler couldn't reach.
+  const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
+  const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
   const handleClearDemoData = () => {
     // Triple-belt: (1) in-memory reset via setState, (2) explicit localStorage
     // removeItem on the persist key, (3) forced re-write of the empty state to
@@ -351,7 +364,14 @@ export default function VendorDashboard() {
       localStorage.removeItem('buildconnect-homeowner-info')
       localStorage.removeItem('buildconnect-id-document')
     } catch { /* storage errors non-fatal */ }
+    // Ship #250 — hide seeded fixture data too (Maria Rodriguez / James
+    // Thompson / etc.) since Clear Demo Data couldn't touch static imports
+    // pre-#250.
+    setDemoDataHidden(true)
     setClearDemoDialogOpen(false)
+  }
+  const handleRestoreDemoData = () => {
+    setDemoDataHidden(false)
   }
   const [rejectionReason, setRejectionReason] = useState('')
 
@@ -734,16 +754,33 @@ export default function VendorDashboard() {
                 <p className="text-sm text-muted-foreground mt-0.5">{vendor.name} &middot; {vendor.phone}</p>
               </div>
               {demoMode && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/30"
-                  onClick={() => setClearDemoDialogOpen(true)}
-                  aria-label="Clear demo data"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Clear Demo Data</span>
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Ship #250 — Restore Demo Data counterpart. Visible only
+                      when demoDataHidden is true (post-Clear state). Lets
+                      Rodolfo cycle demo-state freely pre-launch. */}
+                  {demoDataHidden && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={handleRestoreDemoData}
+                      aria-label="Restore demo data"
+                    >
+                      <span className="hidden sm:inline">Restore Demo Data</span>
+                      <span className="sm:hidden">Restore</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/30"
+                    onClick={() => setClearDemoDialogOpen(true)}
+                    aria-label="Clear demo data"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Clear Demo Data</span>
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>

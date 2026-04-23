@@ -13,7 +13,7 @@ import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
-import { MOCK_LEADS } from '@/lib/mock-data'
+import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +57,8 @@ export function VendorLayout() {
   const navigate = useNavigate()
   const { sidebarCollapsed, toggleSidebarCollapsed } = useUIStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
+  const mockLeads = useEffectiveMockLeads()
 
   // Vendor notifications = pending leads awaiting action. Reverse-map
   // profile.id → mock-vendor-id so the demo vendors see their MOCK_LEADS
@@ -65,7 +67,7 @@ export function VendorLayout() {
     ? Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(([, uuid]) => uuid === profile.id)?.[0]
     : null
   const vendorIdForLeads = mockVendorId ?? profile?.id ?? ''
-  const pendingLeads = MOCK_LEADS.filter(
+  const pendingLeads = mockLeads.filter(
     (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
   )
 
@@ -82,7 +84,7 @@ export function VendorLayout() {
   const RECENT_RESOLVED_WINDOW_MS = 24 * 60 * 60 * 1000 // 24h — resolved events surface briefly then drop off
 
   const myLeadIds = new Set<string>([
-    ...MOCK_LEADS.filter((l) => l.vendor_id === vendorIdForLeads).map((l) => l.id),
+    ...mockLeads.filter((l) => l.vendor_id === vendorIdForLeads).map((l) => l.id),
     ...sentProjects
       .filter((p) => p.contractor?.vendor_id === vendorIdForLeads)
       .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`),
