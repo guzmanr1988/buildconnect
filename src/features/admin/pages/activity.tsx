@@ -452,6 +452,10 @@ export default function AdminActivityPage() {
                     key={e.id}
                     type="button"
                     disabled={!clickable}
+                    data-activity-row
+                    data-activity-type={e.type}
+                    data-activity-lead-id={e.leadId ?? ''}
+                    data-activity-project-id={e.projectId ?? ''}
                     onClick={() => {
                       if (e.projectId) setSelectedProjectId(e.projectId)
                       else if (e.leadId) setSelectedProjectId(e.leadId)
