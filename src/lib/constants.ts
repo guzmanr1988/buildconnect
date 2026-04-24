@@ -589,6 +589,86 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
       },
     ],
   },
+  {
+    // Ship #260 — Blinds as 12th service. Residential window-treatment
+    // coverage across common buying-decisions: type (multi — homes often
+    // mix types across rooms), material, control mechanism, mount style,
+    // light-control opacity. Prices set vendor-side via /admin/products
+    // or Supabase catalog; SERVICE_CATALOG defines shape only.
+    id: 'blinds',
+    name: 'Blinds',
+    tagline: 'Custom window treatments for every room',
+    description: 'Roller, venetian, roman, cellular, vertical, blackout, motorized — multiple materials, mount styles, and light-control options for residential applications.',
+    features: ['Cordless Available', 'Energy Efficient', 'Custom Fit'],
+    stat: { label: 'Homes Dressed', value: '1,240' },
+    optionGroups: [
+      {
+        // Multi — homes commonly mix blind types across rooms (roller in
+        // kitchen, blackout in bedroom, motorized in living room).
+        id: 'type',
+        label: 'Blind Type',
+        required: true,
+        type: 'multi',
+        options: [
+          { id: 'roller', label: 'Roller Shades', description: 'Clean, modern, affordable — most common' },
+          { id: 'venetian', label: 'Venetian Blinds', description: 'Horizontal slats, classic look' },
+          { id: 'roman', label: 'Roman Shades', description: 'Fabric folds, upscale' },
+          { id: 'cellular', label: 'Cellular / Honeycomb', description: 'Energy-efficient insulation' },
+          { id: 'vertical', label: 'Vertical Blinds', description: 'Sliding doors, wide windows' },
+          { id: 'blackout', label: 'Blackout Shades', description: 'Bedrooms, media rooms — total darkness' },
+          { id: 'motorized', label: 'Motorized / Smart', description: 'Remote + app control, premium' },
+        ],
+      },
+      {
+        id: 'material',
+        label: 'Material',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'fabric', label: 'Fabric', description: 'Soft, customizable, living-room feel' },
+          { id: 'vinyl', label: 'Vinyl', description: 'Moisture-resistant — bathrooms, kitchens' },
+          { id: 'faux_wood', label: 'Faux Wood', description: 'Wood look + moisture-resistant' },
+          { id: 'real_wood', label: 'Real Wood', description: 'Natural, premium' },
+          { id: 'aluminum', label: 'Aluminum', description: 'Modern, durable, slim profile' },
+          { id: 'bamboo', label: 'Bamboo', description: 'Eco-friendly, organic texture' },
+        ],
+      },
+      {
+        id: 'control',
+        label: 'Control Type',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'cordless', label: 'Cordless', description: 'Child-safe — recommended default' },
+          { id: 'traditional_cord', label: 'Traditional Cord', description: 'Classic pull-cord' },
+          { id: 'wand', label: 'Wand', description: 'Tilt wand for slat-based blinds' },
+          { id: 'motorized', label: 'Motorized', description: 'Remote or app control' },
+        ],
+      },
+      {
+        id: 'mount',
+        label: 'Mount Style',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'inside_mount', label: 'Inside Mount', description: 'Flush inside the window frame — cleaner look' },
+          { id: 'outside_mount', label: 'Outside Mount', description: 'Covers the frame — blocks more light' },
+        ],
+      },
+      {
+        id: 'light_control',
+        label: 'Light Control',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'blackout', label: 'Blackout', description: 'Total light block' },
+          { id: 'room_darkening', label: 'Room Darkening', description: 'Most light blocked, softer than blackout' },
+          { id: 'light_filtering', label: 'Light Filtering', description: 'Diffuses light, maintains privacy' },
+          { id: 'sheer', label: 'Sheer', description: 'Lets light through, minimal privacy' },
+        ],
+      },
+    ],
+  },
 ]
 
 export const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {

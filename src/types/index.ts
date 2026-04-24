@@ -29,6 +29,7 @@ export type ServiceCategory =
   | 'wall_paneling'
   | 'garage'
   | 'house_painting'
+  | 'blinds'
 
 export type CatalogUnit = 'per_sq_ft' | 'per_unit' | 'per_linear_ft' | 'flat_rate'
 

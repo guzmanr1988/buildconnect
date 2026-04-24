@@ -723,11 +723,16 @@ export const useCatalogStore = create<CatalogState>()(
       // in constants.ts, but the persist middleware kept serving the v8
       // cached single-select shape to existing users, so the multi-select
       // code-path never fired on their runtime despite the bundle carrying
-      // the new default. Version bump = eviction trigger; migrate resets
-      // to fresh SERVICE_CATALOG which now carries the multi shape.
+      // the new default.
+      //
+      // Ship #260 — version bump 9→10 paired-edit-discipline: SERVICE_CATALOG
+      // gained 12th service "Blinds" in the same commit. Paired-edit enforces
+      // the #259 lesson — any SERVICE_CATALOG shape change MUST bump persist
+      // version in the same commit to force migration for existing users.
+      //
       // Future same-class fixes: when changing SERVICE_CATALOG defaults,
       // bump this version to force persisted-state eviction.
-      version: 9,
+      version: 10,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({

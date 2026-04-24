@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -40,6 +40,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   wall_paneling: PanelTop,
   garage: Hammer,
   house_painting: PaintRoller,
+  blinds: Blinds,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
@@ -54,6 +55,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   wall_paneling: 'from-purple-400 to-violet-500',
   garage: 'from-slate-400 to-slate-600',
   house_painting: 'from-rose-400 to-pink-500',
+  blinds: 'from-indigo-400 to-purple-500',
 }
 
 export function ServiceDetailPage() {

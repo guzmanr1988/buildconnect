@@ -24,6 +24,7 @@ function getServiceMeasurementPhrase(serviceId: string): string {
     case 'wall_paneling': return 'your wall space'
     case 'garage': return 'your garage'
     case 'house_painting': return 'your painting area'
+    case 'blinds': return 'your blinds'
     default: return 'your project'
   }
 }
