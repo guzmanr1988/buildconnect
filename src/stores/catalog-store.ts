@@ -717,7 +717,17 @@ export const useCatalogStore = create<CatalogState>()(
     }),
     {
       name: 'buildconnect-catalog',
-      version: 8,
+      // Ship #259 — version bump 8→9 forces existing users to re-hydrate
+      // from SERVICE_CATALOG via the migrate fn below. #255 flipped the
+      // roofing material option-group from type:'single' to type:'multi'
+      // in constants.ts, but the persist middleware kept serving the v8
+      // cached single-select shape to existing users, so the multi-select
+      // code-path never fired on their runtime despite the bundle carrying
+      // the new default. Version bump = eviction trigger; migrate resets
+      // to fresh SERVICE_CATALOG which now carries the multi shape.
+      // Future same-class fixes: when changing SERVICE_CATALOG defaults,
+      // bump this version to force persisted-state eviction.
+      version: 9,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
