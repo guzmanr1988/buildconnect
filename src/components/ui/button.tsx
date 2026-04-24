@@ -5,14 +5,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  // Smooth button transition unified app-wide (ship #101 per kratos msg
-  // 1776715504837). Homeowner service-card button had duration-300 ease-out
-  // + hover:shadow-lg + hover:-translate-y-[2px]; vendor + admin Button
-  // surfaces had only `transition-all` (150ms default, no hover-lift). Adds
-  // duration-200 ease-out explicit + hover:-translate-y-px + hover:shadow-sm
-  // for a subtle unified hover-lift that complements the existing
-  // active:translate-y-px press-down for a consistent interactive feel.
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all duration-200 ease-out outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 hover:not-aria-[haspopup]:-translate-y-px hover:not-aria-[haspopup]:shadow-sm active:not-aria-[haspopup]:translate-y-px active:not-aria-[haspopup]:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  // Ship #256 — stripped hover/active translate-y platform-wide per Rodolfo
+  // directive "buttons for the menus not to move". Rodolfo's mental model
+  // carves motion between cards (float, from #245) and buttons (still —
+  // they're actions you take, not items you pick). Button feedback stays
+  // tactile via hover:shadow-sm + active:shadow-none; cards still float
+  // per #245 (untouched).
+  //
+  // Pre-#256 history (preserved for archaeological context):
+  // Ship #101 unified button transitions — added duration-200 ease-out +
+  // hover:-translate-y-px + hover:shadow-sm + active:translate-y-px for
+  // subtle lift-and-press feel. Removed in #256 because it introduced
+  // unwanted motion on buttons-inside-menus; shadow feedback kept.
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all duration-200 ease-out outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 hover:not-aria-[haspopup]:shadow-sm active:not-aria-[haspopup]:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
