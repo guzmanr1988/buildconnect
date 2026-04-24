@@ -433,12 +433,22 @@ export function ServiceDetailPage() {
                           if (serviceId === 'windows_doors' && option.id === 'doors') {
                             setDoorConfigOpen((prev) => selected.includes('doors') ? !prev : true)
                           }
+                          // Ship #255 — multi-select material. `selected` is the
+                          // pre-click state, so includes('metal') tells us whether
+                          // THIS click de-selects metal (was in, now out) or adds
+                          // metal (was out, now in). Matches the windows_doors
+                          // pattern above (line 430-434). Previously the logic
+                          // assumed single-select and cleared metal state on any
+                          // non-metal click; that breaks multi-mode (user picking
+                          // shingle alongside metal would wipe the metal config).
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'metal') {
-                            setMetalRoofConfigOpen(true)
-                          }
-                          if (serviceId === 'roofing' && group.id === 'material' && option.id !== 'metal') {
-                            setMetalRoofConfigOpen(false)
-                            setMetalRoofSelection({ color: '', roofSize: '' })
+                            const wasSelected = selected.includes('metal')
+                            if (wasSelected) {
+                              setMetalRoofConfigOpen(false)
+                              setMetalRoofSelection({ color: '', roofSize: '' })
+                            } else {
+                              setMetalRoofConfigOpen(true)
+                            }
                           }
                           if (serviceId === 'windows_doors' && option.id === 'garage_doors') {
                             setGarageDoorConfigOpen((prev) => selected.includes('garage_doors') ? !prev : true)

@@ -23,10 +23,15 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
+        // Ship #255 — multi-select per Rodolfo directive. Many homes have
+        // a primary sloped material with secondary flat-roof sections
+        // (shingle + flat, tile + flat, metal + flat). Multi-select lets
+        // the homeowner reflect their actual roof shape. Data model
+        // already supports string[] via pack_items.material.
         id: 'material',
         label: 'Roofing Material',
         required: true,
-        type: 'single',
+        type: 'multi',
         options: [
           { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan' },
           { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan' },
