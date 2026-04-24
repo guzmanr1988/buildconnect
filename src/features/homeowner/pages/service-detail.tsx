@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
+import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
@@ -330,6 +331,18 @@ export function ServiceDetailPage() {
             ))}
           </div>
         </div>
+      </motion.div>
+
+      {/* Ship #253 — per-service measurement tutorial CTA. Placed above
+          the Configure-your-project card so the homeowner sees the help-
+          link BEFORE getting into option selection. Toast-placeholder
+          onClick; real video URLs land when content is produced. */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.08 }}
+      >
+        <MeasurementTutorialCTA serviceId={service.id} />
       </motion.div>
 
       {/* Configuration section */}
