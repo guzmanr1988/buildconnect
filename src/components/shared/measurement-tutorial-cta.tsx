@@ -1,5 +1,5 @@
+import { useNavigate } from 'react-router-dom'
 import { Video, PlayCircle } from 'lucide-react'
-import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,7 @@ function getServiceMeasurementPhrase(serviceId: string): string {
 }
 
 export function MeasurementTutorialCTA({ serviceId, className }: { serviceId: string; className?: string }) {
+  const navigate = useNavigate()
   const phrase = getServiceMeasurementPhrase(serviceId)
   return (
     <Card
@@ -54,12 +55,13 @@ export function MeasurementTutorialCTA({ serviceId, className }: { serviceId: st
           variant="outline"
           className="shrink-0 gap-1.5 border-sky-300 bg-white/60 text-sky-800 hover:bg-white dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100"
           onClick={() => {
-            // Ship #253 placeholder — real video URLs wire in when content
-            // is produced. Toast-only so the UI shape is correct; swap
-            // onClick target later without restructuring.
-            toast('Tutorial video coming soon', {
-              description: 'Real content lands once we wire the video library.',
-            })
+            // Ship #254 — navigate to the homeowner tutorials page with
+            // service-id filter pre-applied. /home/tutorials already
+            // supports ?service=<id> via useSearchParams and renders
+            // the service-specific bucket + general bucket alongside.
+            // Video URLs on the tutorials page itself still placeholder-
+            // staged (pre-content); navigation path becomes real.
+            navigate(`/home/tutorials?service=${serviceId}`)
           }}
         >
           <PlayCircle className="h-3.5 w-3.5" />
