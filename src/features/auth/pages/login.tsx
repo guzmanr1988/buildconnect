@@ -366,7 +366,7 @@ export function LoginPage() {
                   transition={{ duration: 0.3, delay: 0.4 + i * 0.08 }}
                 >
                   <Card
-                    className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/20 active:scale-[0.99]"
+                    className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/20"
                     onClick={() => !isLoading && demoLogin(demo.email, demo.password, demo.role)}
                     role="button"
                     tabIndex={0}

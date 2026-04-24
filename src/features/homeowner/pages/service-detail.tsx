@@ -350,7 +350,7 @@ export function ServiceDetailPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
-        className="rounded-2xl border bg-card p-6 shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]"
+        className="rounded-2xl border bg-card p-6 shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5"
       >
         <h2 className="text-lg font-semibold font-heading text-foreground mb-1">
           Configure your project
