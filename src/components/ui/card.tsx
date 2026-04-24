@@ -11,22 +11,26 @@ function Card({
   // Ship #245 — floating-card effect applied by default platform-wide per
   // Rodolfo directive. `flat` opt-out escape hatch for surfaces that
   // shouldn't lift (dialog-internal cards, static KPI tiles, info panels).
-  // #246 follow-up will sweep and tag `flat` on specific surfaces after
-  // Rodolfo field-tests which surfaces feel wrong with the float.
+  //
+  // Ship #247 — pointer-fine gate on transform utilities. :active fires
+  // on touchstart on touch devices, and scale transform interferes with
+  // browser scroll-gesture detection. pointer-fine keeps the effect on
+  // mouse/trackpad only; touch devices see the shadow-md baseline without
+  // transforms, so swipe gestures pass through unblocked.
+  //
+  // Ship #257 — dropped Card's active:scale. When user clicked a button
+  // INSIDE a card, :active bubbled from button to the Card ancestor,
+  // compressing the whole menu (Rodolfo: "when i click on the buttons
+  // the whole floating menus moves and that is not what i want"). Press
+  // animation now lives on Button itself (active:scale-[0.98]) so only
+  // the clicked button compresses; the containing card stays put.
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        // Ship #247 — pointer-fine gate on transform utilities. :active
-        // fires on touchstart on touch devices, and the resulting scale
-        // transform interferes with the browser's scroll-gesture detection
-        // on horizontal-swipe containers (Rodolfo-surfaced mobile regression
-        // post-#245). Tailwind v4 pointer-fine: variant gates to
-        // mouse/trackpad only; touch devices see the shadow-md baseline
-        // without any transform, so swipe gestures pass through unblocked.
-        !flat && "shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5 pointer-fine:active:scale-[0.99]",
+        !flat && "shadow-md transition-all duration-200 ease-out pointer-fine:hover:shadow-lg pointer-fine:hover:-translate-y-0.5",
         className
       )}
       {...props}

@@ -6,18 +6,25 @@ import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
   // Ship #256 — stripped hover/active translate-y platform-wide per Rodolfo
-  // directive "buttons for the menus not to move". Rodolfo's mental model
-  // carves motion between cards (float, from #245) and buttons (still —
-  // they're actions you take, not items you pick). Button feedback stays
-  // tactile via hover:shadow-sm + active:shadow-none; cards still float
-  // per #245 (untouched).
+  // directive. Motion-language split: cards float (things you pick);
+  // buttons stay put vertically (actions you take).
+  //
+  // Ship #257 — added pointer-fine:active:scale-[0.98] press animation.
+  // Rodolfo clarified #256 over-corrected: he wanted BUTTON to animate on
+  // press, just not the whole menu/card to compress. Root cause: Card's
+  // active:scale bubbled from child button clicks. #257 moved the press
+  // animation FROM Card TO Button (correct surface), gated pointer-fine
+  // to skip touch devices per #247 discipline, and haspopup-exempt to
+  // preserve dropdown-trigger behavior. 0.98 (2% compression) slightly
+  // more visible than Card's old 0.99 because buttons are smaller
+  // elements and need more % per size-unit for tactile feel.
   //
   // Pre-#256 history (preserved for archaeological context):
   // Ship #101 unified button transitions — added duration-200 ease-out +
   // hover:-translate-y-px + hover:shadow-sm + active:translate-y-px for
-  // subtle lift-and-press feel. Removed in #256 because it introduced
-  // unwanted motion on buttons-inside-menus; shadow feedback kept.
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all duration-200 ease-out outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 hover:not-aria-[haspopup]:shadow-sm active:not-aria-[haspopup]:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  // subtle lift-and-press feel. Lift removed in #256; press now scale-
+  // based per #257 (non-translate, no lift).
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all duration-200 ease-out outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 hover:not-aria-[haspopup]:shadow-sm active:not-aria-[haspopup]:shadow-none pointer-fine:active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
