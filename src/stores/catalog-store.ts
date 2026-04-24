@@ -487,6 +487,21 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
   return next
 }
 
+// Ship #261 — union-fill-gaps helper. Takes a services array from any
+// source (server fetch OR persisted-rehydrate) and APPENDS any SERVICE_CATALOG
+// bundled entries whose id is missing. Server/persisted entries win for
+// overlapping ids (admin edits, overrides). Bundled entries fill gaps for
+// newly-added code services that haven''t been propagated to Supabase yet.
+//
+// This is the paired mechanism to persist-version-bump: version-bump forces
+// a one-time migrate, union-fill-gaps ensures the bundled-only services stay
+// present even after subsequent server fetches or persist-rehydrates.
+function unionBundledFillingGaps(services: ServiceConfig[]): ServiceConfig[] {
+  const seenIds = new Set(services.map((s) => s.id))
+  const missing = SERVICE_CATALOG.filter((s) => !seenIds.has(s.id))
+  return missing.length > 0 ? [...services, ...missing] : services
+}
+
 /* ---------------------------------------------------------------- */
 /* Store                                                             */
 /* ---------------------------------------------------------------- */
@@ -503,7 +518,16 @@ export const useCatalogStore = create<CatalogState>()(
         if (get().isHydrating) return
         set({ isHydrating: true, lastFetchError: null })
         try {
-          const services = await api.fetchServiceCatalog()
+          const servers = await api.fetchServiceCatalog()
+          // Ship #261 — union bundled + server. Server wins for overlapping
+          // ids (admin edits persist); bundled fills gaps (newly-added code
+          // services surface even when Supabase hasn''t caught up yet).
+          // Root cause: #260 added Blinds to bundled SERVICE_CATALOG but
+          // Supabase services table still had 11 pre-Blinds entries. Users
+          // who hit /admin/products post-#260 got their state wiped of
+          // Blinds when fetch returned 11. Union-fills-gap semantics
+          // prevents recurrence for any future bundle-added service.
+          const services = unionBundledFillingGaps(servers)
           set({ services, hasHydrated: true, isHydrating: false })
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'fetchServiceCatalog failed'
@@ -730,9 +754,17 @@ export const useCatalogStore = create<CatalogState>()(
       // the #259 lesson — any SERVICE_CATALOG shape change MUST bump persist
       // version in the same commit to force migration for existing users.
       //
+      // Ship #261 — version bump 10→11 paired-edit: the #260 migration worked
+      // for homeowner-only users but got wiped when admin/products fetched
+      // Supabase services (still 11 pre-Blinds entries). #261 adds
+      // union-fill-gaps on hydrateFromServer AND onRehydrateStorage so
+      // bundled-only services persist across fetch/rehydrate cycles. Version
+      // bump forces one more migration so existing stale-state users get
+      // reset alongside the new union logic.
+      //
       // Future same-class fixes: when changing SERVICE_CATALOG defaults,
       // bump this version to force persisted-state eviction.
-      version: 10,
+      version: 11,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
@@ -740,11 +772,24 @@ export const useCatalogStore = create<CatalogState>()(
         hasHydrated: state.hasHydrated,
       }),
       // Migrate resets to bundled SERVICE_CATALOG so existing users get a
-      // clean fallback; hydrateFromServer will overwrite on next auth'd load.
+      // clean fallback; hydrateFromServer will overwrite on next auth'd load
+      // via union-fill-gaps (Ship #261).
       migrate: () => ({
         services: SERVICE_CATALOG,
         hasHydrated: false,
       }),
+      // Ship #261 — apply union-fill-gaps on persist-rehydrate. If persisted
+      // state lacks any bundled SERVICE_CATALOG entries (because an earlier
+      // hydrateFromServer persisted a server-only subset), append them post-
+      // rehydrate. Silent no-op when persisted state already has all bundled
+      // entries.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        const patched = unionBundledFillingGaps(state.services)
+        if (patched.length !== state.services.length) {
+          state.services = patched
+        }
+      },
     }
   )
 )
