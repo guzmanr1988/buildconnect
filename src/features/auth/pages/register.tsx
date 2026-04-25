@@ -114,13 +114,32 @@ export function RegisterPage() {
   const zipValue = watch('zip') ?? ''
 
   useEffect(() => {
-    if (!isAuthenticated || !profile) return
+    // Ship #274 — diag telemetry on redirect useEffect re-fires.
+    const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+    if (isDemoMode) {
+      // eslint-disable-next-line no-console
+      console.log('[#274 payment-stuck-diag]', 'redirect-useEffect:fire', {
+        t: Date.now(),
+        isAuthenticated,
+        profile_id: profile?.id,
+        profile_role: profile?.role,
+        paymentDialogOpen,
+      })
+    }
+    if (!isAuthenticated || !profile) {
+      if (isDemoMode) console.log('[#274 payment-stuck-diag]', 'redirect-useEffect:returning-early (not-authed-or-no-profile)')
+      return
+    }
     // Ship #179 — gate vendor redirect on payment dialog. paymentDialogOpen
     // is set synchronously in onSubmit BEFORE the signUp await boundary,
     // so by the time AuthBootstrap hydrates profile + this effect re-runs,
     // the gate is already true. The dialog's onSuccess handler flips the
     // gate to false, which re-triggers this effect and lands the redirect.
-    if (profile.role === 'vendor' && paymentDialogOpen) return
+    if (profile.role === 'vendor' && paymentDialogOpen) {
+      if (isDemoMode) console.log('[#274 payment-stuck-diag]', 'redirect-useEffect:returning-early (vendor + paymentDialogOpen)')
+      return
+    }
+    if (isDemoMode) console.log('[#274 payment-stuck-diag]', 'redirect-useEffect:about-to-navigate', { target: profile.role === 'vendor' ? '/vendor' : '/home' })
     navigate(profile.role === 'vendor' ? '/vendor' : '/home', { replace: true })
   }, [isAuthenticated, profile, paymentDialogOpen, navigate])
 
@@ -242,6 +261,21 @@ export function RegisterPage() {
   // via AuthBootstrap hydration; by the time the user submits payment,
   // the profile is live and we can key the stored method to it.
   function handlePaymentSuccess(method: Omit<VendorPaymentMethod, 'id'>) {
+    // Ship #274 — diag telemetry on payment-success handler.
+    const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+    const diagLog = (phase: string, extra: Record<string, unknown> = {}) => {
+      if (!isDemoMode) return
+      // eslint-disable-next-line no-console
+      console.log('[#274 payment-stuck-diag]', phase, { t: Date.now(), ...extra })
+    }
+    diagLog('handlePaymentSuccess:start', {
+      vendorId: profile?.id,
+      profile_role: profile?.role,
+      isAuthenticated,
+      paymentDialogOpen_before: paymentDialogOpen,
+      method_kind: method.kind,
+      method_last4: method.last4,
+    })
     const vendorId = profile?.id
     if (vendorId) {
       // Ship #189 — addPaymentMethod appends to the per-vendor array +
@@ -263,6 +297,7 @@ export function RegisterPage() {
       console.warn('[register] payment success fired before profile hydrate; skipping store')
     }
     setPaymentDialogOpen(false)
+    diagLog('handlePaymentSuccess:end (setPaymentDialogOpen(false) called)')
     // The register.useEffect re-runs on gate flip → navigates to /vendor.
   }
 

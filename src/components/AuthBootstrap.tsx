@@ -9,9 +9,23 @@ export function AuthBootstrap() {
     let mounted = true
 
     async function hydrate(userId: string, email: string, access_token: string) {
+      // Ship #274 — diag telemetry on hydrate firings during the
+      // payment-success window (TOKEN_REFRESHED / SIGNED_IN /
+      // USER_UPDATED listener fires).
+      const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+      const diagLog = (phase: string, extra: Record<string, unknown> = {}) => {
+        if (!isDemoMode) return
+        // eslint-disable-next-line no-console
+        console.log('[#274 payment-stuck-diag]', phase, { t: Date.now(), ...extra })
+      }
+      diagLog('AuthBootstrap.hydrate:start', { userId, email })
       try {
         const profile = await getProfile(userId)
-        if (!mounted) return
+        diagLog('AuthBootstrap.hydrate:getProfile-success', { profile_role: profile.role })
+        if (!mounted) {
+          diagLog('AuthBootstrap.hydrate:returning-early (unmounted)')
+          return
+        }
         const store = useAuthStore.getState()
         store.setSession({ access_token, user: { id: userId, email } })
         // Preserve fields whose Supabase columns don't yet exist —
@@ -40,11 +54,13 @@ export function AuthBootstrap() {
           merged.noncircumvention_agreement_signature_metadata = prior.noncircumvention_agreement_signature_metadata
         }
         store.setProfile(merged)
+        diagLog('AuthBootstrap.hydrate:setProfile-called', { merged_role: merged.role })
         // Catalog is authed-read-only — pull fresh data now that the session is live.
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
         useCatalogStore.getState().hydrateFromServer()
       } catch (err) {
+        diagLog('AuthBootstrap.hydrate:getProfile-FAILED', { error: String(err) })
         console.error('[AuthBootstrap] getProfile failed:', err)
       }
     }
@@ -78,6 +94,14 @@ export function AuthBootstrap() {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ship #274 — diag telemetry on every auth listener fire so we
+      // can see if a TOKEN_REFRESHED / USER_UPDATED interrupts the
+      // payment-success window.
+      const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+      if (isDemoMode) {
+        // eslint-disable-next-line no-console
+        console.log('[#274 payment-stuck-diag]', 'AuthBootstrap.listener:fire', { t: Date.now(), event, has_session: !!session, user_id: session?.user?.id })
+      }
       if (!mounted) return
       // QA persona bypass on listener too — prevents a late Supabase
       // SIGNED_IN / TOKEN_REFRESHED event from overwriting persona state.

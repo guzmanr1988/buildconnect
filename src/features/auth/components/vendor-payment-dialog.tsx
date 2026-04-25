@@ -158,16 +158,38 @@ export function VendorPaymentDialog({
   function handleSubmit() {
     const method = buildMethod()
     if (!method) return
+    // Ship #274 — VITE_DEMO_MODE-gated diagnostic telemetry on the
+    // payment-success → vendor-redirect chain. Static trace exhausted
+    // on Rodolfo's "stuck in loading" report; need real-trace data
+    // to narrow stall location. Drop these logs once the regression
+    // closes (post-cause identified).
+    const isDemoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+    const diagLog = (phase: string, extra: Record<string, unknown> = {}) => {
+      if (!isDemoMode) return
+      // eslint-disable-next-line no-console
+      console.log('[#274 payment-stuck-diag]', phase, { t: Date.now(), ...extra })
+    }
+    diagLog('handleSubmit:start', {
+      kind: method.kind,
+      last4: method.last4,
+      uiState_before: 'entering',
+    })
     setUIState('submitting')
+    diagLog('handleSubmit:setUIState(submitting)')
     // Mock: pretend a short processing delay so the UI has weight. Real
     // integration would replace this with the processor's confirm call.
     setTimeout(() => {
+      diagLog('handleSubmit:inner-timeout-fired (post-600ms)')
       setUIState('success')
+      diagLog('handleSubmit:setUIState(success)')
       // Parent onSuccess fires after the success state shows. Auto-close
       // follows SUCCESS_DISPLAY_MS later so the user sees the green check.
       setTimeout(() => {
+        diagLog('handleSubmit:outer-timeout-fired (post-2100ms)')
         onSuccess(method)
+        diagLog('handleSubmit:onSuccess-returned')
         onOpenChange(false)
+        diagLog('handleSubmit:onOpenChange(false)-called')
       }, SUCCESS_DISPLAY_MS)
     }, 600)
   }
