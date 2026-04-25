@@ -15,6 +15,8 @@ import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope } from '@/lib/vendor-scope'
+import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
+import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -271,6 +273,21 @@ export function VendorLayout() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Ship #270 — Non-circumvention agreement gate. Single insertion
+          point handles fresh-signup landing, login-resume, AND
+          version-bump re-prompt. Dialog renders blocking when the
+          authed vendor's signed-version doesn't match the current
+          version constant. profile.role === 'vendor' guard prevents
+          mid-redirect homeowner/admin flash from triggering the gate.
+          When dismissible={false}, the only exits are Sign Agreement
+          (updates profile + closes via state flip) or Sign Out
+          (clears session). */}
+      {profile?.role === 'vendor'
+        && profile.noncircumvention_agreement_version !== CURRENT_AGREEMENT_VERSION
+        && (
+          <NonCircumventionAgreementDialog mode="sign" open />
+        )}
     </div>
   )
 }

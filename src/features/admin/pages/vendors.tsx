@@ -53,6 +53,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Input } from '@/components/ui/input'
 import { MOCK_VENDORS } from '@/lib/mock-data'
+import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
+import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import {
   useEffectiveMockLeads,
   useEffectiveMockClosedSales,
@@ -96,6 +98,11 @@ export default function VendorsPage() {
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
   const [resolveNote, setResolveNote] = useState('')
+  // Ship #270 — agreement view + re-prompt state. agreementViewVendor
+  // holds the vendor whose signed-snapshot opens in view-mode dialog.
+  // repromptVendor holds the vendor pending re-prompt confirmation.
+  const [agreementViewVendor, setAgreementViewVendor] = useState<Vendor | null>(null)
+  const [repromptVendor, setRepromptVendor] = useState<Vendor | null>(null)
   // Ship #172 (task_1776719975617_951) — data-edit form state. Populated
   // from the effective vendor profile on openResolve so admin can tweak
   // the fields in place. Only non-empty trimmed fields are committed on
@@ -505,6 +512,60 @@ export default function VendorsPage() {
                   </div>
                 </div>
 
+                {/* Ship #270 — Non-circumvention agreement status. MOCK_VENDORS
+                    fixtures don't carry signed-state today (signatures live on
+                    real vendor profiles after the Phase 1 sign-flow). Surface
+                    is honest: shows Not Signed for unsigned, Signed YYYY-MM-DD
+                    + version for signed. View opens audit-mode dialog with
+                    snapshot. Reprompt fires destructive-confirm + toast +
+                    Tranche-2 marker (real cross-session enforcement waits on
+                    Supabase backend wiring). */}
+                {(() => {
+                  const signed = vendor.noncircumvention_agreement_signed_at
+                  const signedDate = signed
+                    ? new Date(signed).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : null
+                  const version = vendor.noncircumvention_agreement_version
+                  const isCurrent = version === CURRENT_AGREEMENT_VERSION
+                  return (
+                    <div className="flex items-center gap-2 mb-4 rounded-lg border p-3 bg-card">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground">Agreement</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {signed ? (
+                            <>
+                              Signed {signedDate} · {version ?? '—'}
+                              {!isCurrent && version && (
+                                <span className="ml-1 text-amber-700 dark:text-amber-400">(stale)</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-amber-700 dark:text-amber-400">Not signed</span>
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={!signed}
+                        onClick={() => setAgreementViewVendor(vendor)}
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setRepromptVendor(vendor)}
+                      >
+                        Reprompt
+                      </Button>
+                    </div>
+                  )
+                })()}
+
                 {/* Action Buttons */}
                 <div className="flex gap-2 mb-4">
                   <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => navigate(`/admin/messages?vendor=${vendor.id}`)}>
@@ -651,6 +712,62 @@ export default function VendorsPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Ship #270 — agreement view dialog (audit-mode). Renders only
+          when admin clicks View on a signed vendor; passes the vendor
+          as profile so the dialog reads its snapshot fields. */}
+      {agreementViewVendor && (
+        <NonCircumventionAgreementDialog
+          mode="view"
+          open
+          onOpenChange={(o) => !o && setAgreementViewVendor(null)}
+          profile={agreementViewVendor}
+        />
+      )}
+
+      {/* Ship #270 — reprompt confirmation. Destructive-confirm-four-
+          refinement applied: names-the-break, earned-diction,
+          alternative-steer (Send a message), verb-matched-cancel. */}
+      <Dialog open={!!repromptVendor} onOpenChange={(o) => !o && setRepromptVendor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Force re-sign of agreement?</DialogTitle>
+            <DialogDescription>
+              {repromptVendor?.company} will be locked out of their portal on next login until they re-sign the current agreement. Their previously-signed audit record will remain on file. Use this when the agreement language has materially changed and prior consent no longer applies.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            If you only need to nudge a vendor without locking them out, send a message instead.
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setRepromptVendor(null)}
+            >
+              Keep current signature
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (!repromptVendor) return
+                // TODO Tranche-2: write reprompt-flag to vendor's
+                // profile via Supabase so the gate at vendor-layout
+                // sees it on next login. For Phase 1 mock-mode, this
+                // is a toast + admin-record stub — real cross-session
+                // enforcement waits on backend wiring.
+                toast.success(
+                  `Reprompt sent — ${repromptVendor.company} will see the agreement on next login.`,
+                )
+                setRepromptVendor(null)
+              }}
+            >
+              Reprompt sign
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

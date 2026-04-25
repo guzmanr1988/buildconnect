@@ -74,6 +74,23 @@ export interface Profile {
   initials?: string
   status: 'active' | 'pending' | 'suspended'
   created_at: string
+  // Ship #270 — Non-circumvention agreement signature audit. Profile-
+  // level (not Vendor-level) per banked widen-reads-narrow-writes:
+  // future role-specific agreements (e.g. homeowner ToS Phase 2) reuse
+  // the same field-shape without interface rework. Only vendors
+  // populate today; gate at vendor-layout.tsx checks
+  // noncircumvention_agreement_version against CURRENT_AGREEMENT_VERSION.
+  noncircumvention_agreement_signed_at?: string
+  noncircumvention_agreement_signed_name?: string
+  noncircumvention_agreement_version?: string
+  // Frozen body of the agreement at sign-time. Lets admin view show
+  // exactly what the vendor agreed to, even if AGREEMENT_TEXT later
+  // gets updated to a new version.
+  noncircumvention_agreement_text_snapshot?: string
+  noncircumvention_agreement_signature_metadata?: {
+    ip?: string
+    ua?: string
+  }
 }
 
 export interface Lead {
