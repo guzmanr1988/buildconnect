@@ -24,7 +24,12 @@ import { useVendorBillingStore, type VendorPaymentMethod } from '@/stores/vendor
 import { useVendorMembershipStore } from '@/stores/vendor-membership-store'
 
 const registerSchema = z.object({
-  name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
+  // Ship #272 — split full-name capture into firstName + lastName.
+  // Profile.name remains single-string SoT (downstream reads use
+  // profile.name everywhere); the two-input UI concatenates at
+  // submit time per banked widen-reads-narrow-writes.
+  firstName: z.string().min(1, 'First name is required').min(2, 'First name must be at least 2 characters'),
+  lastName: z.string().min(1, 'Last name is required').min(2, 'Last name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Invalid email address'),
   phone: z.string().min(1, 'Phone is required').min(12, 'Enter a valid 10-digit phone'),
   street: z.string().min(1, 'Street is required'),
@@ -95,6 +100,7 @@ export function RegisterPage() {
     register,
     handleSubmit,
     setValue,
+    setError,
     watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
@@ -155,6 +161,15 @@ export function RegisterPage() {
 
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
+    // Ship #272 — Company Name is mandatory for vendors only. Schema
+    // keeps it optional so homeowner signup (where the field isn't
+    // rendered) doesn't reject; the role-conditional gate fires here
+    // at submit time. setError surfaces the message inline under the
+    // Input via the existing aria-invalid + error-paragraph pattern.
+    if (selectedRole === 'vendor' && !data.company?.trim()) {
+      setError('company', { type: 'required', message: 'Company name is required' })
+      return
+    }
     // Clear any prior form error at retry — fresh attempt, fresh state.
     setFormError(null)
     // Ship #179 — gate-state SYNCHRONOUSLY before the signUp async
@@ -177,9 +192,14 @@ export function RegisterPage() {
       state: data.state,
       zip: data.zip,
     })
+    // Ship #272 — concat firstName + lastName → single profile.name SoT.
+    // Profile.name stays single-string downstream (read everywhere as
+    // profile.name); the two-input UI is just the capture-side split
+    // per banked widen-reads-narrow-writes.
+    const composedName = `${data.firstName.trim()} ${data.lastName.trim()}`
     try {
       const result = await signUp(data.email, data.password, {
-        name: data.name,
+        name: composedName,
         role: selectedRole,
         phone: data.phone,
         address: composedAddress,
@@ -321,29 +341,48 @@ export function RegisterPage() {
             </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Full Name <span className="text-destructive">*</span></Label>
-                <Input
-                  id="name"
-                  placeholder="John Doe"
-                  className="h-11"
-                  {...register('name')}
-                  aria-invalid={!!errors.name}
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name.message}</p>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="firstName">First Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="firstName"
+                    placeholder="John"
+                    className="h-11"
+                    {...register('firstName')}
+                    aria-invalid={!!errors.firstName}
+                  />
+                  {errors.firstName && (
+                    <p className="text-xs text-destructive">{errors.firstName.message}</p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="lastName">Last Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="lastName"
+                    placeholder="Doe"
+                    className="h-11"
+                    {...register('lastName')}
+                    aria-invalid={!!errors.lastName}
+                  />
+                  {errors.lastName && (
+                    <p className="text-xs text-destructive">{errors.lastName.message}</p>
+                  )}
+                </div>
               </div>
 
               {selectedRole === 'vendor' && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="company">Company Name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Label htmlFor="company">Company Name <span className="text-destructive">*</span></Label>
                   <Input
                     id="company"
                     placeholder="Your Company LLC"
                     className="h-11"
                     {...register('company')}
+                    aria-invalid={!!errors.company}
                   />
+                  {errors.company && (
+                    <p className="text-xs text-destructive">{errors.company.message}</p>
+                  )}
                 </div>
               )}
 
