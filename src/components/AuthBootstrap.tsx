@@ -14,18 +14,32 @@ export function AuthBootstrap() {
         if (!mounted) return
         const store = useAuthStore.getState()
         store.setSession({ access_token, user: { id: userId, email } })
-        // Preserve additional_addresses during Tranche-2: the Supabase profiles
-        // table has no column for them yet (Phase B3 work), so a clean
-        // setProfile(fetched) would wipe any addresses the homeowner added in
-        // /profile. Merge the local value from the current zustand profile if
-        // the fetched profile doesn't carry its own. Once B3 lands, the column
-        // becomes authoritative and this merge is a no-op.
+        // Preserve fields whose Supabase columns don't yet exist —
+        // Tranche-2 work bridges the schema. Same merge-from-prior
+        // pattern for each gap-class field. When the columns land in
+        // Supabase, each merge below becomes a no-op.
+        //
+        // additional_addresses: Phase B3 column add (homeowner /profile)
+        // noncircumvention_agreement_*: Phase 2 column add (#270 added
+        //   to TS Profile interface; #273 fixes the wipe-loop where
+        //   each AuthBootstrap.hydrate (SIGNED_IN / TOKEN_REFRESHED /
+        //   USER_UPDATED) was overwriting the locally-signed agreement
+        //   state with a server profile lacking those columns). Banked
+        //   "Supabase column not yet migrated → preserve local value"
+        //   idiom; sibling of additional_addresses workaround.
         const prior = store.profile
+        const merged: typeof profile = { ...profile }
         if (!profile.additional_addresses && prior?.additional_addresses) {
-          store.setProfile({ ...profile, additional_addresses: prior.additional_addresses })
-        } else {
-          store.setProfile(profile)
+          merged.additional_addresses = prior.additional_addresses
         }
+        if (!profile.noncircumvention_agreement_signed_at && prior?.noncircumvention_agreement_signed_at) {
+          merged.noncircumvention_agreement_signed_at = prior.noncircumvention_agreement_signed_at
+          merged.noncircumvention_agreement_signed_name = prior.noncircumvention_agreement_signed_name
+          merged.noncircumvention_agreement_version = prior.noncircumvention_agreement_version
+          merged.noncircumvention_agreement_text_snapshot = prior.noncircumvention_agreement_text_snapshot
+          merged.noncircumvention_agreement_signature_metadata = prior.noncircumvention_agreement_signature_metadata
+        }
+        store.setProfile(merged)
         // Catalog is authed-read-only — pull fresh data now that the session is live.
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
