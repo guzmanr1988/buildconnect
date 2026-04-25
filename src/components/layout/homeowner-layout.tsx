@@ -10,6 +10,7 @@ import { NotificationBell, type NotificationItem } from '@/components/shared/not
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useCartStore } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -31,15 +32,22 @@ export function HomeownerLayout() {
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
 
-  // Ship #262 — Rodolfo-direct (task_1776795590596_638, 2026-04-21):
-  // blinking indicator on the Projects nav item when the homeowner has
-  // open projects. "Open" = pending (vendor hasn't decided) or approved
-  // (booked, not yet sold/declined). Subtle pulsing dot rather than a
-  // literal asterisk — matches the notification-bell idiom already used
-  // in this layout. Both desktop top-nav and mobile bottom-nav surfaces.
-  const activeProjectsCount = sentProjects.filter(
+  // Ship #262 / #265 — blinking indicator on Projects nav. Rodolfo-direct
+  // task_1776795590596_638 (2026-04-21). Initial #262 only counted
+  // sentProjects (post-vendor-send pending|approved), but the /home/cart
+  // page is labeled "Projects" in the nav AND surfaces BOTH cart items
+  // (configured drafts) + sent projects together. Rodolfo'd interpretation
+  // of "I added a project" = added to cart, which left cart-items > 0
+  // but sentProjects empty, so the dot didn't fire. #265 fix: include
+  // cart items in the open-projects count so any in-progress work
+  // (draft OR sent) lights the indicator. Lesson: nav-label semantics
+  // dictate indicator semantics — match the user mental model of the
+  // labeled tab, not the underlying store-name.
+  const cartItemsCount = useCartStore((s) => s.items.length)
+  const sentActiveCount = sentProjects.filter(
     (p) => p.status === 'pending' || p.status === 'approved',
   ).length
+  const openProjectsCount = cartItemsCount + sentActiveCount
 
   // Ship #240 — cross-role notification event derivations (homeowner
   // perspective). Pattern is "derive from state" (option A): filter
@@ -177,9 +185,9 @@ export function HomeownerLayout() {
                       <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className={cn('rounded-full px-4', isActive && 'bg-primary/10 text-primary font-medium')}>
                         {label}
                       </Button>
-                      {label === 'Projects' && activeProjectsCount > 0 && (
+                      {label === 'Projects' && openProjectsCount > 0 && (
                         <span
-                          aria-label={`${activeProjectsCount} open project${activeProjectsCount > 1 ? 's' : ''}`}
+                          aria-label={`${openProjectsCount} open project${openProjectsCount > 1 ? 's' : ''}`}
                           className="pointer-events-none absolute right-1 top-1 flex h-2 w-2"
                         >
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
@@ -275,9 +283,9 @@ export function HomeownerLayout() {
                   <div className={cn('flex flex-col items-center gap-0.5 py-1 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}>
                     <div className="relative">
                       <Icon className="h-5 w-5" />
-                      {label === 'Projects' && activeProjectsCount > 0 && (
+                      {label === 'Projects' && openProjectsCount > 0 && (
                         <span
-                          aria-label={`${activeProjectsCount} open project${activeProjectsCount > 1 ? 's' : ''}`}
+                          aria-label={`${openProjectsCount} open project${openProjectsCount > 1 ? 's' : ''}`}
                           className="pointer-events-none absolute -right-1 -top-1 flex h-2 w-2"
                         >
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
