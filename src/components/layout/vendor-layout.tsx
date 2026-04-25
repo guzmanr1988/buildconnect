@@ -14,7 +14,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -60,13 +60,13 @@ export function VendorLayout() {
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
 
-  // Vendor notifications = pending leads awaiting action. Reverse-map
-  // profile.id → mock-vendor-id so the demo vendors see their MOCK_LEADS
-  // rows; authed-but-unmapped vendors see an empty list.
-  const mockVendorId = profile
-    ? Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(([, uuid]) => uuid === profile.id)?.[0]
-    : null
-  const vendorIdForLeads = mockVendorId ?? profile?.id ?? ''
+  // Vendor notifications = pending leads awaiting action. Resolve the
+  // current vendor's id via useVendorScope so the demo-alias LS override
+  // (#222) and the DEMO_VENDOR_UUID_BY_MOCK_ID reverse-map both apply
+  // — pre-#264 this layout had its own inline reverse-lookup that
+  // missed the LS alias, so generic Vendor demo'd notification count
+  // could fall through. task_1776835392387_106 fix.
+  const { vendorId: vendorIdForLeads } = useVendorScope()
   const pendingLeads = mockLeads.filter(
     (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
   )
