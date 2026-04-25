@@ -19,6 +19,22 @@ export function AuthBootstrap() {
         console.log('[#274 payment-stuck-diag]', phase, { t: Date.now(), ...extra })
       }
       diagLog('AuthBootstrap.hydrate:start', { userId, email })
+      // Ship #275 — defensive: setSession FIRST so isAuthenticated
+      // flips true regardless of whether getProfile succeeds. Pre-#275
+      // order was setSession AFTER getProfile, so any getProfile throw
+      // (RLS regression / network blip / table-shape change) left
+      // isAuthenticated=false and the redirect useEffect blocked
+      // forever — visible as "stuck loading" post-payment. Now the
+      // worst case on getProfile failure is profile=null but auth=true,
+      // so navigation can proceed with whatever local profile was
+      // already in place (zustand persist).
+      if (!mounted) {
+        diagLog('AuthBootstrap.hydrate:returning-early-pre-fetch (unmounted)')
+        return
+      }
+      const store = useAuthStore.getState()
+      store.setSession({ access_token, user: { id: userId, email } })
+      diagLog('AuthBootstrap.hydrate:setSession-called (defensive, pre-getProfile)')
       try {
         const profile = await getProfile(userId)
         diagLog('AuthBootstrap.hydrate:getProfile-success', { profile_role: profile.role })
@@ -26,8 +42,8 @@ export function AuthBootstrap() {
           diagLog('AuthBootstrap.hydrate:returning-early (unmounted)')
           return
         }
-        const store = useAuthStore.getState()
-        store.setSession({ access_token, user: { id: userId, email } })
+        // setSession already called pre-getProfile (#275 defensive
+        // ordering). Don't re-call here; just merge + setProfile.
         // Preserve fields whose Supabase columns don't yet exist —
         // Tranche-2 work bridges the schema. Same merge-from-prior
         // pattern for each gap-class field. When the columns land in

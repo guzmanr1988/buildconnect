@@ -276,6 +276,13 @@ export function RegisterPage() {
       method_kind: method.kind,
       method_last4: method.last4,
     })
+    // Ship #275 — defensive try/finally: setPaymentDialogOpen(false)
+    // ABSOLUTELY MUST fire so the redirect useEffect can navigate.
+    // If addVendorPaymentMethod / activateMembership ever throw (mock-
+    // mode pure zustand can't throw today, but real-mode Supabase
+    // writes will), the close-flip MUST still land. Otherwise the
+    // dialog stays open forever + redirect blocked + user stuck.
+    try {
     const vendorId = profile?.id
     if (vendorId) {
       // Ship #189 — addPaymentMethod appends to the per-vendor array +
@@ -296,8 +303,13 @@ export function RegisterPage() {
       // signup-time side-effect on the server.)
       console.warn('[register] payment success fired before profile hydrate; skipping store')
     }
-    setPaymentDialogOpen(false)
-    diagLog('handlePaymentSuccess:end (setPaymentDialogOpen(false) called)')
+    } catch (err) {
+      diagLog('handlePaymentSuccess:caught-error', { error: String(err) })
+      console.error('[handlePaymentSuccess] error:', err)
+    } finally {
+      setPaymentDialogOpen(false)
+      diagLog('handlePaymentSuccess:end (setPaymentDialogOpen(false) called)')
+    }
     // The register.useEffect re-runs on gate flip → navigates to /vendor.
   }
 

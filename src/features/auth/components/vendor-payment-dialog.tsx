@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, CreditCard, Landmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
@@ -89,6 +89,21 @@ export function VendorPaymentDialog({
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry] = useState('')
   const [cvv, setCvv] = useState('')
+  // Ship #275 — defensive: guard setUIState with mountedRef so
+  // unmount mid-setTimeout doesn't trigger setState-on-unmounted-
+  // component warnings. CRITICAL: do NOT clear pending timers on
+  // unmount — parent callbacks (onSuccess + onOpenChange) MUST fire
+  // even if dialog unmounted, since parent owns the post-success
+  // state machine (setPaymentDialogOpen / navigate / activateMembership).
+  // Stranding the parent on dialog-unmount is the failure mode this
+  // ship is fixing.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   // Checking fields
   const [bankName, setBankName] = useState('')
   const [routing, setRouting] = useState('')
@@ -179,13 +194,21 @@ export function VendorPaymentDialog({
     // Mock: pretend a short processing delay so the UI has weight. Real
     // integration would replace this with the processor's confirm call.
     setTimeout(() => {
-      diagLog('handleSubmit:inner-timeout-fired (post-600ms)')
-      setUIState('success')
-      diagLog('handleSubmit:setUIState(success)')
-      // Parent onSuccess fires after the success state shows. Auto-close
-      // follows SUCCESS_DISPLAY_MS later so the user sees the green check.
+      diagLog('handleSubmit:inner-timeout-fired (post-600ms)', { mounted: mountedRef.current })
+      // Guard setUIState with mountedRef (avoid setState-on-unmounted
+      // warning), but ALWAYS schedule the outer timeout — parent
+      // callbacks need to fire regardless of dialog mount state so the
+      // post-success state machine (setPaymentDialogOpen, navigate,
+      // activateMembership) completes. Stranding the parent on
+      // dialog-unmount is the failure mode this ship is fixing.
+      if (mountedRef.current) {
+        setUIState('success')
+        diagLog('handleSubmit:setUIState(success)')
+      } else {
+        diagLog('handleSubmit:skipping-setUIState (unmounted) — parent callbacks still fire')
+      }
       setTimeout(() => {
-        diagLog('handleSubmit:outer-timeout-fired (post-2100ms)')
+        diagLog('handleSubmit:outer-timeout-fired (post-2100ms)', { mounted: mountedRef.current })
         onSuccess(method)
         diagLog('handleSubmit:onSuccess-returned')
         onOpenChange(false)
