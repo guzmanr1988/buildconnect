@@ -9,7 +9,6 @@ import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { CartItem } from '@/stores/cart-store'
@@ -793,23 +792,30 @@ export function CartPage() {
           </div>
         </motion.div>
       )}
-      {/* View Summary Sheet */}
-      <Sheet open={!!viewItem} onOpenChange={(open) => !open && setViewItem(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      {/* Ship #266 — View Summary Dialog (was Sheet pre-#266). Rodolfo
+          directive: centered popup matching the rest-of-app Dialog
+          idiom (cancelDialogJsx + idPreview Dialog already use this
+          primitive in this same file). shadcn Dialog default fade-in +
+          zoom-in-95 covers the open-animation requirement; max-h-[85vh]
+          + overflow-y-auto preserves scroll for tall configs (multi-
+          window/door projects). Close button at the bottom in
+          DialogFooter per Rodolfo'\''s shape. */}
+      <Dialog open={!!viewItem} onOpenChange={(open) => !open && setViewItem(null)}>
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           {viewItem && (() => {
             const service = SERVICE_CATALOG.find((s) => s.id === viewItem.serviceId)
             const Icon = SERVICE_ICONS[viewItem.serviceId] || ShoppingCart
             const gradient = ICON_GRADIENTS[viewItem.serviceId] || 'from-blue-400 to-blue-600'
             return (
               <div className="space-y-5">
-                <SheetHeader>
+                <DialogHeader>
                   <div className="flex items-center gap-3">
                     <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br shadow-sm', gradient)}>
                       <Icon className="h-5 w-5 text-white" strokeWidth={1.8} />
                     </div>
-                    <SheetTitle className="font-heading">{viewItem.serviceName}</SheetTitle>
+                    <DialogTitle className="font-heading">{viewItem.serviceName}</DialogTitle>
                   </div>
-                </SheetHeader>
+                </DialogHeader>
 
                 <div className="space-y-4">
                   {viewItem.address && (
@@ -935,11 +941,20 @@ export function CartPage() {
                     </div>
                   )}
                 </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setViewItem(null)}
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
               </div>
             )
           })()}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* ID Preview Dialog */}
       <Dialog open={idPreviewOpen} onOpenChange={setIdPreviewOpen}>
