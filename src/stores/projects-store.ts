@@ -36,6 +36,13 @@ export interface SentProject {
   contractor: ContractorInfo
   booking: BookingInfo
   homeowner?: HomeownerInfo
+  // Ship #269 — homeowner profile.id snapshot for admin auditing /
+  // dispute-support queries. HomeownerInfo carries display fields (name/
+  // phone/email/address) but not the FK; admin surfaces couldn't filter
+  // "which homeowner sent this lead" pre-#269. Optional for back-compat
+  // with persisted entries that pre-date the FK; new sendProject calls
+  // populate it from auth profile.id.
+  homeowner_id?: string
   sentAt: string
   soldAt?: string
   saleAmount?: number
@@ -134,7 +141,7 @@ interface ProjectsState {
   // Written whenever assignRepByLead fires; consumed by homeowner
   // timeline on "Representative assigned" entry.
   repAssignedAtByLead: Record<string, string>
-  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string) => void
+  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string, homeownerId?: string) => void
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
@@ -190,7 +197,7 @@ export const useProjectsStore = create<ProjectsState>()(
       leadConfirmedAtByLead: {},
       repAssignedAtByLead: {},
 
-      sendProject: (item, contractor, booking, homeowner, idDocument) => {
+      sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId) => {
         set((state) => {
           const next: SentProject = {
             id: crypto.randomUUID(),
@@ -200,6 +207,7 @@ export const useProjectsStore = create<ProjectsState>()(
             booking,
             idDocument,
             homeowner,
+            homeowner_id: homeownerId,
             sentAt: new Date().toISOString(),
           }
           const nextSentProjects = [...state.sentProjects, next]

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAuthStore } from '@/stores/auth-store'
 
 type BookingDetails = { service: string; vendor: string; date: string; time: string }
 type ConfirmationState = 'loading' | 'success' | 'refreshed' | 'incomplete'
@@ -22,6 +23,7 @@ export function BookingConfirmationPage() {
   const removeItem = useCartStore((s) => s.removeItem)
   const sendProject = useProjectsStore((s) => s.sendProject)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const profile = useAuthStore((s) => s.profile)
   const [details, setDetails] = useState<BookingDetails | null>(null)
   const [state, setState] = useState<ConfirmationState>('loading')
 
@@ -70,7 +72,11 @@ export function BookingConfirmationPage() {
           vendor: contractor.company,
           vendor_id: contractor.vendor_id,
         })
-        sendProject(pendingItem, contractor, booking, homeowner, idDoc)
+        // Ship #269 — pass profile.id as homeowner_id snapshot for admin
+        // auditing. Optional on the SentProject side, so undefined here
+        // (e.g. unauthed-flow regression) just falls back to display-only
+        // homeowner fields.
+        sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id)
         removeItem(pendingItem.id)
 
         localStorage.removeItem('buildconnect-pending-item')

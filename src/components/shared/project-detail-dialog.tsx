@@ -128,6 +128,10 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
         _rescheduleRequest: rescheduleRequestsByLead[leadKey],
         _cancellationRequest: cReq,
         _idDocument: sp.idDocument,
+        // Ship #269 — homeowner.id snapshot for admin auditing /
+        // dispute-support. Surfaces only when populated (post-#269
+        // sendProject calls); legacy persisted entries fall through.
+        _homeownerId: sp.homeowner_id,
       }
     }
 
@@ -324,6 +328,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   _rescheduleRequest?: { requestedBy: string; proposedDate: string; proposedTime: string; originalDate: string; originalTime: string; status: string; reason?: string }
                   _cancellationRequest?: { status: string; reason?: string; explanation?: string }
                   _idDocument?: string
+                  _homeownerId?: string
                 }
                 const hasAny =
                   extra._bookingDate ||
@@ -331,7 +336,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   extra._repAssignedAt ||
                   extra._rescheduleRequest ||
                   extra._cancellationRequest ||
-                  extra._idDocument
+                  extra._idDocument ||
+                  extra._homeownerId
                 if (!hasAny) return null
                 return (
                   <div className="rounded-xl border p-4 space-y-3">
@@ -410,6 +416,15 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                             alt="Customer ID"
                             className="h-12 w-20 rounded border object-cover"
                           />
+                        </div>
+                      )}
+                      {extra._homeownerId && (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">Homeowner ID</span>
+                          <span className="font-mono text-[11px] text-foreground/80 break-all">
+                            {extra._homeownerId}
+                          </span>
                         </div>
                       )}
                     </div>
