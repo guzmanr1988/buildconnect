@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -610,15 +610,18 @@ export function CartPage() {
         </label>
         <div className="rounded-xl border bg-card p-4">
           {idDocument ? (
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer">
+            // Ship #267 — stack vertically on mobile (was single flex row,
+            // overlapped at narrow viewports). cancelDialogJsx footer
+            // pattern (flex-col sm:flex-row gap-2) is the matching idiom.
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer self-start sm:self-auto">
                 <img src={idDocument} alt="ID Document" className="w-full h-full object-cover" />
               </button>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">ID Uploaded</p>
                 <p className="text-xs text-muted-foreground">Click image to preview</p>
               </div>
-              <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition">
+              <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto">
                 Replace
                 <input
                   type="file"
@@ -956,12 +959,41 @@ export function CartPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ID Preview Dialog */}
+      {/* Ship #267 — ID Preview Dialog rebuilt: DialogHeader + Title +
+          larger max-w-2xl + DialogFooter with Download + Close. Pre-#267
+          was a bare DialogContent with raw image — Rodolfo couldn't
+          register it as a popup ("nothing comes up") because there was
+          no header/footer chrome. Download anchor uses the data-URL +
+          download attribute; browser infers extension from the embedded
+          MIME type. Generic "id-document" filename keeps PII out of
+          download metadata when files get shared/saved. */}
       <Dialog open={idPreviewOpen} onOpenChange={setIdPreviewOpen}>
-        <DialogContent className="sm:max-w-md p-2">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading">ID Document</DialogTitle>
+          </DialogHeader>
           {idDocument && (
             <img src={idDocument} alt="ID Document Preview" className="w-full rounded-lg" />
           )}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {idDocument && (
+              <a
+                href={idDocument}
+                download="id-document"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition w-full sm:w-auto"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </a>
+            )}
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setIdPreviewOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
