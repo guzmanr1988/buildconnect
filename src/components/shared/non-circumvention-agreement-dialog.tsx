@@ -74,11 +74,15 @@ function SignMode({ open }: { open: boolean }) {
   }
 
   return (
-    // Ship #270 — gate-modal: blocks vendor portal until sign-or-logout.
-    // dismissible={false} on base-ui Dialog.Root prevents both ESC and
-    // backdrop click; showCloseButton={false} hides the default close X
-    // on the Popup. Only Sign Out or Sign Agreement exit this modal.
-    <Dialog open={open} dismissible={false}>
+    // Ship #270 / #271 — gate-modal: blocks vendor portal until sign-or-
+    // logout. Open state controlled fully by parent (vendor-layout gate
+    // condition); the no-op onOpenChange ignores ESC + backdrop dismiss
+    // attempts so base-ui's internal close events can't flip it shut.
+    // showCloseButton={false} hides the default X. Only Sign Out or Sign
+    // Agreement exit this modal — both flip state at the parent level
+    // (logout clears profile → gate condition false → modal unmounts;
+    // sign updates agreement_version → gate condition false → unmounts).
+    <Dialog open={open} onOpenChange={() => { /* gated — no implicit close */ }}>
       <DialogContent
         className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-4"
         showCloseButton={false}
