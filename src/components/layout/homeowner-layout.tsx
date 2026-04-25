@@ -31,6 +31,16 @@ export function HomeownerLayout() {
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
 
+  // Ship #262 — Rodolfo-direct (task_1776795590596_638, 2026-04-21):
+  // blinking indicator on the Projects nav item when the homeowner has
+  // open projects. "Open" = pending (vendor hasn't decided) or approved
+  // (booked, not yet sold/declined). Subtle pulsing dot rather than a
+  // literal asterisk — matches the notification-bell idiom already used
+  // in this layout. Both desktop top-nav and mobile bottom-nav surfaces.
+  const activeProjectsCount = sentProjects.filter(
+    (p) => p.status === 'pending' || p.status === 'approved',
+  ).length
+
   // Ship #240 — cross-role notification event derivations (homeowner
   // perspective). Pattern is "derive from state" (option A): filter
   // projects-store maps to events relevant TO this homeowner (their
@@ -163,9 +173,20 @@ export function HomeownerLayout() {
               {navItems.map(({ to, label }) => (
                 <NavLink key={to} to={to} end={to === '/home'}>
                   {({ isActive }) => (
-                    <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className={cn('rounded-full px-4', isActive && 'bg-primary/10 text-primary font-medium')}>
-                      {label}
-                    </Button>
+                    <div className="relative">
+                      <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className={cn('rounded-full px-4', isActive && 'bg-primary/10 text-primary font-medium')}>
+                        {label}
+                      </Button>
+                      {label === 'Projects' && activeProjectsCount > 0 && (
+                        <span
+                          aria-label={`${activeProjectsCount} open project${activeProjectsCount > 1 ? 's' : ''}`}
+                          className="pointer-events-none absolute right-1 top-1 flex h-2 w-2"
+                        >
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                        </span>
+                      )}
+                    </div>
                   )}
                 </NavLink>
               ))}
@@ -252,7 +273,18 @@ export function HomeownerLayout() {
               <NavLink key={to} to={to} end={to === '/home'} className="flex-1">
                 {({ isActive }) => (
                   <div className={cn('flex flex-col items-center gap-0.5 py-1 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}>
-                    <Icon className="h-5 w-5" />
+                    <div className="relative">
+                      <Icon className="h-5 w-5" />
+                      {label === 'Projects' && activeProjectsCount > 0 && (
+                        <span
+                          aria-label={`${activeProjectsCount} open project${activeProjectsCount > 1 ? 's' : ''}`}
+                          className="pointer-events-none absolute -right-1 -top-1 flex h-2 w-2"
+                        >
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] font-medium">{label}</span>
                   </div>
                 )}
