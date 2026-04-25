@@ -13,15 +13,13 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
-import { useVendorScope } from '@/lib/vendor-scope'
-import { useAuthStore } from '@/stores/auth-store'
+import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
-import type { Lead, Vendor } from '@/types'
+import type { Lead } from '@/types'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -33,44 +31,14 @@ function fmtDate(iso: string) {
 
 export default function LeadInbox() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const { vendorId: VENDOR_ID, mockVendorId, isMock } = useVendorScope()
-  const profile = useAuthStore((s) => s.profile)
+  const { vendorId: VENDOR_ID, isMock } = useVendorScope()
 
-  // Ship #214 — align lead-inbox scope with dashboard. Prior permissive
-  // behavior (map all sentProjects without filter, stamp vendor_id =
-  // VENDOR_ID) caused cross-vendor bleed: every vendor saw every
-  // homeowner's sentProject regardless of who it was actually sent to.
-  // Correct launch semantic = strict match by contractor.vendor_id
-  // (with company fallback for legacy pre-#165 entries that pre-date
-  // the vendor_id FK). Same filter shape as
-  // src/features/vendor/pages/dashboard.tsx homeownerLeads.
-  const vendor: Vendor | null = useMemo(() => {
-    if (mockVendorId) {
-      const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
-      if (m) return m
-    }
-    if (!profile || profile.role !== 'vendor') return null
-    return {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      role: 'vendor',
-      phone: profile.phone ?? '',
-      address: profile.address ?? '',
-      company: profile.company ?? profile.name,
-      avatar_color: profile.avatar_color ?? '#3b82f6',
-      initials: profile.initials ?? deriveInitials(profile.name),
-      status: profile.status ?? 'active',
-      created_at: profile.created_at ?? new Date().toISOString(),
-      service_categories: [],
-      rating: 0,
-      response_time: '—',
-      verified: false,
-      financing_available: false,
-      total_reviews: 0,
-      commission_pct: 15,
-    }
-  }, [mockVendorId, profile])
+  // Ship #214 — strict scope by contractor.vendor_id (with company
+  // fallback for pre-#165 entries that pre-date the FK). Vendor
+  // resolution lives in useResolvedVendor (ship #263 extraction);
+  // the predicate stays here because it intentionally diverges from
+  // dashboard.tsx (which is permissive per #223).
+  const vendor = useResolvedVendor()
 
   // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
   // Log vendor-side read snapshot on every sentProjects mutation so we

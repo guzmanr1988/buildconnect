@@ -20,16 +20,15 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
-import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
-import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
-import type { Lead, Vendor, VendorRep } from '@/types'
+import type { Lead, VendorRep } from '@/types'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -114,42 +113,14 @@ export default function VendorDashboard() {
       }))
   }, [employeesMap, VENDOR_ID])
 
-  // Vendor display-data: from MOCK_VENDORS fixture when mapped, synthesized
-  // from profile when not. Role-gate the synthesis — a homeowner profile
-  // (e.g. a QA persona left in auth-store during a pre-redirect first paint)
-  // must NOT be synthesized into a vendor, or the dashboard flashes that
-  // homeowner's name as the vendor name until the useEffect auth-guard
-  // redirect commits. Rod P0 2026-04-20 (kratos msg 1776665548710 via apollo
-  // sweep): Paradise-demo vendor profile rendered 'Ana Martinez' (qa-1
-  // persona name) before the redirect fired — this guard blocks the flash.
-  const vendor: Vendor | null = useMemo(() => {
-    if (mockVendorId) {
-      const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
-      if (m) return m
-    }
-    if (!profile) return null
-    if (profile.role !== 'vendor') return null
-    return {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      role: 'vendor',
-      phone: profile.phone ?? '',
-      address: profile.address ?? '',
-      company: profile.company ?? profile.name,
-      avatar_color: profile.avatar_color ?? '#3b82f6',
-      initials: profile.initials ?? deriveInitials(profile.name),
-      status: profile.status ?? 'active',
-      created_at: profile.created_at ?? new Date().toISOString(),
-      service_categories: [],
-      rating: 0,
-      response_time: '—',
-      verified: false,
-      financing_available: false,
-      total_reviews: 0,
-      commission_pct: 15,
-    }
-  }, [mockVendorId, profile])
+  // Vendor display-data: extracted to useResolvedVendor (ship #263).
+  // Role-gate is preserved by the helper — a homeowner profile (e.g.
+  // a QA persona left in auth-store during a pre-redirect first paint)
+  // resolves to null instead of being synthesized as a vendor. Rod P0
+  // 2026-04-20 (kratos msg 1776665548710 via apollo sweep): Paradise-
+  // demo vendor profile rendered 'Ana Martinez' (qa-1 persona name)
+  // before the redirect fired — that guard now lives in vendor-scope.ts.
+  const vendor = useResolvedVendor()
 
   // Gate seeded MOCK_LEADS + MOCK_CLOSED_SALES fixtures to only the 5
   // featured mock vendors (v-1..v-5). Synthesized / unmapped vendors (e.g.

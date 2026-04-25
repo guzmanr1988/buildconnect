@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { deriveInitials } from '@/lib/initials'
+import type { Vendor } from '@/types'
 
 /**
  * Set of mock-vendor ids that MOCK_LEADS + MOCK_CLOSED_SALES fixtures are
@@ -57,4 +60,57 @@ export function useVendorScope(): {
     const vendorId = mockVendorId ?? profile.id
     return { mockVendorId, vendorId, isMock: !!mockVendorId }
   }, [profile])
+}
+
+/**
+ * Resolve the current authed user into a full Vendor object — for surfaces
+ * that need vendor-shaped fields (rating, response_time, commission_pct,
+ * etc.) rather than just an id.
+ *
+ * - If the profile maps to a featured mock vendor (v-1..v-5), returns the
+ *   MOCK_VENDORS entry (full fixture data).
+ * - If the profile is a real authed vendor (role === 'vendor') without a
+ *   mock mapping, synthesizes a Vendor from profile fields with sane
+ *   defaults for fixture-only fields (rating=0, verified=false, etc.).
+ * - If profile is null OR not a vendor, returns null. Critical guard —
+ *   pre-#212 dashboard flashed a homeowner's name as the vendor name
+ *   before the auth-redirect committed (Rod P0 2026-04-20).
+ *
+ * Extracted from dashboard.tsx + lead-inbox.tsx where this exact synthesis
+ * was duplicated. task_1776818232208_731 — extraction was originally
+ * scoped to also include the homeownerLeads filter, but post-#223 the
+ * predicates intentionally diverge (dashboard permissive, lead-inbox
+ * strict) so only the vendor resolution is deep-shared.
+ */
+export function useResolvedVendor(): Vendor | null {
+  const { mockVendorId } = useVendorScope()
+  const profile = useAuthStore((s) => s.profile)
+  return useMemo(() => {
+    if (mockVendorId) {
+      const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
+      if (m) return m
+    }
+    if (!profile) return null
+    if (profile.role !== 'vendor') return null
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      role: 'vendor',
+      phone: profile.phone ?? '',
+      address: profile.address ?? '',
+      company: profile.company ?? profile.name,
+      avatar_color: profile.avatar_color ?? '#3b82f6',
+      initials: profile.initials ?? deriveInitials(profile.name),
+      status: profile.status ?? 'active',
+      created_at: profile.created_at ?? new Date().toISOString(),
+      service_categories: [],
+      rating: 0,
+      response_time: '—',
+      verified: false,
+      financing_available: false,
+      total_reviews: 0,
+      commission_pct: 15,
+    }
+  }, [mockVendorId, profile])
 }
