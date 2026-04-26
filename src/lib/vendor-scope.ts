@@ -110,7 +110,16 @@ export function useResolvedVendor(): Vendor | null {
       verified: false,
       financing_available: false,
       total_reviews: 0,
-      commission_pct: 15,
+      // Ship #290 — Rodolfo-direct: platform-default commission for
+      // new vendor signups is 10%. Admin override via setVendorCommission
+      // (#286-#289 Save Changes flow) takes precedence per existing
+      // vendorCommissionOverrides resolution. Pre-#290 default was 15;
+      // changed to match Rodolfo's "every vendor that signs up the
+      // preset % is 10% unless I go and manually adjust" directive.
+      // MOCK_VENDORS fixtures (v-1..v-5) keep their per-fixture values
+      // per kratos lean — Rodolfo's "signs up" language targets new-
+      // signups, not pre-existing fixtures.
+      commission_pct: 10,
     }
   }, [mockVendorId, profile])
 }
