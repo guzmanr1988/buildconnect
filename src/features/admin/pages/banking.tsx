@@ -6,7 +6,6 @@ import {
   DollarSign,
   ArrowDownToLine,
   ArrowUpFromLine,
-  BookOpen,
   Link2,
   Plus,
   Send,
@@ -59,8 +58,6 @@ import {
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
-import { formatTransactionId } from '@/components/shared/transaction-detail-dialog'
-import type { TransactionType, TransactionStatus } from '@/types'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -78,36 +75,6 @@ const pendingPayouts = MOCK_TRANSACTIONS
 const totalDisbursed = MOCK_TRANSACTIONS
   .filter((t) => t.type === 'payout' && t.status === 'paid')
   .reduce((s, t) => s + t.amount, 0)
-
-const TYPE_CONFIG: Record<TransactionType, { label: string; className: string }> = {
-  commission: {
-    label: 'Commission',
-    className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  },
-  membership: {
-    label: 'Membership',
-    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  },
-  payout: {
-    label: 'Payout',
-    className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  },
-}
-
-const STATUS_CONFIG: Record<TransactionStatus, { label: string; className: string }> = {
-  paid: {
-    label: 'Paid',
-    className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  },
-  closed: {
-    label: 'Closed',
-    className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  },
-  pending: {
-    label: 'Pending',
-    className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  },
-}
 
 // Mock deposit history
 const depositHistory = [
@@ -367,10 +334,6 @@ export default function BankingPage() {
             <TabsTrigger value="disbursements" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
               <ArrowUpFromLine className="h-4 w-4" />
               Payouts
-            </TabsTrigger>
-            <TabsTrigger value="ledger" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
-              <BookOpen className="h-4 w-4" />
-              Ledger
             </TabsTrigger>
             <TabsTrigger value="autopay" className="gap-1.5 px-3 py-2.5 text-sm sm:px-4 sm:py-2.5">
               <RefreshCw className="h-4 w-4" />
@@ -959,113 +922,10 @@ export default function BankingPage() {
           </motion.div>
         </TabsContent>
 
-        {/* ── Ledger Tab ── */}
-        <TabsContent value="ledger" className="space-y-6 mt-6">
-          {(() => {
-            // Group transactions by month
-            const sorted = [...MOCK_TRANSACTIONS].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            const byMonth = new Map<string, typeof MOCK_TRANSACTIONS>()
-            for (const tx of sorted) {
-              const d = new Date(tx.date)
-              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-              if (!byMonth.has(key)) byMonth.set(key, [])
-              byMonth.get(key)!.push(tx)
-            }
-
-            return Array.from(byMonth.entries()).map(([monthKey, txs], idx) => {
-              const monthDate = new Date(monthKey + '-01')
-              const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-              const monthTotal = txs.reduce((s, t) => s + t.amount, 0)
-              const commTotal = txs.filter((t) => t.type === 'commission').reduce((s, t) => s + t.amount, 0)
-              const memTotal = txs.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0)
-              const payTotal = txs.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0)
-
-              return (
-                <motion.div key={monthKey} custom={idx} variants={fadeUp} initial="hidden" animate="visible">
-                  <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="h-4 w-4 text-primary" />
-                          <span>{monthLabel}</span>
-                          <span className="text-sm font-normal text-muted-foreground">({txs.length} transactions)</span>
-                        </div>
-                        <span className="text-lg font-bold">${monthTotal.toLocaleString()}</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Month summary */}
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        {commTotal > 0 && (
-                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 p-2 text-center">
-                            <p className="text-[10px] text-muted-foreground">Commissions</p>
-                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">${commTotal.toLocaleString()}</p>
-                          </div>
-                        )}
-                        {memTotal > 0 && (
-                          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 p-2 text-center">
-                            <p className="text-[10px] text-muted-foreground">Memberships</p>
-                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">${memTotal.toLocaleString()}</p>
-                          </div>
-                        )}
-                        {payTotal > 0 && (
-                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-2 text-center">
-                            <p className="text-[10px] text-muted-foreground">Payouts</p>
-                            <p className="text-sm font-bold text-amber-700 dark:text-amber-400">${payTotal.toLocaleString()}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="overflow-x-auto rounded-lg border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/50">
-                              <TableHead className="font-semibold">ID</TableHead>
-                              <TableHead className="font-semibold">Type</TableHead>
-                              <TableHead className="font-semibold">Company</TableHead>
-                              <TableHead className="font-semibold">Detail</TableHead>
-                              <TableHead className="font-semibold text-right">Amount</TableHead>
-                              <TableHead className="font-semibold">Date</TableHead>
-                              <TableHead className="font-semibold">Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {txs.map((tx) => (
-                              <TableRow key={tx.id}>
-                                <TableCell className="font-mono text-xs font-semibold">{formatTransactionId(tx.id, tx.type)}</TableCell>
-                                <TableCell>
-                                  <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', TYPE_CONFIG[tx.type].className)}>
-                                    {TYPE_CONFIG[tx.type].label}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="font-medium">{tx.company}</TableCell>
-                                <TableCell className="text-muted-foreground max-w-[160px] truncate">{tx.detail}</TableCell>
-                                <TableCell className="text-right font-semibold">${tx.amount.toLocaleString()}</TableCell>
-                                <TableCell className="text-muted-foreground">
-                                  {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </TableCell>
-                                <TableCell>
-                                  <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_CONFIG[tx.status].className)}>
-                                    {STATUS_CONFIG[tx.status].label}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            <TableRow className="bg-muted/30 border-t-2">
-                              <TableCell colSpan={4} className="font-semibold text-right">Month Total</TableCell>
-                              <TableCell className="text-right font-bold text-base">${monthTotal.toLocaleString()}</TableCell>
-                              <TableCell colSpan={2} />
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )
-            })
-          })()}
-        </TabsContent>
+        {/* Ship #297 — Ledger tab removed per Rodolfo "is the same
+            información as transactions". /admin/transactions renders the
+            same MOCK_TRANSACTIONS data with category-then-month grouping
+            + KPIs + month-filter popover; Ledger tab was redundant. */}
 
         {/* ── Auto Pay Tab ── */}
         <TabsContent value="autopay" className="space-y-6 mt-6">
