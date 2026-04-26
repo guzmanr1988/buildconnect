@@ -27,6 +27,7 @@ import { CartPage } from '@/features/homeowner/pages/cart'
 
 // Vendor (default exports)
 import VendorDashboard from '@/features/vendor/pages/dashboard'
+import VendorLeadWorkflow from '@/features/vendor/pages/lead-workflow'
 import LeadInbox from '@/features/vendor/pages/lead-inbox'
 import VendorCalendar from '@/features/vendor/pages/calendar'
 import VendorCatalog from '@/features/vendor/pages/catalog'
@@ -103,6 +104,8 @@ export const router = createBrowserRouter([
         handle: { title: 'Vendor · Dashboard' },
         children: [
           { index: true, element: <VendorDashboard /> },
+          // Ship #293 — Lead Workflow tab (extracted 5-status-tile pipeline + modal).
+          { path: 'lead-workflow', element: <VendorLeadWorkflow />, handle: { title: 'Vendor · Lead Workflow' } },
           { path: 'leads', element: <LeadInbox />, handle: { title: 'Vendor · Leads' } },
           // /vendor/projects alias for apollo probe + any UI surface that
           // labels the leads bucket as Projects (sidebar label-to-URL

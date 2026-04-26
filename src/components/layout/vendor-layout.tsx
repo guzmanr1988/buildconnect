@@ -21,6 +21,9 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/vendor', icon: LayoutDashboard, label: 'Dashboard' },
+  // Ship #293 — Lead Workflow tab between Dashboard and Projects per
+  // funnel-from-summary-to-detail mental model.
+  { to: '/vendor/lead-workflow', icon: InboxIcon, label: 'Lead Workflow' },
   { to: '/vendor/leads', icon: Inbox, label: 'Projects' },
   // Ship #277 — Homeowners tab between Projects and Calendar per
   // customer-data-grouping cluster (Projects/Homeowners/Calendar are
