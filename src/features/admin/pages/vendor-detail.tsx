@@ -222,7 +222,16 @@ export default function AdminVendorDetail() {
               "a bit bigger" annotation (kept from #287). */}
           <CardContent className="p-4 space-y-3">
             <p className="text-sm text-muted-foreground">Platform fee on each closed sale</p>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Ship #289 — mobile layout fix. Pre-#289 controls row used
+                flex-col sm:flex-row pattern; on mobile the col-stack made
+                Save button stretch full-width + input/% wrapper left-
+                aligned below. Total content width (Save ~130px + gap +
+                input 112px + % ~15px) fits comfortably at mobile
+                viewports (320px+ with 40px container padding leaves
+                280px+ available). flex-row ALWAYS keeps Save left +
+                input/% right via justify-between across breakpoints,
+                matching desktop layout Rodolfo confirmed wanted. */}
+            <div className="flex items-center justify-between gap-3">
               <Button
                 size="sm"
                 onClick={handleSaveCommission}
