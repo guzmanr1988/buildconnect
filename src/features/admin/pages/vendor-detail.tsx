@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, Briefcase, Phone, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
@@ -64,6 +64,21 @@ export default function AdminVendorDetail() {
   const [agreementViewOpen, setAgreementViewOpen] = useState(false)
   const [repromptConfirmOpen, setRepromptConfirmOpen] = useState(false)
 
+  // Ship #286 — Rodolfo-direct: explicit Save button on Commission Fee
+  // so user sees confirmation that their % is persisted, not implicit
+  // auto-save on each keystroke. Local draft state decouples input
+  // from store; Save button commits via setVendorCommission + toast.
+  // Drafts sync back when store changes from outside (e.g., another
+  // tab edits the same vendor) so the input doesn't get stuck on a
+  // stale-value while the canonical store moves underneath.
+  const persistedCommissionPct = vendor
+    ? (vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct)
+    : 15
+  const [draftCommission, setDraftCommission] = useState(String(persistedCommissionPct))
+  useEffect(() => {
+    setDraftCommission(String(persistedCommissionPct))
+  }, [persistedCommissionPct])
+
   const allProjects = useMemo(() => {
     if (!vendor) return []
     const rows: { id: string; date: string; project: string; status: string; clickId: string; source: 'sent' | 'lead' }[] = []
@@ -119,7 +134,23 @@ export default function AdminVendorDetail() {
     )
   }
 
-  const commissionPct = vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct
+  // Ship #286 — Save-button validation + handler. draftAsNumber parses
+  // the live input; valid range 1-50% (matches existing min/max attrs).
+  // hasUnsavedChanges drives Save button enabled state — disabled when
+  // value matches store (no-op) or when invalid (NaN / out-of-range).
+  const draftAsNumber = Number(draftCommission)
+  const isDraftValid = !Number.isNaN(draftAsNumber) && draftAsNumber >= 1 && draftAsNumber <= 50
+  const hasUnsavedChanges = isDraftValid && draftAsNumber !== persistedCommissionPct
+
+  const handleSaveCommission = () => {
+    if (!isDraftValid) {
+      toast.error('Commission must be between 1 and 50%')
+      return
+    }
+    setVendorCommission(vendor.id, draftAsNumber)
+    toast.success(`Commission saved at ${draftAsNumber}%`)
+  }
+
   const signed = vendor.noncircumvention_agreement_signed_at
   const signedDate = signed ? fmtDate(signed) : null
   const agreementVersion = vendor.noncircumvention_agreement_version
@@ -166,26 +197,42 @@ export default function AdminVendorDetail() {
         </CardContent>
       </Card>
 
-      {/* Section: Commission Fee */}
+      {/* Section: Commission Fee — Ship #286 explicit Save button.
+          Pre-#286 onChange auto-saved on each keystroke; user couldn't
+          tell if their value persisted. Now: input updates local
+          draft only; Save Changes button commits via setVendorCommission
+          + toast confirmation (matches existing "Save Changes" +
+          toast.success convention from admin/users + admin/banking +
+          admin/products per banked cross-file-idiom-consistency). */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Percent className="h-5 w-5 text-amber-700 dark:text-amber-400" />
           <h2 className="font-heading text-lg font-semibold">Commission Fee</h2>
         </div>
         <Card className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40">
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
             <span className="text-sm text-muted-foreground">Platform fee on each closed sale</span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={commissionPct}
-                onChange={(e) => setVendorCommission(vendor.id, Number(e.target.value))}
-                className="w-20 h-9 text-center text-sm font-bold"
-                data-admin-vendor-commission-input
-              />
-              <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
+            <div className="sm:ml-auto flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={draftCommission}
+                  onChange={(e) => setDraftCommission(e.target.value)}
+                  className="w-20 h-9 text-center text-sm font-bold"
+                  data-admin-vendor-commission-input
+                />
+                <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleSaveCommission}
+                disabled={!hasUnsavedChanges}
+                data-admin-vendor-commission-save
+              >
+                Save Changes
+              </Button>
             </div>
           </CardContent>
         </Card>
