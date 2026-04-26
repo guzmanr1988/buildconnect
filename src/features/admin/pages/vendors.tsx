@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
@@ -53,7 +53,6 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { Input } from '@/components/ui/input'
 import { MOCK_VENDORS } from '@/lib/mock-data'
-import { useVendorsStore } from '@/stores/vendors-store'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import {
@@ -124,13 +123,7 @@ export default function VendorsPage() {
     // not use the form so the pre-fill is harmless when hidden.
     const req = changeRequests.find((r) => r.id === id)
     if (req) {
-      // #282 — prefer vendorsFromStore (Supabase) when fetched; fall
-      // back to inline MOCK_VENDORS. Keeps openResolve consistent with
-      // the rest of the page's source-of-truth resolution.
-      const rawVendor =
-        (vendorsFetched && vendorsFromStore.length > 0
-          ? vendorsFromStore.find((v) => v.id === req.vendorId)
-          : undefined) ?? MOCK_VENDORS.find((v) => v.id === req.vendorId)
+      const rawVendor = MOCK_VENDORS.find((v) => v.id === req.vendorId)
       const override = vendorProfileOverrides[req.vendorId] ?? {}
       setEditName(override.name ?? rawVendor?.name ?? '')
       setEditCompany(override.company ?? rawVendor?.company ?? '')
@@ -225,31 +218,8 @@ export default function VendorsPage() {
 
   const isVerified = (vendor: Vendor) => vendor.verified || verifiedVendors.has(vendor.id)
 
-  // Ship #282 — admin/vendors populates from Supabase profiles where
-  // role=vendor via useVendorsStore (hydrate-on-mount + persist for
-  // cross-tab + last-known-fast-paint). Falls back to inline
-  // MOCK_VENDORS when fetch never landed OR returned empty (mock-mode
-  // demo state). Real-mode signups now propagate to admin list
-  // automatically via the Supabase profiles INSERT trigger. Mirror
-  // of #281 admin/homeowners realtime wire-up.
-  const vendorsFromStore = useVendorsStore((s) => s.vendors)
-  const vendorsFetched = useVendorsStore((s) => s.fetched)
-  const hydrateVendors = useVendorsStore((s) => s.hydrate)
-  useEffect(() => {
-    hydrateVendors()
-  }, [hydrateVendors])
-
-  // Source-of-truth resolution: prefer Supabase fetch when it has
-  // returned at least one row; fall back to inline MOCK_VENDORS when
-  // never-fetched OR fetched-but-empty. Used uniformly across the
-  // page (vendorData map + header counts).
-  const vendorsSource: Vendor[] = useMemo(
-    () => (vendorsFetched && vendorsFromStore.length > 0 ? vendorsFromStore : MOCK_VENDORS),
-    [vendorsFetched, vendorsFromStore],
-  )
-
   const vendorData = useMemo(() => {
-    return vendorsSource.map((rawVendor) => {
+    return MOCK_VENDORS.map((rawVendor) => {
       // Ship #172 — merge per-vendor profile overrides so the admin card
       // renders the effective post-approval state after a data-edit
       // commit. Raw MOCK_VENDOR fields remain the fallback; override
@@ -282,19 +252,19 @@ export default function VendorsPage() {
 
       return { vendor, leads, closedSales, totalRevenue, statusCounts }
     })
-  }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides, mockLeads, mockClosedSales, vendorsSource])
+  }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides, mockLeads, mockClosedSales])
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Vendor Management" description={`${vendorsSource.length} registered vendors`}>
+      <PageHeader title="Vendor Management" description={`${MOCK_VENDORS.length} registered vendors`}>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-sm">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{vendorsSource.filter((v) => v.status === 'active').length} Active</span>
+            <span className="font-medium">{MOCK_VENDORS.filter((v) => v.status === 'active').length} Active</span>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 text-sm">
             <span className="font-medium text-amber-800 dark:text-amber-400">
-              {vendorsSource.filter((v) => v.status === 'pending').length} Pending
+              {MOCK_VENDORS.filter((v) => v.status === 'pending').length} Pending
             </span>
           </div>
         </div>
