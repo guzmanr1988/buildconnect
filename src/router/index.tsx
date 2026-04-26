@@ -36,6 +36,7 @@ import VendorMessages from '@/features/vendor/pages/messages'
 import VendorProfile from '@/features/vendor/pages/profile'
 import VendorEmployeesPage from '@/features/vendor/pages/employees'
 import VendorHomeowners from '@/features/vendor/pages/homeowners'
+import VendorHomeownerDetail from '@/features/vendor/pages/homeowner-detail'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -107,6 +108,8 @@ export const router = createBrowserRouter([
           { path: 'projects', element: <LeadInbox />, handle: { title: 'Vendor · Projects' } },
           // Ship #277 — vendor-side Homeowners roster (vendor-scoped).
           { path: 'homeowners', element: <VendorHomeowners />, handle: { title: 'Vendor · Homeowners' } },
+          // Ship #278 — per-homeowner detail (Sold Projects + Documents).
+          { path: 'homeowners/:homeownerId', element: <VendorHomeownerDetail />, handle: { title: 'Vendor · Homeowner' } },
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
