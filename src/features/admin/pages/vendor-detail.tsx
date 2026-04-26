@@ -210,33 +210,39 @@ export default function AdminVendorDetail() {
           <h2 className="font-heading text-lg font-semibold">Commission Fee</h2>
         </div>
         <Card className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40">
-          {/* Ship #287 — Rodolfo-direct layout reorder. Save Changes
-              sits in the middle (where the % input was pre-#287); % input
-              + suffix anchored all-the-way-right; input bumped to w-28
-              (was w-20) per "a bit bigger" annotation. justify-between
-              on the outer flex distributes the three items: text-left /
-              save-middle / input-right. Mobile stacks via flex-col. */}
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Platform fee on each closed sale</span>
-            <Button
-              size="sm"
-              onClick={handleSaveCommission}
-              disabled={!hasUnsavedChanges}
-              data-admin-vendor-commission-save
-            >
-              Save Changes
-            </Button>
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={draftCommission}
-                onChange={(e) => setDraftCommission(e.target.value)}
-                className="w-28 h-10 text-center text-base font-bold"
-                data-admin-vendor-commission-input
-              />
-              <span className="text-base font-semibold text-amber-700 dark:text-amber-400">%</span>
+          {/* Ship #287 → #288 — layout reorder + vertical-hierarchy
+              preservation. Description "Platform fee on each closed
+              sale" stays on its OWN row above (matches Rodolfo
+              screenshot). Controls row below uses justify-between to
+              distribute Save (left) + input/% (right). #287 collapsed
+              description inline with controls on desktop via single-
+              flex justify-between; #288 corrects by wrapping controls
+              in a sub-flex so description preserves its block-level
+              row above. Input sized w-28/h-10/text-base per Rodolfo
+              "a bit bigger" annotation (kept from #287). */}
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm text-muted-foreground">Platform fee on each closed sale</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <Button
+                size="sm"
+                onClick={handleSaveCommission}
+                disabled={!hasUnsavedChanges}
+                data-admin-vendor-commission-save
+              >
+                Save Changes
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={draftCommission}
+                  onChange={(e) => setDraftCommission(e.target.value)}
+                  className="w-28 h-10 text-center text-base font-bold"
+                  data-admin-vendor-commission-input
+                />
+                <span className="text-base font-semibold text-amber-700 dark:text-amber-400">%</span>
+              </div>
             </div>
           </CardContent>
         </Card>
