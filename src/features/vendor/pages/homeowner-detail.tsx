@@ -248,7 +248,15 @@ export default function VendorHomeownerDetail() {
                   </div>
                   {typeof p.amount === 'number' && p.amount > 0 && (
                     <div className="text-right shrink-0">
-                      <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(p.amount)}</p>
+                      {/* Ship #291 — Rodolfo "a bit bigger" on dollar
+                          amount. text-base on mobile (320px+ viewport
+                          fits comfortably given content-width math:
+                          256px available, $X,XXX ~70px + chevron 16px
+                          = ~170px for truncating project-name) →
+                          text-lg on sm+ for slightly fuller weight on
+                          desktop. Mental-render-check pre-push per
+                          banked helios-side responsive-render rule. */}
+                      <p className="font-bold text-base sm:text-lg text-emerald-700 dark:text-emerald-400">{fmtCurrency(p.amount)}</p>
                     </div>
                   )}
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
