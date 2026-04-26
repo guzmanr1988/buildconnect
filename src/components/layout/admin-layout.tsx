@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -15,7 +15,17 @@ import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { MOCK_BUGS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
-const navItems = [
+type NavLeaf = { to: string; icon: typeof LayoutDashboard; label: string }
+type NavGroup = NavLeaf & { children: NavLeaf[] }
+type NavEntry = NavLeaf | NavGroup
+
+// Ship #298 — Banking nav-item is a dropdown group; Transactions +
+// Reports nest under it per Rodolfo "in admin menu in banking have a
+// drop menu and include transactions and reports under". Parent click
+// still navigates to /admin/banking (label-as-contract); chevron
+// toggles expand. Auto-expand when parent-route or any child-route is
+// active.
+const navItems: NavEntry[] = [
   { to: '/admin/profile', icon: User, label: 'Profile' },
   { to: '/admin', icon: LayoutDashboard, label: 'Overview' },
   { to: '/admin/users', icon: Users, label: 'Users' },
@@ -24,9 +34,15 @@ const navItems = [
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
   { to: '/admin/employees', icon: UserCog, label: 'Employees' },
   { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
-  { to: '/admin/transactions', icon: Receipt, label: 'Transactions' },
-  { to: '/admin/reports', icon: FileText, label: 'Reports' },
-  { to: '/admin/banking', icon: Landmark, label: 'Banking' },
+  {
+    to: '/admin/banking',
+    icon: Landmark,
+    label: 'Banking',
+    children: [
+      { to: '/admin/transactions', icon: Receipt, label: 'Transactions' },
+      { to: '/admin/reports', icon: FileText, label: 'Reports' },
+    ],
+  },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
   { to: '/admin/workflow', icon: GitBranch, label: 'Workflow' },
   { to: '/admin/activity', icon: ActivityIcon, label: 'Activity' },
@@ -35,22 +51,90 @@ const navItems = [
   { to: '/admin/bugs', icon: Bug, label: 'Bug Tracker' },
 ]
 
+function isNavGroup(item: NavEntry): item is NavGroup {
+  return 'children' in item
+}
+
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  const location = useLocation()
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
-      {navItems.map(({ to, icon: Icon, label }) => (
-        <NavLink key={to} to={to} end={to === '/admin'} onClick={() => onNavigate?.()}>
-          {({ isActive }) => (
-            <div className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}>
-              <Icon className="h-4.5 w-4.5 shrink-0" />
-              <span>{label}</span>
+      {navItems.map((item) => {
+        const Icon = item.icon
+        if (isNavGroup(item)) {
+          const childActive = item.children.some((c) => location.pathname === c.to)
+          const parentActive = location.pathname === item.to
+          const isExpanded = expanded[item.label] ?? (parentActive || childActive)
+          return (
+            <div key={item.to}>
+              <NavLink to={item.to} end={item.to === '/admin'} onClick={() => onNavigate?.()}>
+                {({ isActive }) => (
+                  <div className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}>
+                    <Icon className="h-4.5 w-4.5 shrink-0" />
+                    <span className="flex-1">{item.label}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setExpanded((prev) => ({ ...prev, [item.label]: !isExpanded }))
+                      }}
+                      className={cn(
+                        '-mr-1 rounded p-0.5 transition-colors',
+                        isActive ? 'hover:bg-primary-foreground/10' : 'hover:bg-foreground/5'
+                      )}
+                      aria-label={isExpanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded
+                        ? <ChevronDown className="h-4 w-4" />
+                        : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  </div>
+                )}
+              </NavLink>
+              {isExpanded && (
+                <div className="mt-1 ml-3 flex flex-col gap-1 border-l border-border pl-3">
+                  {item.children.map((child) => {
+                    const ChildIcon = child.icon
+                    return (
+                      <NavLink key={child.to} to={child.to} onClick={() => onNavigate?.()}>
+                        {({ isActive }) => (
+                          <div className={cn(
+                            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                            isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          )}>
+                            <ChildIcon className="h-4 w-4 shrink-0" />
+                            <span>{child.label}</span>
+                          </div>
+                        )}
+                      </NavLink>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </NavLink>
-      ))}
+          )
+        }
+        return (
+          <NavLink key={item.to} to={item.to} end={item.to === '/admin'} onClick={() => onNavigate?.()}>
+            {({ isActive }) => (
+              <div className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}>
+                <Icon className="h-4.5 w-4.5 shrink-0" />
+                <span>{item.label}</span>
+              </div>
+            )}
+          </NavLink>
+        )
+      })}
     </nav>
   )
 }
