@@ -232,7 +232,16 @@ export default function LeadInbox() {
 
             return (
               <motion.div key={lead.id} variants={item}>
-                <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+                {/* Ship #292 — drop inline shadow-sm/hover:shadow-md/transition
+                    overrides that masked the platform-wide floating-card
+                    default applied at the Card primitive level (#245).
+                    Card primitive provides shadow-md + transition-all +
+                    pointer-fine:hover:shadow-lg + pointer-fine:hover:
+                    -translate-y-0.5; per Rodolfo "same floating effect
+                    same rules" directive, no override needed. Inner
+                    nested Card (line 306) is intentionally flat per
+                    banked nested-inner-card flat-stance — left as-is. */}
+                <Card className="rounded-xl">
                   {/* Header - always visible */}
                   <button
                     type="button"
