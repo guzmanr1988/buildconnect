@@ -50,6 +50,7 @@ import ProductsAdminPage from '@/features/admin/pages/products'
 import UsersPage from '@/features/admin/pages/users'
 import HomeownersPage from '@/features/admin/pages/homeowners'
 import AdminHomeownerDetail from '@/features/admin/pages/homeowner-detail'
+import AdminVendorDetail from '@/features/admin/pages/vendor-detail'
 import EmployeesPage from '@/features/admin/pages/employees'
 import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
@@ -133,6 +134,8 @@ export const router = createBrowserRouter([
           { path: 'overview', element: <OverviewPage />, handle: { title: 'Admin · Overview' } },
           { path: 'revenue', element: <RevenuePage />, handle: { title: 'Admin · Revenue' } },
           { path: 'vendors', element: <VendorsPage />, handle: { title: 'Admin · Vendors' } },
+          // Ship #284 — admin per-vendor detail (Commission + Agreement + All Projects).
+          { path: 'vendors/:vendorId', element: <AdminVendorDetail />, handle: { title: 'Admin · Vendor' } },
           { path: 'employees', element: <EmployeesPage />, handle: { title: 'Admin · Employees' } },
           { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
           { path: 'transactions', element: <TransactionsPage />, handle: { title: 'Admin · Transactions' } },

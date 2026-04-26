@@ -8,8 +8,6 @@ import {
   ShieldCheck,
   Ban,
   Users,
-  FileText,
-  Percent,
   Send,
   CheckCircle2,
   RotateCcw,
@@ -26,12 +24,6 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from '@/components/ui/accordion'
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -39,22 +31,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { StatusBadge } from '@/components/shared/status-badge'
 import { Input } from '@/components/ui/input'
 import { MOCK_VENDORS } from '@/lib/mock-data'
-import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
-import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import {
   useEffectiveMockLeads,
   useEffectiveMockClosedSales,
@@ -98,11 +79,9 @@ export default function VendorsPage() {
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
   const [resolveNote, setResolveNote] = useState('')
-  // Ship #270 — agreement view + re-prompt state. agreementViewVendor
-  // holds the vendor whose signed-snapshot opens in view-mode dialog.
-  // repromptVendor holds the vendor pending re-prompt confirmation.
-  const [agreementViewVendor, setAgreementViewVendor] = useState<Vendor | null>(null)
-  const [repromptVendor, setRepromptVendor] = useState<Vendor | null>(null)
+  // Ship #284: agreementViewVendor + repromptVendor state moved to
+  // /admin/vendors/:vendorId detail page alongside the Agreement
+  // section + dialogs that depend on them.
   // Ship #172 (task_1776719975617_951) — data-edit form state. Populated
   // from the effective vendor profile on openResolve so admin can tweak
   // the fields in place. Only non-empty trimmed fields are committed on
@@ -162,11 +141,10 @@ export default function VendorsPage() {
   }
 
   const navigate = useNavigate()
-  // Commission % overrides now persist in admin-moderation-store (ship #130)
-  // so edits ripple to revenue/reports/overview/banking via the shared store
-  // instead of being trapped in local useState.
-  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
-  const setVendorCommission = useAdminModerationStore((s) => s.setVendorCommission)
+  // Ship #284: Commission % surface moved to /admin/vendors/:vendorId
+  // detail page; setter still consumed by openResolve / vendor-profile-edit
+  // flows here so admin-moderation-store wiring stays intact across both
+  // surfaces.
   const vendorProfileOverrides = useAdminModerationStore((s) => s.vendorProfileOverrides)
   const applyVendorProfileEdit = useAdminModerationStore((s) => s.applyVendorProfileEdit)
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
@@ -177,10 +155,6 @@ export default function VendorsPage() {
   const [messageDialogOpen, setMessageDialogOpen] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [messageSent, setMessageSent] = useState(false)
-
-  const updateCommission = (vendorId: string, pct: number) => {
-    setVendorCommission(vendorId, pct)
-  }
 
   const handleSuspend = (vendor: Vendor) => {
     setSuspendTarget(vendor)
@@ -432,9 +406,12 @@ export default function VendorsPage() {
 
       {/* Vendor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {vendorData.map(({ vendor, leads, closedSales, totalRevenue, statusCounts }, i) => (
+        {vendorData.map(({ vendor, closedSales, totalRevenue }, i) => (
           <motion.div key={vendor.id} custom={i} variants={fadeUp} initial="hidden" animate="visible">
-            <Card className="rounded-xl shadow-sm hover:shadow-md transition flex flex-col">
+            <Card
+              className="rounded-xl shadow-sm hover:shadow-md transition flex flex-col cursor-pointer"
+              onClick={() => navigate(`/admin/vendors/${encodeURIComponent(vendor.id)}`)}
+            >
               <CardContent className="p-5 flex-1 flex flex-col">
                 {/* Header */}
                 <div className="flex items-start gap-3 mb-4">
@@ -495,156 +472,40 @@ export default function VendorsPage() {
                   </div>
                 </div>
 
-                {/* Commission % */}
-                <div className="flex items-center gap-2 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3">
-                  <Percent className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Commission Fee</span>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct}
-                      onChange={(e) => updateCommission(vendor.id, Number(e.target.value))}
-                      className="w-16 h-8 text-center text-sm font-bold"
-                    />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
-                  </div>
-                </div>
-
-                {/* Ship #270 — Non-circumvention agreement status. MOCK_VENDORS
-                    fixtures don't carry signed-state today (signatures live on
-                    real vendor profiles after the Phase 1 sign-flow). Surface
-                    is honest: shows Not Signed for unsigned, Signed YYYY-MM-DD
-                    + version for signed. View opens audit-mode dialog with
-                    snapshot. Reprompt fires destructive-confirm + toast +
-                    Tranche-2 marker (real cross-session enforcement waits on
-                    Supabase backend wiring). */}
-                {(() => {
-                  const signed = vendor.noncircumvention_agreement_signed_at
-                  const signedDate = signed
-                    ? new Date(signed).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                    : null
-                  const version = vendor.noncircumvention_agreement_version
-                  const isCurrent = version === CURRENT_AGREEMENT_VERSION
-                  return (
-                    <div className="flex items-center gap-2 mb-4 rounded-lg border p-3 bg-card">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground">Agreement</p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          {signed ? (
-                            <>
-                              Signed {signedDate} · {version ?? '—'}
-                              {!isCurrent && version && (
-                                <span className="ml-1 text-amber-700 dark:text-amber-400">(stale)</span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-amber-700 dark:text-amber-400">Not signed</span>
-                          )}
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={!signed}
-                        onClick={() => setAgreementViewVendor(vendor)}
-                      >
-                        View
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setRepromptVendor(vendor)}
-                      >
-                        Reprompt
-                      </Button>
-                    </div>
-                  )
-                })()}
-
-                {/* Action Buttons */}
+                {/* Action Buttons — Ship #284: Commission Fee + Agreement
+                    + Lead Accordion moved to /admin/vendors/:vendorId
+                    detail page. Card retains identity + revenue stats +
+                    moderation actions per Rodolfo spec. Whole card is
+                    click-through to detail; per-button handlers
+                    stopPropagation to prevent navigate on inner clicks. */}
                 <div className="flex gap-2 mb-4">
-                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => navigate(`/admin/messages?vendor=${vendor.id}`)}>
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={(e) => { e.stopPropagation(); navigate(`/admin/messages?vendor=${vendor.id}`) }}>
                     <MessageSquare className="h-3.5 w-3.5" />
                     Message
                   </Button>
                   {suspendedVendors.has(vendor.id) ? (
-                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleSuspend(vendor)}>
+                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={(e) => { e.stopPropagation(); handleSuspend(vendor) }}>
                       <RotateCcw className="h-3.5 w-3.5" />
                       Reinstate
                     </Button>
                   ) : (
-                    <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => handleSuspend(vendor)}>
+                    <Button variant="destructive" size="sm" className="gap-1.5" onClick={(e) => { e.stopPropagation(); handleSuspend(vendor) }}>
                       <Ban className="h-3.5 w-3.5" />
                       Suspend
                     </Button>
                   )}
                   {!isVerified(vendor) && (
-                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleVerify(vendor.id)}>
+                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={(e) => { e.stopPropagation(); handleVerify(vendor.id) }}>
                       <ShieldCheck className="h-3.5 w-3.5" />
                       Verify
                     </Button>
                   )}
                 </div>
 
-                {/* Lead Accordion */}
-                <Accordion type="single" collapsible className="mt-auto">
-                  <AccordionItem value="leads">
-                    <AccordionTrigger className="text-sm">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span>Leads ({leads.length})</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      {leads.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">No leads yet</p>
-                      ) : (
-                        <>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-xs">Project</TableHead>
-                                <TableHead className="text-xs">Value</TableHead>
-                                <TableHead className="text-xs">Status</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {leads.map((lead) => (
-                                <TableRow key={lead.id}>
-                                  <TableCell className="text-xs font-medium max-w-[140px] truncate">
-                                    {lead.project}
-                                  </TableCell>
-                                  <TableCell className="text-xs">${lead.value.toLocaleString()}</TableCell>
-                                  <TableCell>
-                                    <StatusBadge status={lead.status} className="text-[10px] px-2 py-0" />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-
-                          {/* Status Summary */}
-                          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
-                            {(['pending', 'confirmed', 'rejected', 'cancelled', 'rescheduled', 'completed'] as LeadStatus[]).map(
-                              (status) =>
-                                statusCounts[status] ? (
-                                  <StatusBadge key={status} status={status} className="text-[10px]" />
-                                ) : null
-                            )}
-                            <span className="ml-auto text-xs text-muted-foreground font-medium">
-                              {leads.length} total
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                {/* Ship #284: Lead Accordion (status counts + per-lead
+                    table) moved to /admin/vendors/:vendorId detail page,
+                    expanded into full clickable per-project rows with
+                    ProjectDetailDialog #248 dual-lookup click-through. */}
               </CardContent>
             </Card>
           </motion.div>
@@ -715,61 +576,9 @@ export default function VendorsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Ship #270 — agreement view dialog (audit-mode). Renders only
-          when admin clicks View on a signed vendor; passes the vendor
-          as profile so the dialog reads its snapshot fields. */}
-      {agreementViewVendor && (
-        <NonCircumventionAgreementDialog
-          mode="view"
-          open
-          onOpenChange={(o) => !o && setAgreementViewVendor(null)}
-          profile={agreementViewVendor}
-        />
-      )}
-
-      {/* Ship #270 — reprompt confirmation. Destructive-confirm-four-
-          refinement applied: names-the-break, earned-diction,
-          alternative-steer (Send a message), verb-matched-cancel. */}
-      <Dialog open={!!repromptVendor} onOpenChange={(o) => !o && setRepromptVendor(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Force re-sign of agreement?</DialogTitle>
-            <DialogDescription>
-              {repromptVendor?.company} will be locked out of their portal on next login until they re-sign the current agreement. Their previously-signed audit record will remain on file. Use this when the agreement language has materially changed and prior consent no longer applies.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            If you only need to nudge a vendor without locking them out, send a message instead.
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setRepromptVendor(null)}
-            >
-              Keep current signature
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                if (!repromptVendor) return
-                // TODO Tranche-2: write reprompt-flag to vendor's
-                // profile via Supabase so the gate at vendor-layout
-                // sees it on next login. For Phase 1 mock-mode, this
-                // is a toast + admin-record stub — real cross-session
-                // enforcement waits on backend wiring.
-                toast.success(
-                  `Reprompt sent — ${repromptVendor.company} will see the agreement on next login.`,
-                )
-                setRepromptVendor(null)
-              }}
-            >
-              Reprompt sign
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Ship #284: Agreement view + Reprompt dialogs moved to
+          /admin/vendors/:vendorId detail page alongside the Agreement
+          section that triggers them. */}
     </div>
   )
 }
