@@ -11,26 +11,11 @@ import {
   Phone,
   Search,
   Users,
-  Hammer,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from '@/components/ui/accordion'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -41,13 +26,10 @@ import {
 } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { StatusBadge } from '@/components/shared/status-badge'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
-import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -134,9 +116,6 @@ export default function HomeownersPage() {
   // one) so we gate it inline here instead of through a shared hook.
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
 
-  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
-  const mockLeads = useEffectiveMockLeads()
-
   // Cross-tab rehydrate: admin-moderation + projects both persist to LS but
   // don't auto-sync across tabs. Rehydrate on focus so status changes +
   // homeowner cart-created projects surface here. Phase 2b admin-SoT per
@@ -151,14 +130,6 @@ export default function HomeownersPage() {
   // homeowner.email (Profile.id used to not map back to mock ho-N ids, so
   // email is the stable bridge key).
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-
-  // Per-homeowner "Showing projects at: <label>" address filter (ship #135
-  // per kratos msg 1776742863870). Silent no-op when a homeowner's
-  // sentProjects only surface one distinct address label.
-  const [addressFilterByHomeowner, setAddressFilterByHomeowner] = useState<Record<string, string>>({})
-
-  // In-place project-detail Dialog (ship #140 replaces #139 navigate()).
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   // Ship #250 — gate the local CUSTOMER_PROJECTS fixture behind the
   // demoDataHidden flag the same way the shared mock fixtures are gated.
@@ -290,36 +261,15 @@ export default function HomeownersPage() {
               contractor_assigned: sp.contractor?.company ?? 'Unassigned',
               address_label: sp.item.address?.label ?? 'Primary',
             }))
-          const allProjects = [...sentForHomeowner, ...fixtureProjects]
-
-          // Distinct address labels across this homeowner's projects — used
-          // to decide whether to surface the Other-Addresses filter. Silent
-          // no-op if only one distinct label (per kratos spec 1776742863870:
-          // "If homeowner has no additional addresses, no UI surfaces").
-          const distinctAddressLabels = Array.from(new Set(
-            allProjects.map((p) => p.address_label ?? 'Primary')
-          ))
-          const showAddressFilter = distinctAddressLabels.length >= 2
-          // Ship #138: add 'All Properties' as first dropdown option; keep
-          // Primary as default for single-focus view.
-          const ALL_ADDRESSES = 'All Properties'
-          const selectedAddress = addressFilterByHomeowner[homeowner.id] ?? 'Primary'
-          const projects = showAddressFilter && selectedAddress !== ALL_ADDRESSES
-            ? allProjects.filter((p) => (p.address_label ?? 'Primary') === selectedAddress)
-            : allProjects
-          // Grouped-by-address view when 'All Properties' is selected — small
-          // address subheader above each group so admin can visually distinguish
-          // which property each project belongs to.
-          const showGrouped = showAddressFilter && selectedAddress === ALL_ADDRESSES
-          const groupedProjects: { label: string; items: typeof projects }[] = showGrouped
-            ? distinctAddressLabels
-                .sort((a, b) => (a === 'Primary' ? -1 : b === 'Primary' ? 1 : a.localeCompare(b)))
-                .map((label) => ({
-                  label,
-                  items: projects.filter((p) => (p.address_label ?? 'Primary') === label),
-                }))
-                .filter((g) => g.items.length > 0)
-            : []
+          // Ship #296 — Rodolfo-direct: "take out the customer projects
+          // outside, I can already see all project inside the menu".
+          // Inline accordion + address-filter UI removed; per-homeowner
+          // detail page (#280, /admin/homeowners/:homeownerId) renders
+          // All Projects with full breakdown including address grouping.
+          // allProjects retained for the Stats grid count + Completed
+          // count below; sentProjects + fixtures still merged so the
+          // counts include both seed + cart-created projects.
+          const projects = [...sentForHomeowner, ...fixtureProjects]
           return (
             <motion.div
               key={homeowner.id}
@@ -453,172 +403,11 @@ export default function HomeownersPage() {
                     )}
                   </div>
 
-                  {/* Projects Accordion */}
-                  <Accordion type="single" collapsible className="mt-auto">
-                    <AccordionItem value="projects">
-                      <AccordionTrigger className="text-sm">
-                        <div className="flex items-center gap-2">
-                          <Hammer className="h-4 w-4 text-muted-foreground" />
-                          <span>Customer Projects ({projects.length})</span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {showAddressFilter && (
-                          <div className="mb-3 flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <label className="text-xs text-muted-foreground shrink-0" htmlFor={`addr-filter-${homeowner.id}`}>
-                              Showing projects at:
-                            </label>
-                            <select
-                              id={`addr-filter-${homeowner.id}`}
-                              value={selectedAddress}
-                              onChange={(e) =>
-                                setAddressFilterByHomeowner((prev) => ({
-                                  ...prev,
-                                  [homeowner.id]: e.target.value,
-                                }))
-                              }
-                              className="flex-1 bg-background rounded border text-xs px-2 py-1"
-                              aria-label={`Filter projects by address for ${homeowner.name}`}
-                            >
-                              <option value={ALL_ADDRESSES}>{ALL_ADDRESSES}</option>
-                              {distinctAddressLabels
-                                .sort((a, b) => (a === 'Primary' ? -1 : b === 'Primary' ? 1 : a.localeCompare(b)))
-                                .map((label) => (
-                                  <option key={label} value={label}>{label}</option>
-                                ))}
-                            </select>
-                          </div>
-                        )}
-                        {projects.length === 0 ? (
-                          <p className="text-sm text-muted-foreground py-2">
-                            No projects yet
-                          </p>
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-xs">
-                                  Project
-                                </TableHead>
-                                <TableHead className="text-xs">
-                                  Service
-                                </TableHead>
-                                <TableHead className="text-xs">
-                                  Status
-                                </TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {showGrouped
-                                ? groupedProjects.flatMap((group) => [
-                                    <TableRow key={`group-${group.label}`} className="bg-muted/30 hover:bg-muted/30">
-                                      <TableCell colSpan={3} className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-1.5">
-                                        <span className="flex items-center gap-1.5">
-                                          <MapPin className="h-3 w-3" />
-                                          {group.label} ({group.items.length})
-                                        </span>
-                                      </TableCell>
-                                    </TableRow>,
-                                    ...group.items.map((proj) => (
-                                      <TableRow
-                                        key={proj.id}
-                                        className="cursor-pointer hover:bg-muted/40"
-                                        onClick={() => {
-                                          // Ship #151 P0 fix: CUSTOMER_PROJECTS
-                                          // fixture ids (cp-N) aren't in MOCK_
-                                          // LEADS/sentProjects so ProjectDetail
-                                          // Dialog can't resolve them. Bridge
-                                          // cp-N → matching MOCK_LEAD via
-                                          // homeowner_id + project-name prefix
-                                          // match (handles em-dash vs hyphen
-                                          // variance). sentProject synth rows
-                                          // pass through directly (sp.id in
-                                          // sentProjects).
-                                          let resolvedId = proj.id
-                                          if (proj.id.startsWith('cp-')) {
-                                            const matched = mockLeads.find((l) => {
-                                              if (l.homeowner_id !== proj.homeowner_id) return false
-                                              const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
-                                              const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()
-                                              return leadPrefix === projPrefix || projPrefix.includes(leadPrefix) || leadPrefix.includes(projPrefix)
-                                            })
-                                            if (matched) resolvedId = matched.id
-                                          }
-                                          setSelectedProjectId(resolvedId)
-                                        }}
-                                      >
-                                        <TableCell className="text-xs font-medium max-w-[140px]">
-                                          <div className="truncate">{proj.project_name}</div>
-                                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                                            {new Date(proj.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="text-xs">{proj.service_type}</TableCell>
-                                        <TableCell>
-                                          <StatusBadge status={proj.status} className="text-[10px] px-2 py-0" />
-                                        </TableCell>
-                                      </TableRow>
-                                    )),
-                                  ])
-                                : projects.map((proj) => (
-                                    <TableRow
-                                      key={proj.id}
-                                      className="cursor-pointer hover:bg-muted/40"
-                                      onClick={() => {
-                                        // Ship #152 P0 — flat-mode branch
-                                        // got missed by #151 replace_all
-                                        // (multi-line onClick pattern drift
-                                        // broke the single-line flat-mode
-                                        // match). Second instance of the
-                                        // replace_all-blindspot-on-multi-
-                                        // branch-render pattern I banked at
-                                        // #141 — applied replace_all but the
-                                        // CODE-SHAPE divergence between the
-                                        // two branches post-edit broke the
-                                        // symmetry. Post-edit grep is the
-                                        // right cheap-insurance discipline.
-                                        let resolvedId = proj.id
-                                        if (proj.id.startsWith('cp-')) {
-                                          const matched = mockLeads.find((l) => {
-                                            if (l.homeowner_id !== proj.homeowner_id) return false
-                                            const leadPrefix = l.project.split(/[-—]/)[0].trim().toLowerCase()
-                                            const projPrefix = proj.project_name.split(/[-—]/)[0].trim().toLowerCase()
-                                            return leadPrefix === projPrefix || projPrefix.includes(leadPrefix) || leadPrefix.includes(projPrefix)
-                                          })
-                                          if (matched) resolvedId = matched.id
-                                        }
-                                        setSelectedProjectId(resolvedId)
-                                      }}
-                                    >
-                                      <TableCell className="text-xs font-medium max-w-[140px]">
-                                        <div className="truncate">{proj.project_name}</div>
-                                        <div className="text-[10px] text-muted-foreground mt-0.5">
-                                          {new Date(proj.date_submitted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="text-xs">{proj.service_type}</TableCell>
-                                      <TableCell>
-                                        <StatusBadge status={proj.status} className="text-[10px] px-2 py-0" />
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                        {projects.length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium">
-                                Last contractor:
-                              </span>{' '}
-                              {projects[0].contractor_assigned}
-                            </p>
-                          </div>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                  {/* Ship #296 — Customer Projects accordion removed per
+                      Rodolfo "I can already see all project inside the
+                      menu". Per-homeowner detail page (#280) renders
+                      All Projects with full breakdown. Stats grid above
+                      keeps the count + completed-count summary. */}
                 </CardContent>
               </Card>
             </motion.div>
@@ -654,11 +443,6 @@ export default function HomeownersPage() {
         </DialogContent>
       </Dialog>
 
-      <ProjectDetailDialog
-        open={!!selectedProjectId}
-        onClose={() => setSelectedProjectId(null)}
-        projectId={selectedProjectId}
-      />
     </div>
   )
 }
