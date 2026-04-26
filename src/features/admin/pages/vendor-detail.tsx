@@ -210,29 +210,33 @@ export default function AdminVendorDetail() {
           <h2 className="font-heading text-lg font-semibold">Commission Fee</h2>
         </div>
         <Card className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40">
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          {/* Ship #287 — Rodolfo-direct layout reorder. Save Changes
+              sits in the middle (where the % input was pre-#287); % input
+              + suffix anchored all-the-way-right; input bumped to w-28
+              (was w-20) per "a bit bigger" annotation. justify-between
+              on the outer flex distributes the three items: text-left /
+              save-middle / input-right. Mobile stacks via flex-col. */}
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <span className="text-sm text-muted-foreground">Platform fee on each closed sale</span>
-            <div className="sm:ml-auto flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={draftCommission}
-                  onChange={(e) => setDraftCommission(e.target.value)}
-                  className="w-20 h-9 text-center text-sm font-bold"
-                  data-admin-vendor-commission-input
-                />
-                <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
-              </div>
-              <Button
-                size="sm"
-                onClick={handleSaveCommission}
-                disabled={!hasUnsavedChanges}
-                data-admin-vendor-commission-save
-              >
-                Save Changes
-              </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveCommission}
+              disabled={!hasUnsavedChanges}
+              data-admin-vendor-commission-save
+            >
+              Save Changes
+            </Button>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={draftCommission}
+                onChange={(e) => setDraftCommission(e.target.value)}
+                className="w-28 h-10 text-center text-base font-bold"
+                data-admin-vendor-commission-input
+              />
+              <span className="text-base font-semibold text-amber-700 dark:text-amber-400">%</span>
             </div>
           </CardContent>
         </Card>
