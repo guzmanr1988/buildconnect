@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, MessageSquare, Mail, MapPin, Phone, Briefcase, FileText, Plus, Download, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Mail, MapPin, Phone, Briefcase, FileText, Plus, Download, Trash2, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
+import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { useVendorHomeowners } from '@/lib/hooks/use-vendor-homeowners'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -83,6 +84,10 @@ export default function VendorHomeownerDetail() {
   const [pendingFilename, setPendingFilename] = useState<string | null>(null)
   const [pendingDataUrl, setPendingDataUrl] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<VendorHomeownerDoc | null>(null)
+  // Ship #279 — Sold Projects row click opens ProjectDetailDialog (#248
+  // dual-lookup pattern: sentProjects.id OR mockLeads.id resolves the
+  // canonical detail view, regardless of which source the row came from).
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   const soldProjects = useMemo(() => {
     if (!vendor) return []
@@ -105,14 +110,17 @@ export default function VendorHomeownerDetail() {
         })
       })
     // (ii) MOCK_CLOSED_SALES scoped to this vendor + bridged via
-    // lead.email match.
+    // lead.email match. Ship #279 — id is the lead_id (L-XXXX) so
+    // ProjectDetailDialog resolves via mockLeads.find lookup path.
+    // Pre-#279 stored cs.id which is the closed-sale UUID and would
+    // miss both sentProjects and mockLeads lookup branches.
     mockClosedSales
       .filter((cs) => cs.vendor_id === vendorId)
       .forEach((cs) => {
         const lead = mockLeads.find((l) => l.id === cs.lead_id)
         if (!lead || lead.email !== homeownerEmail) return
         sold.push({
-          id: cs.id,
+          id: cs.lead_id,
           date: cs.closed_at,
           project: cs.project,
           amount: cs.sale_amount,
@@ -227,7 +235,13 @@ export default function VendorHomeownerDetail() {
         ) : (
           <div className="space-y-2">
             {soldProjects.map((p) => (
-              <Card key={p.id} className="rounded-xl">
+              <Card
+                key={p.id}
+                className="rounded-xl cursor-pointer hover:shadow-md transition"
+                onClick={() => setSelectedProjectId(p.id)}
+                data-vendor-sold-project-row={p.id}
+                data-vendor-sold-project-source={p.source}
+              >
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{p.project}</p>
@@ -238,6 +252,7 @@ export default function VendorHomeownerDetail() {
                       <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(p.amount)}</p>
                     </div>
                   )}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </CardContent>
               </Card>
             ))}
@@ -347,6 +362,16 @@ export default function VendorHomeownerDetail() {
           </div>
         )}
       </section>
+
+      {/* Ship #279 — full project detail via shared ProjectDetailDialog
+          (#248 dual-lookup pattern: sentProjects.id OR mockLeads.id).
+          Closed-sale source rows pass cs.lead_id (#279 fix) so the
+          mockLeads-fallback path resolves the canonical detail view. */}
+      <ProjectDetailDialog
+        open={!!selectedProjectId}
+        onClose={() => setSelectedProjectId(null)}
+        projectId={selectedProjectId}
+      />
 
       {/* Destructive-confirm-four-refinement on Delete-doc */}
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
