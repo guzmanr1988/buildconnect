@@ -57,6 +57,10 @@ export default function VendorLeadWorkflow() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const setLeadStatus = useProjectsStore((s) => s.setLeadStatus)
+  // Ship #295 — vendor-marked manual completion. Stamps completedAt on
+  // the sentProject; bucketing reads completedAt-presence to override
+  // age-based 90d auto-transition.
+  const markCompleted = useProjectsStore((s) => s.markCompleted)
   // Ship #191 — reschedule request actions + map read. Map-entry read
   // is stable (undefined or RescheduleRequest object) per the banked
   // zustand-selector-stable-reference rule.
@@ -154,7 +158,7 @@ export default function VendorLeadWorkflow() {
   // Cross-vendor-visibility intentionally loose in demo mode; post-
   // launch re-approach (task_1776818232208_731) lifts to shared helper
   // with strict scope once real vendor accounts are wired.
-  const homeownerLeads: (Lead & { soldAt?: string })[] = useMemo(() => sentProjects
+  const homeownerLeads: (Lead & { soldAt?: string; completedAt?: string })[] = useMemo(() => sentProjects
     .map((p) => ({
     id: `L-${p.id.slice(0, 4).toUpperCase()}`,
     _projectId: p.id,
@@ -175,6 +179,7 @@ export default function VendorLeadWorkflow() {
     slot: p.sentAt,
     received_at: p.sentAt,
     soldAt: p.soldAt,
+    completedAt: p.completedAt,
   })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company])
 
   // Per-lead status overrides are now persisted via projects-store (ship #55 —
@@ -234,9 +239,16 @@ export default function VendorLeadWorkflow() {
   // Lead categories
   const newLeads = leads.filter((l) => l.status === 'pending' || l.status === 'rescheduled')
   const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
+  // Ship #295 — vendor-marked manual completion (completedAt presence)
+  // wins over the age-based 90d auto-transition. If completedAt is set,
+  // project lives in Projects Completed regardless of soldAt age.
+  const isManuallyCompleted = (l: Lead): boolean => {
+    return !!(l as Lead & { completedAt?: string }).completedAt
+  }
   const projectSold = leads.filter((l) => {
     if (isCancelledLead(l)) return false
     if (l.status !== 'completed') return false
+    if (isManuallyCompleted(l)) return false
     const age = soldAgeDays(l as Lead & { soldAt?: string })
     // Currently-active bucket: either just-sold (no soldAt yet → treat as
     // fresh) OR sold less than SOLD_TO_COMPLETED_DAYS ago.
@@ -245,8 +257,9 @@ export default function VendorLeadWorkflow() {
   const projectsCompleted = leads.filter((l) => {
     if (isCancelledLead(l)) return false
     if (l.status !== 'completed') return false
+    // Manual completion wins; otherwise age-based threshold applies.
+    if (isManuallyCompleted(l)) return true
     const age = soldAgeDays(l as Lead & { soldAt?: string })
-    // Truly-completed: aged-out past the 90d threshold.
     return age !== null && age >= SOLD_TO_COMPLETED_DAYS
   })
   const cancelledProjects = leads.filter(isCancelledLead)
@@ -275,6 +288,10 @@ export default function VendorLeadWorkflow() {
   const [vendorCounterOpen, setVendorCounterOpen] = useState(false)
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
   const [saleAmount, setSaleAmount] = useState('')
+  // Ship #295 — Project Completed confirm dialog. Lighter-confirm shape
+  // (not full destructive-four-refinement) since the action is
+  // acceleration of automatic 90d transition, not destruction.
+  const [completedDialogOpen, setCompletedDialogOpen] = useState(false)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   // Assign-rep flow: selectedRepId is the rep chosen in the new-lead modal
   // (Confirm is gated on it being non-empty). editRepOpen/editRep* drive the
@@ -971,6 +988,23 @@ export default function VendorLeadWorkflow() {
                     <div className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg bg-primary/10 text-primary font-semibold text-sm border border-primary/20">
                       <Handshake className="h-4 w-4" /> Sold
                     </div>
+                    {/* Ship #295 — Rodolfo-direct: "under price add a button
+                        project completed when clicked project pass from sold
+                        to complete status". Gated to currently-active sold
+                        projects only (no completedAt yet). Acceleration of
+                        the existing 90d age-based auto-transition. */}
+                    {(() => {
+                      const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                      if (!sp || sp.completedAt) return null
+                      return (
+                        <Button
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={() => setCompletedDialogOpen(true)}
+                        >
+                          <Check className="h-4 w-4 mr-1.5" /> Project Completed
+                        </Button>
+                      )
+                    })()}
                     {(() => {
                       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                       if (!sp) return null
@@ -979,6 +1013,11 @@ export default function VendorLeadWorkflow() {
                           {sp.soldAt && (
                             <p className="text-xs text-muted-foreground text-center">
                               Sold on {new Date(sp.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          )}
+                          {sp.completedAt && (
+                            <p className="text-xs text-emerald-700 dark:text-emerald-400 text-center font-medium">
+                              Completed on {new Date(sp.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                           )}
                           {sp.saleAmount && sp.saleAmount > 0 && (
@@ -1424,6 +1463,39 @@ export default function VendorLeadWorkflow() {
               }}
             >
               <Handshake className="h-4 w-4 mr-1.5" /> Confirm Sale
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ship #295 — Project Completed confirm dialog. Lighter-confirm
+          shape (per kratos concur on edge-case-calibration of
+          destructive-confirm-four-refinement preconditions): action is
+          acceleration of the existing 90d age-based auto-transition,
+          not destruction. Plain 1-line description + Cancel/Confirm. */}
+      <Dialog open={completedDialogOpen} onOpenChange={setCompletedDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Mark Project Completed?</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm text-muted-foreground">
+            <p>This moves the project from Sold, Active to Projects Completed.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompletedDialogOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                if (selected) {
+                  const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                  if (sp) markCompleted(sp.id)
+                }
+                setCompletedDialogOpen(false)
+                setSheetOpen(false)
+                toast.success('Project marked as completed')
+              }}
+            >
+              <Check className="h-4 w-4 mr-1.5" /> Confirm
             </Button>
           </DialogFooter>
         </DialogContent>

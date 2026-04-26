@@ -45,6 +45,12 @@ export interface SentProject {
   homeowner_id?: string
   sentAt: string
   soldAt?: string
+  // Ship #295 — vendor-marked manual completion. Presence overrides the
+  // age-based 90d auto-transition so the project moves to Projects
+  // Completed tile immediately on click instead of waiting on
+  // SOLD_TO_COMPLETED_DAYS. Set by markCompleted; absence means age-
+  // based bucketing applies.
+  completedAt?: string
   saleAmount?: number
   rejectionReason?: string
   idDocument?: string
@@ -145,6 +151,11 @@ interface ProjectsState {
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
+  // Ship #295 — vendor-marked manual completion. Stamps completedAt and
+  // moves the project from Sold, Active to Projects Completed bucket
+  // immediately. Acceleration of the existing 90d age-based auto-
+  // transition; not a status change (still 'sold').
+  markCompleted: (id: string) => void
   assignRep: (id: string, rep: VendorRep) => void
   // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
   // handled via assignRep).
@@ -259,6 +270,14 @@ export const useProjectsStore = create<ProjectsState>()(
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
             p.id === id ? { ...p, status: 'sold', soldAt: new Date().toISOString(), saleAmount } : p
+          ),
+        }))
+      },
+
+      markCompleted: (id) => {
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === id ? { ...p, completedAt: new Date().toISOString() } : p
           ),
         }))
       },
