@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
@@ -44,6 +44,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useHomeownersStore } from '@/stores/homeowners-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
@@ -119,13 +120,27 @@ export default function HomeownersPage() {
   const [search, setSearch] = useState('')
   const [suspendTarget, setSuspendTarget] = useState<{ id: string; name: string } | null>(null)
 
-  // Merge the static MOCK_HOMEOWNERS with any admin-moderation overrides so
-  // suspend/reactivate reflects in the list + counts immediately. Subscribe
-  // to the overrides MAP (not the selector fn) — zustand keeps function
+  // Ship #281 — admin/homeowners populates from Supabase profiles
+  // where role=homeowner via useHomeownersStore (hydrate-on-mount +
+  // persist for cross-tab + last-known-fast-paint). Falls back to
+  // inline HOMEOWNERS fixtures when fetch fails (banked Supabase-
+  // column-not-yet-migrated → preserve-local-value idiom applied at
+  // data-source layer). Real-mode signups now propagate to this list
+  // automatically via the profiles INSERT trigger.
+  // Pre-#281 read inline HOMEOWNERS only — fresh-signup homeowners
+  // never appeared in admin list. Mirror admin-vendors-bridge shape
+  // for future admin/vendors Supabase wire-up consistency.
+  const homeownersFromStore = useHomeownersStore((s) => s.homeowners)
+  const homeownersFetched = useHomeownersStore((s) => s.fetched)
+  const hydrateHomeowners = useHomeownersStore((s) => s.hydrate)
+  useEffect(() => {
+    hydrateHomeowners()
+  }, [hydrateHomeowners])
+
+  // Status overrides + actions (admin-moderation). Subscribe to the
+  // overrides MAP (not the selector fn) — zustand keeps function
   // identities stable across state updates, so a useMemo keyed on the
   // selector fn would never re-run; keying on the overrides object does.
-  // When Tranche 2 wires lib/api/vendors.updateVendor to Supabase, this
-  // layer becomes a read from profiles-by-role; the UX layer is unchanged.
   const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
   const suspendHomeowner = useAdminModerationStore((s) => s.suspendHomeowner)
   const reactivateHomeowner = useAdminModerationStore((s) => s.reactivateHomeowner)
@@ -167,14 +182,30 @@ export default function HomeownersPage() {
     [demoDataHidden]
   )
 
-  const homeowners = useMemo(
-    () =>
-      HOMEOWNERS.map((h) => ({
-        ...h,
-        status: homeownerStatusOverrides[h.id] ?? h.status,
-      })),
-    [homeownerStatusOverrides]
-  )
+  // Source-of-truth resolution: prefer Supabase fetch when it has
+  // returned at least one row; fall back to inline HOMEOWNERS fixtures
+  // when fetch never landed OR returned empty (mock-mode demo or
+  // pre-Supabase-migration state). Status overrides applied
+  // uniformly across both source paths.
+  const homeowners = useMemo(() => {
+    const source = homeownersFetched && homeownersFromStore.length > 0
+      ? homeownersFromStore.map((p) => ({
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          phone: p.phone ?? '',
+          address: p.address ?? '',
+          avatar_color: p.avatar_color,
+          initials: p.initials ?? '',
+          status: p.status,
+          created_at: p.created_at,
+        }))
+      : HOMEOWNERS
+    return source.map((h) => ({
+      ...h,
+      status: homeownerStatusOverrides[h.id] ?? h.status,
+    }))
+  }, [homeownerStatusOverrides, homeownersFromStore, homeownersFetched])
 
   // Multi-field search (ship #134) via shared matchesSearch util: name /
   // email / phone (digits-normalized) / address / project-id (fixture
