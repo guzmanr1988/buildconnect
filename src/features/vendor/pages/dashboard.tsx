@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
-  Trash2, ArrowRight,
+  Trash2, ArrowRight, Shield, Star, MessageSquare, Clock,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -15,6 +16,7 @@ import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { SERVICE_CATALOG } from '@/lib/constants'
 import type { Lead } from '@/types'
 
 // Ship #293 — VendorDashboard slimmed down per Rodolfo "more clean
@@ -142,6 +144,11 @@ export default function VendorDashboard() {
   const wins = leads.filter((l) => !isCancelled(l) && (l.status === 'confirmed' || l.status === 'completed')).length
   const winRate = totalDecided > 0 ? Math.round((wins / totalDecided) * 100) : 0
 
+  const serviceNames = useMemo(
+    () => (vendor?.service_categories ?? []).map((cat) => SERVICE_CATALOG.find((s) => s.id === cat)?.name || cat),
+    [vendor?.service_categories],
+  )
+
   if (!vendor) {
     return (
       <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
@@ -212,6 +219,32 @@ export default function VendorDashboard() {
         </Card>
       </motion.div>
 
+      {/* Ship #294 — Service Categories moved from /vendor/profile per
+          Rodolfo "move service categories and performance stats to
+          dashboard". Read-only display; vendor edits via Request Info
+          Change flow on /vendor/profile. */}
+      {serviceNames.length > 0 && (
+        <motion.div variants={item}>
+          <Card className="rounded-xl">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Service Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {serviceNames.map((name) => (
+                  <Badge key={name} variant="secondary" className="text-sm px-3 py-1.5">
+                    {name}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* KPI Row */}
       <div className="kpi-grid grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
         <motion.div variants={item}>
@@ -227,6 +260,48 @@ export default function VendorDashboard() {
           <KpiCard title="Win Rate" value={`${winRate}%`} change="+5pp vs last quarter" trend="up" icon={Target} iconColor="bg-violet-500" />
         </motion.div>
       </div>
+
+      {/* Ship #294 — Performance Stats moved from /vendor/profile per
+          Rodolfo "move service categories and performance stats to
+          dashboard". Quality metrics complement KPI Row pipeline metrics. */}
+      <motion.div variants={item}>
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg">Performance Stats</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-3">
+                  <Star className="h-6 w-6 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-heading">{vendor.rating}</p>
+                  <p className="text-xs text-muted-foreground">Average Rating</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="rounded-xl bg-primary/10 p-3">
+                  <MessageSquare className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-heading">{vendor.total_reviews}</p>
+                  <p className="text-xs text-muted-foreground">Total Reviews</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-3">
+                  <Clock className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-heading">{vendor.response_time}</p>
+                  <p className="text-xs text-muted-foreground">Avg Response Time</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Ship #293 — Lead Workflow link. Discoverability into the
           pipeline-stage funnel that lives at /vendor/lead-workflow. */}

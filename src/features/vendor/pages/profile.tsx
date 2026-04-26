@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  User, Phone, Mail, MapPin, Star, Clock, MessageSquare,
-  BadgeCheck, CreditCard, LogOut, Shield, MessageCircle,
+  User, Phone, Mail, MapPin, Star,
+  BadgeCheck, CreditCard, LogOut, MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,7 +15,6 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDORS } from '@/lib/mock-data'
-import { SERVICE_CATALOG } from '@/lib/constants'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 
@@ -62,9 +61,6 @@ export default function VendorProfile() {
     setRequestDialogOpen(false)
     toast.success('Request submitted. Admin will review shortly.')
   }
-
-  const serviceNames = vendor.service_categories
-    .map((cat) => SERVICE_CATALOG.find((s) => s.id === cat)?.name || cat)
 
   const container = {
     hidden: { opacity: 0 },
@@ -183,74 +179,6 @@ export default function VendorProfile() {
                     <MapPin className="h-4 w-4 shrink-0" />
                     <span>{vendor.address}</span>
                   </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Service Categories */}
-      <motion.div variants={item}>
-        <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-          <CardHeader>
-            <CardTitle className="font-heading text-lg flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              Service Categories
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {serviceNames.map((name) => (
-                <Badge
-                  key={name}
-                  variant="secondary"
-                  className="text-sm px-3 py-1.5"
-                >
-                  {name}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Stats */}
-      <motion.div variants={item}>
-        <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-          <CardHeader>
-            <CardTitle className="font-heading text-lg">Performance Stats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {/* Rating */}
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-3">
-                  <Star className="h-6 w-6 text-amber-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.rating}</p>
-                  <p className="text-xs text-muted-foreground">Average Rating</p>
-                </div>
-              </div>
-              {/* Reviews */}
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-primary/10 p-3">
-                  <MessageSquare className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.total_reviews}</p>
-                  <p className="text-xs text-muted-foreground">Total Reviews</p>
-                </div>
-              </div>
-              {/* Response Time */}
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-3">
-                  <Clock className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.response_time}</p>
-                  <p className="text-xs text-muted-foreground">Avg Response Time</p>
                 </div>
               </div>
             </div>
