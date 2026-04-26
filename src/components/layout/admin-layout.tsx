@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { MOCK_BUGS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
@@ -70,6 +71,11 @@ export function AdminLayout() {
   const openBugs = MOCK_BUGS.filter((b) => b.status === 'open')
   const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
+  // Ship #276 — non-circumvention agreement signings as cross-role
+  // notifications. 48h window — once-per-vendor-lifetime events get
+  // longer fade than per-lead reschedule/cancel churn (24h).
+  const agreementEvents = useAgreementEventsStore((s) => s.events)
+  const RECENT_AGREEMENT_WINDOW_MS = 48 * 60 * 60 * 1000
 
   const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)
     .filter(([, r]) => r.status === 'pending')
@@ -93,6 +99,23 @@ export function AdminLayout() {
       tint: 'bg-destructive/5',
     }))
 
+  // Ship #276 — recent agreement signings, ordered most-recent-first.
+  // Click navigates to /admin/vendors (matches reschedule/cancel
+  // notification idiom — informational, no deep-link). Per-vendor
+  // detail lives on the always-on vendors page View button.
+  const agreementSignNotifications: NotificationItem[] = agreementEvents
+    .filter((e) => Date.now() - new Date(e.signedAt).getTime() < RECENT_AGREEMENT_WINDOW_MS)
+    .slice()
+    .reverse()
+    .map((e) => ({
+      id: `admin-agreement-signed-${e.vendorId}-${e.signedAt}`,
+      title: `Vendor ${e.vendorName} signed Non-Circumvention Agreement (${e.version})`,
+      description: `${e.vendorEmail} · ${new Date(e.signedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`,
+      icon: FileText,
+      iconColor: 'text-primary',
+      tint: 'bg-primary/5',
+    }))
+
   const notifications: NotificationItem[] = [
     ...openBugs.map((b) => ({
       id: b.id,
@@ -101,6 +124,7 @@ export function AdminLayout() {
       icon: AlertCircle,
       iconColor: b.priority === 'high' ? 'text-red-500' : b.priority === 'medium' ? 'text-amber-500' : 'text-muted-foreground',
     })),
+    ...agreementSignNotifications,
     ...rescheduleNotifications,
     ...cancellationNotifications,
   ]

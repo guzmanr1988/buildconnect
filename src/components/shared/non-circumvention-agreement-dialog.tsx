@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuthStore } from '@/stores/auth-store'
+import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import {
   AGREEMENT_DRAFT_BANNER,
   AGREEMENT_EMAIL_FOOTER,
@@ -15,6 +16,11 @@ import {
   getCurrentAgreementSnapshot,
 } from '@/lib/non-circumvention-agreement'
 import type { Profile } from '@/types'
+
+// Ship #276 — admin-side mock-email destination. Hardcoded for demo
+// per kratos directive (lean a). Tranche-2 expands to all role=admin
+// users via Supabase query when role-based-recipients infra lands.
+const ADMIN_EMAIL_DESTINATION = 'admin@buildc.net'
 
 // Ship #270 — Dual-mode dialog. "sign" mode is the gate-modal that
 // blocks vendor portal access until signature lands. "view" mode is
@@ -45,6 +51,7 @@ function SignMode({ open }: { open: boolean }) {
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
+  const recordSign = useAgreementEventsStore((s) => s.recordSign)
   const [typedName, setTypedName] = useState('')
   const [agreed, setAgreed] = useState(false)
   const canSubmit = typedName.trim().length > 0 && agreed
@@ -52,8 +59,9 @@ function SignMode({ open }: { open: boolean }) {
   const handleSubmit = () => {
     if (!canSubmit) return
     const snapshot = getCurrentAgreementSnapshot()
+    const signedAt = new Date().toISOString()
     updateProfile({
-      noncircumvention_agreement_signed_at: new Date().toISOString(),
+      noncircumvention_agreement_signed_at: signedAt,
       noncircumvention_agreement_signed_name: typedName.trim(),
       noncircumvention_agreement_version: snapshot.version,
       noncircumvention_agreement_text_snapshot: snapshot.text,
@@ -62,13 +70,26 @@ function SignMode({ open }: { open: boolean }) {
         // IP capture would need a server round-trip — Phase 2 wires real.
       },
     })
+    // Ship #276 — cross-role notification: admin sees the agreement
+    // signing in their notification rail (48h window). Pushes to the
+    // agreement-events-store ledger; admin-layout reads + filters.
+    if (profile) {
+      recordSign({
+        vendorId: profile.id,
+        vendorName: profile.name,
+        vendorEmail: profile.email,
+        version: snapshot.version,
+        signedAt,
+      })
+    }
     // TODO Tranche-2: replace mock with real email-send via SendGrid /
-    // Mailgun / Resend integration. For Phase 1 this is toast + log
-    // event only; admin sees the event in the activity feed.
+    // Mailgun / Resend integration. For Phase 1 this is toast + ledger
+    // record only; admin sees the event in the notification rail.
+    // Ship #276 — second mock email to admin destination per Rodolfo
+    // selection (C: both vendor + admin notified). Tranche-2 replaces
+    // hardcoded admin@ with role-based-recipients query (all role=admin).
     toast.success(`Agreement sent to your email at ${profile?.email ?? 'your account'}`)
-    // Log via cortextos bus would be server-side; for now the toast +
-    // updateProfile audit record is the visible trail. Real event
-    // logging lands when the email infra wires.
+    toast.success(`Copy also sent to ${ADMIN_EMAIL_DESTINATION}`)
     setTypedName('')
     setAgreed(false)
   }
