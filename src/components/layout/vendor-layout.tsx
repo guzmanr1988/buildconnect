@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, RotateCcw, CheckCircle2, X as XIcon } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -22,6 +22,11 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { to: '/vendor', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/vendor/leads', icon: Inbox, label: 'Projects' },
+  // Ship #277 — Homeowners tab between Projects and Calendar per
+  // customer-data-grouping cluster (Projects/Homeowners/Calendar are
+  // all customer-facing surfaces; Account Reps/Membership are
+  // internal-team config).
+  { to: '/vendor/homeowners', icon: HomeIcon, label: 'Homeowners' },
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
