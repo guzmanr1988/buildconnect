@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Check,
   X,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
@@ -36,6 +37,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { Input } from '@/components/ui/input'
 import { MOCK_VENDORS } from '@/lib/mock-data'
+import { matchesSearch } from '@/lib/search-match'
 import {
   useEffectiveMockLeads,
   useEffectiveMockClosedSales,
@@ -75,6 +77,10 @@ export default function VendorsPage() {
   // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
+  // Ship #285 — search state mirrors admin/homeowners pattern (#280-era).
+  // Matches across vendor.company / name / email / phone / address +
+  // project IDs scoped to vendor (analogous to homeowners → projects bridge).
+  const [search, setSearch] = useState('')
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [resolveRequestId, setResolveRequestId] = useState<string | null>(null)
   const [resolveAction, setResolveAction] = useState<'approve' | 'deny'>('approve')
@@ -228,6 +234,26 @@ export default function VendorsPage() {
     })
   }, [leadStatusOverrides, cancellationRequestsByLead, vendorProfileOverrides, mockLeads, mockClosedSales])
 
+  // Ship #285 — multi-field search via shared matchesSearch helper
+  // (mirrors admin/homeowners pattern). Fields: vendor.company /
+  // name / email / address; phone digits-normalized; project IDs
+  // scoped to this vendor for ID-as-search-term support.
+  const filteredVendorData = useMemo(() => {
+    if (!search.trim()) return vendorData
+    return vendorData.filter(({ vendor, leads, closedSales }) => {
+      const projectIds = [
+        ...leads.map((l) => l.id),
+        ...closedSales.map((c) => c.id),
+      ]
+      return matchesSearch({
+        query: search,
+        fields: [vendor.company, vendor.name, vendor.email, vendor.address],
+        phones: [vendor.phone],
+        ids: projectIds,
+      })
+    })
+  }, [search, vendorData])
+
   return (
     <div className="space-y-6">
       <PageHeader title="Vendor Management" description={`${MOCK_VENDORS.length} registered vendors`}>
@@ -243,6 +269,18 @@ export default function VendorsPage() {
           </div>
         </div>
       </PageHeader>
+
+      {/* Ship #285 — search bar mirroring admin/homeowners pattern.
+          Multi-field via shared matchesSearch helper. */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search company, name, email, phone, address, or project ID..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
 
       {/* Pending Change Requests (ship Phase C per kratos msg 1776719583850).
           Admin-mediated vendor profile changes — vendors submit a request
@@ -406,7 +444,7 @@ export default function VendorsPage() {
 
       {/* Vendor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {vendorData.map(({ vendor, closedSales, totalRevenue }, i) => (
+        {filteredVendorData.map(({ vendor, closedSales, totalRevenue }, i) => (
           <motion.div key={vendor.id} custom={i} variants={fadeUp} initial="hidden" animate="visible">
             <Card
               className="rounded-xl shadow-sm hover:shadow-md transition flex flex-col cursor-pointer"
