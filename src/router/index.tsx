@@ -49,6 +49,7 @@ import BugsPage from '@/features/admin/pages/bugs'
 import ProductsAdminPage from '@/features/admin/pages/products'
 import UsersPage from '@/features/admin/pages/users'
 import HomeownersPage from '@/features/admin/pages/homeowners'
+import AdminHomeownerDetail from '@/features/admin/pages/homeowner-detail'
 import EmployeesPage from '@/features/admin/pages/employees'
 import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
@@ -145,6 +146,8 @@ export const router = createBrowserRouter([
           { path: 'products', element: <ProductsAdminPage />, handle: { title: 'Admin · Products' } },
           { path: 'users', element: <UsersPage />, handle: { title: 'Admin · Users' } },
           { path: 'homeowners', element: <HomeownersPage />, handle: { title: 'Admin · Homeowners' } },
+          // Ship #280 — admin per-homeowner detail (god-view cross-vendor).
+          { path: 'homeowners/:homeownerId', element: <AdminHomeownerDetail />, handle: { title: 'Admin · Homeowner' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
         ],
       },

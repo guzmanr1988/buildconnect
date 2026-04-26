@@ -330,15 +330,24 @@ export default function HomeownersPage() {
             >
               <Card className="rounded-xl shadow-sm hover:shadow-md transition flex flex-col">
                 <CardContent className="p-5 flex-1 flex flex-col">
-                  {/* Header */}
+                  {/* Header — Ship #280: name+email row click-to-detail
+                      (small affordance). Existing per-card buttons
+                      keep their own click semantics — no stopPropagation
+                      sprawl across the many inline handlers in this
+                      file. Vendor side wraps whole card; admin side
+                      uses targeted name-click since the per-card body
+                      has many existing actions. */}
                   <div className="flex items-start gap-3 mb-4">
                     <AvatarInitials
                       initials={homeowner.initials}
                       color={homeowner.avatar_color}
                       size="lg"
                     />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-heading font-semibold text-base truncate">
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => navigate(`/admin/homeowners/${encodeURIComponent(homeowner.email)}`)}
+                    >
+                      <h3 className="font-heading font-semibold text-base truncate hover:text-primary transition-colors">
                         {homeowner.name}
                       </h3>
                       <p className="text-sm text-muted-foreground truncate">

@@ -48,6 +48,11 @@ interface VendorHomeownerDocsState {
   addDoc: (doc: Omit<VendorHomeownerDoc, 'id' | 'uploadedAt'>) => void
   removeDoc: (vendorId: string, homeownerEmail: string, docId: string) => void
   getDocsForHomeowner: (vendorId: string, homeownerEmail: string) => VendorHomeownerDoc[]
+  // Ship #280 — admin god-view: flatten across all vendor_id keys for
+  // a single homeowner. Returns each doc with vendor_id field already
+  // attached (it's on the VendorHomeownerDoc shape) so the admin page
+  // can group-by-vendor on display.
+  getAllDocsForHomeowner: (homeownerEmail: string) => VendorHomeownerDoc[]
 }
 
 export const useVendorHomeownerDocsStore = create<VendorHomeownerDocsState>()(
@@ -94,6 +99,15 @@ export const useVendorHomeownerDocsStore = create<VendorHomeownerDocsState>()(
       getDocsForHomeowner: (vendorId, homeownerEmail) => {
         const vendorMap = get().docsByVendorByHomeowner[vendorId] ?? {}
         return vendorMap[homeownerEmail] ?? []
+      },
+
+      getAllDocsForHomeowner: (homeownerEmail) => {
+        const all: VendorHomeownerDoc[] = []
+        Object.values(get().docsByVendorByHomeowner).forEach((vendorMap) => {
+          const docs = vendorMap[homeownerEmail]
+          if (docs) all.push(...docs)
+        })
+        return all.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
       },
     }),
     { name: 'buildconnect-vendor-homeowner-docs' },

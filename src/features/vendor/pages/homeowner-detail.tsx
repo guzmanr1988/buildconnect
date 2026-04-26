@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, MessageSquare, Mail, MapPin, Phone, Briefcase, FileText, Plus, Download, Trash2, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Mail, FileText, Plus, Download, Trash2, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared/page-header'
-import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
+import { HomeownerDetailHeader } from '@/components/shared/homeowner-detail-header'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { useVendorHomeowners } from '@/lib/hooks/use-vendor-homeowners'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
@@ -197,20 +197,18 @@ export default function VendorHomeownerDetail() {
 
       <PageHeader title={homeowner.name} description={homeowner.email} />
 
-      {/* Header card — homeowner contact + actions */}
-      <Card className="rounded-xl">
-        <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <AvatarInitials
-            initials={homeowner.initials ?? homeowner.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
-            color={homeowner.avatar_color ?? '#3b82f6'}
-            size="lg"
-          />
-          <div className="flex-1 min-w-0 space-y-1.5 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 shrink-0" /><span>{homeowner.phone}</span></div>
-            <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 shrink-0" /><span>{homeowner.address}</span></div>
-            <div className="flex items-center gap-2"><Briefcase className="h-3.5 w-3.5 shrink-0" /><span>{homeowner.projectCount} {homeowner.projectCount === 1 ? 'project' : 'projects'} with you</span></div>
-          </div>
-          <div className="flex gap-2">
+      {/* Header card via HomeownerDetailHeader (extracted to shared
+          component in #280 at n=2 consumers per banked format-SoT). */}
+      <HomeownerDetailHeader
+        name={homeowner.name}
+        email={homeowner.email}
+        phone={homeowner.phone}
+        address={homeowner.address}
+        avatar_color={homeowner.avatar_color}
+        initials={homeowner.initials}
+        projectsLabel={`${homeowner.projectCount} ${homeowner.projectCount === 1 ? 'project' : 'projects'} with you`}
+        actions={
+          <>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/vendor/messages', { state: { homeownerId: homeowner.id, homeownerName: homeowner.name } })}>
               <MessageSquare className="h-3.5 w-3.5" />
               Message
@@ -219,9 +217,10 @@ export default function VendorHomeownerDetail() {
               <Mail className="h-3.5 w-3.5" />
               Email
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </>
+        }
+      />
+
 
       {/* Section 1: Sold Projects */}
       <section className="space-y-3">
