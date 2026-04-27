@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
-  Trash2, ArrowRight, Shield, Star, MessageSquare, Clock,
+  Trash2, Shield, Star, MessageSquare, Clock,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -402,18 +402,10 @@ export default function VendorDashboard() {
         </Card>
       </motion.div>
 
-      {/* Ship #293 — Lead Workflow link. Discoverability into the
-          pipeline-stage funnel that lives at /vendor/lead-workflow. */}
-      <motion.div variants={item}>
-        <Link
-          to="/vendor/lead-workflow"
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          data-vendor-dashboard-lead-workflow-link
-        >
-          View Lead Workflow
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </motion.div>
+      {/* Ship #304 — "View Lead Workflow ->" CTA removed per Rodolfo
+          "remove view lead workflow letters and arrow". Redundant with
+          the 5-cell icon+count row inside Performance Stats card (added
+          #303) which already links every stage to /vendor/lead-workflow. */}
 
       {/* Clear Demo Data confirmation — demo-mode gated (VITE_DEMO_MODE). */}
       <Dialog open={clearDemoDialogOpen} onOpenChange={setClearDemoDialogOpen}>
