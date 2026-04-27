@@ -183,7 +183,7 @@ export default function VendorDashboard() {
             <div className="flex items-center gap-3 min-[480px]:gap-4">
               <AvatarInitials initials={vendor.initials} color={vendor.avatar_color} size="lg" />
               <div className="flex-1 min-w-0">
-                <h2 className="text-base min-[480px]:text-xl font-bold font-heading truncate min-[480px]:inline-block min-[480px]:mr-2">{vendor.company}</h2>
+                <h2 className="text-lg min-[480px]:text-xl font-bold font-heading truncate min-[480px]:inline-block min-[480px]:mr-2">{vendor.company}</h2>
                 {/* Inline badges — visible at min-[480px]+ (landscape phones + larger).
                     Mobile portrait renders these in the bottom-left row instead. */}
                 <div className="hidden min-[480px]:inline-flex items-center gap-2 flex-wrap align-middle">
@@ -197,11 +197,11 @@ export default function VendorDashboard() {
                     {vendor.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs min-[480px]:text-sm text-muted-foreground mt-1 min-w-0">
-                  <MapPin className="h-3 w-3 min-[480px]:h-3.5 min-[480px]:w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{vendor.address}</span>
                 </div>
-                <p className="text-xs min-[480px]:text-sm text-muted-foreground mt-0.5 truncate">{vendor.name} &middot; {vendor.phone}</p>
+                <p className="text-sm text-muted-foreground mt-0.5 truncate">{vendor.name} &middot; {vendor.phone}</p>
               </div>
               {/* Demo controls — inline (right side) at min-[480px]+ */}
               {demoMode && (
@@ -236,12 +236,12 @@ export default function VendorDashboard() {
             <div className="flex min-[480px]:hidden items-center justify-between gap-2 mt-3 pt-3 border-t">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {vendor.verified && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                    <BadgeCheck className="h-3 w-3" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    <BadgeCheck className="h-3.5 w-3.5" />
                     Verified
                   </span>
                 )}
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
                   {vendor.status}
                 </span>
               </div>
