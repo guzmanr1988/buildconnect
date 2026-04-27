@@ -9,6 +9,7 @@ import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { deriveInitials } from '@/lib/initials'
+import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -199,7 +200,13 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      {/* Ship #309 — Bin-A horizontal-PC treatment. PC widens to
+          sm:max-w-3xl + content sections wrap in 2-col grid via
+          DIALOG_HORIZONTAL_GRID shared constant (n=2 consumer with
+          Lead Detail Modal #308; #103 single-source-of-truth). Mobile
+          portrait preserved exactly. Left column: identity + customer
+          context. Right column: selections + audit + commission. */}
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         {selectedItem && (
           <>
             <DialogHeader>
@@ -208,7 +215,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 {selectedItem.name}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-2">
+            <div className={`${DIALOG_HORIZONTAL_GRID} mt-2`}>
+            <div className="space-y-4">
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Project</span>
@@ -236,32 +244,34 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 )}
               </div>
 
+              {selectedItem.project_data?.homeowner && (
+                <div className="rounded-xl border p-4 space-y-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer Info</h4>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{selectedItem.project_data.homeowner.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{selectedItem.project_data.homeowner.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{selectedItem.project_data.homeowner.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{selectedItem.project_data.homeowner.address}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* RIGHT COLUMN — selections + audit + commission */}
+            <div className="space-y-4">
               {selectedItem.project_data && (
                 <>
-                  {selectedItem.project_data.homeowner && (
-                    <div className="rounded-xl border p-4 space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer Info</h4>
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex items-center gap-2">
-                          <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{selectedItem.project_data.homeowner.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{selectedItem.project_data.homeowner.phone}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{selectedItem.project_data.homeowner.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{selectedItem.project_data.homeowner.address}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="rounded-xl border p-4 space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Selections</h4>
                     {Object.entries(selectedItem.project_data.item.selections).map(([key, values]: [string, any]) => (
@@ -481,6 +491,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   </div>
                 )
               })()}
+            </div>
             </div>
             <Button variant="outline" className="w-full mt-2" onClick={onClose}>
               Close

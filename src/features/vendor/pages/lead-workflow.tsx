@@ -22,6 +22,7 @@ import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-di
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorLeadStages, STAGE_COLOR_BY_KEY } from '@/lib/vendor-lead-stages'
+import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -800,8 +801,10 @@ export default function VendorLeadWorkflow() {
                   (preserves order: Customer Info → Project →
                   Appointment → Separator → Price → Actions). PC splits
                   into info-left + operations-right with sm:items-start
-                  so columns align top regardless of differing height. */}
-              <div className="grid gap-3 sm:grid-cols-2 sm:gap-6 sm:items-start">
+                  so columns align top regardless of differing height.
+                  Ship #309 — className lifted to DIALOG_HORIZONTAL_GRID
+                  shared constant (same shape on ProjectDetailDialog). */}
+              <div className={DIALOG_HORIZONTAL_GRID}>
               <div className="space-y-3">
               {/* Customer Info */}
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
