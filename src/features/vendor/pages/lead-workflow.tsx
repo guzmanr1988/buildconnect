@@ -682,9 +682,13 @@ export default function VendorLeadWorkflow() {
         </LeadStatusTile>
       </motion.div>
 
-      {/* Lead Detail Modal — centered floating dialog with dark backdrop (Dialog primitive handles ESC + backdrop-click dismissal). */}
+      {/* Lead Detail Modal — centered floating dialog with dark backdrop (Dialog primitive handles ESC + backdrop-click dismissal).
+          Ship #308 — Bin-A horizontal-PC treatment: PC widens to
+          sm:max-w-3xl + content sections wrap in 2-col grid (info-left
+          + operations-right) on sm+. Mobile portrait preserved exactly
+          as-is per Rodolfo "mobile no changes" strict directive. */}
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           {selected && (
             <div className="space-y-3">
               <DialogHeader className="space-y-1.5">
@@ -791,6 +795,14 @@ export default function VendorLeadWorkflow() {
                 )
               })()}
 
+              {/* Ship #308 — 2-column wrapper for PC (sm+). Mobile
+                  portrait stays single-column via grid-cols-1 default
+                  (preserves order: Customer Info → Project →
+                  Appointment → Separator → Price → Actions). PC splits
+                  into info-left + operations-right with sm:items-start
+                  so columns align top regardless of differing height. */}
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-6 sm:items-start">
+              <div className="space-y-3">
               {/* Customer Info */}
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Customer Info</p>
@@ -864,14 +876,19 @@ export default function VendorLeadWorkflow() {
                   <span className="font-medium">{fmtDateTime(selected.slot)}</span>
                 </div>
               </div>
+              </div>
+              {/* RIGHT COLUMN: Price + Actions (operations side) */}
+              <div className="space-y-3">
+              {/* Mobile-only Separator — preserves the original visual
+                  break between Appointment and Price on mobile portrait
+                  (PC uses column-gap to separate the info/ops sides). */}
+              <Separator className="sm:hidden" />
 
               {/* Price */}
               <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                 <span className="text-sm text-muted-foreground font-medium">Price</span>
                 <span className="text-lg font-bold font-heading text-foreground">{fmt(selected.value)}</span>
               </div>
-
-              <Separator />
 
               {/* Actions */}
               <div className="flex flex-col gap-2">
@@ -1160,6 +1177,8 @@ export default function VendorLeadWorkflow() {
                     </Button>
                   </>
                 )}
+              </div>
+              </div>
               </div>
             </div>
           )}
