@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -21,7 +21,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useVendorLeadStages, STAGE_COLOR_BY_KEY } from '@/lib/vendor-lead-stages'
+import { useVendorLeadStages, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
+import type { LeadStageKey } from '@/lib/vendor-lead-stages'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
@@ -226,9 +227,19 @@ export default function VendorLeadWorkflow() {
   // Section collapse state
   // Single-open accordion: at most one lead-status tile open at a time
   // (kratos msg 1776576047204). Null = all closed.
-  type LeadTileId = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
-  const [openTile, setOpenTile] = useState<LeadTileId | null>(null)
-  const toggleTile = (id: LeadTileId) => setOpenTile((prev) => (prev === id ? null : id))
+  // Ship #310 — deep-link from /vendor dashboard summary row via
+  // ?stage=<key>. Reads URL param on mount and pre-opens the matching
+  // tile so user lands on the stage they clicked. Once opened, user
+  // toggle-action takes precedence (no further URL-param-driven
+  // overrides on subsequent renders — only mount). Tile-id type
+  // unified to LeadStageKey from vendor-lead-stages.ts SoT (#103
+  // dropping the local LeadTileId duplicate).
+  const [searchParams] = useSearchParams()
+  const stageFromUrl = searchParams.get('stage') as LeadStageKey | null
+  const validTileIds: LeadStageKey[] = ['new', 'confirmed', 'sold', 'completed', 'cancelled']
+  const initialOpenTile: LeadStageKey | null = stageFromUrl && validTileIds.includes(stageFromUrl) ? stageFromUrl : null
+  const [openTile, setOpenTile] = useState<LeadStageKey | null>(initialOpenTile)
+  const toggleTile = (id: LeadStageKey) => setOpenTile((prev) => (prev === id ? null : id))
 
   // Layer 5 of bulletproof close (kratos msg 1776670030582): if sheetOpen
   // ever flips to false but selected is non-null, forcibly clear selected +
@@ -512,6 +523,7 @@ export default function VendorLeadWorkflow() {
     subtitleColor,
     count,
     color,
+    pulse,
     icon: Icon,
     open,
     onToggle,
@@ -522,6 +534,9 @@ export default function VendorLeadWorkflow() {
     subtitleColor?: string
     count: number
     color: string
+    // Ship #310 — attention-grabbing pulse on the icon-square for
+    // active-action stages (New Leads + Sold Active per LEAD_STAGES.pulse).
+    pulse?: boolean
     icon: React.ElementType
     open: boolean
     onToggle: () => void
@@ -550,7 +565,7 @@ export default function VendorLeadWorkflow() {
           className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none hover:bg-muted/30"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className={cn('rounded-md p-1.5 shrink-0', color)}>
+            <div className={cn('rounded-md p-1.5 shrink-0', color, pulse && 'animate-pulse')}>
               <Icon className="h-3.5 w-3.5 text-white" />
             </div>
             <div className="flex flex-col min-w-0">
@@ -624,6 +639,7 @@ export default function VendorLeadWorkflow() {
           title="New Leads"
           count={newLeads.length}
           color={STAGE_COLOR_BY_KEY.new}
+          pulse={STAGE_PULSE_BY_KEY.new}
           icon={Inbox}
           open={openTile === 'new'}
           onToggle={() => toggleTile('new')}
@@ -640,6 +656,7 @@ export default function VendorLeadWorkflow() {
           title="Scheduled Leads"
           count={confirmedLeads.length}
           color={STAGE_COLOR_BY_KEY.confirmed}
+          pulse={STAGE_PULSE_BY_KEY.confirmed}
           icon={CalendarCheck}
           open={openTile === 'confirmed'}
           onToggle={() => toggleTile('confirmed')}
@@ -656,6 +673,7 @@ export default function VendorLeadWorkflow() {
           title="Sold, Active"
           count={projectSold.length}
           color={STAGE_COLOR_BY_KEY.sold}
+          pulse={STAGE_PULSE_BY_KEY.sold}
           icon={Handshake}
           open={openTile === 'sold'}
           onToggle={() => toggleTile('sold')}

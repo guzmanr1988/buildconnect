@@ -305,7 +305,11 @@ export default function VendorDashboard() {
               return (
                 <Link
                   key={stage.key}
-                  to="/vendor/lead-workflow"
+                  // Ship #310 — deep-link via ?stage=<key> so /vendor/
+                  // lead-workflow auto-opens the corresponding tile on
+                  // mount per Rodolfo "when clicked take it straight to
+                  // the lead that corresponds tab".
+                  to={`/vendor/lead-workflow?stage=${stage.key}`}
                   className="group flex flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-background/60 transition"
                   aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
                 >
@@ -313,8 +317,10 @@ export default function VendorDashboard() {
                       lead-workflow.tsx tile color SoT (STAGE_COLOR_BY_KEY).
                       Mirrors the tile-icon visual treatment so the at-a-
                       glance row reads as a preview of the full Lead
-                      Workflow page. */}
-                  <div className={cn('rounded-md p-1.5', stage.color)}>
+                      Workflow page.
+                      Ship #310 — pulse animation on active-action stages
+                      (New Leads + Sold Active per LEAD_STAGES.pulse). */}
+                  <div className={cn('rounded-md p-1.5', stage.color, stage.pulse && 'animate-pulse')}>
                     <StageIcon className="h-4 w-4 text-white" />
                   </div>
                   <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
