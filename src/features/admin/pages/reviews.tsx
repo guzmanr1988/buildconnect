@@ -364,10 +364,11 @@ export default function ReviewsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Flag dialog — lighter-confirm with required note at Phase 1.
-          Phase 2 upgrades to four-refinement when vendor-visibility +
-          commission-pause are wired (discipline-precondition-check-as-
-          time-sensitive). */}
+      {/* Ship #316 — Flag four-refinement upgrade per #131 discipline-
+          precondition-check-as-time-sensitive (vendor-visibility now
+          wired → action consequential). Names-the-break + earned-
+          diction button + alternative-steer + verb-matched-cancel +
+          required-note preserved. */}
       <Dialog
         open={!!flagTarget}
         onOpenChange={(o) => {
@@ -379,11 +380,21 @@ export default function ReviewsPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading">Flag this deal?</DialogTitle>
+            <DialogTitle className="font-heading">Flag and notify vendor?</DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Captures a flag note for internal records. Vendor-visibility and commission-pause come in Phase 2.
+            {/* names-the-break: explicit on what wires now vs what is
+                Phase-3 deferred (commission-pause). #94 truthfulness. */}
+            <div className="rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 p-3 text-xs space-y-1">
+              <p className="font-semibold text-red-800 dark:text-red-300">What happens when you flag:</p>
+              <ul className="text-red-800 dark:text-red-300 list-disc list-inside space-y-0.5">
+                <li>The vendor sees your flag note on their Sold Active card immediately.</li>
+                <li>Commission processing pause for this deal is still Phase-3 (not wired yet).</li>
+              </ul>
+            </div>
+            {/* alternative-steer: lighter resolution path before flag */}
+            <p className="text-xs text-muted-foreground">
+              If the contract just needs minor edits, contact the vendor via Messages first.
             </p>
             {flagTarget && (
               <p className="text-xs text-muted-foreground">
@@ -392,11 +403,11 @@ export default function ReviewsPage() {
               </p>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Reason <span className="text-destructive">*</span></label>
+              <label className="text-sm font-medium">Flag note <span className="text-destructive">*</span></label>
               <Textarea
                 value={flagNote}
                 onChange={(e) => setFlagNote(e.target.value)}
-                placeholder="Why is this deal being flagged?"
+                placeholder="What needs to be resolved? The vendor will see this verbatim."
                 rows={4}
                 className="text-sm"
                 autoFocus
@@ -404,14 +415,16 @@ export default function ReviewsPage() {
             </div>
           </div>
           <DialogFooter>
+            {/* verb-matched-cancel: "Cancel" cleanly opposes "Flag" */}
             <Button variant="outline" onClick={() => { setFlagTarget(null); setFlagNote('') }}>Cancel</Button>
+            {/* earned-diction: button label states the consequence directly */}
             <Button
               variant="destructive"
               disabled={!flagNote.trim()}
               onClick={handleFlag}
             >
               <Flag className="h-4 w-4 mr-1.5" />
-              Flag deal
+              Flag and Notify Vendor
             </Button>
           </DialogFooter>
         </DialogContent>

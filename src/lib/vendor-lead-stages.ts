@@ -7,7 +7,16 @@ import type { Lead } from '@/types'
 
 export type LeadStageKey = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
 
-export type LeadExt = Lead & { soldAt?: string; completedAt?: string; _projectId?: string }
+export type LeadExt = Lead & {
+  soldAt?: string
+  completedAt?: string
+  _projectId?: string
+  // Ship #316 — BuildConnect review state propagated from sentProject
+  // for vendor-side visibility on Sold Active LeadCard + Lead Detail
+  // Modal. undefined treated as 'pending' per #314 schema convention.
+  reviewStatus?: 'pending' | 'approved' | 'flagged'
+  reviewNote?: string
+}
 
 export interface LeadStageMeta {
   key: LeadStageKey
@@ -117,6 +126,8 @@ export function useVendorLeadStages(): {
       received_at: p.sentAt,
       soldAt: p.soldAt,
       completedAt: p.completedAt,
+      reviewStatus: p.reviewStatus,
+      reviewNote: p.reviewNote,
     })),
     [sentProjects, VENDOR_ID],
   )

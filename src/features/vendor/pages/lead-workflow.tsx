@@ -22,8 +22,9 @@ import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-di
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorLeadStages, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
-import type { LeadStageKey } from '@/lib/vendor-lead-stages'
+import type { LeadStageKey, LeadExt } from '@/lib/vendor-lead-stages'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
+import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
@@ -183,7 +184,6 @@ export default function VendorLeadWorkflow() {
   // Ship #191 — vendor counter-propose dialog.
   const [vendorCounterOpen, setVendorCounterOpen] = useState(false)
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
-  const [saleAmount, setSaleAmount] = useState('')
   // Ship #313 — contract requirement on Mark as Sold per Rodolfo
   // "make it a requirement that vendor needs to upload their contract".
   // Dialog-local state until Confirm Sale; cleared on close.
@@ -389,7 +389,7 @@ export default function VendorLeadWorkflow() {
     show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
   } satisfies Variants
 
-  function LeadCard({ lead }: { lead: Lead }) {
+  function LeadCard({ lead }: { lead: LeadExt }) {
     const rep = getAssignedRepForLead(lead.id)
     const cancelReq = cancellationRequestsByLead[lead.id]
     const hasPendingCancel = cancelReq?.status === 'pending'
@@ -410,6 +410,11 @@ export default function VendorLeadWorkflow() {
     // Covers MOCK_LEADS path that previously had button always-hidden
     // due to sp-missing gate.
     const showCompleteButton = lead.status === 'completed' && !(lead as Lead & { completedAt?: string }).completedAt && !isCancelledLead(lead)
+    // Ship #316 — BuildConnect review-state badge on Sold Active +
+    // Projects Completed leads. Only sold-status leads have a review;
+    // skip for new/confirmed/rejected/cancelled leads.
+    const isSoldStatus = lead.status === 'completed' && !isCancelledLead(lead)
+    const reviewDisplay = isSoldStatus ? getReviewStatusDisplay(lead.reviewStatus) : null
     return (
       <Card
         className={cn(
@@ -446,6 +451,16 @@ export default function VendorLeadWorkflow() {
                         : resolveLeadStatusLabel(lead as Lead & { soldAt?: string })
                     }
                   />
+                  {/* Ship #316 — BuildConnect review-state badge for sold leads. */}
+                  {reviewDisplay && (() => {
+                    const ReviewIcon = reviewDisplay.icon
+                    return (
+                      <Badge className={cn('text-[10px] font-semibold gap-1 border-0', reviewDisplay.badgeClassName)}>
+                        <ReviewIcon className="h-3 w-3" />
+                        {reviewDisplay.label}
+                      </Badge>
+                    )
+                  })()}
                   {hasPendingCancel && (
                     <Badge className="bg-destructive/10 text-destructive border border-destructive/30 text-[10px] font-semibold gap-1">
                       <X className="h-3 w-3" />
@@ -510,6 +525,16 @@ export default function VendorLeadWorkflow() {
                 <Check className="h-4 w-4 mr-1.5" />
                 Project Completed
               </Button>
+            </div>
+          )}
+          {/* Ship #316 — flagged-state banner with reviewNote (Phase-2
+              vendor-flag-visibility wiring per #131 precondition met). */}
+          {reviewDisplay?.variant === 'flagged' && lead.reviewNote && (
+            <div className={cn('mt-3 pt-3 border-t border-border/50')}>
+              <div className={cn('rounded-lg p-2.5 text-xs', reviewDisplay.bannerClassName)}>
+                <p className="font-semibold text-red-700 dark:text-red-400 mb-0.5">BuildConnect flag note:</p>
+                <p className="text-red-800 dark:text-red-300 whitespace-pre-wrap">{lead.reviewNote}</p>
+              </div>
             </div>
           )}
         </CardContent>
@@ -965,6 +990,34 @@ export default function VendorLeadWorkflow() {
                     <div className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg bg-primary/10 text-primary font-semibold text-sm border border-primary/20">
                       <Handshake className="h-4 w-4" /> Sold
                     </div>
+                    {/* Ship #316 — BuildConnect review-state surface in
+                        Modal sold-branch. Pending/Approved badge + (when
+                        flagged) banner with reviewNote. */}
+                    {!isCancelledLead(selected) && (() => {
+                      const display = getReviewStatusDisplay((selected as LeadExt).reviewStatus)
+                      const Icon = display.icon
+                      return (
+                        <div className={cn('rounded-lg p-2.5 flex items-start gap-2', display.bannerClassName)}>
+                          <Icon className={cn(
+                            'h-4 w-4 shrink-0 mt-0.5',
+                            display.variant === 'pending' && 'text-amber-700 dark:text-amber-400',
+                            display.variant === 'approved' && 'text-emerald-700 dark:text-emerald-400',
+                            display.variant === 'flagged' && 'text-red-700 dark:text-red-400',
+                          )} />
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              'text-xs font-semibold',
+                              display.variant === 'pending' && 'text-amber-800 dark:text-amber-300',
+                              display.variant === 'approved' && 'text-emerald-800 dark:text-emerald-300',
+                              display.variant === 'flagged' && 'text-red-800 dark:text-red-300',
+                            )}>{display.label}</p>
+                            {display.variant === 'flagged' && (selected as LeadExt).reviewNote && (
+                              <p className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap mt-1">{(selected as LeadExt).reviewNote}</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {/* Ship #312 — Inside-modal Project Completed button
                         REMOVED per Rodolfo "i only want the outside one and
                         needs to work". Outside LeadCard button (#307a) is
@@ -1009,10 +1062,7 @@ export default function VendorLeadWorkflow() {
                 ) : selected.status === 'confirmed' ? (
                   <Button
                     className="w-full bg-primary hover:bg-primary/90 text-white"
-                    onClick={() => {
-                      setSaleAmount('')
-                      setSoldDialogOpen(true)
-                    }}
+                    onClick={() => setSoldDialogOpen(true)}
                   >
                     <Handshake className="h-4 w-4 mr-1.5" /> Mark as Sold
                   </Button>
@@ -1405,22 +1455,12 @@ export default function VendorLeadWorkflow() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Sale Amount</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                <input
-                  type="number"
-                  value={saleAmount}
-                  onChange={(e) => setSaleAmount(e.target.value)}
-                  placeholder="Enter total sale amount"
-                  className="w-full h-10 pl-7 pr-3 rounded-lg border border-input bg-background text-base"
-                />
-              </div>
-            </div>
-
-            {/* Ship #313 — Contract Amount field. Client-side equality
-                check against Sale Amount per Decision A. */}
+            {/* Ship #316 — Sale Amount input REMOVED per Rodolfo "take
+                out sale amount and just leave contract amount". Contract
+                Amount is now the sole source-of-truth; written to
+                saleAmount internally on Confirm Sale per Decision A
+                (UI-only rename, internal field unchanged for back-compat
+                across 8+ consumers reading sp.saleAmount). */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Contract Amount <span className="text-destructive">*</span></label>
               <div className="relative">
@@ -1433,9 +1473,6 @@ export default function VendorLeadWorkflow() {
                   className="w-full h-10 pl-7 pr-3 rounded-lg border border-input bg-background text-base"
                 />
               </div>
-              {saleAmount && contractAmount && Number(saleAmount) > 0 && Number(contractAmount) > 0 && Number(saleAmount) !== Number(contractAmount) && (
-                <p className="text-xs text-destructive">Contract amount must match Sale Amount.</p>
-              )}
             </div>
 
             {/* Ship #313 — mandatory contract file upload. Persists to
@@ -1480,19 +1517,22 @@ export default function VendorLeadWorkflow() {
               <p className="text-[10px] text-muted-foreground">PDF or image (JPG / PNG / WEBP).</p>
             </div>
 
-            {saleAmount && Number(saleAmount) > 0 && (
+            {/* Ship #316 — breakdown reads contractAmount (single source-
+                of-truth post-simplification). Internal write to
+                saleAmount preserved per Decision A back-compat. */}
+            {contractAmount && Number(contractAmount) > 0 && (
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sale Total</span>
-                  <span className="font-bold">${Number(saleAmount).toLocaleString()}</span>
+                  <span className="text-muted-foreground">Contract Total</span>
+                  <span className="font-bold">${Number(contractAmount).toLocaleString()}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="text-emerald-700 dark:text-emerald-400 font-medium">Vendor Share ({100 - vendor.commission_pct}%)</span>
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400">${Math.round(Number(saleAmount) * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">${Math.round(Number(contractAmount) * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-amber-700 dark:text-amber-400 font-medium">BuildConnect ({vendor.commission_pct}%)</span>
-                  <span className="font-bold text-amber-700 dark:text-amber-400">${Math.round(Number(saleAmount) * (vendor.commission_pct / 100)).toLocaleString()}</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-400">${Math.round(Number(contractAmount) * (vendor.commission_pct / 100)).toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -1501,9 +1541,7 @@ export default function VendorLeadWorkflow() {
             <Button variant="outline" onClick={() => setSoldDialogOpen(false)}>Cancel</Button>
             <Button
               disabled={
-                !saleAmount || Number(saleAmount) <= 0 ||
                 !contractAmount || Number(contractAmount) <= 0 ||
-                Number(saleAmount) !== Number(contractAmount) ||
                 !contractFile
               }
               onClick={() => {
@@ -1512,7 +1550,10 @@ export default function VendorLeadWorkflow() {
                   setLeadStatus(selected.id, 'completed')
                   const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                   if (sp) {
-                    markProjectSold(sp.id, Number(saleAmount))
+                    // Ship #316 — write Contract Amount to saleAmount
+                    // internally (Decision A back-compat: 8+ consumers
+                    // read sp.saleAmount; UI-only rename preserved).
+                    markProjectSold(sp.id, Number(contractAmount))
                   }
                   // Ship #313 — persist contract to vendor-homeowner-
                   // documents-store under category='contract'. Existing
