@@ -18,6 +18,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { LEAD_STAGES, useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { SERVICE_CATALOG } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
 
 // Ship #293 — VendorDashboard slimmed down per Rodolfo "more clean
@@ -305,10 +306,17 @@ export default function VendorDashboard() {
                 <Link
                   key={stage.key}
                   to="/vendor/lead-workflow"
-                  className="group flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-background/60 transition"
+                  className="group flex flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-background/60 transition"
                   aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
                 >
-                  <StageIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition" />
+                  {/* Ship #306 — colored square per stage, lifted from
+                      lead-workflow.tsx tile color SoT (STAGE_COLOR_BY_KEY).
+                      Mirrors the tile-icon visual treatment so the at-a-
+                      glance row reads as a preview of the full Lead
+                      Workflow page. */}
+                  <div className={cn('rounded-md p-1.5', stage.color)}>
+                    <StageIcon className="h-4 w-4 text-white" />
+                  </div>
                   <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
                 </Link>
               )

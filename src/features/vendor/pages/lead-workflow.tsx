@@ -21,7 +21,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
+import { useVendorLeadStages, STAGE_COLOR_BY_KEY } from '@/lib/vendor-lead-stages'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -571,7 +571,7 @@ export default function VendorLeadWorkflow() {
         <LeadStatusTile
           title="New Leads"
           count={newLeads.length}
-          color="bg-amber-500"
+          color={STAGE_COLOR_BY_KEY.new}
           icon={Inbox}
           open={openTile === 'new'}
           onToggle={() => toggleTile('new')}
@@ -587,7 +587,7 @@ export default function VendorLeadWorkflow() {
         <LeadStatusTile
           title="Scheduled Leads"
           count={confirmedLeads.length}
-          color="bg-emerald-500"
+          color={STAGE_COLOR_BY_KEY.confirmed}
           icon={CalendarCheck}
           open={openTile === 'confirmed'}
           onToggle={() => toggleTile('confirmed')}
@@ -603,7 +603,7 @@ export default function VendorLeadWorkflow() {
         <LeadStatusTile
           title="Sold, Active"
           count={projectSold.length}
-          color="bg-primary"
+          color={STAGE_COLOR_BY_KEY.sold}
           icon={Handshake}
           open={openTile === 'sold'}
           onToggle={() => toggleTile('sold')}
@@ -619,7 +619,7 @@ export default function VendorLeadWorkflow() {
         <LeadStatusTile
           title="Projects Completed"
           count={projectsCompleted.length}
-          color="bg-slate-500"
+          color={STAGE_COLOR_BY_KEY.completed}
           icon={Archive}
           open={openTile === 'completed'}
           onToggle={() => toggleTile('completed')}
@@ -642,7 +642,7 @@ export default function VendorLeadWorkflow() {
         <LeadStatusTile
           title="Cancelled Projects"
           count={cancelledProjects.length}
-          color="bg-destructive"
+          color={STAGE_COLOR_BY_KEY.cancelled}
           icon={X}
           open={openTile === 'cancelled'}
           onToggle={() => toggleTile('cancelled')}

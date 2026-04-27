@@ -13,18 +13,31 @@ export interface LeadStageMeta {
   key: LeadStageKey
   title: string
   icon: typeof Inbox
+  // Tailwind bg-* class applied to the icon-square wrapper. Same
+  // values across both consumers (lead-workflow tiles + dashboard
+  // summary row) per #103 single-source-of-truth.
+  color: string
 }
 
 // Ordered for both lead-workflow tile sequence (#293) and dashboard
 // compact summary row (#303). Same order = same mental model across
-// the two surfaces.
+// the two surfaces. Colors added in #306 — canonical values lifted
+// from the original lead-workflow.tsx tile color props.
 export const LEAD_STAGES: LeadStageMeta[] = [
-  { key: 'new', title: 'New Leads', icon: Inbox },
-  { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck },
-  { key: 'sold', title: 'Sold, Active', icon: Handshake },
-  { key: 'completed', title: 'Projects Completed', icon: Archive },
-  { key: 'cancelled', title: 'Cancelled Projects', icon: X },
+  { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-500' },
+  { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck, color: 'bg-emerald-500' },
+  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-primary' },
+  { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-500' },
+  { key: 'cancelled', title: 'Cancelled Projects', icon: X, color: 'bg-destructive' },
 ]
+
+// By-key lookup map for consumers that render tiles in fixed order
+// rather than iterating LEAD_STAGES (e.g. lead-workflow.tsx tiles
+// each have distinct empty-state messages so they're rendered
+// individually).
+export const STAGE_COLOR_BY_KEY: Record<LeadStageKey, string> = Object.fromEntries(
+  LEAD_STAGES.map((s) => [s.key, s.color]),
+) as Record<LeadStageKey, string>
 
 const SOLD_TO_COMPLETED_DAYS = 90
 const DAY_MS = 24 * 60 * 60 * 1000
