@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon } from 'lucide-react'
@@ -67,6 +68,14 @@ export function VendorLayout() {
   const navigate = useNavigate()
   const { sidebarCollapsed, toggleSidebarCollapsed } = useUIStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Ship #318 — one-time backfill of legacy completedAt-set entries
+  // that lack reviewStatus (pre-#317 sentProjects). Idempotent via
+  // localStorage flag inside maybeBackfillLegacyApprovals().
+  useEffect(() => {
+    maybeBackfillLegacyApprovals()
+  }, [])
+
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
 

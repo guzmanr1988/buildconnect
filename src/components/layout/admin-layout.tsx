@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -174,6 +175,13 @@ export function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Ship #318 — one-time backfill of legacy completedAt-set entries
+  // that lack reviewStatus (pre-#317 sentProjects). Idempotent via
+  // localStorage flag inside maybeBackfillLegacyApprovals().
+  useEffect(() => {
+    maybeBackfillLegacyApprovals()
+  }, [])
 
   // Admin notifications = open bugs + cross-role activity (god-view).
   // Ship #240 — extended beyond bug-only to surface platform-wide

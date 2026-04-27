@@ -154,7 +154,16 @@ export function useVendorLeadStages(): {
       const cReq = cancellationRequestsByLead[l.id]
       return cReq?.status === 'approved'
     }
-    const isManuallyCompleted = (l: LeadExt): boolean => !!l.completedAt
+    // Ship #318 — Projects Completed requires reviewStatus='approved'
+    // per Rodolfo "no pending approvals by buildconnect cant be on
+    // projects completed unless it was approved by buildconnect".
+    // Strict gate at SoT layer — both manual-completion path and 90d
+    // age-based path now require approval. Pre-existing entries that
+    // had completedAt without approval are migrated via legacy-
+    // completed-approval-backfill helper at app entry; bucketing only
+    // sees entries that already passed the migration step.
+    const isManuallyCompleted = (l: LeadExt): boolean =>
+      !!l.completedAt && l.reviewStatus === 'approved'
     const now = Date.now()
     const soldAgeDays = (l: LeadExt): number | null => {
       if (!l.soldAt) return null
@@ -166,6 +175,14 @@ export function useVendorLeadStages(): {
     const projectSold = leads.filter((l) => {
       if (isCancelledLead(l)) return false
       if (l.status !== 'completed') return false
+      // Ship #318 — entries with completedAt set but reviewStatus !==
+      // 'approved' fall back to Sold Active (visible-but-disabled
+      // Project Completed button per #317). isManuallyCompleted now
+      // gates on approval, so non-approved completedAt-set entries
+      // are not in Projects Completed AND not in Sold Active per the
+      // age-based path (they have age=0 since soldAt is recent).
+      // Inclusion logic: any non-cancelled status='completed' entry
+      // that is NOT approved-completed AND age < 90d.
       if (isManuallyCompleted(l)) return false
       const age = soldAgeDays(l)
       return age === null || age < SOLD_TO_COMPLETED_DAYS
@@ -173,6 +190,10 @@ export function useVendorLeadStages(): {
     const projectsCompleted = leads.filter((l) => {
       if (isCancelledLead(l)) return false
       if (l.status !== 'completed') return false
+      // Ship #318 — strict approval-gate: only approved deals can be
+      // in Projects Completed. Both manual-completion path AND
+      // age-based 90d path require this.
+      if (l.reviewStatus !== 'approved') return false
       if (isManuallyCompleted(l)) return true
       const age = soldAgeDays(l)
       return age !== null && age >= SOLD_TO_COMPLETED_DAYS
