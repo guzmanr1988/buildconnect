@@ -163,43 +163,49 @@ export default function VendorDashboard() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
-      {/* Vendor Profile Card — Ship #300 mobile fix: previously the
-          avatar + identity + demo-controls all crammed into one row,
-          which pinched the identity-block to ~140px on mobile (name
-          truncated mid-word, badges wrapped to 3 lines, address
-          overflowed without truncate, demo Trash icon squeezed in
-          corner). Fix: identity-row stays single-row; demo-controls
-          drop to their own bottom row on mobile via border-t separator
-          (desktop unchanged — controls inline at far right). Inner
-          text/icon/badge sizing scaled down on mobile only with
-          truncate added to address + contact lines. */}
+      {/* Vendor Profile Card — Ship #301 (refines #300):
+          (1) Mobile portrait: badges (Verified + Active) drop to a
+              bottom-left row below the identity block per Rodolfo
+              "place it at the bottom left". Demo controls take the
+              right side of that same bottom row (justify-between).
+          (2) Landscape phones (568-932px wide) now hit the inline
+              desktop-style layout instead of the mobile bottom-row
+              layout. Layout-mode breakpoint switched from sm: (640px)
+              to min-[480px]: so any landscape orientation phone gets
+              the wider single-row layout. Sizing classes also use
+              min-[480px]: for consistency.
+          History: #294 added Service Categories + Performance Stats;
+          #299 fixed Performance Stats mobile; #300 fixed Vendor
+          Profile mobile cramming via dual-render bottom-row pattern. */}
       <motion.div variants={item}>
         <Card className="rounded-xl">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center gap-3 sm:gap-4">
+          <CardContent className="p-4 min-[480px]:p-6">
+            <div className="flex items-center gap-3 min-[480px]:gap-4">
               <AvatarInitials initials={vendor.initials} color={vendor.avatar_color} size="lg" />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <h2 className="text-base sm:text-xl font-bold font-heading truncate">{vendor.company}</h2>
+                <h2 className="text-base min-[480px]:text-xl font-bold font-heading truncate min-[480px]:inline-block min-[480px]:mr-2">{vendor.company}</h2>
+                {/* Inline badges — visible at min-[480px]+ (landscape phones + larger).
+                    Mobile portrait renders these in the bottom-left row instead. */}
+                <div className="hidden min-[480px]:inline-flex items-center gap-2 flex-wrap align-middle">
                   {vendor.verified && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium text-primary">
-                      <BadgeCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                      <BadgeCheck className="h-3.5 w-3.5" />
                       Verified
                     </span>
                   )}
-                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
                     {vendor.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1 min-w-0">
-                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                <div className="flex items-center gap-1.5 text-xs min-[480px]:text-sm text-muted-foreground mt-1 min-w-0">
+                  <MapPin className="h-3 w-3 min-[480px]:h-3.5 min-[480px]:w-3.5 shrink-0" />
                   <span className="truncate">{vendor.address}</span>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{vendor.name} &middot; {vendor.phone}</p>
+                <p className="text-xs min-[480px]:text-sm text-muted-foreground mt-0.5 truncate">{vendor.name} &middot; {vendor.phone}</p>
               </div>
-              {/* Demo controls — desktop only in the identity row */}
+              {/* Demo controls — inline (right side) at min-[480px]+ */}
               {demoMode && (
-                <div className="hidden sm:flex items-center gap-2 shrink-0">
+                <div className="hidden min-[480px]:flex items-center gap-2 shrink-0">
                   {demoDataHidden && (
                     <Button
                       variant="outline"
@@ -224,9 +230,23 @@ export default function VendorDashboard() {
                 </div>
               )}
             </div>
-            {/* Demo controls — mobile only on its own row below border-t */}
-            {demoMode && (
-              <div className="flex sm:hidden items-center justify-end gap-2 mt-3 pt-3 border-t">
+            {/* Mobile-portrait bottom row: badges left + demo controls right.
+                Hidden at min-[480px]+ (where badges go inline + demo goes
+                right of identity row). */}
+            <div className="flex min-[480px]:hidden items-center justify-between gap-2 mt-3 pt-3 border-t">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {vendor.verified && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <BadgeCheck className="h-3 w-3" />
+                    Verified
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
+                  {vendor.status}
+                </span>
+              </div>
+              {demoMode && (
+                <div className="flex items-center gap-2 shrink-0">
                 {demoDataHidden && (
                   <Button
                     variant="outline"
@@ -249,7 +269,8 @@ export default function VendorDashboard() {
                   Clear
                 </Button>
               </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       </motion.div>
