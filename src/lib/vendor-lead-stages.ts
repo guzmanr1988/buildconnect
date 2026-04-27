@@ -108,28 +108,33 @@ export function useVendorLeadStages(): {
     // Ship #319 — defensive filter on malformed entries (Rodolfo
     // production crash: localStorage state from earlier testing
     // contained an undefined or partial sentProject entry; map-then-
-    // read crashed on p.id of undefined). Strips malformed entries
-    // before mapping. Sister-fix in legacy-completed-approval-
-    // backfill.ts walks.
+    // read crashed on p.id of undefined).
+    // Ship #320 — DROPPED the `!!p.item` guard from #319 (was too
+    // aggressive — silently stripped legitimate entries where .item
+    // happened to be falsy/weird after localStorage round-trip,
+    // causing leads-not-populating regression on /vendor/lead-workflow).
+    // Filter now strips ONLY truly-malformed entries (undefined p OR
+    // non-string id); downstream reads use ?. for .item to handle
+    // undefined gracefully.
     () => sentProjects
-      .filter((p): p is typeof p => !!p && typeof p.id === 'string' && !!p.item)
+      .filter((p): p is typeof p => !!p && typeof p.id === 'string')
       .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       _projectId: p.id,
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
       homeowner_name: p.homeowner?.name || 'New Customer',
-      project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+      project: (p.item?.serviceName ?? 'Unknown service') + ' — ' + Object.values(p.item?.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (sentProjectStatusMap[p.status] || 'pending') as Lead['status'],
       value: 0,
       address: p.homeowner?.address || 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',
       sq_ft: 0,
-      service_category: p.item.serviceId as Lead['service_category'],
-      permit_choice: Object.values(p.item.selections).flat().includes('permit'),
-      financing: Object.values(p.item.selections).flat().includes('financed'),
-      pack_items: p.item.selections,
+      service_category: (p.item?.serviceId ?? '') as Lead['service_category'],
+      permit_choice: Object.values(p.item?.selections ?? {}).flat().includes('permit'),
+      financing: Object.values(p.item?.selections ?? {}).flat().includes('financed'),
+      pack_items: p.item?.selections ?? {},
       slot: p.sentAt,
       received_at: p.sentAt,
       soldAt: p.soldAt,
