@@ -366,6 +366,15 @@ export default function VendorLeadWorkflow() {
     // Approved' label. Pending-cancel (red ring) wins over confirmed-approval
     // (green ring) since the cancel is the more-urgent state.
     const isScheduleApproved = lead.status === 'confirmed' && !!rep && !hasPendingCancel
+    // Ship #307 — Sold-Active inline Project Completed button. Surfaces
+    // the action directly on the card per Rodolfo "available to press
+    // button project completed". Routes through the same #295 lighter-
+    // confirm dialog (setSelected + setCompletedDialogOpen) so accidental-
+    // click protection + acceleration-not-destruction precondition stay
+    // intact. Visible only for currently-active sold leads (status
+    // 'completed' AND no completedAt yet AND not in cancelled bucket).
+    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+    const showCompleteButton = lead.status === 'completed' && sp && !sp.completedAt && !isCancelledLead(lead)
     return (
       <Card
         className={cn(
@@ -446,6 +455,22 @@ export default function VendorLeadWorkflow() {
                 aria-label={`Edit rep for ${lead.id}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+          {showCompleteButton && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <Button
+                size="sm"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelected(lead)
+                  setCompletedDialogOpen(true)
+                }}
+              >
+                <Check className="h-4 w-4 mr-1.5" />
+                Project Completed
               </Button>
             </div>
           )}
