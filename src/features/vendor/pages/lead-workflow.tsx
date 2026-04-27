@@ -508,25 +508,44 @@ export default function VendorLeadWorkflow() {
               </Button>
             </div>
           )}
-          {showCompleteButton && (
-            <div className="mt-3 pt-3 border-t border-border/50">
-              <Button
-                size="sm"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Ship #312 — write to completedDialogLead (not
-                  // selected) to avoid Layer-5 bulletproof-close race
-                  // that wipes `selected` when sheetOpen=false.
-                  setCompletedDialogLead(lead)
-                  setCompletedDialogOpen(true)
-                }}
-              >
-                <Check className="h-4 w-4 mr-1.5" />
-                Project Completed
-              </Button>
-            </div>
-          )}
+          {showCompleteButton && (() => {
+            // Ship #317 — gate Project Completed button on BuildConnect
+            // approval per Rodolfo "if the project is pending approval
+            // by buildconnect project completed button will be disabled
+            // until approved by buildconnect". Render the button always
+            // (visible-but-disabled communicates "exists, available
+            // later"); only enable when reviewStatus === 'approved'.
+            const reviewVariant = reviewDisplay?.variant ?? 'pending'
+            const isApproved = reviewVariant === 'approved'
+            const disabledHelpText = reviewVariant === 'flagged'
+              ? 'Resolve BuildConnect flag first'
+              : 'Awaiting BuildConnect approval'
+            return (
+              <div className="mt-3 pt-3 border-t border-border/50 space-y-1.5">
+                <Button
+                  size="sm"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={!isApproved}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Ship #312 — write to completedDialogLead (not
+                    // selected) to avoid Layer-5 bulletproof-close race
+                    // that wipes `selected` when sheetOpen=false.
+                    setCompletedDialogLead(lead)
+                    setCompletedDialogOpen(true)
+                  }}
+                >
+                  <Check className="h-4 w-4 mr-1.5" />
+                  Project Completed
+                </Button>
+                {!isApproved && (
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    {disabledHelpText}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
           {/* Ship #316 — flagged-state banner with reviewNote (Phase-2
               vendor-flag-visibility wiring per #131 precondition met). */}
           {reviewDisplay?.variant === 'flagged' && lead.reviewNote && (
