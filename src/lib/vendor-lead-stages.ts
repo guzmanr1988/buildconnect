@@ -105,7 +105,15 @@ export function useVendorLeadStages(): {
   )
 
   const homeownerLeads = useMemo<LeadExt[]>(
-    () => sentProjects.map((p) => ({
+    // Ship #319 — defensive filter on malformed entries (Rodolfo
+    // production crash: localStorage state from earlier testing
+    // contained an undefined or partial sentProject entry; map-then-
+    // read crashed on p.id of undefined). Strips malformed entries
+    // before mapping. Sister-fix in legacy-completed-approval-
+    // backfill.ts walks.
+    () => sentProjects
+      .filter((p): p is typeof p => !!p && typeof p.id === 'string' && !!p.item)
+      .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       _projectId: p.id,
       homeowner_id: 'ho-current',

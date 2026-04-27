@@ -30,8 +30,13 @@ export function maybeBackfillLegacyApprovals(): void {
   }
 
   const projectsStore = useProjectsStore.getState()
+  // Ship #319 — defensive guard: legacy-backfill walks may encounter
+  // malformed entries (undefined or partial sentProject from earlier
+  // corrupted-localStorage state). Filter strips them before checking
+  // backfill candidacy AND before the setState map; co-cleans state
+  // while applying migration.
   const targets = projectsStore.sentProjects.filter(
-    (p) => !!p.completedAt && p.reviewStatus === undefined,
+    (p) => !!p && typeof p.id === 'string' && !!p.completedAt && p.reviewStatus === undefined,
   )
 
   if (targets.length === 0) {
@@ -43,15 +48,17 @@ export function maybeBackfillLegacyApprovals(): void {
 
   const now = new Date().toISOString()
   useProjectsStore.setState((state) => ({
-    sentProjects: state.sentProjects.map((p) => {
-      if (!p.completedAt || p.reviewStatus !== undefined) return p
-      return {
-        ...p,
-        reviewStatus: 'approved',
-        reviewedAt: now,
-        reviewedBy: LEGACY_REVIEWED_BY,
-      }
-    }),
+    sentProjects: state.sentProjects
+      .filter((p) => !!p && typeof p.id === 'string')
+      .map((p) => {
+        if (!p.completedAt || p.reviewStatus !== undefined) return p
+        return {
+          ...p,
+          reviewStatus: 'approved',
+          reviewedAt: now,
+          reviewedBy: LEGACY_REVIEWED_BY,
+        }
+      }),
   }))
 
   try { localStorage.setItem(BACKFILL_FLAG_KEY, '1') } catch {}
