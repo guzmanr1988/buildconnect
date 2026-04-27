@@ -65,6 +65,16 @@ export interface SentProject {
   // Timestamp when vendor first picked the assignedRep. Overwrites on
   // reassignment (semantically "when the currently-assigned rep was set").
   repAssignedAt?: string
+  // Ship #314 — BuildConnect contract review state. Set by admin on
+  // /admin/reviews queue (Phase 1). reviewStatus=undefined treated as
+  // "pending" by consumers (back-compat for legacy persisted entries
+  // pre-#313 contract requirement). Phase 1 consequences are admin-
+  // internal-only; vendor-visibility + commission-pause are Phase 2
+  // (per banked discipline-precondition-check-as-time-sensitive).
+  reviewStatus?: 'pending' | 'approved' | 'flagged'
+  reviewedAt?: string
+  reviewedBy?: string
+  reviewNote?: string
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -165,6 +175,15 @@ interface ProjectsState {
   // isManuallyCompleted predicate.
   leadCompletedAtByLead: Record<string, string>
   setLeadCompletedAt: (leadId: string, completedAt: string) => void
+  // Ship #314 — admin BuildConnect review actions. Approve / Flag
+  // applied to a sentProject by admin id; reviewNote required on
+  // Flag, optional on Approve.
+  setReviewStatus: (
+    projectId: string,
+    status: 'approved' | 'flagged',
+    reviewedBy: string,
+    reviewNote?: string,
+  ) => void
   assignRep: (id: string, rep: VendorRep) => void
   // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
   // handled via assignRep).
@@ -295,6 +314,22 @@ export const useProjectsStore = create<ProjectsState>()(
       setLeadCompletedAt: (leadId, completedAt) => {
         set((state) => ({
           leadCompletedAtByLead: { ...state.leadCompletedAtByLead, [leadId]: completedAt },
+        }))
+      },
+
+      setReviewStatus: (projectId, status, reviewedBy, reviewNote) => {
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  reviewStatus: status,
+                  reviewedAt: new Date().toISOString(),
+                  reviewedBy,
+                  ...(reviewNote ? { reviewNote } : {}),
+                }
+              : p
+          ),
         }))
       },
 

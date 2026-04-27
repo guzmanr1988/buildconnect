@@ -50,6 +50,7 @@ import BugsPage from '@/features/admin/pages/bugs'
 import ProductsAdminPage from '@/features/admin/pages/products'
 import UsersPage from '@/features/admin/pages/users'
 import HomeownersPage from '@/features/admin/pages/homeowners'
+import ReviewsPage from '@/features/admin/pages/reviews'
 import AdminHomeownerDetail from '@/features/admin/pages/homeowner-detail'
 import AdminVendorDetail from '@/features/admin/pages/vendor-detail'
 import EmployeesPage from '@/features/admin/pages/employees'
@@ -154,6 +155,8 @@ export const router = createBrowserRouter([
           { path: 'homeowners', element: <HomeownersPage />, handle: { title: 'Admin · Homeowners' } },
           // Ship #280 — admin per-homeowner detail (god-view cross-vendor).
           { path: 'homeowners/:homeownerId', element: <AdminHomeownerDetail />, handle: { title: 'Admin · Homeowner' } },
+          // Ship #314 — BuildConnect contract review queue (Phase 1).
+          { path: 'reviews', element: <ReviewsPage />, handle: { title: 'Admin · Reviews' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
         ],
       },

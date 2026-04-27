@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -32,6 +32,10 @@ const navItems: NavEntry[] = [
   { to: '/admin/vendors', icon: Users, label: 'Vendors' },
   { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
+  // Ship #314 — BuildConnect contract review queue. Cross-functional
+  // surface (vendor + homeowner + financial all touch) so top-level
+  // rather than nested under Banking.
+  { to: '/admin/reviews', icon: ShieldCheck, label: 'Reviews' },
   { to: '/admin/employees', icon: UserCog, label: 'Employees' },
   { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
   {
