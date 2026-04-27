@@ -186,6 +186,14 @@ export default function VendorLeadWorkflow() {
   // (not full destructive-four-refinement) since the action is
   // acceleration of automatic 90d transition, not destruction.
   const [completedDialogOpen, setCompletedDialogOpen] = useState(false)
+  // Ship #312 — separate lead-state for the Project Completed flow,
+  // independent from `selected`. Reason: Layer-5 bulletproof-close
+  // useEffect (line 224-230) wipes `selected` whenever sheetOpen
+  // flips false. The #307a outside-button path never opens the modal
+  // (sheetOpen stays false), so Layer-5 fires immediately on
+  // setSelected(lead) and wipes it before Confirm can read it. Using
+  // a separate state for the confirm-dialog lead breaks the race.
+  const [completedDialogLead, setCompletedDialogLead] = useState<Lead | null>(null)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   // Assign-rep flow: selectedRepId is the rep chosen in the new-lead modal
   // (Confirm is gated on it being non-empty). editRepOpen/editRep* drive the
@@ -474,7 +482,10 @@ export default function VendorLeadWorkflow() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setSelected(lead)
+                  // Ship #312 — write to completedDialogLead (not
+                  // selected) to avoid Layer-5 bulletproof-close race
+                  // that wipes `selected` when sheetOpen=false.
+                  setCompletedDialogLead(lead)
                   setCompletedDialogOpen(true)
                 }}
               >
@@ -929,23 +940,12 @@ export default function VendorLeadWorkflow() {
                     <div className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg bg-primary/10 text-primary font-semibold text-sm border border-primary/20">
                       <Handshake className="h-4 w-4" /> Sold
                     </div>
-                    {/* Ship #295 — Rodolfo-direct: "under price add a button
-                        project completed when clicked project pass from sold
-                        to complete status". Gated to currently-active sold
-                        projects only (no completedAt yet). Acceleration of
-                        the existing 90d age-based auto-transition.
-                        Ship #311 — gate now reads selected.completedAt
-                        (override-aware via useVendorLeadStages enrichment)
-                        instead of sp.completedAt. Covers MOCK_LEADS path
-                        that previously had button always-hidden. */}
-                    {!(selected as Lead & { completedAt?: string }).completedAt && (
-                      <Button
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                        onClick={() => setCompletedDialogOpen(true)}
-                      >
-                        <Check className="h-4 w-4 mr-1.5" /> Project Completed
-                      </Button>
-                    )}
+                    {/* Ship #312 — Inside-modal Project Completed button
+                        REMOVED per Rodolfo "i only want the outside one and
+                        needs to work". Outside LeadCard button (#307a) is
+                        the sole entry point now; routes through completed-
+                        DialogLead state to avoid Layer-5 bulletproof-close
+                        race that broke the inside path before #311. */}
                     {(() => {
                       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                       if (!sp) return null
@@ -1416,7 +1416,15 @@ export default function VendorLeadWorkflow() {
           destructive-confirm-four-refinement preconditions): action is
           acceleration of the existing 90d age-based auto-transition,
           not destruction. Plain 1-line description + Cancel/Confirm. */}
-      <Dialog open={completedDialogOpen} onOpenChange={setCompletedDialogOpen}>
+      <Dialog
+        open={completedDialogOpen}
+        onOpenChange={(o) => {
+          setCompletedDialogOpen(o)
+          // Ship #312 — clear completedDialogLead on dialog close
+          // (Cancel / backdrop / ESC). Confirm-handler clears it too.
+          if (!o) setCompletedDialogLead(null)
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading">Mark Project Completed?</DialogTitle>
@@ -1425,20 +1433,25 @@ export default function VendorLeadWorkflow() {
             <p>This moves the project from Sold, Active to Projects Completed.</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCompletedDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setCompletedDialogOpen(false); setCompletedDialogLead(null) }}>Cancel</Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={() => {
-                if (selected) {
+                // Ship #312 — read completedDialogLead (not selected)
+                // to avoid Layer-5 bulletproof-close race. Outside-
+                // button path never opens the modal, so `selected`
+                // gets wiped by Layer-5 before Confirm can read it.
+                if (completedDialogLead) {
                   // Ship #311 — ALWAYS fire override-map setter (covers
                   // MOCK_LEADS without sentProject backing); preserve
                   // sentProject.completedAt write when sp exists for
                   // persistence parity.
-                  setLeadCompletedAt(selected.id, new Date().toISOString())
-                  const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                  setLeadCompletedAt(completedDialogLead.id, new Date().toISOString())
+                  const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === completedDialogLead.id)
                   if (sp) markCompleted(sp.id)
                 }
                 setCompletedDialogOpen(false)
+                setCompletedDialogLead(null)
                 setSheetOpen(false)
                 toast.success('Project marked as completed')
               }}
