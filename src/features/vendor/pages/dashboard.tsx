@@ -16,6 +16,7 @@ import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { LEAD_STAGES, useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import type { Lead } from '@/types'
 
@@ -91,6 +92,17 @@ export default function VendorDashboard() {
   const handleRestoreDemoData = () => {
     setDemoDataHidden(false)
   }
+
+  // Ship #303 — Lead Workflow stage counts for the compact summary
+  // row inside Performance Stats card. Uses useVendorLeadStages
+  // shared helper (same source-of-truth as /vendor/lead-workflow
+  // tile counts). KPI derivations below remain inline for now —
+  // they use slightly different bucketing semantics (cancellation-
+  // filtered active-leads, pipelineValue summed across confirmed
+  // + sold). format-SoT-shared-helper #103 trigger ALSO met for
+  // KPI logic at n=3 consumers but holding extraction until those
+  // semantics align.
+  const { counts: leadStageCounts } = useVendorLeadStages()
 
   // Leads-derivation for KPI counts (cancellation-aware bucketing).
   // Same shape as pre-#293; live-status overrides + cancellation
@@ -359,6 +371,31 @@ export default function VendorDashboard() {
                   <p className="text-lg sm:text-2xl font-bold font-heading">{vendor.response_time}</p>
                   <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Avg Response Time</p>
                 </div>
+              </div>
+            </div>
+            {/* Ship #303 — Lead Workflow at-a-glance: icons + counts only,
+                per Rodolfo "at the bottom of perfomance stats add the
+                lead workflow only icons and numbers for info". 5 cells
+                map to the 5 stage tiles on /vendor/lead-workflow (same
+                source-of-truth via useVendorLeadStages). Each cell is a
+                clickable Link to the full Lead Workflow page. */}
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Lead Workflow</p>
+              <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                {LEAD_STAGES.map((stage) => {
+                  const StageIcon = stage.icon
+                  return (
+                    <Link
+                      key={stage.key}
+                      to="/vendor/lead-workflow"
+                      className="group flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-muted/50 transition"
+                      aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
+                    >
+                      <StageIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition" />
+                      <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           </CardContent>

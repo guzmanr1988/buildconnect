@@ -21,7 +21,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
+import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -55,7 +55,6 @@ export default function VendorLeadWorkflow() {
   const assignProjectRep = useProjectsStore((s) => s.assignRep)
   const assignRepByLead = useProjectsStore((s) => s.assignRepByLead)
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
-  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const setLeadStatus = useProjectsStore((s) => s.setLeadStatus)
   // Ship #295 — vendor-marked manual completion. Stamps completedAt on
   // the sentProject; bucketing reads completedAt-presence to override
@@ -100,7 +99,7 @@ export default function VendorLeadWorkflow() {
   // email-match + UUID-map chain already wired, so swapping here unifies
   // the resolver across dashboard + lead-inbox + banking + calendar.
   // Single-resolver-for-vendor-scope.
-  const { mockVendorId, vendorId: VENDOR_ID } = useVendorScope()
+  const { vendorId: VENDOR_ID } = useVendorScope()
 
   // Ship #224 — Account Rep list for the assign-rep dropdown. Reads
   // active employees from useVendorEmployeesStore keyed by VENDOR_ID,
@@ -129,145 +128,34 @@ export default function VendorLeadWorkflow() {
   // before the redirect fired — that guard now lives in vendor-scope.ts.
   const vendor = useResolvedVendor()
 
-  // Gate seeded MOCK_LEADS + MOCK_CLOSED_SALES fixtures to only the 5
-  // featured mock vendors (v-1..v-5). Synthesized / unmapped vendors (e.g.
-  // generic Demo Vendor account) see only their own sentProjects — Rod
-  // P0 2026-04-20: DV was inheriting Maria L-0001 + James L-0005 as its
-  // own leads via the filter match when mockVendorId was null.
-  // Ship #250 — read through useEffectiveMockLeads hook so demoDataHidden
-  // flag zero-outs seeded fixture leads after Clear Demo Data. Pre-#250
-  // direct MOCK_LEADS import couldn't be cleared at runtime.
-  const effectiveMockLeads = useEffectiveMockLeads()
-  const mockLeads = useMemo(
-    () => (mockVendorId ? effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID) : []),
-    [VENDOR_ID, mockVendorId, effectiveMockLeads]
-  )
-  // Convert sent projects from homeowner side into lead-like objects.
-  // Ship #163 + #165 vendor_id-FK hardening (task_1776731114470_226):
-  // prefer contractor.vendor_id FK (stable across rename); fall back to
-  // company-name match for legacy persisted entries that predate the FK.
-  const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
-  // Ship #223 — aligned to lead-inbox.tsx permissive shape (no
-  // contractor-vendor-id filter). Prior strict filter diverged from
-  // lead-inbox's permissive read, causing dashboard 'New Leads' tile
-  // to reject sentProjects whose contractor.vendor_id didn't match
-  // the Vendor-demo's aliased vendor.id — while /vendor/projects tab
-  // showed them. Rodolfo's expectation (confirmed directly): Vendor
-  // demo sees leads regardless of which contractor the homeowner
-  // picked (Apex / Shield / Paradise — "they all should work").
-  // Cross-vendor-visibility intentionally loose in demo mode; post-
-  // launch re-approach (task_1776818232208_731) lifts to shared helper
-  // with strict scope once real vendor accounts are wired.
-  const homeownerLeads: (Lead & { soldAt?: string; completedAt?: string })[] = useMemo(() => sentProjects
-    .map((p) => ({
-    id: `L-${p.id.slice(0, 4).toUpperCase()}`,
-    _projectId: p.id,
-    homeowner_id: 'ho-current',
-    vendor_id: VENDOR_ID,
-    homeowner_name: p.homeowner?.name || 'New Customer',
-    project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
-    status: (statusMap[p.status] || 'pending') as Lead['status'],
-    value: 0,
-    address: p.homeowner?.address || 'Pending site visit',
-    phone: p.homeowner?.phone || '—',
-    email: p.homeowner?.email || '—',
-    sq_ft: 0,
-    service_category: p.item.serviceId as any,
-    permit_choice: Object.values(p.item.selections).flat().includes('permit'),
-    financing: Object.values(p.item.selections).flat().includes('financed'),
-    pack_items: p.item.selections,
-    slot: p.sentAt,
-    received_at: p.sentAt,
-    soldAt: p.soldAt,
-    completedAt: p.completedAt,
-  })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company])
-
-  // Per-lead status overrides are now persisted via projects-store (ship #55 —
-  // Rod-surfaced refresh-wipes-everything on Demo Vendor). Vendor actions
-  // (Confirm / Reject / Reschedule / Mark-as-Sold) write to the store; the
-  // store's persist middleware keeps the override alive across page reloads.
-  // Previously this was component useState and wiped on refresh.
-
-  // Put homeowner leads first so they appear at the top, then apply overrides.
-  const leads = useMemo(() => {
-    const combined = [...homeownerLeads, ...mockLeads]
-    return combined.map((l) =>
-      leadStatusOverrides[l.id] ? { ...l, status: leadStatusOverrides[l.id] } : l
-    )
-  }, [mockLeads, homeownerLeads, leadStatusOverrides])
-
-  // Lifecycle thresholds simplified to single sold→completed split (kratos msg
-  // 1776693800134). Active Projects tile merged into Project Sold — the
-  // "currently active" bucket is any sold/approved project that isn't
-  // aged-out to Completed yet.
-  //
-  // Ship #171 (task_1776662387601_014) — Cancelled Projects vs Rejected
-  // Leads are now distinct tiles, reflecting the split 'cancelled' /
-  // 'rejected' lifecycle statuses. Homeowner-initiated, vendor-approved
-  // cancellations land in Cancelled; vendor-upfront rejections (no
-  // cancellation request on file) land in Rejected. Pre-#171 persisted
-  // leads that sit at status='rejected' AND carry an approved
-  // cancellationRequest are still surfaced as cancelled via the
-  // isCancelledLead predicate (read-path back-compat; no data migration
-  // needed).
-  const SOLD_TO_COMPLETED_DAYS = 90
-  const DAY_MS = 24 * 60 * 60 * 1000
-  const now = Date.now()
-  const soldAgeDays = (l: Lead & { soldAt?: string }): number | null => {
-    if (!l.soldAt) return null
-    return (now - new Date(l.soldAt).getTime()) / DAY_MS
-  }
-
-  // Cancelled = any deal that didn't happen. Ship #184 (Rodolfo-direct
-  // 2026-04-21) collapsed the #171 rejected-vs-cancelled UI split back
-  // into one tile per his directive: 'in vendor rejected leads are the
-  // same as cancelled projects eliminate rejected leads'. The data model
-  // still carries the distinction (LeadStatus includes both 'rejected'
-  // and 'cancelled'; approveCancellation still writes 'cancelled' per
-  // #171), but the vendor-dashboard tile treats them as one bucket.
-  // Covers: status='cancelled' (homeowner-initiated, vendor-approved)
-  // OR status='rejected' (vendor-upfront rejection)
-  // OR cancellationRequest.status='approved' (pre-#171 persisted data +
-  // ordering-race defense against a partial state write).
-  const isCancelledLead = (l: Lead): boolean => {
-    if (l.status === 'cancelled' || l.status === 'rejected') return true
-    const cReq = cancellationRequestsByLead[l.id]
-    if (cReq?.status === 'approved') return true
-    return false
-  }
-
-  // Lead categories
-  const newLeads = leads.filter((l) => l.status === 'pending' || l.status === 'rescheduled')
-  const confirmedLeads = leads.filter((l) => l.status === 'confirmed')
-  // Ship #295 — vendor-marked manual completion (completedAt presence)
-  // wins over the age-based 90d auto-transition. If completedAt is set,
-  // project lives in Projects Completed regardless of soldAt age.
-  const isManuallyCompleted = (l: Lead): boolean => {
-    return !!(l as Lead & { completedAt?: string }).completedAt
-  }
-  const projectSold = leads.filter((l) => {
-    if (isCancelledLead(l)) return false
-    if (l.status !== 'completed') return false
-    if (isManuallyCompleted(l)) return false
-    const age = soldAgeDays(l as Lead & { soldAt?: string })
-    // Currently-active bucket: either just-sold (no soldAt yet → treat as
-    // fresh) OR sold less than SOLD_TO_COMPLETED_DAYS ago.
-    return age === null || age < SOLD_TO_COMPLETED_DAYS
-  })
-  const projectsCompleted = leads.filter((l) => {
-    if (isCancelledLead(l)) return false
-    if (l.status !== 'completed') return false
-    // Manual completion wins; otherwise age-based threshold applies.
-    if (isManuallyCompleted(l)) return true
-    const age = soldAgeDays(l as Lead & { soldAt?: string })
-    return age !== null && age >= SOLD_TO_COMPLETED_DAYS
-  })
-  const cancelledProjects = leads.filter(isCancelledLead)
+  // Ship #303 — extracted to useVendorLeadStages hook (src/lib/
+  // vendor-lead-stages.ts). The hook owns mockLeads vendor-scope
+  // filter, sentProjects-to-Lead synthesis, leadStatusOverrides
+  // merge, isCancelledLead predicate (#171/#184 lifecycle), manual-
+  // completion-wins-over-age bucketing (#295), and the 5 stage
+  // buckets. Same source-of-truth now powers /vendor dashboard
+  // compact summary row. Pre-#303 this entire derivation lived
+  // inline here; format-SoT-shared-helper #103 trigger met at n=2
+  // consumers (lead-workflow + dashboard preview).
+  const {
+    leads,
+    stages: {
+      new: newLeads,
+      confirmed: confirmedLeads,
+      sold: projectSold,
+      completed: projectsCompleted,
+      cancelled: cancelledProjects,
+    },
+    isCancelledLead,
+  } = useVendorLeadStages()
 
   // Ship #293 — pipelineValue + bookedThisMonth + winRate moved with KPI
   // Row to /vendor (dashboard). activeLeads kept here since the page-
   // header description references it.
-  const activeLeads = leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled')
+  const activeLeads = useMemo(
+    () => leads.filter((l) => l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled'),
+    [leads],
+  )
 
   // Sheet / dialog state
   const [selected, setSelected] = useState<Lead | null>(null)
