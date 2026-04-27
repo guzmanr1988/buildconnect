@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -62,6 +62,19 @@ function isNavGroup(item: NavEntry): item is NavGroup {
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  // Ship #315 — pending-review count badge on the Reviews nav entry.
+  // Reads sentProjects + filters status='sold' AND reviewStatus !==
+  // 'approved'/'flagged' (default-undefined treated as pending per
+  // #314 schema-extension default).
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const pendingReviewCount = useMemo(() => {
+    return sentProjects.filter((p) => {
+      if (p.status !== 'sold') return false
+      if (!(p.saleAmount && p.saleAmount > 0)) return false
+      const status = p.reviewStatus ?? 'pending'
+      return status === 'pending'
+    }).length
+  }, [sentProjects])
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
@@ -125,6 +138,10 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )
         }
+        // Ship #315 — pending-review count badge on /admin/reviews
+        // entry. Special-cased per #103 first-consumer-discipline (n=1
+        // today; generic NavLeaf badge prop deferred to n=2 trigger).
+        const showReviewBadge = item.to === '/admin/reviews' && pendingReviewCount > 0
         return (
           <NavLink key={item.to} to={item.to} end={item.to === '/admin'} onClick={() => onNavigate?.()}>
             {({ isActive }) => (
@@ -133,7 +150,15 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                 isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}>
                 <Icon className="h-4.5 w-4.5 shrink-0" />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {showReviewBadge && (
+                  <span className={cn(
+                    'inline-flex items-center justify-center rounded-full px-2 min-w-[1.25rem] h-5 text-[10px] font-bold',
+                    isActive ? 'bg-primary-foreground text-primary' : 'bg-amber-500 text-white'
+                  )}>
+                    {pendingReviewCount}
+                  </span>
+                )}
               </div>
             )}
           </NavLink>

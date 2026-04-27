@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import { ShieldCheck, Check, Flag, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
@@ -20,6 +20,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import type { SentProject } from '@/stores/projects-store'
+import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 
 // Ship #314 — BuildConnect contract review queue (Phase 1 per kratos
 // dispatch). Surfaces all sold sentProjects with their contract docs
@@ -69,6 +70,13 @@ export default function ReviewsPage() {
   const [approveTarget, setApproveTarget] = useState<SentProject | null>(null)
   const [flagTarget, setFlagTarget] = useState<SentProject | null>(null)
   const [flagNote, setFlagNote] = useState('')
+
+  // Ship #315 — one-time sample-review seed on first /admin/reviews
+  // mount per Rodolfo "im not seen a contract to review sample".
+  // Idempotent via localStorage flag inside maybeSeedSampleReview().
+  useEffect(() => {
+    maybeSeedSampleReview()
+  }, [])
 
   // Ship #314 — review queue surfaces all sold sentProjects regardless
   // of completedAt (admin reviews the SALE event itself, not the
