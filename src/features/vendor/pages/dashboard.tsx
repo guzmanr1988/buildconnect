@@ -163,33 +163,43 @@ export default function VendorDashboard() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
-      {/* Vendor Profile Card */}
+      {/* Vendor Profile Card — Ship #300 mobile fix: previously the
+          avatar + identity + demo-controls all crammed into one row,
+          which pinched the identity-block to ~140px on mobile (name
+          truncated mid-word, badges wrapped to 3 lines, address
+          overflowed without truncate, demo Trash icon squeezed in
+          corner). Fix: identity-row stays single-row; demo-controls
+          drop to their own bottom row on mobile via border-t separator
+          (desktop unchanged — controls inline at far right). Inner
+          text/icon/badge sizing scaled down on mobile only with
+          truncate added to address + contact lines. */}
       <motion.div variants={item}>
         <Card className="rounded-xl">
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-3 sm:gap-4">
               <AvatarInitials initials={vendor.initials} color={vendor.avatar_color} size="lg" />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-bold font-heading truncate">{vendor.company}</h2>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-xl font-bold font-heading truncate">{vendor.company}</h2>
                   {vendor.verified && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                      <BadgeCheck className="h-3.5 w-3.5" />
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium text-primary">
+                      <BadgeCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       Verified
                     </span>
                   )}
-                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 capitalize">
                     {vendor.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {vendor.address}
+                <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1 min-w-0">
+                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                  <span className="truncate">{vendor.address}</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">{vendor.name} &middot; {vendor.phone}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{vendor.name} &middot; {vendor.phone}</p>
               </div>
+              {/* Demo controls — desktop only in the identity row */}
               {demoMode && (
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="hidden sm:flex items-center gap-2 shrink-0">
                   {demoDataHidden && (
                     <Button
                       variant="outline"
@@ -198,8 +208,7 @@ export default function VendorDashboard() {
                       onClick={handleRestoreDemoData}
                       aria-label="Restore demo data"
                     >
-                      <span className="hidden sm:inline">Restore Demo Data</span>
-                      <span className="sm:hidden">Restore</span>
+                      Restore Demo Data
                     </Button>
                   )}
                   <Button
@@ -210,11 +219,37 @@ export default function VendorDashboard() {
                     aria-label="Clear demo data"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Clear Demo Data</span>
+                    Clear Demo Data
                   </Button>
                 </div>
               )}
             </div>
+            {/* Demo controls — mobile only on its own row below border-t */}
+            {demoMode && (
+              <div className="flex sm:hidden items-center justify-end gap-2 mt-3 pt-3 border-t">
+                {demoDataHidden && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={handleRestoreDemoData}
+                    aria-label="Restore demo data"
+                  >
+                    Restore
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/30"
+                  onClick={() => setClearDemoDialogOpen(true)}
+                  aria-label="Clear demo data"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
