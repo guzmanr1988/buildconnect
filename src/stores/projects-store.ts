@@ -156,6 +156,15 @@ interface ProjectsState {
   // immediately. Acceleration of the existing 90d age-based auto-
   // transition; not a status change (still 'sold').
   markCompleted: (id: string) => void
+  // Ship #311 — lead-id-keyed manual-completion override map. Mirrors
+  // existing leadStatusOverrides / leadConfirmedAtByLead patterns so
+  // MOCK_LEADS without sentProject backing still get the manual-
+  // completion transition (markCompleted on sentProject doesn't fire
+  // for MOCK_LEADS — silent-stale-fallback class fix). Bucketing in
+  // vendor-lead-stages.ts reads this OR sp.completedAt for the unified
+  // isManuallyCompleted predicate.
+  leadCompletedAtByLead: Record<string, string>
+  setLeadCompletedAt: (leadId: string, completedAt: string) => void
   assignRep: (id: string, rep: VendorRep) => void
   // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
   // handled via assignRep).
@@ -207,6 +216,7 @@ export const useProjectsStore = create<ProjectsState>()(
       rescheduleRequestsByLead: {},
       leadConfirmedAtByLead: {},
       repAssignedAtByLead: {},
+      leadCompletedAtByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId) => {
         set((state) => {
@@ -279,6 +289,12 @@ export const useProjectsStore = create<ProjectsState>()(
           sentProjects: state.sentProjects.map((p) =>
             p.id === id ? { ...p, completedAt: new Date().toISOString() } : p
           ),
+        }))
+      },
+
+      setLeadCompletedAt: (leadId, completedAt) => {
+        set((state) => ({
+          leadCompletedAtByLead: { ...state.leadCompletedAtByLead, [leadId]: completedAt },
         }))
       },
 

@@ -13,6 +13,13 @@ const DAY_MS = 24 * 60 * 60 * 1000
 interface LeadShape {
   status: string
   soldAt?: string
+  // Ship #311 — manual-completion-aware label resolution. When
+  // completedAt is set (either via sentProject.completedAt #295 or
+  // leadCompletedAtByLead override map), the label flips to the
+  // default "Completed" regardless of soldAt-age. Fixes label-as-
+  // contract violation where vendor clicked Project Completed but
+  // status badge still read "Sold, Active".
+  completedAt?: string
 }
 
 /**
@@ -27,6 +34,10 @@ interface LeadShape {
  */
 export function resolveLeadStatusLabel(lead: LeadShape): string | undefined {
   if (lead.status !== 'completed') return undefined
+  // Ship #311 — manual-completion wins over age-based "Sold, Active"
+  // override. Once vendor marks as completed, label reads "Completed"
+  // (default) immediately.
+  if (lead.completedAt) return undefined
   if (!lead.soldAt) return 'Sold, Active'
   const age = (Date.now() - new Date(lead.soldAt).getTime()) / DAY_MS
   if (age < SOLD_ACTIVE_WINDOW_DAYS) return 'Sold, Active'

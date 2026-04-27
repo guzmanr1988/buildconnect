@@ -66,6 +66,11 @@ export function useVendorLeadStages(): {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  // Ship #311 — manual-completion override map. MOCK_LEADS without
+  // sentProject backing get marked completed via this map; bucketing
+  // + label-derivation read lead.completedAt downstream so the
+  // override-aware value propagates to all consumers transparently.
+  const leadCompletedAtByLead = useProjectsStore((s) => s.leadCompletedAtByLead)
   const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
   const effectiveMockLeads = useEffectiveMockLeads()
   // Gate seeded MOCK_LEADS to the 5 featured mock vendors (v-1..v-5)
@@ -104,9 +109,20 @@ export function useVendorLeadStages(): {
 
   return useMemo(() => {
     const combined: LeadExt[] = [...homeownerLeads, ...mockLeads]
-    const leads: LeadExt[] = combined.map((l) =>
-      leadStatusOverrides[l.id] ? { ...l, status: leadStatusOverrides[l.id] } : l,
-    )
+    const leads: LeadExt[] = combined.map((l) => {
+      const statusOverride = leadStatusOverrides[l.id]
+      const completedOverride = leadCompletedAtByLead[l.id]
+      // Apply override-aware completedAt: prefer existing
+      // (sp.completedAt) when present, fall back to leadCompletedAt
+      // override map (covers MOCK_LEADS without sp backing).
+      const effectiveCompletedAt = l.completedAt ?? completedOverride
+      if (!statusOverride && effectiveCompletedAt === l.completedAt) return l
+      return {
+        ...l,
+        ...(statusOverride ? { status: statusOverride } : {}),
+        completedAt: effectiveCompletedAt,
+      }
+    })
 
     const isCancelledLead = (l: LeadExt): boolean => {
       if (l.status === 'cancelled' || l.status === 'rejected') return true
@@ -153,5 +169,5 @@ export function useVendorLeadStages(): {
       cancelled: cancelledProjects.length,
     }
     return { leads, stages, counts, isCancelledLead }
-  }, [homeownerLeads, mockLeads, leadStatusOverrides, cancellationRequestsByLead])
+  }, [homeownerLeads, mockLeads, leadStatusOverrides, cancellationRequestsByLead, leadCompletedAtByLead])
 }

@@ -61,6 +61,11 @@ export default function VendorLeadWorkflow() {
   // the sentProject; bucketing reads completedAt-presence to override
   // age-based 90d auto-transition.
   const markCompleted = useProjectsStore((s) => s.markCompleted)
+  // Ship #311 — lead-id-keyed manual-completion override; covers
+  // MOCK_LEADS without sentProject backing. Bucketing + label
+  // derivation read effective completedAt downstream so the override
+  // propagates to all consumers transparently.
+  const setLeadCompletedAt = useProjectsStore((s) => s.setLeadCompletedAt)
   // Ship #191 — reschedule request actions + map read. Map-entry read
   // is stable (undefined or RescheduleRequest object) per the banked
   // zustand-selector-stable-reference rule.
@@ -374,8 +379,11 @@ export default function VendorLeadWorkflow() {
     // click protection + acceleration-not-destruction precondition stay
     // intact. Visible only for currently-active sold leads (status
     // 'completed' AND no completedAt yet AND not in cancelled bucket).
-    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
-    const showCompleteButton = lead.status === 'completed' && sp && !sp.completedAt && !isCancelledLead(lead)
+    // Ship #311 — gate now reads lead.completedAt (override-aware via
+    // useVendorLeadStages enrichment) instead of sp.completedAt.
+    // Covers MOCK_LEADS path that previously had button always-hidden
+    // due to sp-missing gate.
+    const showCompleteButton = lead.status === 'completed' && !(lead as Lead & { completedAt?: string }).completedAt && !isCancelledLead(lead)
     return (
       <Card
         className={cn(
@@ -925,19 +933,19 @@ export default function VendorLeadWorkflow() {
                         project completed when clicked project pass from sold
                         to complete status". Gated to currently-active sold
                         projects only (no completedAt yet). Acceleration of
-                        the existing 90d age-based auto-transition. */}
-                    {(() => {
-                      const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                      if (!sp || sp.completedAt) return null
-                      return (
-                        <Button
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => setCompletedDialogOpen(true)}
-                        >
-                          <Check className="h-4 w-4 mr-1.5" /> Project Completed
-                        </Button>
-                      )
-                    })()}
+                        the existing 90d age-based auto-transition.
+                        Ship #311 — gate now reads selected.completedAt
+                        (override-aware via useVendorLeadStages enrichment)
+                        instead of sp.completedAt. Covers MOCK_LEADS path
+                        that previously had button always-hidden. */}
+                    {!(selected as Lead & { completedAt?: string }).completedAt && (
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => setCompletedDialogOpen(true)}
+                      >
+                        <Check className="h-4 w-4 mr-1.5" /> Project Completed
+                      </Button>
+                    )}
                     {(() => {
                       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                       if (!sp) return null
@@ -1422,6 +1430,11 @@ export default function VendorLeadWorkflow() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={() => {
                 if (selected) {
+                  // Ship #311 — ALWAYS fire override-map setter (covers
+                  // MOCK_LEADS without sentProject backing); preserve
+                  // sentProject.completedAt write when sp exists for
+                  // persistence parity.
+                  setLeadCompletedAt(selected.id, new Date().toISOString())
                   const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                   if (sp) markCompleted(sp.id)
                 }
