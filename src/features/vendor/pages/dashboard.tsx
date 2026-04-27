@@ -263,39 +263,45 @@ export default function VendorDashboard() {
 
       {/* Ship #294 — Performance Stats moved from /vendor/profile per
           Rodolfo "move service categories and performance stats to
-          dashboard". Quality metrics complement KPI Row pipeline metrics. */}
+          dashboard". Quality metrics complement KPI Row pipeline metrics.
+          Ship #299 — mobile layout fix: 3-col grid on mobile (was
+          1-col stacking 3 tall rows ~210px tall); vertical-stack per
+          cell (icon-top + value + label) at mobile, horizontal flex
+          on sm+. Mirrors KPI Row 2-col mobile pattern; eliminates the
+          empty-right-side dangling text problem on the prior stacked
+          rows. */}
       <motion.div variants={item}>
         <Card className="rounded-xl">
           <CardHeader>
             <CardTitle className="font-heading text-lg">Performance Stats</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-3">
-                  <Star className="h-6 w-6 text-amber-500" />
+            <div className="grid grid-cols-3 gap-3 sm:gap-6">
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+                <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-2 sm:p-3 shrink-0">
+                  <Star className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.rating}</p>
-                  <p className="text-xs text-muted-foreground">Average Rating</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-primary/10 p-3">
-                  <MessageSquare className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.total_reviews}</p>
-                  <p className="text-xs text-muted-foreground">Total Reviews</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold font-heading">{vendor.rating}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Average Rating</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-3">
-                  <Clock className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+                <div className="rounded-xl bg-primary/10 p-2 sm:p-3 shrink-0">
+                  <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold font-heading">{vendor.response_time}</p>
-                  <p className="text-xs text-muted-foreground">Avg Response Time</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold font-heading">{vendor.total_reviews}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Total Reviews</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+                <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/30 p-2 sm:p-3 shrink-0">
+                  <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700 dark:text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold font-heading">{vendor.response_time}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Avg Response Time</p>
                 </div>
               </div>
             </div>
