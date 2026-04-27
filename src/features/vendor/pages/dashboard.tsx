@@ -287,6 +287,36 @@ export default function VendorDashboard() {
         </Card>
       </motion.div>
 
+      {/* Ship #305 — Lead Workflow at-a-glance block. Relocated from
+          inside Performance Stats card (#303 original placement) to
+          standalone position directly under Vendor Profile per Rodolfo
+          "move leadflow under vendor info". Standalone block with
+          subtle bg-muted/30 wrapper for visual cohesion without
+          competing with neighbor Card primitives. Same source-of-truth
+          via useVendorLeadStages hook (#103 single-extraction
+          preserved). */}
+      <motion.div variants={item}>
+        <div className="rounded-xl bg-muted/30 dark:bg-muted/10 px-3 py-3 sm:px-4 sm:py-4">
+          <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Lead Workflow</p>
+          <div className="grid grid-cols-5 gap-2 sm:gap-3">
+            {LEAD_STAGES.map((stage) => {
+              const StageIcon = stage.icon
+              return (
+                <Link
+                  key={stage.key}
+                  to="/vendor/lead-workflow"
+                  className="group flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-background/60 transition"
+                  aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
+                >
+                  <StageIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition" />
+                  <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      </motion.div>
+
       {/* Ship #294 — Service Categories moved from /vendor/profile per
           Rodolfo "move service categories and performance stats to
           dashboard". Read-only display; vendor edits via Request Info
@@ -373,39 +403,17 @@ export default function VendorDashboard() {
                 </div>
               </div>
             </div>
-            {/* Ship #303 — Lead Workflow at-a-glance: icons + counts only,
-                per Rodolfo "at the bottom of perfomance stats add the
-                lead workflow only icons and numbers for info". 5 cells
-                map to the 5 stage tiles on /vendor/lead-workflow (same
-                source-of-truth via useVendorLeadStages). Each cell is a
-                clickable Link to the full Lead Workflow page. */}
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Lead Workflow</p>
-              <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                {LEAD_STAGES.map((stage) => {
-                  const StageIcon = stage.icon
-                  return (
-                    <Link
-                      key={stage.key}
-                      to="/vendor/lead-workflow"
-                      className="group flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-muted/50 transition"
-                      aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
-                    >
-                      <StageIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary transition" />
-                      <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </motion.div>
 
       {/* Ship #304 — "View Lead Workflow ->" CTA removed per Rodolfo
           "remove view lead workflow letters and arrow". Redundant with
-          the 5-cell icon+count row inside Performance Stats card (added
-          #303) which already links every stage to /vendor/lead-workflow. */}
+          the Lead Workflow icon+count row (originally inside Performance
+          Stats per #303; relocated standalone above per #305).
+          Ship #305 — Lead Workflow row moved per Rodolfo "move
+          leadflow under vendor info" — now sits between Vendor Profile
+          Card and Performance Stats Card. See block above this comment. */}
 
       {/* Clear Demo Data confirmation — demo-mode gated (VITE_DEMO_MODE). */}
       <Dialog open={clearDemoDialogOpen} onOpenChange={setClearDemoDialogOpen}>
