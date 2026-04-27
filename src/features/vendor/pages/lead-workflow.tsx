@@ -6,7 +6,7 @@ import {
   Inbox, CalendarCheck, MapPin,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil,
+  UserCheck, Pencil, Info, Upload, FileText,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorLeadStages, STAGE_COLOR_BY_KEY } from '@/lib/vendor-lead-stages'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
+import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
@@ -182,6 +183,12 @@ export default function VendorLeadWorkflow() {
   const [vendorCounterOpen, setVendorCounterOpen] = useState(false)
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
   const [saleAmount, setSaleAmount] = useState('')
+  // Ship #313 — contract requirement on Mark as Sold per Rodolfo
+  // "make it a requirement that vendor needs to upload their contract".
+  // Dialog-local state until Confirm Sale; cleared on close.
+  const [contractAmount, setContractAmount] = useState('')
+  const [contractFile, setContractFile] = useState<{ filename: string; dataUrl: string } | null>(null)
+  const addVendorHomeownerDoc = useVendorHomeownerDocsStore((s) => s.addDoc)
   // Ship #295 — Project Completed confirm dialog. Lighter-confirm shape
   // (not full destructive-four-refinement) since the action is
   // acceleration of automatic 90d transition, not destruction.
@@ -1347,13 +1354,39 @@ export default function VendorLeadWorkflow() {
         </DialogContent>
       </Dialog>
 
-      {/* Mark as Sold Dialog */}
-      <Dialog open={soldDialogOpen} onOpenChange={setSoldDialogOpen}>
+      {/* Mark as Sold Dialog — Ship #313 added: notice text +
+          mandatory contract upload + contract amount match validation
+          per Rodolfo "make it a requirement that vendor needs to upload
+          their contract make it mandatory and vendor contract needs to
+          match the sale amount and put a note that all sold active
+          will be revised with the contract by buildconnect". Lighter-
+          confirm shape preserved per #107 (validation gates + notice
+          ARE the protective layer; four-refinement preconditions not
+          met). */}
+      <Dialog
+        open={soldDialogOpen}
+        onOpenChange={(o) => {
+          setSoldDialogOpen(o)
+          if (!o) {
+            setContractAmount('')
+            setContractFile(null)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading">Mark as Sold</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Ship #313 — BuildConnect-review notice. Top-of-dialog
+                placement so vendor sees BEFORE entering data. */}
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 flex items-start gap-2">
+              <Info className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-foreground/90">
+                All Sold Active deals will be reviewed against the contract by BuildConnect.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Sale Amount</label>
               <div className="relative">
@@ -1367,6 +1400,68 @@ export default function VendorLeadWorkflow() {
                 />
               </div>
             </div>
+
+            {/* Ship #313 — Contract Amount field. Client-side equality
+                check against Sale Amount per Decision A. */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contract Amount <span className="text-destructive">*</span></label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <input
+                  type="number"
+                  value={contractAmount}
+                  onChange={(e) => setContractAmount(e.target.value)}
+                  placeholder="Enter total contract amount"
+                  className="w-full h-10 pl-7 pr-3 rounded-lg border border-input bg-background text-base"
+                />
+              </div>
+              {saleAmount && contractAmount && Number(saleAmount) > 0 && Number(contractAmount) > 0 && Number(saleAmount) !== Number(contractAmount) && (
+                <p className="text-xs text-destructive">Contract amount must match Sale Amount.</p>
+              )}
+            </div>
+
+            {/* Ship #313 — mandatory contract file upload. Persists to
+                vendor-homeowner-documents-store on Confirm Sale (#103
+                SoT reuse — addDoc with category='contract'). */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contract File <span className="text-destructive">*</span></label>
+              {contractFile ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{contractFile.filename}</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setContractFile(null)}
+                    aria-label="Remove contract file"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 h-10 rounded-lg border border-dashed border-input bg-muted/20 px-3 text-sm text-muted-foreground cursor-pointer hover:bg-muted/40">
+                  <Upload className="h-3.5 w-3.5" />
+                  Choose Contract File
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = () => setContractFile({ filename: file.name, dataUrl: reader.result as string })
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </label>
+              )}
+              <p className="text-[10px] text-muted-foreground">PDF or image (JPG / PNG / WEBP).</p>
+            </div>
+
             {saleAmount && Number(saleAmount) > 0 && (
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -1387,7 +1482,12 @@ export default function VendorLeadWorkflow() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSoldDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!saleAmount || Number(saleAmount) <= 0}
+              disabled={
+                !saleAmount || Number(saleAmount) <= 0 ||
+                !contractAmount || Number(contractAmount) <= 0 ||
+                Number(saleAmount) !== Number(contractAmount) ||
+                !contractFile
+              }
               onClick={() => {
                 if (selected) {
                   // Always flip the lead-status override so mock-leads move too.
@@ -1396,8 +1496,23 @@ export default function VendorLeadWorkflow() {
                   if (sp) {
                     markProjectSold(sp.id, Number(saleAmount))
                   }
+                  // Ship #313 — persist contract to vendor-homeowner-
+                  // documents-store under category='contract'. Existing
+                  // canonical doc-storage; admin god-view + vendor-
+                  // homeowner-detail page already render this.
+                  if (contractFile && vendor) {
+                    addVendorHomeownerDoc({
+                      vendor_id: vendor.id,
+                      homeowner_email: selected.email,
+                      category: 'contract',
+                      filename: contractFile.filename,
+                      dataUrl: contractFile.dataUrl,
+                    })
+                  }
                 }
                 setSoldDialogOpen(false)
+                setContractAmount('')
+                setContractFile(null)
                 // Also close the lead-detail modal so the vendor returns to the
                 // list view with the lead now in the Sold column (kratos msg
                 // 1776636334448). Matches the Confirm / Reject / Reschedule
