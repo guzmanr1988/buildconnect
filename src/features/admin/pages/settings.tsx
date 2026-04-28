@@ -16,6 +16,12 @@ import { Separator } from '@/components/ui/separator'
 import { PageHeader } from '@/components/shared/page-header'
 import { MOCK_SETTINGS } from '@/lib/mock-data'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+import {
+  FEATURE_FLAGS_INVENTORY,
+  FEATURE_CATEGORY_LABEL,
+  FEATURE_CATEGORY_ORDER,
+} from '@/lib/feature-flags-inventory'
 import type { AppSettings } from '@/types'
 
 const fadeUp = {
@@ -32,6 +38,9 @@ export default function SettingsPage() {
   // Ship #246 — Match Radius binding from admin-moderation-store.
   const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
   const setMatchRadius = useAdminModerationStore((s) => s.setMatchRadius)
+  // Ship #325 — per-feature admin-toggleable flags.
+  const featureFlags = useFeatureFlagsStore((s) => s.flags)
+  const setFeatureFlag = useFeatureFlagsStore((s) => s.setFlag)
 
   // Extended settings state
   const [ext, setExt] = useState({
@@ -377,38 +386,99 @@ export default function SettingsPage() {
         </Card>
       </motion.div>
 
-      {/* Feature Flags */}
+      {/* Ship #325 — Feature Toggles. Replaces the prior single-Card
+          orphan-switch list with a per-feature inventory-driven section
+          on top + a Legacy section below for the AppSettings display-only
+          mocks. The Phase 2 toggle in particular was orphan (no consumer)
+          so flipping it did nothing — note this honestly per #94 in the
+          Legacy header so admin understands the difference. */}
       <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible">
         <Card className="rounded-xl shadow-sm hover:shadow-md transition">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-4 w-4 text-primary" />
-              Feature Flags
+              Feature Toggles
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {toggles.map((t) => {
-                const IconComp = t.icon
+          <CardContent className="space-y-6">
+            {/* Per-feature releases — grouped by category. Each toggle
+                lands on a real feature as that feature gets wired up to
+                its consumer surface; defaults OFF until ready. */}
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Feature Releases
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Switch on individual features as they become ready. Each one stays off until it's actually wired up to its surface.
+                </p>
+              </div>
+              {FEATURE_CATEGORY_ORDER.map((category) => {
+                const flagsInCategory = FEATURE_FLAGS_INVENTORY.filter((f) => f.category === category)
+                if (flagsInCategory.length === 0) return null
                 return (
-                  <div key={t.key} className="flex items-start justify-between gap-4 rounded-lg border border-border/50 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-lg bg-muted p-2 mt-0.5">
-                        <IconComp className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{t.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
-                      </div>
+                  <div key={category} className="space-y-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                      {FEATURE_CATEGORY_LABEL[category]}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {flagsInCategory.map((flag) => (
+                        <div key={flag.key} className="flex items-start justify-between gap-4 rounded-lg border border-border/50 p-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{flag.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{flag.description}</p>
+                          </div>
+                          <Switch
+                            aria-label={flag.label}
+                            checked={!!featureFlags[flag.key]}
+                            onCheckedChange={(val: boolean) => setFeatureFlag(flag.key, val)}
+                          />
+                        </div>
+                      ))}
                     </div>
-                    <Switch
-                      aria-label={t.label}
-                      checked={settings[t.key] as boolean}
-                      onCheckedChange={(val: boolean) => setSettings((prev) => ({ ...prev, [t.key]: val }))}
-                    />
                   </div>
                 )
               })}
+            </div>
+
+            <Separator />
+
+            {/* Legacy AppSettings toggles — kept for back-compat reference.
+                phase2_enabled in particular has no consumer; per-service
+                Coming Soon gating is per-service via catalog.phase2 in
+                /admin/products. Cleanup planned in a future ship. */}
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Platform Modes (Legacy)
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Display-only toggles from earlier prototyping. The Phase 2 toggle here doesn't gate anything — per-service Coming Soon control lives on individual services in /admin/products. Listed for reference; cleanup planned.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {toggles.map((t) => {
+                  const IconComp = t.icon
+                  return (
+                    <div key={t.key} className="flex items-start justify-between gap-4 rounded-lg border border-border/50 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-lg bg-muted p-2 mt-0.5">
+                          <IconComp className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{t.label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+                        </div>
+                      </div>
+                      <Switch
+                        aria-label={t.label}
+                        checked={settings[t.key] as boolean}
+                        onCheckedChange={(val: boolean) => setSettings((prev) => ({ ...prev, [t.key]: val }))}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>
