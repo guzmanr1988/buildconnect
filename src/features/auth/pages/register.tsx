@@ -236,7 +236,32 @@ export function RegisterPage() {
             ...(data.company ? { company: data.company } : {}),
           })
         } catch (err) {
+          // Ship #322 Phase B Part 2 — defensive+corrective mask-fix per
+          // banked feedback_defensive_plus_corrective_pairing #92.
+          // Apollo probe-275 evidence: when handle_new_user trigger silent-
+          // fails (search_path / RLS / migration-drift), auth.users row
+          // exists but profiles row never inserts → PATCH returns 406 /
+          // PGRST116. Pre-#322 catch silently swallowed the error → outer
+          // flow continued opening payment dialog → spinner hangs forever
+          // (looks-like-success-is-actually-not-success class).
+          //
+          // Cause-fix lives in supabase/migrations/014_fix_handle_new_user_
+          // search_path.sql (re-pin search_path on the trigger function).
+          // This mask-fix surfaces the failure to the user with a friendly
+          // error + resets all the gate-state (spinner OFF, payment dialog
+          // CLOSED, form usable for retry).
+          //
+          // Per #94 truthfulness: vendor needs to know signup partially
+          // failed even though Supabase auth.users created — re-attempt
+          // is risky (auth user already exists; may rate-limit or duplicate)
+          // so we direct to support rather than auto-retry.
           console.error('[register] profile patch failed:', err)
+          const msg = 'Signup partially failed — please contact support. (Your auth account was created but your profile setup did not complete.)'
+          setFormError(msg)
+          toast.error(msg)
+          setIsLoading(false)
+          setPaymentDialogOpen(false)
+          return
         }
       }
       // For homeowners: AuthBootstrap hydrates, useEffect navigates to /home.
