@@ -959,8 +959,11 @@ export default function VendorLeadWorkflow() {
                 </div>
               </div>
 
-              {/* Appointment */}
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+              {/* Appointment — mobile-only slot. Ship #323 PC-only refinement:
+                  mobile view preserved (left col single-column stack); PC view
+                  relocates Appointment to right col bottom (sibling block below
+                  with `hidden sm:block`). */}
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2 sm:hidden">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
                 <div className="flex items-center gap-2 text-sm text-foreground/90">
                   <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -968,7 +971,7 @@ export default function VendorLeadWorkflow() {
                 </div>
               </div>
               </div>
-              {/* RIGHT COLUMN: Price + Actions (operations side) */}
+              {/* RIGHT COLUMN: Price + Actions + Appointment(PC) (operations side) */}
               <div className="space-y-3">
               {/* Mobile-only Separator — preserves the original visual
                   break between Appointment and Price on mobile portrait
@@ -1282,6 +1285,22 @@ export default function VendorLeadWorkflow() {
                     </Button>
                   </>
                 )}
+              </div>
+              {/* Appointment — PC-only slot. Ship #323: paired below the
+                  Actions container so on PC (sm:+) the appointment time
+                  sits directly under Reschedule (visual association
+                  between the action and the data it modifies). Sibling
+                  mobile-only block lives in the left column with
+                  `sm:hidden` so the mobile single-column stack is
+                  unchanged. Always rendered for all 4 lead states
+                  (pending/confirmed/completed/rejected) — Appointment-
+                  visibility preserved across the matrix. */}
+              <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
+                <div className="flex items-center gap-2 text-sm text-foreground/90">
+                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
+                </div>
               </div>
               </div>
               </div>
