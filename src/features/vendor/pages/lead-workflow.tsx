@@ -1182,10 +1182,19 @@ export default function VendorLeadWorkflow() {
                 )
               })()}
 
-              {/* Price */}
+              {/* Price — Ship #342: reuse #338 saleAmountByLeadId Map
+                  fallback at this Lead Detail Modal Price chip render-site
+                  (consumer-render-layer; vendor-lead-stages.ts UNTOUCHED
+                  per CHAIN IS GOD). Pre-#342 the chip rendered selected.value
+                  which is hardcoded 0 in the chain-synthesis (per #319/#320
+                  + #329-revert-trauma kept-untouched). Fallback to
+                  sp.saleAmount via the existing useMemo Map matches sale-info
+                  + tile-preview behavior. */}
               <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                 <span className="text-sm text-muted-foreground font-medium">Price</span>
-                <span className="text-lg font-bold font-heading text-foreground">{fmt(selected.value)}</span>
+                <span className="text-lg font-bold font-heading text-foreground">
+                  {fmt(saleAmountByLeadId[selected.id] ?? selected.value)}
+                </span>
               </div>
 
               {/* Actions */}

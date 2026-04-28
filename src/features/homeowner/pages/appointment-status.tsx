@@ -82,7 +82,13 @@ export function AppointmentStatusPage() {
       homeowner_id: 'ho-current',
       vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
       project: sentProject.item.serviceName,
-      value: 0,
+      // Ship #342 — bridge sp.saleAmount → lead.value at this synthesis
+      // site (homeowner-side appointment-status own-synth, not chain
+      // primitive). Matches the lead-inbox.tsx fix pattern from #338.
+      // Per banked feedback_silent_undefined_field_mismatch sibling-class:
+      // hardcoded zero silently degrades the homeowner-side Price display
+      // to $0; bridge gap at synthesis without modifying chain.
+      value: sentProject.saleAmount ?? 0,
       status: sentProjectStatusMap[sentProject.status] ?? 'pending',
       slot: sentProject.sentAt,
       permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),
