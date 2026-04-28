@@ -1,15 +1,24 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
-import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Plus, Ban, Sparkles, RotateCcw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/shared/page-header'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { EmptyState } from '@/components/shared/empty-state'
+import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useVendorEventsStore, type VendorEventType } from '@/stores/vendor-events-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
@@ -50,14 +59,37 @@ const MONTH_NAMES = [
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function VendorCalendar() {
+  const navigate = useNavigate()
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const requestReschedule = useProjectsStore((s) => s.requestReschedule)
+  const updateBooking = useProjectsStore((s) => s.updateBooking)
   const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+  // Ship #339 Phase A — vendor-events parallel data layer (PTO + custom).
+  const eventsByVendor = useVendorEventsStore((s) => s.eventsByVendor)
+  const addVendorEvent = useVendorEventsStore((s) => s.addEvent)
+  const vendorEvents = useMemo(
+    () => eventsByVendor[VENDOR_ID] ?? [],
+    [eventsByVendor, VENDOR_ID],
+  )
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const now = new Date()
   const [currentMonth, setCurrentMonth] = useState(now.getMonth())
   const [currentYear, setCurrentYear] = useState(now.getFullYear())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  // Ship #339 Phase A — Add Event dialog state.
+  const [addEventOpen, setAddEventOpen] = useState(false)
+  const [eventForm, setEventForm] = useState<{
+    type: VendorEventType
+    date: string
+    time: string
+    label: string
+    notes: string
+  }>({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+  // Ship #339 Phase A — Reschedule picker (cross-callable from
+  // calendar lead-card per #103 SoT shared-component).
+  const [rescheduleLeadId, setRescheduleLeadId] = useState<string | null>(null)
+  const [rescheduleSentProjectId, setRescheduleSentProjectId] = useState<string | null>(null)
 
   const confirmedProjectLeads: Lead[] = useMemo(() => sentProjects
     .filter((p) => p.status === 'approved')
@@ -109,6 +141,18 @@ export default function VendorCalendar() {
     return map
   }, [leads])
 
+  // Ship #339 Phase A — vendor-events grouped by date for grid rendering
+  // + selected-day detail. Same shape as leadsByDate per cross-file-idiom-
+  // consistency.
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, typeof vendorEvents> = {}
+    for (const evt of vendorEvents) {
+      if (!map[evt.date]) map[evt.date] = []
+      map[evt.date].push(evt)
+    }
+    return map
+  }, [vendorEvents])
+
   const daysInMonth = getDaysInMonth(currentYear, currentMonth)
   const firstDay = getFirstDayOfMonth(currentYear, currentMonth)
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -147,10 +191,32 @@ export default function VendorCalendar() {
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <PageHeader title="Calendar" description="Your scheduled appointments">
-        <Badge variant="outline" className="text-xs">
-          <CalendarIcon className="h-3 w-3 mr-1" />
-          {leads.length} appointments
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            <CalendarIcon className="h-3 w-3 mr-1" />
+            {leads.length} appointments
+          </Badge>
+          {/* Ship #339 Phase A — Add Event button per Rodolfo "allow vendor
+              to add calendar events to block day or add event". */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => {
+              setEventForm({
+                type: 'block_day',
+                date: selectedDate ?? todayStr,
+                time: '',
+                label: '',
+                notes: '',
+              })
+              setAddEventOpen(true)
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Event
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Calendar Grid */}
@@ -190,9 +256,17 @@ export default function VendorCalendar() {
                 const day = i + 1
                 const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                 const dayLeads = leadsByDate[dateStr] || []
+                const dayEvents = eventsByDate[dateStr] || []
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selectedDate
                 const hasAppts = dayLeads.length > 0
+                const hasEvents = dayEvents.length > 0
+                // Ship #339 Phase A — block_day dimming: when vendor marks a
+                // day blocked, cell renders with line-through + muted bg
+                // so the unavailability is visible at-a-glance per banked
+                // feedback_label_as_contract.
+                const isBlocked = dayEvents.some((e) => e.type === 'block_day')
+                const hasCustomEvent = dayEvents.some((e) => e.type === 'custom')
 
                 return (
                   <button
@@ -205,13 +279,15 @@ export default function VendorCalendar() {
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : isToday
                           ? 'bg-primary/10 text-primary font-bold'
-                          : hasAppts
-                            ? 'bg-muted/60 hover:bg-muted'
-                            : 'hover:bg-muted/40'
+                          : isBlocked
+                            ? 'bg-zinc-200/60 dark:bg-zinc-800/40 text-muted-foreground line-through'
+                            : hasAppts
+                              ? 'bg-muted/60 hover:bg-muted'
+                              : 'hover:bg-muted/40'
                     )}
                   >
                     <span className={cn('text-sm', hasAppts && !isSelected && 'font-semibold')}>{day}</span>
-                    {hasAppts && (
+                    {(hasAppts || hasEvents) && (
                       <div className="flex gap-0.5 mt-0.5">
                         {dayLeads.slice(0, 3).map((l) => (
                           <span
@@ -222,7 +298,16 @@ export default function VendorCalendar() {
                             )}
                           />
                         ))}
-                        {dayLeads.length > 3 && (
+                        {hasCustomEvent && (
+                          <span
+                            className={cn(
+                              'h-1 w-1 rounded-full',
+                              isSelected ? 'bg-white/70' : 'bg-violet-500',
+                            )}
+                            aria-label="Vendor event"
+                          />
+                        )}
+                        {dayLeads.length + (hasCustomEvent ? 1 : 0) > 3 && (
                           <span className={cn('text-[7px] leading-none', isSelected ? 'text-white/70' : 'text-muted-foreground')}>+</span>
                         )}
                       </div>
@@ -245,19 +330,74 @@ export default function VendorCalendar() {
           <h3 className="text-sm font-semibold text-muted-foreground px-1">
             {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </h3>
-          {selectedLeads.length === 0 ? (
+          {/* Ship #339 Phase A — vendor-events for the selected date,
+              rendered before leads. Block-day banner + custom-event-cards. */}
+          {(eventsByDate[selectedDate] ?? []).map((evt) => (
+            <Card
+              key={evt.id}
+              className={cn(
+                'rounded-xl shadow-sm border-l-4',
+                evt.type === 'block_day'
+                  ? 'border-l-zinc-500 bg-zinc-50/60 dark:bg-zinc-950/30'
+                  : 'border-l-violet-500 bg-violet-50/60 dark:bg-violet-950/30',
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  {evt.type === 'block_day' ? (
+                    <Ban className="h-4 w-4 text-zinc-600 dark:text-zinc-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-semibold">{evt.label}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px] uppercase tracking-wider',
+                          evt.type === 'block_day' ? 'border-zinc-400/60' : 'border-violet-400/60',
+                        )}
+                      >
+                        {evt.type === 'block_day' ? 'Blocked' : 'Event'}
+                      </Badge>
+                    </div>
+                    {evt.time && (
+                      <p className="text-xs text-muted-foreground">{evt.time}</p>
+                    )}
+                    {evt.notes && (
+                      <p className="text-xs text-muted-foreground mt-1">{evt.notes}</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
+          {selectedLeads.length === 0 && (eventsByDate[selectedDate] ?? []).length === 0 ? (
             <Card className="rounded-xl shadow-sm">
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
                 No appointments on this day
               </CardContent>
             </Card>
           ) : (
-            selectedLeads.map((lead) => (
+            selectedLeads.map((lead) => {
+              // Ship #339 Phase A — homeowner-id resolution from sentProject
+              // (primary) per banked Q5 lean a. Legacy fallback (email)
+              // deferred to Phase B.
+              const sp = sentProjects.find(
+                (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
+              )
+              const homeownerId = sp?.homeowner_id ?? lead.homeowner_id
+              const cardClickable = !!homeownerId
+              return (
               <Card
                 key={lead.id}
+                onClick={cardClickable ? () => navigate(`/vendor/homeowners/${encodeURIComponent(homeownerId!)}`) : undefined}
                 className={cn(
                   'rounded-xl shadow-sm hover:shadow-md transition border-l-4',
-                  STATUS_COLORS[lead.status]
+                  STATUS_COLORS[lead.status],
+                  cardClickable && 'cursor-pointer',
                 )}
               >
                 <CardContent className="p-4">
@@ -277,6 +417,29 @@ export default function VendorCalendar() {
                         <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span className="text-xs text-muted-foreground truncate">{lead.address}</span>
                       </div>
+                      {/* Ship #339 Phase A — inline Reschedule button per
+                          Rodolfo "the same feature that i have on vendor
+                          workflow add it to calendar so i can reschedule
+                          a customer from the calendar". stopPropagation
+                          so the card-body click (homeowner-detail nav)
+                          doesn't fire when this button is tapped. */}
+                      {(lead.status === 'confirmed' || lead.status === 'rescheduled') && (
+                        <div className="pl-6 pt-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setRescheduleLeadId(lead.id)
+                              setRescheduleSentProjectId(sp?.id ?? null)
+                            }}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Reschedule
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-muted-foreground">{lead.id}</p>
@@ -284,7 +447,8 @@ export default function VendorCalendar() {
                   </div>
                 </CardContent>
               </Card>
-            ))
+              )
+            })
           )}
         </motion.div>
       )}
@@ -297,6 +461,140 @@ export default function VendorCalendar() {
           description="Scheduled appointments will appear here."
         />
       )}
+
+      {/* Ship #339 Phase A — Add Event dialog. Vendor enters block-day
+          OR custom event; on Confirm, addVendorEvent fires + dialog
+          closes. */}
+      <Dialog
+        open={addEventOpen}
+        onOpenChange={(o) => {
+          setAddEventOpen(o)
+          if (!o) {
+            setEventForm({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Add Calendar Event</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm">Type</Label>
+              <Select
+                value={eventForm.type}
+                onValueChange={(v) => setEventForm((f) => ({ ...f, type: (v as VendorEventType) }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="block_day">Block day (out of office)</SelectItem>
+                  <SelectItem value="custom">Custom event</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">Date</Label>
+              <Input
+                type="date"
+                value={eventForm.date}
+                onChange={(e) => setEventForm((f) => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            {eventForm.type === 'custom' && (
+              <div className="space-y-2">
+                <Label className="text-sm">Time</Label>
+                <Input
+                  type="time"
+                  value={eventForm.time}
+                  onChange={(e) => setEventForm((f) => ({ ...f, time: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label className="text-sm">Label <span className="text-destructive">*</span></Label>
+              <Input
+                value={eventForm.label}
+                onChange={(e) => setEventForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder={eventForm.type === 'block_day' ? 'e.g. Out of office' : 'e.g. Team meeting'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">Notes</Label>
+              <Textarea
+                value={eventForm.notes}
+                onChange={(e) => setEventForm((f) => ({ ...f, notes: e.target.value }))}
+                rows={2}
+                placeholder="Optional context"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddEventOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!eventForm.date.trim() || !eventForm.label.trim()}
+              onClick={() => {
+                addVendorEvent({
+                  vendor_id: VENDOR_ID,
+                  type: eventForm.type,
+                  date: eventForm.date,
+                  time: eventForm.type === 'custom' ? eventForm.time : undefined,
+                  label: eventForm.label.trim(),
+                  notes: eventForm.notes.trim() || undefined,
+                })
+                setAddEventOpen(false)
+                setEventForm({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+                toast.success(eventForm.type === 'block_day' ? 'Day blocked' : 'Event added')
+              }}
+            >
+              Add Event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ship #339 Phase A — ReschedulePickerDialog cross-callable from
+          calendar inline Reschedule button per #103 SoT shared-component
+          (n=2 consumers post-#339: lead-workflow + this). Vendor
+          requestReschedule fires post-confirm; updates booking + emits
+          reschedule entity for homeowner approval. */}
+      {rescheduleLeadId && (() => {
+        const lead = leads.find((l) => l.id === rescheduleLeadId)
+        if (!lead) return null
+        const currentDate = lead.slot.split('T')[0]
+        const currentTime = lead.slot.split('T')[1]?.slice(0, 5) ?? ''
+        return (
+          <ReschedulePickerDialog
+            open={!!rescheduleLeadId}
+            onOpenChange={(o) => {
+              if (!o) {
+                setRescheduleLeadId(null)
+                setRescheduleSentProjectId(null)
+              }
+            }}
+            mode="request"
+            currentDate={currentDate}
+            currentTime={currentTime}
+            otherPartyLabel="Homeowner"
+            onSubmit={(proposedDate, proposedTime, reason) => {
+              if (rescheduleSentProjectId) {
+                updateBooking(rescheduleSentProjectId, { date: proposedDate, time: proposedTime })
+              }
+              requestReschedule(
+                lead.id,
+                'vendor',
+                proposedDate,
+                proposedTime,
+                currentDate,
+                currentTime,
+                reason,
+              )
+              toast.success('Reschedule proposal sent to homeowner.')
+              setRescheduleLeadId(null)
+              setRescheduleSentProjectId(null)
+            }}
+          />
+        )
+      })()}
     </motion.div>
   )
 }
