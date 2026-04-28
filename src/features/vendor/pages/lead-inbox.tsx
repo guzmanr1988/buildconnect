@@ -87,7 +87,13 @@ export default function LeadInbox() {
       homeowner_name: p.homeowner?.name || 'New Customer',
       project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
-      value: 0,
+      // Ship #338 — bridge sp.saleAmount → lead.value at this synthesis
+      // site so the Projects-page row preview shows the actual sale
+      // amount (was hardcoded 0 since the chain-bootstrap; cite-divergence
+      // sub-pattern per banked feedback_silent_undefined_field_mismatch).
+      // Consumer-mapping fix (lead-inbox owns its own synthesis); not
+      // chain-touching per CHAIN IS GOD.
+      value: p.saleAmount ?? 0,
       address: p.homeowner?.address || 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',

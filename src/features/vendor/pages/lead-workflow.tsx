@@ -172,6 +172,26 @@ export default function VendorLeadWorkflow() {
     [leads],
   )
 
+  // Ship #338 — bridge sp.saleAmount → render-time at tile-display sites.
+  // Pre-#338 the tile-preview rendered fmt(lead.value) which was 0
+  // because vendor-lead-stages.ts hardcodes value: 0 in the synthesis
+  // (chain primitive; intentionally untouched per CHAIN IS GOD post-#329
+  // revert-trauma). Consumer-render-layer fallback bridges the
+  // cite-divergence at the display-site without modifying the chain.
+  // useMemo Map keyed by lead.id ('L-XXXX' format) so per-tile lookup
+  // is O(1) and the map computes once per sentProjects mutation.
+  const saleAmountByLeadId = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of sentProjects) {
+      if (!p || typeof p.id !== 'string') continue
+      if (p.saleAmount && p.saleAmount > 0) {
+        const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
+        map[leadId] = p.saleAmount
+      }
+    }
+    return map
+  }, [sentProjects])
+
   // Sheet / dialog state
   const [selected, setSelected] = useState<Lead | null>(null)
   // Ship #238 — capture-first state for sub-dialog handlers (reschedule +
@@ -457,7 +477,7 @@ export default function VendorLeadWorkflow() {
                   {lead.project.split(' — ')[0]}
                 </p>
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  <span className="text-sm font-bold">{fmt(lead.value)}</span>
+                  <span className="text-sm font-bold">{fmt(saleAmountByLeadId[lead.id] ?? lead.value)}</span>
                   <StatusBadge
                     status={lead.status}
                     label={
