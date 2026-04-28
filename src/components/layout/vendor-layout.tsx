@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
@@ -45,26 +45,61 @@ const navItems = [
 function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   // Ship #328 — nav-badges per Rodolfo "in projects how the number of
   // projects next to the name and on lead workflow show only new lead
-  // number next to the name". Counts read from useVendorLeadStages
-  // shared helper (#103 SoT — same hook backs the lead-workflow tile
-  // counts + Performance Stats lead-flow row, so badge counts stay in
-  // sync with on-page tile counts automatically).
-  // - Projects badge: total leads count (all of vendor's projects in
-  //   pipeline regardless of stage) — neutral tone since it's a total
-  //   not an action-pending signal
-  // - Lead Workflow badge: new-leads stage count only — amber tone
-  //   matching the new-leads stage color (LEAD_STAGES[0].color
-  //   bg-amber-500) for visual-association with the on-page tile
-  // Hidden when sidebar collapsed (no label to be next-to per
-  // #98 small-scope-clean; collapsed mode trades counts for icon-only
-  // density).
+  // number next to the name".
+  // Ship #330 — strict-vendor-scope filter applied at BADGE-RENDER-TIME
+  // ONLY (NOT at useVendorLeadStages — chain stays loose-scoped per
+  // #223 + task_1776818232208_731 INTENTIONAL-DIVERGENCE). Reverts the
+  // wrong-layer hook-lift from #329; targeted badge-only fix preserves
+  // chain (tiles + dashboard summary stay permissive as designed). Per
+  // banked label-as-contract-for-indicator-semantics: badge labels
+  // ('Projects', 'Lead Workflow') must match labeled-surface scope —
+  // each badge surfaces its own per-vendor count without touching the
+  // shared hook.
+  //
+  // Filter shape mirrors lead-inbox.tsx:76-82 (strict vendor scope):
+  // - Each lead from useVendorLeadStages carries _projectId pointing to
+  //   the source sentProject (or undefined for mockLeads which are
+  //   already vendor-scoped via the hook's mockVendorId gate)
+  // - homeownerLeads: look up sentProject by _projectId + match
+  //   contractor.vendor_id FK or legacy company-name fallback
+  // - mockLeads (no _projectId): pass through; the hook gates them
+  //   to mockVendorId already
   const { leads, counts } = useVendorLeadStages()
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const resolvedVendor = useResolvedVendor()
+  const { mockVendorId } = useVendorScope()
+
+  const strictScopedLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (!l._projectId) {
+        // mockLead — already vendor-scoped via hook's mockVendorId gate
+        return mockVendorId !== null
+      }
+      if (!resolvedVendor) return false
+      const sp = sentProjects.find((p) => p.id === l._projectId)
+      if (!sp) return false
+      if (sp.contractor?.vendor_id) return sp.contractor.vendor_id === resolvedVendor.id
+      return sp.contractor?.company === resolvedVendor.company
+    })
+  }, [leads, sentProjects, resolvedVendor?.id, resolvedVendor?.company, mockVendorId])
+
+  // 'New Leads' stage = pending + rescheduled per useVendorLeadStages
+  // (vendor-lead-stages.ts line 186). Same predicate applied here on
+  // the strict-scoped slice.
+  const strictNewLeadsCount = useMemo(
+    () => strictScopedLeads.filter((l) => l.status === 'pending' || l.status === 'rescheduled').length,
+    [strictScopedLeads],
+  )
+
+  // counts.new (loose-scoped) intentionally retained as fallback for
+  // any post-#330 surface that wants the permissive count — none here.
+  void counts
 
   const badgesByRoute: Record<string, { count: number; tone: NavBadgeTone }> = collapsed
     ? {}
     : {
-        '/vendor/leads': { count: leads.length, tone: 'neutral' },
-        '/vendor/lead-workflow': { count: counts.new ?? 0, tone: 'amber' },
+        '/vendor/leads': { count: strictScopedLeads.length, tone: 'neutral' },
+        '/vendor/lead-workflow': { count: strictNewLeadsCount, tone: 'amber' },
       }
 
   return (
