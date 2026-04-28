@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { MOCK_BUGS } from '@/lib/mock-data'
+import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { cn } from '@/lib/utils'
 
 type NavLeaf = { to: string; icon: typeof LayoutDashboard; label: string }
@@ -64,9 +65,10 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // Ship #315 — pending-review count badge on the Reviews nav entry.
-  // Reads sentProjects + filters status='sold' AND reviewStatus !==
-  // 'approved'/'flagged' (default-undefined treated as pending per
-  // #314 schema-extension default).
+  // Ship #328 — refactored to use shared NavBadge primitive + badges-by-
+  // route lookup map per #132 n=2-extraction trigger. Reads sentProjects
+  // + filters status='sold' AND reviewStatus pending (default-undefined
+  // treated as pending per #314 schema-extension default).
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const pendingReviewCount = useMemo(() => {
     return sentProjects.filter((p) => {
@@ -76,6 +78,12 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       return status === 'pending'
     }).length
   }, [sentProjects])
+
+  // Per #103 format-SoT: badges-by-route lookup keeps navItems static
+  // metadata + count derivations co-located with their store reads.
+  const badgesByRoute: Record<string, { count: number; tone: NavBadgeTone }> = {
+    '/admin/reviews': { count: pendingReviewCount, tone: 'amber' },
+  }
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
@@ -139,10 +147,9 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )
         }
-        // Ship #315 — pending-review count badge on /admin/reviews
-        // entry. Special-cased per #103 first-consumer-discipline (n=1
-        // today; generic NavLeaf badge prop deferred to n=2 trigger).
-        const showReviewBadge = item.to === '/admin/reviews' && pendingReviewCount > 0
+        // Ship #328 — generic NavBadge via badges-by-route lookup
+        // (extracted from #315 special-case at n=2-consumer trigger).
+        const badge = badgesByRoute[item.to]
         return (
           <NavLink key={item.to} to={item.to} end={item.to === '/admin'} onClick={() => onNavigate?.()}>
             {({ isActive }) => (
@@ -152,14 +159,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               )}>
                 <Icon className="h-4.5 w-4.5 shrink-0" />
                 <span className="flex-1">{item.label}</span>
-                {showReviewBadge && (
-                  <span className={cn(
-                    'inline-flex items-center justify-center rounded-full px-2 min-w-[1.25rem] h-5 text-[10px] font-bold',
-                    isActive ? 'bg-primary-foreground text-primary' : 'bg-amber-500 text-white'
-                  )}>
-                    {pendingReviewCount}
-                  </span>
-                )}
+                {badge && <NavBadge count={badge.count} tone={badge.tone} isActive={isActive} />}
               </div>
             )}
           </NavLink>

@@ -16,6 +16,8 @@ import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
+import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { cn } from '@/lib/utils'
@@ -41,22 +43,52 @@ const navItems = [
 ]
 
 function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  // Ship #328 — nav-badges per Rodolfo "in projects how the number of
+  // projects next to the name and on lead workflow show only new lead
+  // number next to the name". Counts read from useVendorLeadStages
+  // shared helper (#103 SoT — same hook backs the lead-workflow tile
+  // counts + Performance Stats lead-flow row, so badge counts stay in
+  // sync with on-page tile counts automatically).
+  // - Projects badge: total leads count (all of vendor's projects in
+  //   pipeline regardless of stage) — neutral tone since it's a total
+  //   not an action-pending signal
+  // - Lead Workflow badge: new-leads stage count only — amber tone
+  //   matching the new-leads stage color (LEAD_STAGES[0].color
+  //   bg-amber-500) for visual-association with the on-page tile
+  // Hidden when sidebar collapsed (no label to be next-to per
+  // #98 small-scope-clean; collapsed mode trades counts for icon-only
+  // density).
+  const { leads, counts } = useVendorLeadStages()
+
+  const badgesByRoute: Record<string, { count: number; tone: NavBadgeTone }> = collapsed
+    ? {}
+    : {
+        '/vendor/leads': { count: leads.length, tone: 'neutral' },
+        '/vendor/lead-workflow': { count: counts.new ?? 0, tone: 'amber' },
+      }
+
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
-      {navItems.map(({ to, icon: Icon, label }) => (
-        <NavLink key={to} to={to} end={to === '/vendor'} onClick={onNavigate}>
-          {({ isActive }) => (
-            <div className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              collapsed && 'justify-center px-2'
-            )}>
-              <Icon className="h-4.5 w-4.5 shrink-0" />
-              {!collapsed && <span>{label}</span>}
-            </div>
-          )}
-        </NavLink>
-      ))}
+      {navItems.map(({ to, icon: Icon, label }) => {
+        const badge = badgesByRoute[to]
+        return (
+          <NavLink key={to} to={to} end={to === '/vendor'} onClick={onNavigate}>
+            {({ isActive }) => (
+              <div className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                collapsed && 'justify-center px-2'
+              )}>
+                <Icon className="h-4.5 w-4.5 shrink-0" />
+                {!collapsed && <span className="flex-1">{label}</span>}
+                {!collapsed && badge && (
+                  <NavBadge count={badge.count} tone={badge.tone} isActive={isActive} />
+                )}
+              </div>
+            )}
+          </NavLink>
+        )
+      })}
     </nav>
   )
 }
