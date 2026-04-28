@@ -292,8 +292,17 @@ export function VendorLayout() {
           'fixed inset-y-0 left-0 z-30 border-r bg-sidebar transition-all duration-200',
           sidebarCollapsed ? 'w-[4.5rem]' : 'w-64'
         )}>
-          <div className="flex h-16 items-center justify-between border-b px-4">
-            <Logo collapsed={sidebarCollapsed} />
+          {/* Ship #331 — collapsed-state header per Rodolfo "the button to
+              close menu when close it overlaps". Pre-#331 the Logo (36px)
+              + toggle (32px) + horizontal padding overflowed the 72px-
+              wide collapsed aside. Fix: hide Logo when collapsed; only
+              the toggle shows, centered. Matches Linear/Notion/GitHub
+              collapsed-sidebar pattern. Expanded-state unchanged. */}
+          <div className={cn(
+            'flex h-16 items-center border-b',
+            sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4',
+          )}>
+            {!sidebarCollapsed && <Logo collapsed={false} />}
             <Button
               variant="ghost"
               size="icon"
