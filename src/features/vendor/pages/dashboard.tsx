@@ -8,6 +8,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -376,18 +377,19 @@ export default function VendorDashboard() {
       {/* Ship #294 — Performance Stats moved from /vendor/profile per
           Rodolfo "move service categories and performance stats to
           dashboard". Quality metrics complement KPI Row pipeline metrics.
-          Ship #299 — mobile layout fix: 3-col grid on mobile (was
-          1-col stacking 3 tall rows ~210px tall); vertical-stack per
-          cell (icon-top + value + label) at mobile, horizontal flex
-          on sm+. Mirrors KPI Row 2-col mobile pattern; eliminates the
-          empty-right-side dangling text problem on the prior stacked
-          rows. */}
+          Ship #299 — mobile layout fix: 3-col grid on mobile.
+          Ship #327 — Review Breakdown merged in per Rodolfo "convined
+          performance stats and review breakdown into one on dashboard
+          and review breakdown removed from profile". Single Card hosts
+          both quality-metrics (top) + star-distribution (below); content-
+          merge not a layout-refactor so mobile stack is a natural
+          single-column flow under the existing 3-col grid. */}
       <motion.div variants={item}>
         <Card className="rounded-xl">
           <CardHeader>
             <CardTitle className="font-heading text-lg">Performance Stats</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
             <div className="grid grid-cols-3 gap-3 sm:gap-6">
               <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
                 <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 p-2 sm:p-3 shrink-0">
@@ -415,6 +417,31 @@ export default function VendorDashboard() {
                   <p className="text-lg sm:text-2xl font-bold font-heading">{vendor.response_time}</p>
                   <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Avg Response Time</p>
                 </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <p className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Review Breakdown</p>
+              <div className="space-y-2.5">
+                {[5, 4, 3, 2, 1].map((stars) => {
+                  const pcts: Record<number, number> = { 5: 72, 4: 18, 3: 7, 2: 2, 1: 1 }
+                  const pct = pcts[stars]
+                  return (
+                    <div key={stars} className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-sm font-medium w-5 sm:w-6 text-right">{stars}</span>
+                      <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                      <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden min-w-0">
+                        <div
+                          className="h-full rounded-full bg-amber-400 transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground w-9 sm:w-10 text-right shrink-0">{pct}%</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </CardContent>

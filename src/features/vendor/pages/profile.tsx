@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  User, Phone, Mail, MapPin, Star,
+  User, Phone, Mail, MapPin,
   BadgeCheck, CreditCard, LogOut, MessageCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -186,36 +186,12 @@ export default function VendorProfile() {
         </Card>
       </motion.div>
 
-      {/* Rating Stars Visual */}
-      <motion.div variants={item}>
-        <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-          <CardHeader>
-            <CardTitle className="font-heading text-lg">Review Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2.5">
-              {[5, 4, 3, 2, 1].map((stars) => {
-                // Simulated distribution for display
-                const pcts: Record<number, number> = { 5: 72, 4: 18, 3: 7, 2: 2, 1: 1 }
-                const pct = pcts[stars]
-                return (
-                  <div key={stars} className="flex items-center gap-3">
-                    <span className="text-sm font-medium w-6 text-right">{stars}</span>
-                    <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                    <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-amber-400 transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-muted-foreground w-10 text-right">{pct}%</span>
-                  </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      {/* Ship #327 — Review Breakdown REMOVED per Rodolfo "review
+          breakdown removed from profile" — relocated into the merged
+          Performance Stats Card on /vendor/dashboard. Same pattern as
+          #294 (Service Categories + Performance Stats relocated to
+          dashboard) — profile keeps editable identity fields; dashboard
+          owns at-a-glance metrics. */}
 
       {/* Account Actions */}
       <motion.div variants={item}>
