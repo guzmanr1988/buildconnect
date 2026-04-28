@@ -24,6 +24,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProjectsStore } from '@/stores/projects-store'
+import { MOCK_VENDOR_IDS } from '@/lib/vendor-scope'
 import { signIn } from '@/lib/auth'
 import { clearQAPersona } from '@/lib/qa-personas'
 import { cn } from '@/lib/utils'
@@ -146,14 +148,36 @@ export function LoginPage() {
     try {
       await clearQaBeforeAuth()
       // Ship #222 — Vendor demo button aliases to mock vendor 'v-1' (Apex)
-      // for the session so useVendorScope resolves to v-1 → strict filter
-      // matches the homeowner-created sentProjects whose contractor.vendor_id
-      // was written as 'v-1' when the homeowner picked Apex on vendor-compare.
-      // Without this alias, generic Vendor demo had no vendor_id mapping and
-      // saw no leads (the leads-empty symptom that triggered the arc).
+      // for the session so useVendorScope resolves → strict filter matches
+      // homeowner-created sentProjects whose contractor.vendor_id was
+      // stamped at vendor-compare pick-time.
+      //
+      // Ship #334 — auto-alias resolution per Rodolfo "demo must work as
+      // real ... see if everything is populating on all 3 all info".
+      // Pre-#334 the Vendor demo button HARDWIRED alias to 'v-1' (Apex),
+      // which meant homeowner picking ANY non-Apex mock-vendor (Shield
+      // v-2 / Paradise v-3 / etc) at vendor-compare wouldn't be visible
+      // on the Vendor demo session (alias mismatch → strict-filter
+      // rejects on badge + Projects page).
+      //
+      // Post-#334: Vendor demo button reads the latest sentProject and
+      // aliases to whichever mock-vendor was last booked-with (must be
+      // a real mock-vendor-id from MOCK_VENDOR_IDS set; falls back to
+      // 'v-1' otherwise). Auto-routes Rodolfo's vendor view to the
+      // vendor identity matching his most-recent homeowner-side booking
+      // — single-button UX preserved; e2e demo flow closes the loop
+      // regardless of which mock-vendor he picked as homeowner.
       // Cleared on Homeowner/Admin login so roles don't leak the alias.
       if (role === 'vendor') {
-        localStorage.setItem('buildconnect-demo-mock-vendor-id', 'v-1')
+        const sentProjects = useProjectsStore.getState().sentProjects
+        const latestBookingVendorId = sentProjects.length > 0
+          ? sentProjects[sentProjects.length - 1].contractor?.vendor_id
+          : undefined
+        const aliasMockId =
+          latestBookingVendorId && MOCK_VENDOR_IDS.has(latestBookingVendorId)
+            ? latestBookingVendorId
+            : 'v-1'
+        localStorage.setItem('buildconnect-demo-mock-vendor-id', aliasMockId)
       } else {
         localStorage.removeItem('buildconnect-demo-mock-vendor-id')
       }
