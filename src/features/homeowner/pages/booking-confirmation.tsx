@@ -245,7 +245,20 @@ export function BookingConfirmationPage() {
             variant="outline"
             size="lg"
             className="flex-1 h-12 gap-2 text-sm font-semibold rounded-xl"
-            onClick={() => navigate('/home/appointments/L-0001')}
+            onClick={() => {
+              // Ship #324 — navigate to the actual just-booked sentProject's
+              // appointment URL instead of the hardcoded L-0001 fixture
+              // (which can be undefined when demoDataHidden=true). Banked
+              // hardcoded-fixture-shape-assumption — fix at the producer
+              // side so consumers (AppointmentStatusPage) never receive an
+              // ID that resolves to no entity.
+              const latest = sentProjects[sentProjects.length - 1]
+              if (latest) {
+                navigate(`/home/appointments/L-${latest.id.slice(0, 4).toUpperCase()}`)
+              } else {
+                navigate('/home/cart')
+              }
+            }}
           >
             View Status
             <ArrowRight className="h-4 w-4" />

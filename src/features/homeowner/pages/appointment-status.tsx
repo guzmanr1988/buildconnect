@@ -97,6 +97,33 @@ export function AppointmentStatusPage() {
       received_at: sentProject.sentAt,
     } as unknown as Lead)
     ?? mockLeads[0]
+
+  // Ship #324 — defensive empty-state. baseLead can resolve to undefined
+  // when demoDataHidden=true empties useEffectiveMockLeads AND no matching
+  // sentProject exists for the URL id (legacy hardcoded L-0001 link from
+  // booking-confirmation pre-#324 cause-fix; or stale bookmark; or admin-
+  // cleared demo data while a tab held an old appointment URL). Banked
+  // hardcoded-fixture-shape-assumption parent-class — guard at consumer
+  // since fixture-shape can shrink at runtime via the demo-clear flag.
+  if (!baseLead) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+          <Calendar className="h-10 w-10 text-muted-foreground/60" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold font-heading text-foreground">
+          Appointment not found
+        </h1>
+        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+          We couldn't find an appointment with this link. It may have been removed, or the link is from an older booking.
+        </p>
+        <Button asChild size="lg" className="h-11 px-6">
+          <Link to="/home/cart">Go to Projects</Link>
+        </Button>
+      </div>
+    )
+  }
+
   // Apply lead-status override (Phase C persist) on top of whatever we resolved.
   const lead = leadStatusOverrides[baseLead.id]
     ? { ...baseLead, status: leadStatusOverrides[baseLead.id] }
