@@ -6,7 +6,7 @@ import {
   Inbox, CalendarCheck, MapPin,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Info, Upload, FileText,
+  UserCheck, Pencil, Info, Upload, FileText, Send,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
+import { useFlagThreadStore } from '@/stores/flag-thread-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
@@ -190,6 +191,15 @@ export default function VendorLeadWorkflow() {
   const [contractAmount, setContractAmount] = useState('')
   const [contractFile, setContractFile] = useState<{ filename: string; dataUrl: string } | null>(null)
   const addVendorHomeownerDoc = useVendorHomeownerDocsStore((s) => s.addDoc)
+  // Ship #326 Phase A — flag-resolution thread + revised-contract upload state.
+  const flagThreadsByProject = useFlagThreadStore((s) => s.threadsByProject)
+  const appendThreadMessage = useFlagThreadStore((s) => s.appendMessage)
+  const ensureLegacyFlagNoteSeed = useFlagThreadStore((s) => s.ensureLegacyFlagNoteSeed)
+  const resetReviewStatus = useProjectsStore((s) => s.resetReviewStatus)
+  const [replyText, setReplyText] = useState('')
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [revisionContractFile, setRevisionContractFile] = useState<{ filename: string; dataUrl: string } | null>(null)
+  const [revisionTargetProjectId, setRevisionTargetProjectId] = useState<string | null>(null)
   // Ship #295 — Project Completed confirm dialog. Lighter-confirm shape
   // (not full destructive-four-refinement) since the action is
   // acceleration of automatic 90d transition, not destruction.
@@ -1014,29 +1024,140 @@ export default function VendorLeadWorkflow() {
                     </div>
                     {/* Ship #316 — BuildConnect review-state surface in
                         Modal sold-branch. Pending/Approved badge + (when
-                        flagged) banner with reviewNote. */}
+                        flagged) banner with reviewNote. Ship #326 Phase A
+                        extends the flagged-state surface with a Resolve
+                        Flag section: thread display + Upload Revised
+                        Contract action + Reply form. */}
                     {!isCancelledLead(selected) && (() => {
                       const display = getReviewStatusDisplay((selected as LeadExt).reviewStatus)
                       const Icon = display.icon
+                      const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                      const isFlagged = display.variant === 'flagged'
+                      // Lazy-seed legacy reviewNote into thread on first read
+                      // (Decision A.i — Phase A audit). Idempotent guard
+                      // inside store skips when thread already has a flag_note.
+                      if (isFlagged && sp && (selected as LeadExt).reviewNote) {
+                        ensureLegacyFlagNoteSeed(
+                          sp.id,
+                          (selected as LeadExt).reviewNote ?? '',
+                          sp.reviewedBy ?? 'admin',
+                          'BuildConnect',
+                        )
+                      }
+                      const thread = sp ? (flagThreadsByProject[sp.id] ?? []) : []
                       return (
-                        <div className={cn('rounded-lg p-2.5 flex items-start gap-2', display.bannerClassName)}>
-                          <Icon className={cn(
-                            'h-4 w-4 shrink-0 mt-0.5',
-                            display.variant === 'pending' && 'text-amber-700 dark:text-amber-400',
-                            display.variant === 'approved' && 'text-emerald-700 dark:text-emerald-400',
-                            display.variant === 'flagged' && 'text-red-700 dark:text-red-400',
-                          )} />
-                          <div className="flex-1 min-w-0">
-                            <p className={cn(
-                              'text-xs font-semibold',
-                              display.variant === 'pending' && 'text-amber-800 dark:text-amber-300',
-                              display.variant === 'approved' && 'text-emerald-800 dark:text-emerald-300',
-                              display.variant === 'flagged' && 'text-red-800 dark:text-red-300',
-                            )}>{display.label}</p>
-                            {display.variant === 'flagged' && (selected as LeadExt).reviewNote && (
-                              <p className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap mt-1">{(selected as LeadExt).reviewNote}</p>
-                            )}
+                        <div className="space-y-2">
+                          <div className={cn('rounded-lg p-2.5 flex items-start gap-2', display.bannerClassName)}>
+                            <Icon className={cn(
+                              'h-4 w-4 shrink-0 mt-0.5',
+                              display.variant === 'pending' && 'text-amber-700 dark:text-amber-400',
+                              display.variant === 'approved' && 'text-emerald-700 dark:text-emerald-400',
+                              display.variant === 'flagged' && 'text-red-700 dark:text-red-400',
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <p className={cn(
+                                'text-xs font-semibold',
+                                display.variant === 'pending' && 'text-amber-800 dark:text-amber-300',
+                                display.variant === 'approved' && 'text-emerald-800 dark:text-emerald-300',
+                                display.variant === 'flagged' && 'text-red-800 dark:text-red-300',
+                              )}>{display.label}</p>
+                              {display.variant === 'flagged' && (selected as LeadExt).reviewNote && (
+                                <p className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap mt-1">{(selected as LeadExt).reviewNote}</p>
+                              )}
+                            </div>
                           </div>
+
+                          {isFlagged && sp && (
+                            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                              <div>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                  Resolve Flag
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Upload a revised contract to send the deal back for re-review, or reply with context BuildConnect should know.
+                                </p>
+                              </div>
+
+                              {thread.length > 0 && (
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {thread.map((msg) => (
+                                    <div
+                                      key={msg.id}
+                                      className={cn(
+                                        'rounded-lg p-2.5 text-xs space-y-1',
+                                        msg.authorRole === 'admin'
+                                          ? 'bg-red-50/60 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/40'
+                                          : 'bg-background border border-border/60',
+                                      )}
+                                    >
+                                      <div className="flex items-baseline justify-between gap-2">
+                                        <span className={cn(
+                                          'font-semibold',
+                                          msg.authorRole === 'admin' && 'text-red-800 dark:text-red-300',
+                                        )}>
+                                          {msg.authorName}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                          {new Date(msg.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                                      {msg.messageType === 'revision_uploaded' && (
+                                        <p className="text-[10px] text-muted-foreground italic">
+                                          Revised contract attached.
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => {
+                                  setRevisionTargetProjectId(sp.id)
+                                  setRevisionDialogOpen(true)
+                                }}
+                              >
+                                <Upload className="h-3.5 w-3.5 mr-1.5" />
+                                Upload Revised Contract
+                              </Button>
+
+                              <div className="space-y-2">
+                                <textarea
+                                  value={replyText}
+                                  onChange={(e) => setReplyText(e.target.value)}
+                                  placeholder="Reply to BuildConnect — explain context or request clarification."
+                                  rows={3}
+                                  className="w-full text-xs rounded-lg border border-input bg-background px-3 py-2 resize-none"
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full"
+                                  disabled={!replyText.trim() || !profile}
+                                  onClick={() => {
+                                    if (!replyText.trim() || !profile) return
+                                    appendThreadMessage({
+                                      projectId: sp.id,
+                                      authorRole: 'vendor',
+                                      authorId: profile.id,
+                                      authorName: profile.name ?? 'Vendor',
+                                      content: replyText.trim(),
+                                      messageType: 'vendor_reply',
+                                    })
+                                    setReplyText('')
+                                    toast.success('Reply sent to BuildConnect.')
+                                  }}
+                                >
+                                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                                  Send Reply
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })()}
@@ -1618,6 +1739,113 @@ export default function VendorLeadWorkflow() {
               }}
             >
               <Handshake className="h-4 w-4 mr-1.5" /> Confirm Sale
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ship #326 Phase A — Upload Revised Contract dialog. Triggered
+          from the Resolve Flag section in the Modal sold-branch when the
+          deal is flagged. Reuses the #313 Mark-as-Sold contract-upload
+          shape (file picker + PDF/image accept). On Confirm:
+            1. addDoc to vendor-homeowner-documents-store (preserves the
+               old contract for audit-trail; new revision sits alongside)
+            2. resetReviewStatus on the sentProject (reviewStatus=pending,
+               clears reviewedAt + reviewedBy; reviewNote KEPT in thread
+               context per Decision D + #94 truthfulness)
+            3. appendMessage to flag-thread with messageType=
+               'revision_uploaded' so the thread shows the revision event
+            4. Close + clear local state. */}
+      <Dialog
+        open={revisionDialogOpen}
+        onOpenChange={(o) => {
+          setRevisionDialogOpen(o)
+          if (!o) {
+            setRevisionContractFile(null)
+            setRevisionTargetProjectId(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Upload Revised Contract</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 flex items-start gap-2">
+              <Info className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-foreground/90">
+                Uploading a revised contract sends the deal back to BuildConnect for re-review. The previous contract stays on file for reference.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Revised Contract <span className="text-destructive">*</span></label>
+              {revisionContractFile ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{revisionContractFile.filename}</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setRevisionContractFile(null)}
+                    aria-label="Remove revised contract file"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 h-10 rounded-lg border border-dashed border-input bg-muted/20 px-3 text-sm text-muted-foreground cursor-pointer hover:bg-muted/40">
+                  <Upload className="h-3.5 w-3.5" />
+                  Choose Revised Contract File
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = () => setRevisionContractFile({ filename: file.name, dataUrl: reader.result as string })
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </label>
+              )}
+              <p className="text-[10px] text-muted-foreground">PDF or image (JPG / PNG / WEBP).</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevisionDialogOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!revisionContractFile || !revisionTargetProjectId}
+              onClick={() => {
+                if (!revisionContractFile || !revisionTargetProjectId || !profile || !vendor || !selected) return
+                addVendorHomeownerDoc({
+                  vendor_id: vendor.id,
+                  homeowner_email: selected.email,
+                  category: 'contract',
+                  filename: revisionContractFile.filename,
+                  dataUrl: revisionContractFile.dataUrl,
+                })
+                resetReviewStatus(revisionTargetProjectId)
+                appendThreadMessage({
+                  projectId: revisionTargetProjectId,
+                  authorRole: 'vendor',
+                  authorId: profile.id,
+                  authorName: profile.name ?? 'Vendor',
+                  content: `Revised contract uploaded: ${revisionContractFile.filename}`,
+                  messageType: 'revision_uploaded',
+                })
+                setRevisionDialogOpen(false)
+                setRevisionContractFile(null)
+                setRevisionTargetProjectId(null)
+                toast.success('Revised contract sent to BuildConnect for re-review.')
+              }}
+            >
+              <Upload className="h-4 w-4 mr-1.5" />
+              Send for Re-Review
             </Button>
           </DialogFooter>
         </DialogContent>

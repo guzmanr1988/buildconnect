@@ -184,6 +184,12 @@ interface ProjectsState {
     reviewedBy: string,
     reviewNote?: string,
   ) => void
+  // Ship #326 — vendor cycles a flagged deal back to Pending by uploading
+  // a revised contract. Resets reviewStatus to 'pending' + clears
+  // reviewedAt + reviewedBy so the deal returns to admin's Pending bucket
+  // for re-review. reviewNote is KEPT (legacy flag-note context preserved
+  // in the flag-thread for audit-trail per #94 truthfulness).
+  resetReviewStatus: (projectId: string) => void
   assignRep: (id: string, rep: VendorRep) => void
   // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
   // handled via assignRep).
@@ -328,6 +334,16 @@ export const useProjectsStore = create<ProjectsState>()(
                   reviewedBy,
                   ...(reviewNote ? { reviewNote } : {}),
                 }
+              : p
+          ),
+        }))
+      },
+
+      resetReviewStatus: (projectId) => {
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === projectId
+              ? { ...p, reviewStatus: 'pending', reviewedAt: undefined, reviewedBy: undefined }
               : p
           ),
         }))
