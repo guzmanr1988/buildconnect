@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Inbox, CalendarCheck, Handshake, Archive, X } from 'lucide-react'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import type { Lead } from '@/types'
 
 export type LeadStageKey = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
@@ -95,6 +95,11 @@ export function useVendorLeadStages(): {
   // override-aware value propagates to all consumers transparently.
   const leadCompletedAtByLead = useProjectsStore((s) => s.leadCompletedAtByLead)
   const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
+  // Ship #329 — resolved-vendor for strict-scope filter (mirrors
+  // lead-inbox.tsx pattern). Vendor id + company-fallback pair
+  // matches the canonical vendor-scope shape used everywhere else
+  // post-#214 + #263.
+  const resolvedVendor = useResolvedVendor()
   const effectiveMockLeads = useEffectiveMockLeads()
   // Gate seeded MOCK_LEADS to the 5 featured mock vendors (v-1..v-5)
   // per Rod P0 2026-04-20 — synthesized/unmapped vendors must NOT
@@ -113,11 +118,28 @@ export function useVendorLeadStages(): {
     // aggressive — silently stripped legitimate entries where .item
     // happened to be falsy/weird after localStorage round-trip,
     // causing leads-not-populating regression on /vendor/lead-workflow).
-    // Filter now strips ONLY truly-malformed entries (undefined p OR
-    // non-string id); downstream reads use ?. for .item to handle
-    // undefined gracefully.
+    // Ship #329 — strict vendor-scope filter mirrors lead-inbox.tsx
+    // shape per banked feedback_label_as_contract_indicator_semantics.
+    // Pre-#329 the loose scope was intentional ("they all should
+    // work" per Rodolfo task_1776818232208_731 demo-testing
+    // directive), but #328 surfaced a count-badge that exposed the
+    // divergence between badge (over-counted) + Projects page
+    // (correctly scoped). Rodolfo's expectation flipped: counts
+    // across surfaces must match, even if it means dropping demo-
+    // bleed entries from other vendors. Strict-scope is the right
+    // shape now.
     () => sentProjects
       .filter((p): p is typeof p => !!p && typeof p.id === 'string')
+      .filter((p) => {
+        // Strict vendor-scope: only this vendor's sentProjects.
+        // Mirror lead-inbox.tsx:76-82 — match by contractor.vendor_id
+        // FK (preferred) with legacy company-name fallback for pre-#165
+        // entries that lack the FK. Reject when no resolved vendor (no
+        // active session — empty render is safer than over-render).
+        if (!resolvedVendor) return false
+        if (p.contractor?.vendor_id) return p.contractor.vendor_id === resolvedVendor.id
+        return p.contractor?.company === resolvedVendor.company
+      })
       .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       _projectId: p.id,
@@ -142,7 +164,7 @@ export function useVendorLeadStages(): {
       reviewStatus: p.reviewStatus,
       reviewNote: p.reviewNote,
     })),
-    [sentProjects, VENDOR_ID],
+    [sentProjects, VENDOR_ID, resolvedVendor?.id, resolvedVendor?.company],
   )
 
   return useMemo(() => {
