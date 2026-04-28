@@ -894,6 +894,127 @@ export default function VendorLeadWorkflow() {
                 )
               })()}
 
+              {/* Ship #332 — Resolve Flag — full-width above-grid block.
+                  When the deal is completed + flagged, the resolution flow
+                  (thread + Upload Revised Contract + Reply) renders at full
+                  dialog width here, ABOVE the 2-col grid. Pre-#332 the
+                  block lived inside the right column of the grid which made
+                  the right column overflow the viewport when the thread
+                  accumulated messages. Full-width above-grid:
+                  - Reads naturally as an action-block (matches reschedule-
+                    banner pattern earlier on the same modal)
+                  - Lets the 2-col grid below stay balanced regardless of
+                    thread length
+                  - The sold-branch banner inside the grid still surfaces
+                    review-status (Pending / Approved / Flagged) for at-a-
+                    glance state. */}
+              {selected.status === 'completed' && !isCancelledLead(selected) && (() => {
+                const display = getReviewStatusDisplay((selected as LeadExt).reviewStatus)
+                if (display.variant !== 'flagged') return null
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp) return null
+                if ((selected as LeadExt).reviewNote) {
+                  ensureLegacyFlagNoteSeed(
+                    sp.id,
+                    (selected as LeadExt).reviewNote ?? '',
+                    sp.reviewedBy ?? 'admin',
+                    'BuildConnect',
+                  )
+                }
+                const thread = flagThreadsByProject[sp.id] ?? []
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Resolve Flag
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Upload a revised contract to send the deal back for re-review, or reply with context BuildConnect should know.
+                      </p>
+                    </div>
+
+                    {thread.length > 0 && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {thread.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={cn(
+                              'rounded-lg p-2.5 text-xs space-y-1',
+                              msg.authorRole === 'admin'
+                                ? 'bg-red-50/60 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/40'
+                                : 'bg-background border border-border/60',
+                            )}
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className={cn(
+                                'font-semibold',
+                                msg.authorRole === 'admin' && 'text-red-800 dark:text-red-300',
+                              )}>
+                                {msg.authorName}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                {new Date(msg.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            {msg.messageType === 'revision_uploaded' && (
+                              <p className="text-[10px] text-muted-foreground italic">
+                                Revised contract attached.
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => {
+                        setRevisionTargetProjectId(sp.id)
+                        setRevisionDialogOpen(true)
+                      }}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                      Upload Revised Contract
+                    </Button>
+
+                    <div className="space-y-2">
+                      <textarea
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        placeholder="Reply to BuildConnect — explain context or request clarification."
+                        rows={3}
+                        className="w-full text-xs rounded-lg border border-input bg-background px-3 py-2 resize-none"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={!replyText.trim() || !profile}
+                        onClick={() => {
+                          if (!replyText.trim() || !profile) return
+                          appendThreadMessage({
+                            projectId: sp.id,
+                            authorRole: 'vendor',
+                            authorId: profile.id,
+                            authorName: profile.name ?? 'Vendor',
+                            content: replyText.trim(),
+                            messageType: 'vendor_reply',
+                          })
+                          setReplyText('')
+                          toast.success('Reply sent to BuildConnect.')
+                        }}
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        Send Reply
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Ship #308 — 2-column wrapper for PC (sm+). Mobile
                   portrait stays single-column via grid-cols-1 default
                   (preserves order: Customer Info → Project →
@@ -930,8 +1051,15 @@ export default function VendorLeadWorkflow() {
               {/* Project — product selections chipped out of title into this
                   section (ship #93 per kratos msg 1776695439349). Title stays
                   service-name-only; the tag detail lives here. Permit +
-                  Financing have their own labeled rows, everything else
-                  becomes a capitalize chip. */}
+                  Financing have their own labeled rows + service-category
+                  chip.
+                  Ship #332 — selection chips MOVED to the right column
+                  (Selections section above Price) per column-rebalance
+                  on PC for confirmed/rejected/cancelled states where
+                  LEFT was 16 lines / RIGHT was 6. Project rows stay LEFT
+                  (Permit / Financing / service-category / italic note);
+                  only the variable-length selection-chip-list moves
+                  RIGHT to even out columns. */}
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Project</p>
                 <div className="space-y-1.5 text-sm">
@@ -947,6 +1075,12 @@ export default function VendorLeadWorkflow() {
                     <Badge variant="secondary" className="text-[10px] capitalize">
                       {selected.service_category.replace(/_/g, ' ')}
                     </Badge>
+                    {/* Ship #332 — selection chips here are MOBILE-ONLY
+                        (sm:hidden) so the mobile single-column stack
+                        preserves the pre-#332 ordering (chips inside
+                        Project section). On PC the same chips render
+                        in the right-column Selections section instead
+                        per the column-rebalance. */}
                     {(() => {
                       const selectionChips = Object.values(selected.pack_items ?? {})
                         .flat()
@@ -956,7 +1090,7 @@ export default function VendorLeadWorkflow() {
                         <Badge
                           key={s}
                           variant="secondary"
-                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20"
+                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20 sm:hidden"
                         >
                           {s.replace(/_/g, ' ')}
                         </Badge>
@@ -981,12 +1115,47 @@ export default function VendorLeadWorkflow() {
                 </div>
               </div>
               </div>
-              {/* RIGHT COLUMN: Price + Actions + Appointment(PC) (operations side) */}
+              {/* RIGHT COLUMN: Selections(PC-only) + Price + Actions + Appointment(PC) (operations side).
+                  Ship #332 — Selections section added at top per column-
+                  rebalance Decision A. PC-only (`hidden sm:block`) so the
+                  mobile single-column stack preserves the prior order
+                  (Customer Info → Project including chips → mobile-sep →
+                  Price → Actions). On PC the chips move here. */}
               <div className="space-y-3">
               {/* Mobile-only Separator — preserves the original visual
                   break between Appointment and Price on mobile portrait
                   (PC uses column-gap to separate the info/ops sides). */}
               <Separator className="sm:hidden" />
+
+              {/* Ship #332 — Selections section (PC-only). Mobile keeps
+                  the chips inside the LEFT Project section (rendered
+                  inline below for mobile via a sibling sm:hidden block
+                  inside the Project section). On PC the chips render
+                  here so the right column has visual mass to balance
+                  the left column for confirmed/rejected/cancelled
+                  states (was 16/6 imbalance). */}
+              {(() => {
+                const selectionChips = Object.values(selected.pack_items ?? {})
+                  .flat()
+                  .filter((s) => s !== 'permit' && s !== 'financed' && s !== 'financing')
+                if (selectionChips.length === 0) return null
+                return (
+                  <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Selections</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {selectionChips.map((s) => (
+                        <Badge
+                          key={s}
+                          variant="secondary"
+                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20"
+                        >
+                          {s.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Price */}
               <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
@@ -1028,136 +1197,33 @@ export default function VendorLeadWorkflow() {
                         extends the flagged-state surface with a Resolve
                         Flag section: thread display + Upload Revised
                         Contract action + Reply form. */}
+                    {/* Ship #332 — Resolve Flag section MOVED to full-width
+                        block ABOVE the 2-col grid (search for 'Resolve Flag
+                        — full-width above-grid'). Inside the sold-branch
+                        only the review-state BANNER stays so column-balance
+                        improves on flagged-completed state. */}
                     {!isCancelledLead(selected) && (() => {
                       const display = getReviewStatusDisplay((selected as LeadExt).reviewStatus)
                       const Icon = display.icon
-                      const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                      const isFlagged = display.variant === 'flagged'
-                      // Lazy-seed legacy reviewNote into thread on first read
-                      // (Decision A.i — Phase A audit). Idempotent guard
-                      // inside store skips when thread already has a flag_note.
-                      if (isFlagged && sp && (selected as LeadExt).reviewNote) {
-                        ensureLegacyFlagNoteSeed(
-                          sp.id,
-                          (selected as LeadExt).reviewNote ?? '',
-                          sp.reviewedBy ?? 'admin',
-                          'BuildConnect',
-                        )
-                      }
-                      const thread = sp ? (flagThreadsByProject[sp.id] ?? []) : []
                       return (
-                        <div className="space-y-2">
-                          <div className={cn('rounded-lg p-2.5 flex items-start gap-2', display.bannerClassName)}>
-                            <Icon className={cn(
-                              'h-4 w-4 shrink-0 mt-0.5',
-                              display.variant === 'pending' && 'text-amber-700 dark:text-amber-400',
-                              display.variant === 'approved' && 'text-emerald-700 dark:text-emerald-400',
-                              display.variant === 'flagged' && 'text-red-700 dark:text-red-400',
-                            )} />
-                            <div className="flex-1 min-w-0">
-                              <p className={cn(
-                                'text-xs font-semibold',
-                                display.variant === 'pending' && 'text-amber-800 dark:text-amber-300',
-                                display.variant === 'approved' && 'text-emerald-800 dark:text-emerald-300',
-                                display.variant === 'flagged' && 'text-red-800 dark:text-red-300',
-                              )}>{display.label}</p>
-                              {display.variant === 'flagged' && (selected as LeadExt).reviewNote && (
-                                <p className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap mt-1">{(selected as LeadExt).reviewNote}</p>
-                              )}
-                            </div>
+                        <div className={cn('rounded-lg p-2.5 flex items-start gap-2', display.bannerClassName)}>
+                          <Icon className={cn(
+                            'h-4 w-4 shrink-0 mt-0.5',
+                            display.variant === 'pending' && 'text-amber-700 dark:text-amber-400',
+                            display.variant === 'approved' && 'text-emerald-700 dark:text-emerald-400',
+                            display.variant === 'flagged' && 'text-red-700 dark:text-red-400',
+                          )} />
+                          <div className="flex-1 min-w-0">
+                            <p className={cn(
+                              'text-xs font-semibold',
+                              display.variant === 'pending' && 'text-amber-800 dark:text-amber-300',
+                              display.variant === 'approved' && 'text-emerald-800 dark:text-emerald-300',
+                              display.variant === 'flagged' && 'text-red-800 dark:text-red-300',
+                            )}>{display.label}</p>
+                            {display.variant === 'flagged' && (selected as LeadExt).reviewNote && (
+                              <p className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap mt-1">{(selected as LeadExt).reviewNote}</p>
+                            )}
                           </div>
-
-                          {isFlagged && sp && (
-                            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
-                              <div>
-                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                  Resolve Flag
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Upload a revised contract to send the deal back for re-review, or reply with context BuildConnect should know.
-                                </p>
-                              </div>
-
-                              {thread.length > 0 && (
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {thread.map((msg) => (
-                                    <div
-                                      key={msg.id}
-                                      className={cn(
-                                        'rounded-lg p-2.5 text-xs space-y-1',
-                                        msg.authorRole === 'admin'
-                                          ? 'bg-red-50/60 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/40'
-                                          : 'bg-background border border-border/60',
-                                      )}
-                                    >
-                                      <div className="flex items-baseline justify-between gap-2">
-                                        <span className={cn(
-                                          'font-semibold',
-                                          msg.authorRole === 'admin' && 'text-red-800 dark:text-red-300',
-                                        )}>
-                                          {msg.authorName}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                          {new Date(msg.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                                      {msg.messageType === 'revision_uploaded' && (
-                                        <p className="text-[10px] text-muted-foreground italic">
-                                          Revised contract attached.
-                                        </p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full"
-                                onClick={() => {
-                                  setRevisionTargetProjectId(sp.id)
-                                  setRevisionDialogOpen(true)
-                                }}
-                              >
-                                <Upload className="h-3.5 w-3.5 mr-1.5" />
-                                Upload Revised Contract
-                              </Button>
-
-                              <div className="space-y-2">
-                                <textarea
-                                  value={replyText}
-                                  onChange={(e) => setReplyText(e.target.value)}
-                                  placeholder="Reply to BuildConnect — explain context or request clarification."
-                                  rows={3}
-                                  className="w-full text-xs rounded-lg border border-input bg-background px-3 py-2 resize-none"
-                                />
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full"
-                                  disabled={!replyText.trim() || !profile}
-                                  onClick={() => {
-                                    if (!replyText.trim() || !profile) return
-                                    appendThreadMessage({
-                                      projectId: sp.id,
-                                      authorRole: 'vendor',
-                                      authorId: profile.id,
-                                      authorName: profile.name ?? 'Vendor',
-                                      content: replyText.trim(),
-                                      messageType: 'vendor_reply',
-                                    })
-                                    setReplyText('')
-                                    toast.success('Reply sent to BuildConnect.')
-                                  }}
-                                >
-                                  <Send className="h-3.5 w-3.5 mr-1.5" />
-                                  Send Reply
-                                </Button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )
                     })()}
