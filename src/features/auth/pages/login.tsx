@@ -98,7 +98,15 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && profile) {
-      const dest = profile.role === 'admin' ? '/admin' : profile.role === 'vendor' ? '/vendor' : '/home'
+      // Ship #333 Phase A — account_rep is vendor-family; lands on
+      // /vendor (with rep-scoped sidebar + render-layer dashboard
+      // filter per banked CHAIN IS GOD).
+      const dest =
+        profile.role === 'admin'
+          ? '/admin'
+          : profile.role === 'vendor' || profile.role === 'account_rep'
+            ? '/vendor'
+            : '/home'
       navigate(dest, { replace: true })
     }
   }, [isAuthenticated, profile, navigate])

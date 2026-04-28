@@ -92,9 +92,13 @@ export default function VendorLeadWorkflow() {
   // directive.
   const employeesMap = useVendorEmployeesStore((s) => s.employeesByVendor)
 
-  // Auth guard — redirect unauth'd or non-vendor roles to /login.
+  // Auth guard — redirect unauth'd or non-vendor-family roles to /login.
+  // Ship #333 Phase A — account_rep is part of the vendor-family
+  // (logs in to /vendor/* with rep-scoped sidebar + render-layer
+  // dashboard filter per banked CHAIN IS GOD). Allow account_rep
+  // through this route alongside vendor.
   useEffect(() => {
-    if (profile !== null && profile.role !== 'vendor') {
+    if (profile !== null && profile.role !== 'vendor' && profile.role !== 'account_rep') {
       navigate('/login', { replace: true })
     }
   }, [profile, navigate])

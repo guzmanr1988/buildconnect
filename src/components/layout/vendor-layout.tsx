@@ -42,7 +42,31 @@ const navItems = [
   { to: '/vendor/profile', icon: User, label: 'Profile' },
 ]
 
+// Ship #333 Phase A — account_rep sees a SUBSET of vendor sidebar per
+// Rodolfo "Calendar up" framing: Dashboard / Lead Workflow / Projects /
+// Homeowners / Calendar. NO Products / Banking / Account Reps /
+// Membership / Messages / Profile. Reps are limited-role vendor-family
+// users; vendor admin still sees the full sidebar.
+const REP_VISIBLE_ROUTES = new Set([
+  '/vendor',
+  '/vendor/lead-workflow',
+  '/vendor/leads',
+  '/vendor/homeowners',
+  '/vendor/calendar',
+])
+
 function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  // Ship #333 Phase A — role-gated sidebar. account_rep sees subset
+  // (Dashboard / Lead Workflow / Projects / Homeowners / Calendar) per
+  // Rodolfo "Calendar up" framing. vendor sees full sidebar unchanged.
+  const profileForGate = useAuthStore((s) => s.profile)
+  const visibleNavItems = useMemo(() => {
+    if (profileForGate?.role === 'account_rep') {
+      return navItems.filter((item) => REP_VISIBLE_ROUTES.has(item.to))
+    }
+    return navItems
+  }, [profileForGate?.role])
+
   // Ship #328 — nav-badges per Rodolfo "in projects how the number of
   // projects next to the name and on lead workflow show only new lead
   // number next to the name".
@@ -104,7 +128,7 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
-      {navItems.map(({ to, icon: Icon, label }) => {
+      {visibleNavItems.map(({ to, icon: Icon, label }) => {
         const badge = badgesByRoute[to]
         return (
           <NavLink key={to} to={to} end={to === '/vendor'} onClick={onNavigate}>

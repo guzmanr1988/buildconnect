@@ -101,15 +101,18 @@ const ROLE_TABS: { value: UserRole | 'all'; label: string; icon: React.ElementTy
 ]
 
 function roleBadge(role: UserRole) {
+  // Ship #333 Phase A — account_rep added to UserRole; admin Users page
+  // displays it with a distinct color to differentiate from vendor.
   const map: Record<UserRole, { className: string }> = {
     admin: { className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
     vendor: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
     homeowner: { className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    account_rep: { className: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400' },
   }
   const cfg = map[role]
   return (
     <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', cfg.className)}>
-      {role}
+      {role.replace(/_/g, ' ')}
     </span>
   )
 }

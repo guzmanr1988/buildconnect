@@ -91,6 +91,26 @@ export function useResolvedVendor(): Vendor | null {
       if (m) return m
     }
     if (!profile) return null
+    // Ship #333 Phase A — account_rep auth-resolution. Reps resolve to
+    // their PARENT vendor's profile via account_rep_for_vendor_id FK.
+    // Per banked CHAIN IS GOD: this is auth-resolution-layer (which
+    // Vendor profile to use), NOT chain modification (chain consumes
+    // Vendor type the same way regardless of resolution-path). Adds-to-
+    // chain (new resolution path) without changing how chain works.
+    // Real Supabase fetch of parent profile lands in Phase B; for Phase
+    // A the synthesized vendor-shape returns null when parent FK is
+    // unset so reps without a parent vendor see empty-state rather than
+    // crash.
+    if (profile.role === 'account_rep') {
+      // Phase A: parent-vendor resolution requires fetching parent
+      // profile. Real fetch lands in Phase B. For now return null so
+      // dashboard renders empty-state instead of synth-from-rep-profile
+      // (which would give wrong company / commission_pct). Reps who
+      // log in pre-Phase-B see auth-success + empty-vendor-context;
+      // navigation works but lead-data unscoped until Phase B wires
+      // the parent fetch.
+      return null
+    }
     if (profile.role !== 'vendor') return null
     return {
       id: profile.id,

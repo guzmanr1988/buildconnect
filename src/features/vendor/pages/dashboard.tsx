@@ -54,10 +54,12 @@ export default function VendorDashboard() {
   const vendor = useResolvedVendor()
   const mockLeads = useEffectiveMockLeads()
 
-  // Auth-redirect guard: non-vendor profile (e.g. QA persona left in
-  // auth-store) shouldn't render this page. Redirect homeowners + admins.
+  // Auth-redirect guard: non-vendor-family profile shouldn't render this
+  // page. Redirect homeowners + admins to their respective home routes.
+  // Ship #333 Phase A — account_rep is vendor-family (sees rep-scoped
+  // dashboard at /vendor); allow through alongside vendor.
   useEffect(() => {
-    if (profile !== null && profile.role !== 'vendor') {
+    if (profile !== null && profile.role !== 'vendor' && profile.role !== 'account_rep') {
       navigate(profile.role === 'homeowner' ? '/home' : '/admin', { replace: true })
     }
   }, [profile, navigate])

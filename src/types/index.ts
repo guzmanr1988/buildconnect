@@ -1,4 +1,4 @@
-export type UserRole = 'homeowner' | 'vendor' | 'admin'
+export type UserRole = 'homeowner' | 'vendor' | 'admin' | 'account_rep'
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
 // Ship #75 Phase A collapsed homeowner-cancellation-approved into the
@@ -47,6 +47,12 @@ export interface Profile {
   email: string
   name: string
   role: UserRole
+  // Ship #333 Phase A — parent-vendor FK for account_rep role. Set only
+  // on account_rep profiles; null for homeowner / vendor / admin. Phase B
+  // rep-dashboard render-layer filter resolves the rep's parent vendor
+  // via this FK to scope chain output. Per CHAIN IS GOD: rep-scope at
+  // consumer-render-layer NOT chain-layer.
+  account_rep_for_vendor_id?: string
   phone: string
   address: string
   // Ship #246 — geo-match Phase 1. Optional lat/lng for distance filter
