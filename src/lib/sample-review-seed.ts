@@ -1,5 +1,6 @@
 import { useProjectsStore, type SentProject } from '@/stores/projects-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 
 // Ship #315 — one-time seed for /admin/reviews queue per Rodolfo
 // "im not seen a contract to review sample". Writes a sample sold-
@@ -73,6 +74,8 @@ export function maybeSeedSampleReview(): void {
     soldAt,
     saleAmount: 18500,
     confirmedAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    // Ship #337 — preset Pricing Breakdown snapshot per #336.
+    priceLineItems: PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
   }
 
   useProjectsStore.setState((state) => ({

@@ -10,6 +10,7 @@ import {
 } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 
 // QA personas for 2-week launch QA sweep. Each persona has a fully-seeded
 // starting state across auth + cart + projects stores so apollo (or any QA
@@ -207,6 +208,8 @@ const PERSONA_3_APPROVED: QAPersona = {
       // never opened. Msg 1776671514407.
       sentAt: '2026-04-19T15:00:00.000Z',
       assignedRep: rep,
+      // Ship #337 — preset Pricing Breakdown snapshot per #336 schema.
+      priceLineItems: PRICE_LINE_ITEM_PRESETS.windows_doors.map((p) => ({ ...p })),
     }],
     assignedRepByLead: { 'L-QA3S': rep },
     leadStatusOverrides: {},
@@ -255,6 +258,8 @@ const PERSONA_4_MIXED: QAPersona = {
         soldAt: '2026-03-05T18:00:00.000Z',
         saleAmount: 18500,
         assignedRep: rep,
+        // Ship #337 — preset Pricing Breakdown snapshot per #336.
+        priceLineItems: PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
       },
       {
         id: 'bath4miguelqa',
@@ -271,6 +276,8 @@ const PERSONA_4_MIXED: QAPersona = {
         homeowner: homeowner(PERSONA_4_PROFILE),
         sentAt: '2026-04-01T11:00:00.000Z',
         assignedRep: rep,
+        // Ship #337 — preset Pricing Breakdown snapshot per #336.
+        priceLineItems: PRICE_LINE_ITEM_PRESETS.bathroom.map((p) => ({ ...p })),
       },
       {
         id: 'pool4miguelqa',
@@ -287,6 +294,8 @@ const PERSONA_4_MIXED: QAPersona = {
         homeowner: homeowner(PERSONA_4_PROFILE),
         sentAt: '2026-04-12T14:00:00.000Z',
         assignedRep: rep,
+        // Ship #337 — preset Pricing Breakdown snapshot per #336.
+        priceLineItems: PRICE_LINE_ITEM_PRESETS.pool.map((p) => ({ ...p })),
       },
     ],
     assignedRepByLead: {

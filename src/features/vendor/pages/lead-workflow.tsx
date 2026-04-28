@@ -28,6 +28,7 @@ import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
@@ -1269,37 +1270,11 @@ export default function VendorLeadWorkflow() {
                             </div>
                           )}
 
-                          {/* Ship #336 Phase A — preset Pricing Breakdown
-                              snapshotted from PRICE_LINE_ITEM_PRESETS at
-                              sendProject time. Read-only across all surfaces
-                              per Rodolfo verbatim "vendor projects to have the
-                              prices reflected with the details ... admin will
-                              see it on workflow as well". Same section also
-                              rendered on shared ProjectDetailDialog (n=7
-                              admin/vendor consumers) for cross-surface label-
-                              as-contract per banked feedback_label_as_contract
-                              _indicator_semantics. */}
-                          {sp.priceLineItems && sp.priceLineItems.length > 0 && (
-                            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                Pricing Breakdown
-                              </p>
-                              <div className="space-y-1.5 text-xs">
-                                {sp.priceLineItems.map((line) => (
-                                  <div key={line.id} className="flex justify-between">
-                                    <span className="text-muted-foreground">{line.label}</span>
-                                    <span className="font-medium">${line.amount.toLocaleString()}</span>
-                                  </div>
-                                ))}
-                                <div className="border-t border-border/60 pt-1.5 flex justify-between">
-                                  <span className="font-semibold">Total</span>
-                                  <span className="font-bold">
-                                    ${sp.priceLineItems.reduce((sum, l) => sum + (l.amount || 0), 0).toLocaleString()}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          {/* Ship #337 Phase A finishing-touch — Pricing
+                              Breakdown moved out of sold-branch to a full-
+                              width section below the 2-col grid. See block
+                              after grid-close (search for 'Pricing Breakdown
+                              full-width all-states'). */}
                         </div>
                       )
                     })()}
@@ -1527,6 +1502,49 @@ export default function VendorLeadWorkflow() {
               </div>
               </div>
               </div>
+
+              {/* Ship #337 Phase A finishing-touch — Pricing Breakdown
+                  full-width all-states. Pre-#337 the section was inside
+                  the sold-branch IIFE so only completed projects rendered
+                  it. Per Rodolfo verbatim 'on vendor projects' = broad-
+                  scope (any state). Now renders below the 2-col grid
+                  visible for all 4 states (pending / confirmed / sold /
+                  rejected) when priceLineItems available. Source priority:
+                  (1) sp.priceLineItems (snapshot at sendProject per
+                  immutable-ledger discipline #336) (2) preset fallback
+                  via service_category lookup for legacy mock-leads pre-
+                  #336 + Rodolfo's pre-#336 persisted entries lacking
+                  the snapshot. Fallback is consumer-render-layer only —
+                  per CHAIN IS GOD: no Lead-type schema change, no chain
+                  primitive modification. */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                const snapshot = sp?.priceLineItems
+                const fallback = PRICE_LINE_ITEM_PRESETS[selected.service_category as keyof typeof PRICE_LINE_ITEM_PRESETS]
+                const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
+                if (!priceLineItems || priceLineItems.length === 0) return null
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Pricing Breakdown
+                    </p>
+                    <div className="space-y-1.5 text-xs sm:text-sm">
+                      {priceLineItems.map((line) => (
+                        <div key={line.id} className="flex justify-between">
+                          <span className="text-muted-foreground">{line.label}</span>
+                          <span className="font-medium">${line.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="border-t border-border/60 pt-1.5 flex justify-between">
+                        <span className="font-semibold">Total</span>
+                        <span className="font-bold">
+                          ${priceLineItems.reduce((sum, l) => sum + (l.amount || 0), 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
         </DialogContent>
