@@ -207,6 +207,22 @@ export interface Bug {
   created_at: string
 }
 
+// Ship #336 Phase A — preset price-line-item per service-type per
+// Rodolfo "that will be aready preset in overhall price for the project
+// choosen by the homeowner". Variable-shape across service-types
+// (windows_doors gets [Product / Permit / Install Windows / Install Doors];
+// roofing gets [Material / Permit / Tear-off / Install]; etc). Source
+// is SERVICE_CATALOG entry; snapshotted onto SentProject.priceLineItems
+// at sendProject time per banked feedback_immutable_ledger_freeze_at_write
+// so price-detail LOCKS at intake-snapshot regardless of future catalog
+// updates. Read-only across all surfaces (no edit UI; vendor + admin
+// both read).
+export interface PriceLineItem {
+  id: string
+  label: string
+  amount: number
+}
+
 export interface VendorRep {
   id: string       // stable per-rep id within a vendor (not a Supabase UUID)
   name: string

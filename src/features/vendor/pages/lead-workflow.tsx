@@ -1268,6 +1268,38 @@ export default function VendorLeadWorkflow() {
                               </div>
                             </div>
                           )}
+
+                          {/* Ship #336 Phase A — preset Pricing Breakdown
+                              snapshotted from PRICE_LINE_ITEM_PRESETS at
+                              sendProject time. Read-only across all surfaces
+                              per Rodolfo verbatim "vendor projects to have the
+                              prices reflected with the details ... admin will
+                              see it on workflow as well". Same section also
+                              rendered on shared ProjectDetailDialog (n=7
+                              admin/vendor consumers) for cross-surface label-
+                              as-contract per banked feedback_label_as_contract
+                              _indicator_semantics. */}
+                          {sp.priceLineItems && sp.priceLineItems.length > 0 && (
+                            <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Pricing Breakdown
+                              </p>
+                              <div className="space-y-1.5 text-xs">
+                                {sp.priceLineItems.map((line) => (
+                                  <div key={line.id} className="flex justify-between">
+                                    <span className="text-muted-foreground">{line.label}</span>
+                                    <span className="font-medium">${line.amount.toLocaleString()}</span>
+                                  </div>
+                                ))}
+                                <div className="border-t border-border/60 pt-1.5 flex justify-between">
+                                  <span className="font-semibold">Total</span>
+                                  <span className="font-bold">
+                                    ${sp.priceLineItems.reduce((sum, l) => sum + (l.amount || 0), 0).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })()}

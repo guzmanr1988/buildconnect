@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from './cart-store'
-import type { VendorRep } from '@/types'
+import type { VendorRep, PriceLineItem } from '@/types'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 
 export interface ContractorInfo {
   // Ship #165 per task_1776731114470_226 — vendor_id FK is the stable
@@ -75,6 +76,13 @@ export interface SentProject {
   reviewedAt?: string
   reviewedBy?: string
   reviewNote?: string
+  // Ship #336 Phase A — preset price-breakdown snapshotted at
+  // sendProject time. Source: SERVICE_CATALOG[item.serviceId].priceLineItems.
+  // Per banked feedback_immutable_ledger_freeze_at_write: locked at
+  // intake; future catalog updates do NOT retro-rewrite this record.
+  // Read-only across vendor (Lead Detail Modal sold-branch) + admin
+  // (ProjectDetailDialog n=7 consumers) surfaces.
+  priceLineItems?: PriceLineItem[]
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -245,6 +253,15 @@ export const useProjectsStore = create<ProjectsState>()(
 
       sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId) => {
         set((state) => {
+          // Ship #336 Phase A — snapshot priceLineItems from preset map
+          // at write-time per banked feedback_immutable_ledger_freeze_at_write.
+          // Snapshot vs lookup-at-render: locks the price-detail to the
+          // preset-state-as-of-intake; future preset-map edits do NOT
+          // retroactively rewrite this record.
+          const presetLineItems = PRICE_LINE_ITEM_PRESETS[item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
+          const priceLineItemsSnapshot = presetLineItems
+            ? presetLineItems.map((p) => ({ ...p }))
+            : undefined
           const next: SentProject = {
             id: crypto.randomUUID(),
             item,
@@ -255,6 +272,7 @@ export const useProjectsStore = create<ProjectsState>()(
             homeowner,
             homeowner_id: homeownerId,
             sentAt: new Date().toISOString(),
+            ...(priceLineItemsSnapshot ? { priceLineItems: priceLineItemsSnapshot } : {}),
           }
           const nextSentProjects = [...state.sentProjects, next]
           // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.

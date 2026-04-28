@@ -312,6 +312,40 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     </div>
                   )}
 
+                  {/* Ship #336 Phase A — Pricing Breakdown read-only section.
+                      Snapshotted from PRICE_LINE_ITEM_PRESETS at sendProject
+                      time per banked feedback_immutable_ledger_freeze_at_write
+                      so the per-project breakdown locks at intake. Same
+                      section also rendered on /vendor/lead-workflow Lead
+                      Detail Modal sold-branch for cross-surface label-as-
+                      contract per banked feedback_label_as_contract_indicator
+                      _semantics. Visible across all n=7 ProjectDetailDialog
+                      consumers (admin/vendor-detail / admin/transactions /
+                      admin/homeowner-detail / admin/activity / admin/workflow
+                      + vendor/homeowner-detail). */}
+                  {selectedItem.project_data.priceLineItems && selectedItem.project_data.priceLineItems.length > 0 && (
+                    <div className="rounded-xl border p-4 space-y-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing Breakdown</h4>
+                      <div className="space-y-1.5 text-sm">
+                        {selectedItem.project_data.priceLineItems.map((line: { id: string; label: string; amount: number }) => (
+                          <div key={line.id} className="flex justify-between">
+                            <span className="text-muted-foreground">{line.label}</span>
+                            <span className="font-medium">${line.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="border-t pt-1.5 flex justify-between">
+                          <span className="font-semibold">Total</span>
+                          <span className="font-bold">
+                            ${selectedItem.project_data.priceLineItems.reduce(
+                              (sum: number, l: { amount: number }) => sum + (l.amount || 0),
+                              0,
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {selectedItem.project_data.rejectionReason && (
                     <div className="rounded-xl border border-red-200 bg-red-50/50 p-4 space-y-1">
                       <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wider">Rejection Reason</h4>
