@@ -259,7 +259,21 @@ const PERSONA_4_MIXED: QAPersona = {
         saleAmount: 18500,
         assignedRep: rep,
         // Ship #337 — preset Pricing Breakdown snapshot per #336.
-        priceLineItems: PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
+        // Ship #343 Phase A — appended EXTRA $ auto-adjustment line so
+        // demo fixture matches what markSold would inject for a sold
+        // project where saleAmount (18500) > sum(roofing-preset-originals)
+        // (14950) → delta 3550. Demo-visibility per banked
+        // mock-data-as-test-harness Rodolfo "demo must work as real".
+        priceLineItems: [
+          ...PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
+          {
+            id: 'auto-extra-qa4-roof',
+            label: 'EXTRA $',
+            amount: 3550,
+            originalAmount: 0,
+            source: 'auto_sold_adjustment' as const,
+          },
+        ],
       },
       {
         id: 'bath4miguelqa',

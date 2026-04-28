@@ -75,7 +75,21 @@ export function maybeSeedSampleReview(): void {
     saleAmount: 18500,
     confirmedAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
     // Ship #337 — preset Pricing Breakdown snapshot per #336.
-    priceLineItems: PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
+    // Ship #343 Phase A — appended EXTRA $ auto-adjustment line so
+    // sample fixture matches markSold injection semantics for a sold
+    // project where saleAmount (18500) > sum(roofing-preset-originals)
+    // (14950) → delta 3550. Demo-visibility per banked
+    // mock-data-as-test-harness.
+    priceLineItems: [
+      ...PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
+      {
+        id: 'auto-extra-sample-review',
+        label: 'EXTRA $',
+        amount: 3550,
+        originalAmount: 0,
+        source: 'auto_sold_adjustment' as const,
+      },
+    ],
   }
 
   useProjectsStore.setState((state) => ({

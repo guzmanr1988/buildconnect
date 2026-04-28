@@ -320,10 +320,58 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       markSold: (id, saleAmount) => {
+        // Ship #343 Phase A — auto-inject 'EXTRA $' line when newSaleAmount
+        // exceeds sum-of-preset-originals so Pricing Breakdown total
+        // matches sold-final per Rodolfo "auto populated to what the
+        // vendor outputs". HIGHER-case-only this Phase A; LOWER-case
+        // (newSaleAmount < sum-original) leaves Pricing Breakdown at
+        // sum-of-originals as-is — TBD pending Rodolfo verdict on
+        // discount-line vs leave-as-is vs block-entirely.
+        //
+        // Per banked rodolfo-vocabulary-preference-as-label-discipline:
+        // exact-string label 'EXTRA $' + delta-amount per Rodolfo verbatim.
+        //
+        // Per banked new-feature-as-display-extension-not-flow-bypass:
+        // existing #316 contract-upload + #313 admin-review enforcement
+        // UNCHANGED. Auto-line is display + commission-source addition
+        // (commission still = saleAmount × commission_pct; no canonical-
+        // source divergence introduced).
         set((state) => ({
-          sentProjects: state.sentProjects.map((p) =>
-            p.id === id ? { ...p, status: 'sold', soldAt: new Date().toISOString(), saleAmount } : p
-          ),
+          sentProjects: state.sentProjects.map((p) => {
+            if (p.id !== id) return p
+            // Compute auto-adjustment delta from preset-source originals only.
+            // vendor_edit + auto_sold_adjustment lines are excluded so re-marks
+            // don't double-count prior adjustments.
+            const presetSum = (p.priceLineItems ?? [])
+              .filter((line) => (line.source ?? 'preset') === 'preset')
+              .reduce((sum, line) => sum + (line.originalAmount ?? line.amount ?? 0), 0)
+            // Strip prior auto_sold_adjustment lines so re-mark replaces
+            // (not appends) the EXTRA $ line.
+            const baseLines = (p.priceLineItems ?? []).filter(
+              (line) => line.source !== 'auto_sold_adjustment',
+            )
+            const delta = saleAmount - presetSum
+            const nextLineItems =
+              delta > 0
+                ? [
+                    ...baseLines,
+                    {
+                      id: `auto-extra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      label: `EXTRA $`,
+                      amount: delta,
+                      originalAmount: 0,
+                      source: 'auto_sold_adjustment' as const,
+                    },
+                  ]
+                : baseLines
+            return {
+              ...p,
+              status: 'sold' as const,
+              soldAt: new Date().toISOString(),
+              saleAmount,
+              priceLineItems: nextLineItems,
+            }
+          }),
         }))
       },
 

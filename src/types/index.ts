@@ -215,12 +215,31 @@ export interface Bug {
 // is SERVICE_CATALOG entry; snapshotted onto SentProject.priceLineItems
 // at sendProject time per banked feedback_immutable_ledger_freeze_at_write
 // so price-detail LOCKS at intake-snapshot regardless of future catalog
-// updates. Read-only across all surfaces (no edit UI; vendor + admin
-// both read).
+// updates.
+//
+// Ship #343 Phase A — added originalAmount + source fields per Rodolfo
+// "make sure when ever job is sold on admin and admin puts a higher
+// number sold to add a line extra and amount" + "auto populated to
+// what the vendor outputs". originalAmount is immutable from snapshot
+// (audit-trail per banked feedback_immutable_ledger_freeze_at_write);
+// source distinguishes preset-original from auto-injected adjustment
+// (Phase A) and from vendor-edited (Phase B / #344).
+export type PriceLineItemSource = 'preset' | 'vendor_edit' | 'auto_sold_adjustment'
+
 export interface PriceLineItem {
   id: string
   label: string
   amount: number
+  // Immutable original amount snapshotted at sendProject time. Phase B
+  // vendor-edit-arrows (#344) renders red ▲ / green ▼ when amount !==
+  // originalAmount. Auto-sold-adjustment lines have originalAmount = 0
+  // (delta-only) so the EXTRA $ line surfaces without a paired arrow.
+  originalAmount?: number
+  // Source of the line. preset = from PRICE_LINE_ITEM_PRESETS at
+  // sendProject snapshot. vendor_edit = vendor-modified amount in #344
+  // Phase B. auto_sold_adjustment = injected by markSold when sold-final
+  // exceeds sum-of-preset-originals.
+  source?: PriceLineItemSource
 }
 
 export interface VendorRep {

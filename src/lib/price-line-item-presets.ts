@@ -19,10 +19,16 @@ import type { PriceLineItem, ServiceCategory } from '@/types'
 // match what gets displayed on Lead Detail Modal + ProjectDetailDialog
 // "Pricing Breakdown" sections (no separate display-vs-store divergence).
 
+// Ship #343 Phase A — preset entries now stamp originalAmount = amount
+// + source = 'preset' so vendor-edit-arrows (#344 Phase B) and
+// auto_sold_adjustment EXTRA $ lines (this ship) can be distinguished
+// from preset-originals at render-time.
 const lineItem = (id: string, label: string, amount: number): PriceLineItem => ({
   id,
   label,
   amount,
+  originalAmount: amount,
+  source: 'preset',
 })
 
 export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> = {
