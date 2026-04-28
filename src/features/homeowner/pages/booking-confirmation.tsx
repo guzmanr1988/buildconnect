@@ -11,6 +11,30 @@ import { useAuthStore } from '@/stores/auth-store'
 type BookingDetails = { service: string; vendor: string; date: string; time: string }
 type ConfirmationState = 'loading' | 'success' | 'refreshed' | 'incomplete'
 
+// Ship #335 — presentation-layer formatters. booking.date stored as
+// canonical ISO 'YYYY-MM-DD'; booking.time as 24h 'HH:MM'. Display
+// formats here at render-time per #103 SoT discipline.
+function formatBookingDate(dateStr: string) {
+  // Defensive: support both canonical ISO ('2026-04-28') and legacy
+  // pre-#335 human-readable ('Tuesday, April 28, 2026') for back-compat
+  // with persisted entries from before this ship.
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr + 'T12:00:00' : dateStr)
+  if (Number.isNaN(d.getTime())) return dateStr
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+function formatBookingTime(timeStr: string) {
+  // Defensive: support canonical 24h 'HH:MM' AND legacy '2:30 PM'.
+  if (/AM|PM/i.test(timeStr)) return timeStr
+  const m = /^(\d{1,2}):(\d{2})$/.exec(timeStr)
+  if (!m) return timeStr
+  const h = Number(m[1])
+  const min = m[2]
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${hour12}:${min} ${suffix}`
+}
+
 // Ship #213 — refresh-window for post-send re-mount. If preconditions
 // were already consumed by an earlier mount but a sentProject entry is
 // fresh (< 5min old), we assume this is a browser refresh of a real
@@ -209,11 +233,11 @@ export function BookingConfirmationPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Date</span>
-              <span className="font-medium text-foreground">{details.date}</span>
+              <span className="font-medium text-foreground">{formatBookingDate(details.date)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Time</span>
-              <span className="font-medium text-foreground">{details.time}</span>
+              <span className="font-medium text-foreground">{formatBookingTime(details.time)}</span>
             </div>
           </CardContent>
         </Card>

@@ -234,9 +234,22 @@ export function BookingCalendarPage() {
                     size="lg"
                     className="mt-2 h-11 w-full text-sm font-medium"
                     onClick={() => {
+                      // Ship #335 — write canonical ISO date + 24h time per
+                      // #103 format-SoT discipline. Pre-#335 wrote
+                      // formatDate(selectedDate) ('Tuesday, April 28, 2026')
+                      // + formatTime(selectedTime) ('2:30 PM') as the LS
+                      // values, which propagated to sentProject.booking.date.
+                      // Vendor /vendor/calendar synthesized slot as
+                      // `${booking.date}T${booking.time}` → malformed-ISO
+                      // → dateKey didn't match grid's ISO lookup → leads
+                      // never appeared on the calendar grid.
+                      // Post-#335: store canonical 'YYYY-MM-DD' + 'HH:MM'
+                      // (24h); presentation-layer formats at render-time
+                      // (booking-confirmation summary card formats via
+                      // toLocaleDateString + AM/PM converter).
                       localStorage.setItem('buildconnect-selected-booking', JSON.stringify({
-                        date: formatDate(selectedDate),
-                        time: formatTime(selectedTime),
+                        date: selectedDate,
+                        time: selectedTime,
                       }))
                       navigate('/home/booking/confirmed')
                     }}
