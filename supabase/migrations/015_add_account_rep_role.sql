@@ -7,37 +7,41 @@
 -- create access for logins on reps."
 --
 -- Phase A extends auth schema:
---   1. Widens user_role check-constraint to include 'account_rep'
+--   1. Adds 'account_rep' to user_role enum (per 001_create_profiles.sql
+--      schema: profiles.role is user_role ENUM type with values
+--      homeowner / vendor / admin)
 --   2. Adds account_rep_for_vendor_id FK on profiles → references the
 --      parent vendor profile so rep-scoped dashboards can resolve their
 --      vendor parent for chain access (per banked CHAIN IS GOD: rep
 --      filtering happens at consumer-render-layer, NOT chain-layer)
 --
--- Idempotent (DO blocks + IF NOT EXISTS guards). Reversible via
--- DROP COLUMN + REVOKE constraint if needed.
+-- Ship #344 schema-correction — original 015 attempted text+check-
+-- constraint extension which doesn't apply to enum columns. profiles.role
+-- is enum user_role per 001_create_profiles.sql:4 → use ALTER TYPE ADD
+-- VALUE IF NOT EXISTS for the enum extension. Studio-apply error 22P02
+-- "invalid input value for enum user_role: account_rep" surfaced the
+-- schema-cite-divergence between original 015's assumption and runtime
+-- reality. Sibling-cite of feedback_silent_undefined_field_mismatch at
+-- schema-vs-migration-assumption layer.
 --
--- profiles.role is currently a text column with a check-constraint
--- enumeration (not a Postgres enum type) per existing schema in
--- 001_create_profiles.sql. Widening the check-constraint is the safe
--- in-place extension; if profiles.role were a true ENUM type the
--- ALTER TYPE ADD VALUE 'account_rep' shape would apply instead.
+-- Idempotent (IF NOT EXISTS guards on enum value + column + index).
+-- Reversible considerations:
+--   - Postgres has no DROP VALUE for enums; extension is one-way at the
+--     enum-type level. Feature-flag at consumer-layer (UserRole TS union
+--     + Phase A gate-patches) covers rollback semantics: revert TS code
+--     to remove account_rep from union → no profile rows can carry the
+--     role → enum value is dormant. Safe.
+--   - account_rep_for_vendor_id column + idx are reversible via DROP COLUMN.
+--
+-- Postgres 12+ allows ALTER TYPE ADD VALUE outside transactions (Supabase
+-- runs 14+). The IF NOT EXISTS clause makes re-application safe. If the
+-- Studio-apply runs everything in one implicit transaction, ADD VALUE
+-- still works in PG 14+ but the new value cannot be used until the
+-- transaction commits — that's why we don't reference 'account_rep' as
+-- a value within this same migration (no INSERT statements use it).
 
--- 1) Widen role check-constraint to include 'account_rep'
-do $$
-begin
-  if exists (
-    select 1 from information_schema.table_constraints
-    where table_schema = 'public'
-      and table_name = 'profiles'
-      and constraint_name = 'profiles_role_check'
-  ) then
-    alter table public.profiles drop constraint profiles_role_check;
-  end if;
-end $$;
-
-alter table public.profiles
-  add constraint profiles_role_check
-  check (role in ('homeowner', 'vendor', 'admin', 'account_rep'));
+-- 1) Add 'account_rep' to user_role enum
+alter type user_role add value if not exists 'account_rep';
 
 -- 2) Add parent-vendor FK column (nullable; only set on account_rep
 --    profiles). Self-referencing FK so the rep's profile points at the
