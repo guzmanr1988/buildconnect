@@ -11,10 +11,8 @@ import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { cn } from '@/lib/utils'
 import type { Lead, LeadStatus } from '@/types'
 
@@ -52,7 +50,6 @@ export function AppointmentStatusPage() {
   const counterReschedule = useProjectsStore((s) => s.counterReschedule)
   const rejectReschedule = useProjectsStore((s) => s.rejectReschedule)
   const updateBooking = useProjectsStore((s) => s.updateBooking)
-  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
 
   // Ship #191 — dialog open-state. Separate flags for request (pre-
   // approval simple update OR post-approval homeowner propose) and
@@ -81,18 +78,20 @@ export function AppointmentStatusPage() {
     ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
     : undefined
 
-  // Catalog-first value for sentProjects — avoids same-preset-for-all by
-  // sourcing windows_doors totals from vendor catalog prices when available.
+  // Ship #355 — frozen price SoT. Priority: saleAmount (post-sale) →
+  // quotedPriceCents (vendor-compare price frozen at booking) → preset
+  // fallback (legacy / no catalog price). Removes the catalog-store
+  // recompute (#352) that diverged from vendor-compare's Supabase path.
   const sentProjectValue: number = sentProject
-    ? sentProject.saleAmount ?? (() => {
-        const lineItems = sentProject.priceLineItems && sentProject.priceLineItems.length > 0
-          ? sentProject.priceLineItems
-          : (PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
-        if (sentProject.item.serviceId === 'windows_doors') {
-          return computeWindowsDoorsCatalogTotal(sentProject.item as any, lineItems, getVendorPrice)
-        }
-        return lineItems.reduce((sum, l) => sum + l.amount, 0)
-      })()
+    ? sentProject.saleAmount
+      ?? (sentProject.quotedPriceCents && sentProject.quotedPriceCents > 0
+          ? Math.round(sentProject.quotedPriceCents / 100)
+          : (() => {
+              const lineItems = (sentProject.priceLineItems && sentProject.priceLineItems.length > 0)
+                ? sentProject.priceLineItems
+                : (PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+              return lineItems.reduce((sum, l) => sum + l.amount, 0)
+            })())
     : 0
 
   const baseLead = mockLead

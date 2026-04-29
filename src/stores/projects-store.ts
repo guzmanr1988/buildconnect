@@ -16,6 +16,10 @@ export interface ContractorInfo {
   company: string
   rating: number
   avatar?: string
+  // Ship #355 — vendor-compare price frozen at booking per
+  // immutable-ledger-freeze-at-write. Optional: absent when vendor has
+  // no catalog price (falls back to preset on appointment-status).
+  quotedPriceCents?: number
 }
 
 export interface BookingInfo {
@@ -83,6 +87,12 @@ export interface SentProject {
   // Read-only across vendor (Lead Detail Modal sold-branch) + admin
   // (ProjectDetailDialog n=7 consumers) surfaces.
   priceLineItems?: PriceLineItem[]
+  // Ship #355 — price the homeowner saw on vendor-compare at booking
+  // time. Source: computeVendorTotal(priceMaps[vendorId], cartItems).totalCents
+  // frozen via sendProject. appointment-status reads this instead of
+  // recomputing via catalog store (different SoT). Optional: absent on
+  // legacy records + when vendor has no Supabase catalog price set.
+  quotedPriceCents?: number
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -273,6 +283,9 @@ export const useProjectsStore = create<ProjectsState>()(
             homeowner_id: homeownerId,
             sentAt: new Date().toISOString(),
             ...(priceLineItemsSnapshot ? { priceLineItems: priceLineItemsSnapshot } : {}),
+            ...(contractor.quotedPriceCents && contractor.quotedPriceCents > 0
+              ? { quotedPriceCents: contractor.quotedPriceCents }
+              : {}),
           }
           const nextSentProjects = [...state.sentProjects, next]
           // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.

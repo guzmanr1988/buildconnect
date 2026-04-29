@@ -280,6 +280,10 @@ export function VendorComparePage() {
                         name: vendor.name,
                         company: vendor.company,
                         rating: vendor.rating,
+                        // Ship #355 — freeze the price the homeowner sees at
+                        // booking time. Only set when vendor has a full quote
+                        // (totalCents > 0); absent when "Contact for quote".
+                        ...(result?.totalCents > 0 ? { quotedPriceCents: result.totalCents } : {}),
                       }))
                       navigate('/home/booking')
                     }}
