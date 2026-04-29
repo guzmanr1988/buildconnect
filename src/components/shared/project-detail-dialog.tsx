@@ -294,8 +294,10 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       pd.priceLineItems?.length > 0
                         ? pd.priceLineItems
                         : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
-                    const wInstallLine = wLineItems.find((l) => l.id === 'wd-install-windows')
+                    const wdProductLine = wLineItems.find((l) => l.id === 'wd-product')
                     const totalWQty: number = pd.item.windowSelections.reduce((s: number, w: any) => s + w.quantity, 0)
+                    const totalDQty: number = (pd.item.doorSelections ?? []).reduce((s: number, d: any) => s + d.quantity, 0)
+                    const totalUnits = totalWQty + totalDQty
                     const fmt = (n: number) => `$${n.toLocaleString()}`
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
@@ -305,7 +307,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                           const hasCatalogPrice = unitPrice > 0
                           const lineTotal = hasCatalogPrice
                             ? unitPrice * w.quantity
-                            : (wInstallLine && totalWQty > 0 ? Math.round(wInstallLine.amount / totalWQty * w.quantity) : null)
+                            : (wdProductLine && totalUnits > 0 ? Math.round(wdProductLine.amount / totalUnits * w.quantity) : null)
                           return (
                             <div key={w.id} className="flex items-center justify-between text-[10px]">
                               <div className="flex flex-wrap gap-1.5">
@@ -338,8 +340,10 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       pd.priceLineItems?.length > 0
                         ? pd.priceLineItems
                         : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
-                    const dInstallLine = dLineItems.find((l) => l.id === 'wd-install-doors')
+                    const wdProductLine2 = dLineItems.find((l) => l.id === 'wd-product')
+                    const totalWQty2: number = (pd.item.windowSelections ?? []).reduce((s: number, w: any) => s + w.quantity, 0)
                     const totalDQty: number = pd.item.doorSelections.reduce((s: number, d: any) => s + d.quantity, 0)
+                    const totalUnits2 = totalWQty2 + totalDQty
                     const fmt = (n: number) => `$${n.toLocaleString()}`
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
@@ -349,7 +353,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                           const hasCatalogPrice = unitPrice > 0
                           const lineTotal = hasCatalogPrice
                             ? unitPrice * d.quantity
-                            : (dInstallLine && totalDQty > 0 ? Math.round(dInstallLine.amount / totalDQty * d.quantity) : null)
+                            : (wdProductLine2 && totalUnits2 > 0 ? Math.round(wdProductLine2.amount / totalUnits2 * d.quantity) : null)
                           return (
                             <div key={d.id} className="flex items-center justify-between text-[10px]">
                               <div className="flex flex-wrap gap-1.5">

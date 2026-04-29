@@ -140,31 +140,35 @@ export function computeWindowsDoorsCatalogTotal(
 ): number {
   let total = 0
 
-  // Windows
   const wInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-windows')
+  const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
+  const wdProductLine = resolvedLineItems.find((l) => l.id === 'wd-product')
   const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
+  const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+  const totalUnits = totalWQty + totalDQty
+
+  // Windows — product cost. Catalog-first; fallback to wd-product distributed
+  // across all window+door units (not install line — that's a separate cost).
   for (const w of item.windowSelections ?? []) {
     const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
     if (unit > 0) {
       total += unit * w.quantity
-    } else if (wInstallLine && totalWQty > 0) {
-      total += Math.round(wInstallLine.amount / totalWQty * w.quantity)
+    } else if (wdProductLine && totalUnits > 0) {
+      total += Math.round(wdProductLine.amount / totalUnits * w.quantity)
     }
   }
 
-  // Doors
-  const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
-  const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+  // Doors — product cost. Same distribution from wd-product.
   for (const d of item.doorSelections ?? []) {
     const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
     if (unit > 0) {
       total += unit * d.quantity
-    } else if (dInstallLine && totalDQty > 0) {
-      total += Math.round(dInstallLine.amount / totalDQty * d.quantity)
+    } else if (wdProductLine && totalUnits > 0) {
+      total += Math.round(wdProductLine.amount / totalUnits * d.quantity)
     }
   }
 
-  // Garage door
+  // Garage door — product cost
   const gd = item.garageDoorSelection
   if (gd?.type) {
     const gdUnit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
@@ -172,13 +176,13 @@ export function computeWindowsDoorsCatalogTotal(
     total += gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
   }
 
-  // Install Windows (per unit)
+  // Install Windows (labor, separate from product)
   if (totalWQty > 0) {
     const catalogInstallW = getPrice(item.serviceId, 'install_windows')
     total += catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
   }
 
-  // Install Doors (per unit)
+  // Install Doors (labor, separate from product)
   if (totalDQty > 0) {
     const catalogInstallD = getPrice(item.serviceId, 'install_doors')
     total += catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)

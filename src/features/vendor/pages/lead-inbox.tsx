@@ -356,8 +356,10 @@ export default function LeadInbox() {
                         return (
                           <>
                             {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
-                              const wInstallLine = resolvedLineItems?.find((l) => l.id === 'wd-install-windows')
+                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
                               const totalWQty = sp.item.windowSelections!.reduce((s, w) => s + w.quantity, 0)
+                              const totalDQty = sp.item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+                              const totalUnits = totalWQty + totalDQty
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
@@ -367,7 +369,7 @@ export default function LeadInbox() {
                                       const hasCatalogPrice = unitPrice > 0
                                       const lineTotal = hasCatalogPrice
                                         ? unitPrice * w.quantity
-                                        : (wInstallLine && totalWQty > 0 ? Math.round(wInstallLine.amount / totalWQty * w.quantity) : null)
+                                        : (wdProductLine && totalUnits > 0 ? Math.round(wdProductLine.amount / totalUnits * w.quantity) : null)
                                       return (
                                         <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
                                           <div className="flex items-center justify-between">
@@ -407,8 +409,10 @@ export default function LeadInbox() {
                               )
                             })()}
                             {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
-                              const dInstallLine = resolvedLineItems?.find((l) => l.id === 'wd-install-doors')
+                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
+                              const totalWQty2 = sp.item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
                               const totalDQty = sp.item.doorSelections!.reduce((s, d) => s + d.quantity, 0)
+                              const totalUnits2 = totalWQty2 + totalDQty
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
@@ -418,7 +422,7 @@ export default function LeadInbox() {
                                       const hasCatalogPrice = unitPrice > 0
                                       const lineTotal = hasCatalogPrice
                                         ? unitPrice * d.quantity
-                                        : (dInstallLine && totalDQty > 0 ? Math.round(dInstallLine.amount / totalDQty * d.quantity) : null)
+                                        : (wdProductLine && totalUnits2 > 0 ? Math.round(wdProductLine.amount / totalUnits2 * d.quantity) : null)
                                       return (
                                         <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
                                           <div className="flex items-center justify-between">
