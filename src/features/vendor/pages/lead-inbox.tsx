@@ -346,64 +346,84 @@ export default function LeadInbox() {
                           : PRICE_LINE_ITEM_PRESETS[sp.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
                         return (
                           <>
-                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
-                                <div className="flex flex-col gap-1">
-                                  {sp.item.windowSelections.map((w) => (
-                                    <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-base font-semibold text-foreground">
-                                          {w.size.replace('x', '" × ')}"
-                                        </span>
-                                        <span className="text-sm font-bold text-primary">×{w.quantity}</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        <Badge variant="secondary" className="text-[10px]">{w.type}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{w.frameColor}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{w.glassColor}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{w.glassType}</Badge>
-                                      </div>
-                                    </div>
-                                  ))}
+                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
+                              const wInstallLine = resolvedLineItems?.find((l) => l.id === 'wd-install-windows')
+                              const totalWQty = sp.item.windowSelections!.reduce((s, w) => s + w.quantity, 0)
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
+                                  <div className="flex flex-col gap-1">
+                                    {sp.item.windowSelections!.map((w) => {
+                                      const linePrice = wInstallLine && totalWQty > 0
+                                        ? Math.round(wInstallLine.amount / totalWQty * w.quantity)
+                                        : null
+                                      return (
+                                        <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-base font-semibold text-foreground">
+                                              {w.size.replace('x', '" × ')}"
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm text-muted-foreground">×{w.quantity}</span>
+                                              {linePrice !== null && <span className="text-sm font-bold text-primary">{fmt(linePrice)}</span>}
+                                            </div>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            <Badge variant="secondary" className="text-[10px]">{w.type}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{w.frameColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{w.glassColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{w.glassType}</Badge>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                  <div className="pt-2 border-t flex items-center justify-between">
+                                    <span className="text-sm font-medium text-muted-foreground">Total Windows</span>
+                                    <span className="text-lg font-bold text-primary">{totalWQty}</span>
+                                  </div>
                                 </div>
-                                <div className="pt-2 border-t flex items-center justify-between">
-                                  <span className="text-sm font-medium text-muted-foreground">Total Windows</span>
-                                  <span className="text-lg font-bold text-primary">
-                                    {sp.item.windowSelections.reduce((sum, w) => sum + w.quantity, 0)}
-                                  </span>
+                              )
+                            })()}
+                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
+                              const dInstallLine = resolvedLineItems?.find((l) => l.id === 'wd-install-doors')
+                              const totalDQty = sp.item.doorSelections!.reduce((s, d) => s + d.quantity, 0)
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
+                                  <div className="flex flex-col gap-1">
+                                    {sp.item.doorSelections!.map((d) => {
+                                      const linePrice = dInstallLine && totalDQty > 0
+                                        ? Math.round(dInstallLine.amount / totalDQty * d.quantity)
+                                        : null
+                                      return (
+                                        <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-base font-semibold text-foreground">
+                                              {d.size.replace('x', '" × ')}"
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm text-muted-foreground">×{d.quantity}</span>
+                                              {linePrice !== null && <span className="text-sm font-bold text-primary">{fmt(linePrice)}</span>}
+                                            </div>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            <Badge variant="secondary" className="text-[10px]">{d.type}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{d.frameColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{d.glassColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{d.glassType}</Badge>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                  <div className="pt-2 border-t flex items-center justify-between">
+                                    <span className="text-sm font-medium text-muted-foreground">Total Doors</span>
+                                    <span className="text-lg font-bold text-primary">{totalDQty}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
-                                <div className="flex flex-col gap-1">
-                                  {sp.item.doorSelections.map((d) => (
-                                    <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-base font-semibold text-foreground">
-                                          {d.size.replace('x', '" × ')}"
-                                        </span>
-                                        <span className="text-sm font-bold text-primary">×{d.quantity}</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        <Badge variant="secondary" className="text-[10px]">{d.type}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{d.frameColor}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{d.glassColor}</Badge>
-                                        <Badge variant="outline" className="text-[10px]">{d.glassType}</Badge>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="pt-2 border-t flex items-center justify-between">
-                                  <span className="text-sm font-medium text-muted-foreground">Total Doors</span>
-                                  <span className="text-lg font-bold text-primary">
-                                    {sp.item.doorSelections.reduce((sum, d) => sum + d.quantity, 0)}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
+                              )
+                            })()}
                             {/* Garage Door */}
                             {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (
                               <div className="rounded-xl border bg-background p-4 space-y-3">

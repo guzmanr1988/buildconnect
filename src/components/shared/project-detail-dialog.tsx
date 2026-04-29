@@ -285,33 +285,71 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     ))}
                   </div>
 
-                  {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (
-                    <div className="rounded-xl border p-4 space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
-                      {selectedItem.project_data.item.windowSelections.map((w: any) => (
-                        <div key={w.id} className="flex flex-wrap gap-1.5 text-[10px]">
-                          <Badge variant="outline">{w.size.replace('x', '"×')}" ×{w.quantity}</Badge>
-                          <Badge variant="secondary">{w.type}</Badge>
-                          <Badge variant="outline">{w.frameColor}</Badge>
-                          <Badge variant="outline">{w.glassColor}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
+                    const pd = selectedItem.project_data
+                    const wLineItems: Array<{ id: string; amount: number }> =
+                      pd.priceLineItems?.length > 0
+                        ? pd.priceLineItems
+                        : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+                    const wInstallLine = wLineItems.find((l) => l.id === 'wd-install-windows')
+                    const totalWQty: number = pd.item.windowSelections.reduce((s: number, w: any) => s + w.quantity, 0)
+                    return (
+                      <div className="rounded-xl border p-4 space-y-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
+                        {pd.item.windowSelections.map((w: any) => {
+                          const linePrice = wInstallLine && totalWQty > 0
+                            ? Math.round(wInstallLine.amount / totalWQty * w.quantity)
+                            : null
+                          return (
+                            <div key={w.id} className="flex items-center justify-between text-[10px]">
+                              <div className="flex flex-wrap gap-1.5">
+                                <Badge variant="outline">{w.size.replace('x', '"×')}" ×{w.quantity}</Badge>
+                                <Badge variant="secondary">{w.type}</Badge>
+                                <Badge variant="outline">{w.frameColor}</Badge>
+                                <Badge variant="outline">{w.glassColor}</Badge>
+                              </div>
+                              {linePrice !== null && (
+                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">${linePrice.toLocaleString()}</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
 
-                  {selectedItem.project_data.item.doorSelections && selectedItem.project_data.item.doorSelections.length > 0 && (
-                    <div className="rounded-xl border p-4 space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
-                      {selectedItem.project_data.item.doorSelections.map((d: any) => (
-                        <div key={d.id} className="flex flex-wrap gap-1.5 text-[10px]">
-                          <Badge variant="outline">{d.size.replace('x', '"×')}" ×{d.quantity}</Badge>
-                          <Badge variant="secondary">{d.type}</Badge>
-                          <Badge variant="outline">{d.frameColor}</Badge>
-                          <Badge variant="outline">{d.glassColor}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {selectedItem.project_data.item.doorSelections && selectedItem.project_data.item.doorSelections.length > 0 && (() => {
+                    const pd = selectedItem.project_data
+                    const dLineItems: Array<{ id: string; amount: number }> =
+                      pd.priceLineItems?.length > 0
+                        ? pd.priceLineItems
+                        : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+                    const dInstallLine = dLineItems.find((l) => l.id === 'wd-install-doors')
+                    const totalDQty: number = pd.item.doorSelections.reduce((s: number, d: any) => s + d.quantity, 0)
+                    return (
+                      <div className="rounded-xl border p-4 space-y-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
+                        {pd.item.doorSelections.map((d: any) => {
+                          const linePrice = dInstallLine && totalDQty > 0
+                            ? Math.round(dInstallLine.amount / totalDQty * d.quantity)
+                            : null
+                          return (
+                            <div key={d.id} className="flex items-center justify-between text-[10px]">
+                              <div className="flex flex-wrap gap-1.5">
+                                <Badge variant="outline">{d.size.replace('x', '"×')}" ×{d.quantity}</Badge>
+                                <Badge variant="secondary">{d.type}</Badge>
+                                <Badge variant="outline">{d.frameColor}</Badge>
+                                <Badge variant="outline">{d.glassColor}</Badge>
+                              </div>
+                              {linePrice !== null && (
+                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">${linePrice.toLocaleString()}</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
 
                   {/* Phase C — Garage Doors, Install Windows, Install Doors, Permit price cards */}
                   {(() => {
