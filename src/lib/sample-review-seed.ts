@@ -84,7 +84,7 @@ export function maybeSeedSampleReview(): void {
       ...PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
       {
         id: 'auto-extra-sample-review',
-        label: 'EXTRA $',
+        label: 'Upsale',
         amount: 3550,
         originalAmount: 0,
         source: 'auto_sold_adjustment' as const,

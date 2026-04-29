@@ -357,7 +357,7 @@ export const useProjectsStore = create<ProjectsState>()(
                     ...baseLines,
                     {
                       id: `auto-extra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      label: `EXTRA $`,
+                      label: `Upsale`,
                       amount: delta,
                       originalAmount: 0,
                       source: 'auto_sold_adjustment' as const,
