@@ -313,6 +313,82 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     </div>
                   )}
 
+                  {/* Phase C — Garage Doors, Install Windows, Install Doors, Permit price cards */}
+                  {(() => {
+                    const pd = selectedItem.project_data
+                    const lineItems: Array<{ id: string; label: string; amount: number }> =
+                      pd.priceLineItems && pd.priceLineItems.length > 0
+                        ? pd.priceLineItems
+                        : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+                    const findLine = (id: string) => lineItems.find((l) => l.id === id)
+                    const garageLine = findLine('wd-garage-door')
+                    const installWindowsLine = findLine('wd-install-windows')
+                    const installDoorsLine = findLine('wd-install-doors')
+                    const permitLine = lineItems.find((l) => l.label.toLowerCase().includes('permit'))
+                    const gd = pd.item?.garageDoorSelection
+                    const ws = pd.item?.windowSelections as Array<{ id: string; quantity: number }> | undefined
+                    const ds = pd.item?.doorSelections as Array<{ id: string; quantity: number }> | undefined
+                    const hasAny = (gd?.type && garageLine) || (ws?.length && installWindowsLine) || (ds?.length && installDoorsLine) || permitLine
+                    if (!hasAny) return null
+                    return (
+                      <>
+                        {gd?.type && garageLine && (
+                          <div className="rounded-xl border p-4 space-y-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Garage Doors</h4>
+                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                              <span className="font-medium">
+                                {gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                              </span>
+                              <span className="font-bold text-primary">${garageLine.amount.toLocaleString()}</span>
+                            </div>
+                            {(gd.size || gd.color || gd.glass) && (
+                              <div className="flex flex-wrap gap-1.5 px-2 text-[10px]">
+                                {gd.type === 'double_garage' && gd.size && (
+                                  <Badge variant="outline" className="text-[10px]">{gd.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                                )}
+                                {gd.color && <Badge variant="outline" className="text-[10px]">{gd.color.charAt(0).toUpperCase() + gd.color.slice(1)}</Badge>}
+                                {gd.glass && <Badge variant="outline" className="text-[10px]">Glass: {gd.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {ws && ws.length > 0 && installWindowsLine && (
+                          <div className="rounded-xl border p-4 space-y-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Windows</h4>
+                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                              <span className="text-muted-foreground">Installation labor</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">×{ws.reduce((s, w) => s + w.quantity, 0)}</span>
+                                <span className="font-bold text-primary">${installWindowsLine.amount.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {ds && ds.length > 0 && installDoorsLine && (
+                          <div className="rounded-xl border p-4 space-y-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Doors</h4>
+                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                              <span className="text-muted-foreground">Installation labor</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">×{ds.reduce((s, d) => s + d.quantity, 0)}</span>
+                                <span className="font-bold text-primary">${installDoorsLine.amount.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {permitLine && (
+                          <div className="rounded-xl border p-4 space-y-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Permit</h4>
+                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                              <span className="text-muted-foreground">Permit Fee</span>
+                              <span className="font-bold text-primary">${permitLine.amount.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
+
                   {/* Ship #336 Phase A — Pricing Breakdown read-only section.
                       Snapshotted from PRICE_LINE_ITEM_PRESETS at sendProject
                       time per banked feedback_immutable_ledger_freeze_at_write

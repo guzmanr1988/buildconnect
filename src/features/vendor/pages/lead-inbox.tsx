@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { EmptyState } from '@/components/shared/empty-state'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -340,6 +341,9 @@ export default function LeadInbox() {
                       {(() => {
                         const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
                         if (!sp) return null
+                        const resolvedLineItems = sp.priceLineItems && sp.priceLineItems.length > 0
+                          ? sp.priceLineItems
+                          : PRICE_LINE_ITEM_PRESETS[sp.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
                         return (
                           <>
                             {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (
@@ -428,6 +432,97 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
+                            {/* Garage Doors — price card */}
+                            {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (() => {
+                              const garageLine = resolvedLineItems?.find((l) => l.id === 'wd-garage-door')
+                              if (!garageLine) return null
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Garage Doors</h4>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-base font-semibold text-foreground">
+                                          {sp.item.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                                        </span>
+                                        <span className="text-sm font-bold text-primary">{fmt(garageLine.amount)}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {sp.item.garageDoorSelection.type === 'double_garage' && sp.item.garageDoorSelection.size && (
+                                          <Badge variant="outline" className="text-[10px]">
+                                            {sp.item.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
+                                          </Badge>
+                                        )}
+                                        {sp.item.garageDoorSelection.color && (
+                                          <Badge variant="outline" className="text-[10px]">
+                                            {sp.item.garageDoorSelection.color.charAt(0).toUpperCase() + sp.item.garageDoorSelection.color.slice(1)}
+                                          </Badge>
+                                        )}
+                                        {sp.item.garageDoorSelection.glass && (
+                                          <Badge variant="outline" className="text-[10px]">
+                                            Glass: {sp.item.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {/* Install Windows — price card */}
+                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
+                              const installLine = resolvedLineItems?.find((l) => l.id === 'wd-install-windows')
+                              if (!installLine) return null
+                              const totalQty = sp.item.windowSelections!.reduce((sum, w) => sum + w.quantity, 0)
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Install Windows</h4>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Installation labor</span>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm text-muted-foreground">×{totalQty}</span>
+                                        <span className="text-sm font-bold text-primary">{fmt(installLine.amount)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {/* Install Doors — price card */}
+                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
+                              const installLine = resolvedLineItems?.find((l) => l.id === 'wd-install-doors')
+                              if (!installLine) return null
+                              const totalQty = sp.item.doorSelections!.reduce((sum, d) => sum + d.quantity, 0)
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Install Doors</h4>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Installation labor</span>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm text-muted-foreground">×{totalQty}</span>
+                                        <span className="text-sm font-bold text-primary">{fmt(installLine.amount)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {/* Permit — single line price card */}
+                            {(() => {
+                              const permitLine = resolvedLineItems?.find((l) => l.label.toLowerCase().includes('permit'))
+                              if (!permitLine) return null
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Permit</h4>
+                                  <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
+                                    <span className="text-sm text-foreground">Permit Fee</span>
+                                    <span className="text-sm font-bold text-primary">{fmt(permitLine.amount)}</span>
+                                  </div>
+                                </div>
+                              )
+                            })()}
                             {/* Metal Roof Selection */}
                             {sp.item.metalRoofSelection && sp.item.metalRoofSelection.color && (
                               <div className="rounded-xl border bg-background p-4 space-y-3">
