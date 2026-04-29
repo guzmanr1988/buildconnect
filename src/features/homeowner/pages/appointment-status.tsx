@@ -11,8 +11,10 @@ import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { cn } from '@/lib/utils'
 import type { Lead, LeadStatus } from '@/types'
 
@@ -50,6 +52,7 @@ export function AppointmentStatusPage() {
   const counterReschedule = useProjectsStore((s) => s.counterReschedule)
   const rejectReschedule = useProjectsStore((s) => s.rejectReschedule)
   const updateBooking = useProjectsStore((s) => s.updateBooking)
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
 
   // Ship #191 — dialog open-state. Separate flags for request (pre-
   // approval simple update OR post-approval homeowner propose) and
@@ -77,22 +80,28 @@ export function AppointmentStatusPage() {
   const sentProject = !mockLead
     ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
     : undefined
+
+  // Catalog-first value for sentProjects — avoids same-preset-for-all by
+  // sourcing windows_doors totals from vendor catalog prices when available.
+  const sentProjectValue: number = sentProject
+    ? sentProject.saleAmount ?? (() => {
+        const lineItems = sentProject.priceLineItems && sentProject.priceLineItems.length > 0
+          ? sentProject.priceLineItems
+          : (PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+        if (sentProject.item.serviceId === 'windows_doors') {
+          return computeWindowsDoorsCatalogTotal(sentProject.item as any, lineItems, getVendorPrice)
+        }
+        return lineItems.reduce((sum, l) => sum + l.amount, 0)
+      })()
+    : 0
+
   const baseLead = mockLead
     ?? (sentProject && {
       id: `L-${sentProject.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
       vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
       project: sentProject.item.serviceName,
-      // Ship #342 — bridge sp.saleAmount → lead.value at this synthesis
-      // site. saleAmount is only written at markSold time; pre-sale it is
-      // undefined. Fall through to priceLineItems sum (snapshotted at
-      // sendProject) → preset fallback (legacy entries) → 0.
-      value: sentProject.saleAmount ?? (() => {
-        const items = sentProject.priceLineItems && sentProject.priceLineItems.length > 0
-          ? sentProject.priceLineItems
-          : PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-        return items?.reduce((sum, l) => sum + l.amount, 0) ?? 0
-      })(),
+      value: sentProjectValue,
       status: sentProjectStatusMap[sentProject.status] ?? 'pending',
       slot: sentProject.sentAt,
       permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),

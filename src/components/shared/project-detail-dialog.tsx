@@ -170,6 +170,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       },
       item: {
         serviceName: l.project.split('—')[0].trim(),
+        serviceId: l.service_category,
         selections: l.pack_items as Record<string, string[]>,
       },
     }

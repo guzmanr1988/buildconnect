@@ -96,7 +96,7 @@ export default function LeadInbox() {
       // item totals (sum of all card prices). Sold projects keep saleAmount
       // (locked at sale time, includes Upsale line).
       value: p.saleAmount ?? (() => {
-        const lineItems = p.priceLineItems?.length > 0
+        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
           ? p.priceLineItems
           : (PRICE_LINE_ITEM_PRESETS[p.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
         if (p.item.serviceId === 'windows_doors') {

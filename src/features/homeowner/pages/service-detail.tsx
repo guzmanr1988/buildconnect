@@ -27,6 +27,9 @@ import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { getOptionMetadata } from '@/lib/option-metadata'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -195,6 +198,7 @@ export function ServiceDetailPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [detailsOpen, setDetailsOpen] = useState(false)
 
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
   const services = useCatalogStore((s) => s.services)
   const service = services.find((s) => s.id === serviceId)
 
@@ -741,6 +745,25 @@ export function ServiceDetailPage() {
 
         {/* CTA */}
         <div className="mt-4 flex flex-col gap-3">
+          {serviceId === 'windows_doors' && (windowSelections.length > 0 || doorSelections.length > 0 || garageDoorSelection.type) && (() => {
+            const liveQuote = computeWindowsDoorsCatalogTotal(
+              {
+                serviceId: serviceId!,
+                windowSelections: windowSelections.length > 0 ? windowSelections : undefined,
+                doorSelections: doorSelections.length > 0 ? doorSelections : undefined,
+                garageDoorSelection: garageDoorSelection.type ? garageDoorSelection : undefined,
+                selections,
+              },
+              PRICE_LINE_ITEM_PRESETS.windows_doors ?? [],
+              getVendorPrice,
+            )
+            return liveQuote > 0 ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Estimated Total</span>
+                <span className="text-lg font-bold text-primary">${liveQuote.toLocaleString()}</span>
+              </div>
+            ) : null
+          })()}
           <Button
             size="lg"
             className={cn(
