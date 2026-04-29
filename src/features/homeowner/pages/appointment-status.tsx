@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
@@ -83,12 +84,15 @@ export function AppointmentStatusPage() {
       vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
       project: sentProject.item.serviceName,
       // Ship #342 — bridge sp.saleAmount → lead.value at this synthesis
-      // site (homeowner-side appointment-status own-synth, not chain
-      // primitive). Matches the lead-inbox.tsx fix pattern from #338.
-      // Per banked feedback_silent_undefined_field_mismatch sibling-class:
-      // hardcoded zero silently degrades the homeowner-side Price display
-      // to $0; bridge gap at synthesis without modifying chain.
-      value: sentProject.saleAmount ?? 0,
+      // site. saleAmount is only written at markSold time; pre-sale it is
+      // undefined. Fall through to priceLineItems sum (snapshotted at
+      // sendProject) → preset fallback (legacy entries) → 0.
+      value: sentProject.saleAmount ?? (() => {
+        const items = sentProject.priceLineItems && sentProject.priceLineItems.length > 0
+          ? sentProject.priceLineItems
+          : PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
+        return items?.reduce((sum, l) => sum + l.amount, 0) ?? 0
+      })(),
       status: sentProjectStatusMap[sentProject.status] ?? 'pending',
       slot: sentProject.sentAt,
       permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),
