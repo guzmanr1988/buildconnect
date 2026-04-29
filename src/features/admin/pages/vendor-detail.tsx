@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, Briefcase, Phone, MapPin } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, Briefcase, Phone, MapPin, Users, CreditCard, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,9 @@ import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS } from '@/stores/vendor-employees-store'
+import { useVendorBillingStore, PAYMENT_METHOD_LABELS } from '@/stores/vendor-billing-store'
+import { useVendorHomeownerDocsStore, VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS } from '@/stores/vendor-homeowner-documents-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import type { LeadStatus } from '@/types'
@@ -59,6 +62,10 @@ export default function AdminVendorDetail() {
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const mockLeads = useEffectiveMockLeads()
+
+  const employeesByVendor = useVendorEmployeesStore((s) => s.employeesByVendor)
+  const paymentMethods = useVendorBillingStore((s) => s.getPaymentMethodsForVendor(vendorId))
+  const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [agreementViewOpen, setAgreementViewOpen] = useState(false)
@@ -327,6 +334,137 @@ export default function AdminVendorDetail() {
           </div>
         )}
       </section>
+
+      {/* Section: Account Reps */}
+      {(() => {
+        const employees = employeesByVendor[vendor.id] ?? []
+        return (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="font-heading text-lg font-semibold">Account Reps</h2>
+              <span className="text-sm text-muted-foreground">({employees.length})</span>
+            </div>
+            {employees.length === 0 ? (
+              <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No staff on file for {vendor.company}.</CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {employees.map((emp) => (
+                  <Card key={emp.id} className="rounded-xl">
+                    <CardContent className="p-4 flex items-start gap-4">
+                      <div
+                        className="mt-0.5 h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                        style={{ backgroundColor: emp.avatarColor }}
+                      >
+                        {emp.firstName[0]}{emp.lastName[0]}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <p className="font-medium text-foreground">{emp.firstName} {emp.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{emp.title} — {emp.department}</p>
+                        <p className="text-xs text-muted-foreground">{emp.email} · {emp.phone}</p>
+                      </div>
+                      <span className={cn(
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                        emp.status === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                        emp.status === 'on_leave' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                        'bg-muted text-muted-foreground'
+                      )}>
+                        {EMPLOYEE_STATUS_LABELS[emp.status]}
+                      </span>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+        )
+      })()}
+
+      {/* Section: Banking */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" />
+          <h2 className="font-heading text-lg font-semibold">Banking</h2>
+          <span className="text-sm text-muted-foreground">({paymentMethods.length})</span>
+        </div>
+        {paymentMethods.length === 0 ? (
+          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No payment methods on file.</CardContent></Card>
+        ) : (
+          <div className="space-y-2">
+            {paymentMethods.map((pm) => (
+              <Card key={pm.id} className="rounded-xl">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <p className="font-medium text-foreground">
+                      {pm.brand ?? PAYMENT_METHOD_LABELS[pm.kind]} •••• {pm.last4}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {pm.holder}
+                      {pm.expiry && <span> · Exp {pm.expiry}</span>}
+                      {pm.bankName && <span> · {pm.bankName}</span>}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground capitalize">
+                    {pm.purpose}
+                  </span>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Section: Documents (cross-homeowner god-view) */}
+      {(() => {
+        const allDocs = Object.values(docsByVendorByHomeowner[vendor.id] ?? {}).flat()
+        const byHomeowner = allDocs.reduce<Record<string, typeof allDocs>>((acc, doc) => {
+          const key = doc.homeowner_email
+          acc[key] = [...(acc[key] ?? []), doc]
+          return acc
+        }, {})
+        return (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <h2 className="font-heading text-lg font-semibold">Documents</h2>
+              <span className="text-sm text-muted-foreground">({allDocs.length})</span>
+            </div>
+            {allDocs.length === 0 ? (
+              <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents uploaded by {vendor.company} yet.</CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(byHomeowner).map(([email, docs]) => (
+                  <div key={email} className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">{email}</p>
+                    {docs.map((doc) => (
+                      <Card key={doc.id} className="rounded-xl">
+                        <CardContent className="p-3 flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{doc.filename}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.customLabel ?? VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[doc.category]} · {fmtDate(doc.uploadedAt)}
+                            </p>
+                          </div>
+                          <a
+                            href={doc.dataUrl}
+                            download={doc.filename}
+                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )
+      })()}
 
       {/* Project detail dialog (#248 dual-lookup pattern, #279 cs.lead_id
           fix learned for closed-sale rows — sentProjects pass sp.id,
