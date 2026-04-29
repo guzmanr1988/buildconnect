@@ -13,7 +13,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
@@ -91,13 +91,19 @@ export default function LeadInbox() {
       homeowner_name: p.homeowner?.name || 'New Customer',
       project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
-      // Ship #338 — bridge sp.saleAmount → lead.value at this synthesis
-      // site so the Projects-page row preview shows the actual sale
-      // amount (was hardcoded 0 since the chain-bootstrap; cite-divergence
-      // sub-pattern per banked feedback_silent_undefined_field_mismatch).
-      // Consumer-mapping fix (lead-inbox owns its own synthesis); not
-      // chain-touching per CHAIN IS GOD.
-      value: p.saleAmount ?? 0,
+      // Ship #338 — bridge sp.saleAmount → lead.value.
+      // Ship #349 — pre-sale projects compute headline from catalog-first
+      // item totals (sum of all card prices). Sold projects keep saleAmount
+      // (locked at sale time, includes Upsale line).
+      value: p.saleAmount ?? (() => {
+        const lineItems = p.priceLineItems?.length > 0
+          ? p.priceLineItems
+          : (PRICE_LINE_ITEM_PRESETS[p.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+        if (p.item.serviceId === 'windows_doors') {
+          return computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+        }
+        return lineItems.reduce((s, l) => s + l.amount, 0)
+      })(),
       address: p.homeowner?.address || 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',
@@ -108,7 +114,7 @@ export default function LeadInbox() {
       pack_items: p.item.selections,
       slot: p.sentAt,
       received_at: p.sentAt,
-    })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company])
+    })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company, getVendorPrice])
 
   const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -481,8 +487,12 @@ export default function LeadInbox() {
                             )}
                             {/* Garage Doors — price card */}
                             {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (() => {
-                              const garageLine = resolvedLineItems?.find((l) => l.id === 'wd-garage-door')
-                              if (!garageLine) return null
+                              const gd = sp.item.garageDoorSelection
+                              const garageLine = resolvedLineItems?.find((l: any) => l.id === 'wd-garage-door')
+                              const catalogUnit = garageDoorCatalogUnitPrice(gd as any, getVendorPrice, sp.item.serviceId)
+                              const hasCatalog = catalogUnit > 0
+                              const displayPrice = hasCatalog ? catalogUnit : (garageLine?.amount ?? null)
+                              if (displayPrice === null) return null
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Garage Doors</h4>
@@ -490,24 +500,33 @@ export default function LeadInbox() {
                                     <div className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
                                       <div className="flex items-center justify-between">
                                         <span className="text-base font-semibold text-foreground">
-                                          {sp.item.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                                          {gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
                                         </span>
-                                        <span className="text-sm font-bold text-primary">{fmt(garageLine.amount)}</span>
+                                        {hasCatalog ? (
+                                          <div className="flex items-center gap-1 text-sm">
+                                            <span className="text-muted-foreground">1 ×</span>
+                                            <span className="font-medium">{fmt(catalogUnit)}</span>
+                                            <span className="text-muted-foreground">=</span>
+                                            <span className="font-bold text-primary">{fmt(catalogUnit)}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-sm font-bold text-primary">{fmt(displayPrice)}</span>
+                                        )}
                                       </div>
                                       <div className="flex flex-wrap gap-1.5">
-                                        {sp.item.garageDoorSelection.type === 'double_garage' && sp.item.garageDoorSelection.size && (
+                                        {gd.type === 'double_garage' && gd.size && (
                                           <Badge variant="outline" className="text-[10px]">
-                                            {sp.item.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
+                                            {gd.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
                                           </Badge>
                                         )}
-                                        {sp.item.garageDoorSelection.color && (
+                                        {gd.color && (
                                           <Badge variant="outline" className="text-[10px]">
-                                            {sp.item.garageDoorSelection.color.charAt(0).toUpperCase() + sp.item.garageDoorSelection.color.slice(1)}
+                                            {gd.color.charAt(0).toUpperCase() + gd.color.slice(1)}
                                           </Badge>
                                         )}
-                                        {sp.item.garageDoorSelection.glass && (
+                                        {gd.glass && (
                                           <Badge variant="outline" className="text-[10px]">
-                                            Glass: {sp.item.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
+                                            Glass: {gd.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
                                           </Badge>
                                         )}
                                       </div>
@@ -518,19 +537,32 @@ export default function LeadInbox() {
                             })()}
                             {/* Install Windows — price card */}
                             {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
-                              const installLine = resolvedLineItems?.find((l) => l.id === 'wd-install-windows')
-                              if (!installLine) return null
+                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-windows')
                               const totalQty = sp.item.windowSelections!.reduce((sum, w) => sum + w.quantity, 0)
+                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_windows')
+                              const hasCatalog = catalogUnit > 0
+                              const fallbackTotal = installLine?.amount ?? null
+                              if (!hasCatalog && fallbackTotal === null) return null
+                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Install Windows</h4>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Installation labor</span>
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-sm text-muted-foreground">×{totalQty}</span>
-                                        <span className="text-sm font-bold text-primary">{fmt(installLine.amount)}</span>
-                                      </div>
+                                      {hasCatalog ? (
+                                        <div className="flex items-center gap-1 text-sm">
+                                          <span className="text-muted-foreground">{totalQty} ×</span>
+                                          <span className="font-medium">{fmt(catalogUnit)}</span>
+                                          <span className="text-muted-foreground">=</span>
+                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
+                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -538,19 +570,32 @@ export default function LeadInbox() {
                             })()}
                             {/* Install Doors — price card */}
                             {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
-                              const installLine = resolvedLineItems?.find((l) => l.id === 'wd-install-doors')
-                              if (!installLine) return null
+                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-doors')
                               const totalQty = sp.item.doorSelections!.reduce((sum, d) => sum + d.quantity, 0)
+                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_doors')
+                              const hasCatalog = catalogUnit > 0
+                              const fallbackTotal = installLine?.amount ?? null
+                              if (!hasCatalog && fallbackTotal === null) return null
+                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Install Doors</h4>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Installation labor</span>
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-sm text-muted-foreground">×{totalQty}</span>
-                                        <span className="text-sm font-bold text-primary">{fmt(installLine.amount)}</span>
-                                      </div>
+                                      {hasCatalog ? (
+                                        <div className="flex items-center gap-1 text-sm">
+                                          <span className="text-muted-foreground">{totalQty} ×</span>
+                                          <span className="font-medium">{fmt(catalogUnit)}</span>
+                                          <span className="text-muted-foreground">=</span>
+                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
+                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -558,14 +603,17 @@ export default function LeadInbox() {
                             })()}
                             {/* Permit — single line price card */}
                             {(() => {
-                              const permitLine = resolvedLineItems?.find((l) => l.label.toLowerCase().includes('permit'))
-                              if (!permitLine) return null
+                              const permitLine = resolvedLineItems?.find((l: any) => l.label?.toLowerCase().includes('permit'))
+                              const catalogPrice = getVendorPrice(sp.item.serviceId, 'permit')
+                              const hasCatalog = catalogPrice > 0
+                              const displayPrice = hasCatalog ? catalogPrice : (permitLine?.amount ?? null)
+                              if (displayPrice === null) return null
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Permit</h4>
                                   <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
                                     <span className="text-sm text-foreground">Permit Fee</span>
-                                    <span className="text-sm font-bold text-primary">{fmt(permitLine.amount)}</span>
+                                    <span className="text-sm font-bold text-primary">{fmt(displayPrice)}</span>
                                   </div>
                                 </div>
                               )

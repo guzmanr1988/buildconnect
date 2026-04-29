@@ -11,7 +11,7 @@ import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-d
 import { deriveInitials } from '@/lib/initials'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
@@ -376,7 +376,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     )
                   })()}
 
-                  {/* Phase C — Garage Doors, Install Windows, Install Doors, Permit price cards */}
+                  {/* Phase C — Garage Doors, Install Windows, Install Doors, Permit price cards (catalog-first) */}
                   {(() => {
                     const pd = selectedItem.project_data
                     const lineItems: Array<{ id: string; label: string; amount: number }> =
@@ -384,70 +384,124 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ? pd.priceLineItems
                         : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
                     const findLine = (id: string) => lineItems.find((l) => l.id === id)
-                    const garageLine = findLine('wd-garage-door')
-                    const installWindowsLine = findLine('wd-install-windows')
-                    const installDoorsLine = findLine('wd-install-doors')
-                    const permitLine = lineItems.find((l) => l.label.toLowerCase().includes('permit'))
                     const gd = pd.item?.garageDoorSelection
                     const ws = pd.item?.windowSelections as Array<{ id: string; quantity: number }> | undefined
                     const ds = pd.item?.doorSelections as Array<{ id: string; quantity: number }> | undefined
-                    const hasAny = (gd?.type && garageLine) || (ws?.length && installWindowsLine) || (ds?.length && installDoorsLine) || permitLine
+                    const hasAny = gd?.type || (ws?.length) || (ds?.length) || lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
                     if (!hasAny) return null
+                    const fmtD = (n: number) => `$${n.toLocaleString()}`
                     return (
                       <>
-                        {gd?.type && garageLine && (
-                          <div className="rounded-xl border p-4 space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Garage Doors</h4>
-                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                              <span className="font-medium">
-                                {gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
-                              </span>
-                              <span className="font-bold text-primary">${garageLine.amount.toLocaleString()}</span>
-                            </div>
-                            {(gd.size || gd.color || gd.glass) && (
-                              <div className="flex flex-wrap gap-1.5 px-2 text-[10px]">
-                                {gd.type === 'double_garage' && gd.size && (
-                                  <Badge variant="outline" className="text-[10px]">{gd.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                        {gd?.type && (() => {
+                          const catalogUnit = garageDoorCatalogUnitPrice(gd as any, getVendorPrice, pd.item.serviceId)
+                          const garageLine = findLine('wd-garage-door')
+                          const hasCatalog = catalogUnit > 0
+                          const displayPrice = hasCatalog ? catalogUnit : garageLine?.amount
+                          if (!displayPrice) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Garage Doors</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="font-medium">
+                                  {gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                                </span>
+                                {hasCatalog ? (
+                                  <div className="flex items-center gap-1 text-sm">
+                                    <span className="text-muted-foreground">1 ×</span>
+                                    <span className="font-medium">{fmtD(catalogUnit)}</span>
+                                    <span className="text-muted-foreground">=</span>
+                                    <span className="font-bold text-primary">{fmtD(catalogUnit)}</span>
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-primary">{fmtD(displayPrice)}</span>
                                 )}
-                                {gd.color && <Badge variant="outline" className="text-[10px]">{gd.color.charAt(0).toUpperCase() + gd.color.slice(1)}</Badge>}
-                                {gd.glass && <Badge variant="outline" className="text-[10px]">Glass: {gd.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>}
                               </div>
-                            )}
-                          </div>
-                        )}
-                        {ws && ws.length > 0 && installWindowsLine && (
-                          <div className="rounded-xl border p-4 space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Windows</h4>
-                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                              <span className="text-muted-foreground">Installation labor</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">×{ws.reduce((s, w) => s + w.quantity, 0)}</span>
-                                <span className="font-bold text-primary">${installWindowsLine.amount.toLocaleString()}</span>
+                              {(gd.size || gd.color || gd.glass) && (
+                                <div className="flex flex-wrap gap-1.5 px-2 text-[10px]">
+                                  {gd.type === 'double_garage' && gd.size && (
+                                    <Badge variant="outline" className="text-[10px]">{gd.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                                  )}
+                                  {gd.color && <Badge variant="outline" className="text-[10px]">{gd.color.charAt(0).toUpperCase() + gd.color.slice(1)}</Badge>}
+                                  {gd.glass && <Badge variant="outline" className="text-[10px]">Glass: {gd.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                        {ws && ws.length > 0 && (() => {
+                          const installWindowsLine = findLine('wd-install-windows')
+                          const totalQty = ws.reduce((s, w) => s + w.quantity, 0)
+                          const catalogUnit = getVendorPrice(pd.item.serviceId, 'install_windows')
+                          const hasCatalog = catalogUnit > 0
+                          const displayTotal = hasCatalog ? catalogUnit * totalQty : installWindowsLine?.amount
+                          if (!displayTotal) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Windows</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="text-muted-foreground">Installation labor</span>
+                                {hasCatalog ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-muted-foreground">{totalQty} ×</span>
+                                    <span className="font-medium">{fmtD(catalogUnit)}</span>
+                                    <span className="text-xs text-muted-foreground">=</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">×{totalQty}</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        )}
-                        {ds && ds.length > 0 && installDoorsLine && (
-                          <div className="rounded-xl border p-4 space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Doors</h4>
-                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                              <span className="text-muted-foreground">Installation labor</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">×{ds.reduce((s, d) => s + d.quantity, 0)}</span>
-                                <span className="font-bold text-primary">${installDoorsLine.amount.toLocaleString()}</span>
+                          )
+                        })()}
+                        {ds && ds.length > 0 && (() => {
+                          const installDoorsLine = findLine('wd-install-doors')
+                          const totalQty = ds.reduce((s, d) => s + d.quantity, 0)
+                          const catalogUnit = getVendorPrice(pd.item.serviceId, 'install_doors')
+                          const hasCatalog = catalogUnit > 0
+                          const displayTotal = hasCatalog ? catalogUnit * totalQty : installDoorsLine?.amount
+                          if (!displayTotal) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Doors</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="text-muted-foreground">Installation labor</span>
+                                {hasCatalog ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-muted-foreground">{totalQty} ×</span>
+                                    <span className="font-medium">{fmtD(catalogUnit)}</span>
+                                    <span className="text-xs text-muted-foreground">=</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">×{totalQty}</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        )}
-                        {permitLine && (
-                          <div className="rounded-xl border p-4 space-y-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Permit</h4>
-                            <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                              <span className="text-muted-foreground">Permit Fee</span>
-                              <span className="font-bold text-primary">${permitLine.amount.toLocaleString()}</span>
+                          )
+                        })()}
+                        {(() => {
+                          const permitLine = lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
+                          const catalogPrice = getVendorPrice(pd.item.serviceId, 'permit')
+                          const hasCatalog = catalogPrice > 0
+                          const displayPrice = hasCatalog ? catalogPrice : permitLine?.amount
+                          if (!displayPrice) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Permit</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="text-muted-foreground">Permit Fee</span>
+                                <span className="font-bold text-primary">{fmtD(displayPrice)}</span>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                       </>
                     )
                   })()}
@@ -465,13 +519,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       to Lead type and no vendor-lead-stages.ts mapping
                       modification. */}
                   {(() => {
-                    const snapshot = selectedItem.project_data.priceLineItems
-                    const serviceId = selectedItem.project_data.item?.serviceId
+                    const pd = selectedItem.project_data
+                    const snapshot = pd.priceLineItems
+                    const serviceId = pd.item?.serviceId
                     const fallback = serviceId
                       ? PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
                       : undefined
                     const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
                     if (!priceLineItems || priceLineItems.length === 0) return null
+                    // For windows_doors pre-sale: compute headline from catalog-first item totals.
+                    // Sold projects keep priceLineItems sum (saleAmount locked at sale time).
+                    const isSold = pd.status === 'sold'
+                    const catalogTotal = (serviceId === 'windows_doors' && !isSold)
+                      ? computeWindowsDoorsCatalogTotal(pd.item as any, priceLineItems, getVendorPrice)
+                      : 0
+                    const displayTotal = catalogTotal > 0
+                      ? catalogTotal
+                      : priceLineItems.reduce((sum: number, l: { amount: number }) => sum + (l.amount || 0), 0)
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing Breakdown</h4>
@@ -484,12 +548,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                           ))}
                           <div className="border-t pt-1.5 flex justify-between">
                             <span className="font-semibold">Total</span>
-                            <span className="font-bold">
-                              ${priceLineItems.reduce(
-                                (sum: number, l: { amount: number }) => sum + (l.amount || 0),
-                                0,
-                              ).toLocaleString()}
-                            </span>
+                            <span className="font-bold">${displayTotal.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>

@@ -102,3 +102,95 @@ export function doorCatalogUnitPrice(
     serviceId,
   )
 }
+
+export interface GarageDoorSelectionLike {
+  type: string
+  size: string
+  color: string
+  glass: string
+}
+
+/** Unit price for one garage door (qty=1 implicit). Option IDs stored directly in GarageDoorSelection. */
+export function garageDoorCatalogUnitPrice(
+  gd: GarageDoorSelectionLike,
+  getPrice: GetPriceFn,
+  serviceId: string,
+): number {
+  return sumOptionPrices([gd.type, gd.size, gd.color, gd.glass], getPrice, serviceId)
+}
+
+export interface WindowsDoorsCatalogItem {
+  serviceId: string
+  windowSelections?: Array<ConfigEntryLike & { quantity: number }>
+  doorSelections?: Array<ConfigEntryLike & { quantity: number }>
+  garageDoorSelection?: GarageDoorSelectionLike
+  selections?: Record<string, string[]>
+}
+
+/**
+ * Computes the full catalog-first total for a windows_doors project.
+ * Per-row: catalog price × quantity, falling back to averaged install-line when no catalog price.
+ * Single-line items (Install Windows/Doors, Permit): catalog price × qty, falling back to preset line.
+ * Used for pre-sale headline computation and Pricing Breakdown totals.
+ */
+export function computeWindowsDoorsCatalogTotal(
+  item: WindowsDoorsCatalogItem,
+  resolvedLineItems: Array<{ id: string; label?: string; amount: number }>,
+  getPrice: GetPriceFn,
+): number {
+  let total = 0
+
+  // Windows
+  const wInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-windows')
+  const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
+  for (const w of item.windowSelections ?? []) {
+    const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
+    if (unit > 0) {
+      total += unit * w.quantity
+    } else if (wInstallLine && totalWQty > 0) {
+      total += Math.round(wInstallLine.amount / totalWQty * w.quantity)
+    }
+  }
+
+  // Doors
+  const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
+  const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+  for (const d of item.doorSelections ?? []) {
+    const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
+    if (unit > 0) {
+      total += unit * d.quantity
+    } else if (dInstallLine && totalDQty > 0) {
+      total += Math.round(dInstallLine.amount / totalDQty * d.quantity)
+    }
+  }
+
+  // Garage door
+  const gd = item.garageDoorSelection
+  if (gd?.type) {
+    const gdUnit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
+    const gdLine = resolvedLineItems.find((l) => l.id === 'wd-garage-door')
+    total += gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
+  }
+
+  // Install Windows (per unit)
+  if (totalWQty > 0) {
+    const catalogInstallW = getPrice(item.serviceId, 'install_windows')
+    total += catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
+  }
+
+  // Install Doors (per unit)
+  if (totalDQty > 0) {
+    const catalogInstallD = getPrice(item.serviceId, 'install_doors')
+    total += catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+  }
+
+  // Permit
+  const hasPermit = item.selections && Object.values(item.selections).flat().includes('permit')
+  if (hasPermit) {
+    const catalogPermit = getPrice(item.serviceId, 'permit')
+    const permitLine = resolvedLineItems.find((l) => l.label?.toLowerCase().includes('permit'))
+    total += catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
+  }
+
+  return total
+}
