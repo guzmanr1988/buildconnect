@@ -11,6 +11,8 @@ import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-d
 import { deriveInitials } from '@/lib/initials'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -64,6 +66,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -293,13 +296,16 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
                     const wInstallLine = wLineItems.find((l) => l.id === 'wd-install-windows')
                     const totalWQty: number = pd.item.windowSelections.reduce((s: number, w: any) => s + w.quantity, 0)
+                    const fmt = (n: number) => `$${n.toLocaleString()}`
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
                         {pd.item.windowSelections.map((w: any) => {
-                          const linePrice = wInstallLine && totalWQty > 0
-                            ? Math.round(wInstallLine.amount / totalWQty * w.quantity)
-                            : null
+                          const unitPrice = windowCatalogUnitPrice(w, getVendorPrice, pd.item.serviceId)
+                          const hasCatalogPrice = unitPrice > 0
+                          const lineTotal = hasCatalogPrice
+                            ? unitPrice * w.quantity
+                            : (wInstallLine && totalWQty > 0 ? Math.round(wInstallLine.amount / totalWQty * w.quantity) : null)
                           return (
                             <div key={w.id} className="flex items-center justify-between text-[10px]">
                               <div className="flex flex-wrap gap-1.5">
@@ -308,9 +314,17 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                                 <Badge variant="outline">{w.frameColor}</Badge>
                                 <Badge variant="outline">{w.glassColor}</Badge>
                               </div>
-                              {linePrice !== null && (
-                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">${linePrice.toLocaleString()}</span>
-                              )}
+                              {hasCatalogPrice ? (
+                                <div className="flex items-center gap-1 text-xs ml-2">
+                                  <span className="text-muted-foreground">{w.quantity}</span>
+                                  <span className="text-muted-foreground">×</span>
+                                  <span className="font-medium">{fmt(unitPrice)}</span>
+                                  <span className="text-muted-foreground">=</span>
+                                  <span className="font-bold text-primary">{fmt(unitPrice * w.quantity)}</span>
+                                </div>
+                              ) : lineTotal !== null ? (
+                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
+                              ) : null}
                             </div>
                           )
                         })}
@@ -326,13 +340,16 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
                     const dInstallLine = dLineItems.find((l) => l.id === 'wd-install-doors')
                     const totalDQty: number = pd.item.doorSelections.reduce((s: number, d: any) => s + d.quantity, 0)
+                    const fmt = (n: number) => `$${n.toLocaleString()}`
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
                         {pd.item.doorSelections.map((d: any) => {
-                          const linePrice = dInstallLine && totalDQty > 0
-                            ? Math.round(dInstallLine.amount / totalDQty * d.quantity)
-                            : null
+                          const unitPrice = doorCatalogUnitPrice(d, getVendorPrice, pd.item.serviceId)
+                          const hasCatalogPrice = unitPrice > 0
+                          const lineTotal = hasCatalogPrice
+                            ? unitPrice * d.quantity
+                            : (dInstallLine && totalDQty > 0 ? Math.round(dInstallLine.amount / totalDQty * d.quantity) : null)
                           return (
                             <div key={d.id} className="flex items-center justify-between text-[10px]">
                               <div className="flex flex-wrap gap-1.5">
@@ -341,9 +358,17 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                                 <Badge variant="outline">{d.frameColor}</Badge>
                                 <Badge variant="outline">{d.glassColor}</Badge>
                               </div>
-                              {linePrice !== null && (
-                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">${linePrice.toLocaleString()}</span>
-                              )}
+                              {hasCatalogPrice ? (
+                                <div className="flex items-center gap-1 text-xs ml-2">
+                                  <span className="text-muted-foreground">{d.quantity}</span>
+                                  <span className="text-muted-foreground">×</span>
+                                  <span className="font-medium">{fmt(unitPrice)}</span>
+                                  <span className="text-muted-foreground">=</span>
+                                  <span className="font-bold text-primary">{fmt(unitPrice * d.quantity)}</span>
+                                </div>
+                              ) : lineTotal !== null ? (
+                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
+                              ) : null}
                             </div>
                           )
                         })}

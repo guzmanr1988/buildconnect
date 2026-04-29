@@ -13,6 +13,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -32,6 +34,7 @@ function fmtDate(iso: string) {
 
 export default function LeadInbox() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
   const { vendorId: VENDOR_ID, isMock } = useVendorScope()
 
   // Ship #214 — strict scope by contractor.vendor_id (with company
@@ -354,19 +357,31 @@ export default function LeadInbox() {
                                   <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
                                   <div className="flex flex-col gap-1">
                                     {sp.item.windowSelections!.map((w) => {
-                                      const linePrice = wInstallLine && totalWQty > 0
-                                        ? Math.round(wInstallLine.amount / totalWQty * w.quantity)
-                                        : null
+                                      const unitPrice = windowCatalogUnitPrice(w, getVendorPrice, sp.item.serviceId)
+                                      const hasCatalogPrice = unitPrice > 0
+                                      const lineTotal = hasCatalogPrice
+                                        ? unitPrice * w.quantity
+                                        : (wInstallLine && totalWQty > 0 ? Math.round(wInstallLine.amount / totalWQty * w.quantity) : null)
                                       return (
                                         <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
                                           <div className="flex items-center justify-between">
                                             <span className="text-base font-semibold text-foreground">
                                               {w.size.replace('x', '" × ')}"
                                             </span>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-sm text-muted-foreground">×{w.quantity}</span>
-                                              {linePrice !== null && <span className="text-sm font-bold text-primary">{fmt(linePrice)}</span>}
-                                            </div>
+                                            {hasCatalogPrice ? (
+                                              <div className="flex items-center gap-1 text-sm">
+                                                <span className="text-muted-foreground">{w.quantity}</span>
+                                                <span className="text-muted-foreground">×</span>
+                                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                                <span className="text-muted-foreground">=</span>
+                                                <span className="font-bold text-primary">{fmt(unitPrice * w.quantity)}</span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-sm text-muted-foreground">×{w.quantity}</span>
+                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
+                                              </div>
+                                            )}
                                           </div>
                                           <div className="flex flex-wrap gap-1.5">
                                             <Badge variant="secondary" className="text-[10px]">{w.type}</Badge>
@@ -393,19 +408,31 @@ export default function LeadInbox() {
                                   <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
                                   <div className="flex flex-col gap-1">
                                     {sp.item.doorSelections!.map((d) => {
-                                      const linePrice = dInstallLine && totalDQty > 0
-                                        ? Math.round(dInstallLine.amount / totalDQty * d.quantity)
-                                        : null
+                                      const unitPrice = doorCatalogUnitPrice(d, getVendorPrice, sp.item.serviceId)
+                                      const hasCatalogPrice = unitPrice > 0
+                                      const lineTotal = hasCatalogPrice
+                                        ? unitPrice * d.quantity
+                                        : (dInstallLine && totalDQty > 0 ? Math.round(dInstallLine.amount / totalDQty * d.quantity) : null)
                                       return (
                                         <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
                                           <div className="flex items-center justify-between">
                                             <span className="text-base font-semibold text-foreground">
                                               {d.size.replace('x', '" × ')}"
                                             </span>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-sm text-muted-foreground">×{d.quantity}</span>
-                                              {linePrice !== null && <span className="text-sm font-bold text-primary">{fmt(linePrice)}</span>}
-                                            </div>
+                                            {hasCatalogPrice ? (
+                                              <div className="flex items-center gap-1 text-sm">
+                                                <span className="text-muted-foreground">{d.quantity}</span>
+                                                <span className="text-muted-foreground">×</span>
+                                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                                <span className="text-muted-foreground">=</span>
+                                                <span className="font-bold text-primary">{fmt(unitPrice * d.quantity)}</span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-sm text-muted-foreground">×{d.quantity}</span>
+                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
+                                              </div>
+                                            )}
                                           </div>
                                           <div className="flex flex-wrap gap-1.5">
                                             <Badge variant="secondary" className="text-[10px]">{d.type}</Badge>
