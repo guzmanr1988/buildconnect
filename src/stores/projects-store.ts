@@ -9,6 +9,19 @@ import { supabase } from '@/lib/supabase'
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
   useActivityLogStore.getState().logEvent(entry)
 
+function upsertProject(fields: Record<string, unknown> & { id: string }) {
+  supabase.from('sent_projects')
+    .upsert(fields, { onConflict: 'id' })
+    .then(({ error }) => { if (error) console.error('[projects] upsert failed:', error.message) })
+}
+
+function updateProject(id: string, fields: Record<string, unknown>) {
+  supabase.from('sent_projects')
+    .update(fields)
+    .eq('id', id)
+    .then(({ error }) => { if (error) console.error('[projects] update failed:', error.message) })
+}
+
 export interface ContractorInfo {
   // Ship #165 per task_1776731114470_226 — vendor_id FK is the stable
   // bridge key. Prefer it in all cross-surface lookups (was company-name
@@ -426,45 +439,36 @@ export const useProjectsStore = create<ProjectsState>()(
       leadCompletedAtByLead: {},
 
       sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId, computedLineItems) => {
+        // Pre-compute next outside set() so the row is available for the Supabase upsert below.
+        // Ship #336 Phase A — snapshot priceLineItems from preset map at write-time per
+        // banked feedback_immutable_ledger_freeze_at_write.
+        const presetLineItems = PRICE_LINE_ITEM_PRESETS[item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
+        let priceLineItemsSnapshot: PriceLineItem[] | undefined
+        if (computedLineItems && computedLineItems.length > 0) {
+          priceLineItemsSnapshot = computedLineItems.map((p) => ({ ...p }))
+        } else {
+          priceLineItemsSnapshot = presetLineItems
+            ? presetLineItems.map((p) => ({ ...p }))
+            : undefined
+        }
+        const next: SentProject = {
+          id: crypto.randomUUID(),
+          item,
+          status: 'pending',
+          contractor,
+          booking,
+          idDocument,
+          homeowner,
+          homeowner_id: homeownerId,
+          sentAt: new Date().toISOString(),
+          ...(priceLineItemsSnapshot ? { priceLineItems: priceLineItemsSnapshot } : {}),
+          ...(contractor.quotedPriceCents && contractor.quotedPriceCents > 0
+            ? { quotedPriceCents: contractor.quotedPriceCents }
+            : {}),
+        }
         set((state) => {
-          // Ship #336 Phase A — snapshot priceLineItems from preset map
-          // at write-time per banked feedback_immutable_ledger_freeze_at_write.
-          // Snapshot vs lookup-at-render: locks the price-detail to the
-          // preset-state-as-of-intake; future preset-map edits do NOT
-          // retroactively rewrite this record.
-          // When computedLineItems are provided (roofing with vendor $/sqft
-          // catalog), they replace the roofing-material preset line with
-          // per-material computed lines; other lines (permit/tearoff/install)
-          // are kept from the preset. Unit-rate fields are also frozen here.
-          const presetLineItems = PRICE_LINE_ITEM_PRESETS[item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-          let priceLineItemsSnapshot: PriceLineItem[] | undefined
-          if (computedLineItems && computedLineItems.length > 0) {
-            priceLineItemsSnapshot = computedLineItems.map((p) => ({ ...p }))
-          } else {
-            priceLineItemsSnapshot = presetLineItems
-              ? presetLineItems.map((p) => ({ ...p }))
-              : undefined
-          }
-          const next: SentProject = {
-            id: crypto.randomUUID(),
-            item,
-            status: 'pending',
-            contractor,
-            booking,
-            idDocument,
-            homeowner,
-            homeowner_id: homeownerId,
-            sentAt: new Date().toISOString(),
-            ...(priceLineItemsSnapshot ? { priceLineItems: priceLineItemsSnapshot } : {}),
-            ...(contractor.quotedPriceCents && contractor.quotedPriceCents > 0
-              ? { quotedPriceCents: contractor.quotedPriceCents }
-              : {}),
-          }
           const nextSentProjects = [...state.sentProjects, next]
           // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
-          // Log write-side state so we can observe whether sendProject
-          // actually fires + what contractor is stamped on the new
-          // entry. VITE_DEMO_MODE-gated so prod builds skip.
           if ((import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false') {
             // eslint-disable-next-line no-console
             console.log('[#212 leads-diag] sendProject WRITE:', {
@@ -480,23 +484,43 @@ export const useProjectsStore = create<ProjectsState>()(
           return { sentProjects: nextSentProjects }
         })
         logEvent({ eventType: 'submitted', projectId: undefined, meta: { serviceName: item.serviceName, vendor: contractor.company } })
+        if (next.contractor.vendor_id) {
+          upsertProject({
+            id: next.id,
+            vendor_id: next.contractor.vendor_id,
+            homeowner_id: next.homeowner_id ?? null,
+            item: next.item,
+            contractor: next.contractor,
+            booking_date: next.booking.date,
+            booking_time: next.booking.time,
+            homeowner_name: next.homeowner?.name ?? null,
+            homeowner_phone: next.homeowner?.phone ?? null,
+            homeowner_email: next.homeowner?.email ?? null,
+            homeowner_address: next.homeowner?.address ?? null,
+            status: next.status,
+            sent_at: next.sentAt,
+            id_document: next.idDocument ?? null,
+            price_line_items: next.priceLineItems ?? null,
+            quoted_price_cents: next.quotedPriceCents ?? null,
+          })
+        }
       },
 
       updateStatus: (id, status) => {
+        const confirmedAt = status === 'approved' ? new Date().toISOString() : undefined
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
             p.id === id
               ? {
                   ...p,
                   status,
-                  // Stamp confirmedAt on transition-to-approved. Overwrites
-                  // on re-approval (reschedule→approved again = latest time).
-                  ...(status === 'approved' ? { confirmedAt: new Date().toISOString() } : {}),
+                  ...(confirmedAt ? { confirmedAt } : {}),
                 }
               : p
           ),
         }))
         if (status === 'approved') logEvent({ eventType: 'confirmed', projectId: id })
+        updateProject(id, { status, ...(confirmedAt ? { confirmed_at: confirmedAt } : {}) })
       },
 
       updateBooking: (id, booking) => {
@@ -505,6 +529,7 @@ export const useProjectsStore = create<ProjectsState>()(
             p.id === id ? { ...p, booking } : p
           ),
         }))
+        updateProject(id, { booking_date: booking.date, booking_time: booking.time })
       },
 
       markSold: (id, saleAmount) => {
@@ -569,15 +594,26 @@ export const useProjectsStore = create<ProjectsState>()(
           }),
         }))
         logEvent({ eventType: 'sold', projectId: id, meta: { saleAmount } })
+        const sold = get().sentProjects.find((p) => p.id === id)
+        if (sold) {
+          updateProject(id, {
+            status: 'sold',
+            sold_at: sold.soldAt ?? null,
+            sale_amount: sold.saleAmount ?? null,
+            price_line_items: sold.priceLineItems ?? null,
+          })
+        }
       },
 
       markCompleted: (id) => {
+        const completedAt = new Date().toISOString()
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
-            p.id === id ? { ...p, completedAt: new Date().toISOString() } : p
+            p.id === id ? { ...p, completedAt } : p
           ),
         }))
         logEvent({ eventType: 'completed', projectId: id })
+        updateProject(id, { completed_at: completedAt })
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {
@@ -587,13 +623,14 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       setReviewStatus: (projectId, status, reviewedBy, reviewNote) => {
+        const reviewedAt = new Date().toISOString()
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
             p.id === projectId
               ? {
                   ...p,
                   reviewStatus: status,
-                  reviewedAt: new Date().toISOString(),
+                  reviewedAt,
                   reviewedBy,
                   ...(reviewNote ? { reviewNote } : {}),
                 }
@@ -601,6 +638,12 @@ export const useProjectsStore = create<ProjectsState>()(
           ),
         }))
         logEvent({ eventType: 'review_set', projectId, meta: { status, reviewedBy } })
+        updateProject(projectId, {
+          review_status: status,
+          reviewed_at: reviewedAt,
+          reviewed_by: reviewedBy,
+          review_note: reviewNote ?? null,
+        })
       },
 
       resetReviewStatus: (projectId) => {
@@ -612,15 +655,18 @@ export const useProjectsStore = create<ProjectsState>()(
           ),
         }))
         logEvent({ eventType: 'review_reset', projectId })
+        updateProject(projectId, { review_status: 'pending', reviewed_at: null, reviewed_by: null, review_note: null })
       },
 
       assignRep: (id, rep) => {
+        const repAssignedAt = new Date().toISOString()
         set((state) => ({
           sentProjects: state.sentProjects.map((p) =>
-            p.id === id ? { ...p, assignedRep: rep, repAssignedAt: new Date().toISOString() } : p
+            p.id === id ? { ...p, assignedRep: rep, repAssignedAt } : p
           ),
         }))
         logEvent({ eventType: 'rep_assigned', projectId: id, meta: { repName: rep.name } })
+        updateProject(id, { assigned_rep: rep, rep_assigned_at: repAssignedAt })
       },
 
       assignRepByLead: (leadId, rep) => {
@@ -660,18 +706,22 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       requestCancellation: (leadId, reason, explanation) => {
+        const cancelReq = {
+          requestedAt: new Date().toISOString(),
+          status: 'pending' as const,
+          ...(reason !== undefined && { reason }),
+          ...(explanation !== undefined && { explanation }),
+        }
         set((state) => ({
           cancellationRequestsByLead: {
             ...state.cancellationRequestsByLead,
-            [leadId]: {
-              requestedAt: new Date().toISOString(),
-              status: 'pending',
-              ...(reason !== undefined && { reason }),
-              ...(explanation !== undefined && { explanation }),
-            },
+            [leadId]: cancelReq,
           },
         }))
         logEvent({ eventType: 'cancellation_requested', leadId, meta: { reason } })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { cancellation_request: cancelReq })
+        }
       },
 
       approveCancellation: (leadId) => {
@@ -690,14 +740,14 @@ export const useProjectsStore = create<ProjectsState>()(
               },
             },
             // Ship #171 — cancellation-approved now writes 'cancelled'
-            // instead of reusing the 'rejected' bucket. Vendor-dashboard
-            // isCancelledLead predicate still surfaces pre-#171 persisted
-            // entries that sit at 'rejected' with an approved cancellation
-            // request, so no migration of old data is required.
+            // instead of reusing the 'rejected' bucket.
             leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: 'cancelled' },
           }
         })
         logEvent({ eventType: 'cancellation_approved', leadId })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { cancellation_request: get().cancellationRequestsByLead[leadId] })
+        }
       },
 
       denyCancellation: (leadId) => {
@@ -717,6 +767,9 @@ export const useProjectsStore = create<ProjectsState>()(
           }
         })
         logEvent({ eventType: 'cancellation_denied', leadId })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { cancellation_request: get().cancellationRequestsByLead[leadId] })
+        }
       },
 
       removeProject: (id) => {
@@ -727,22 +780,26 @@ export const useProjectsStore = create<ProjectsState>()(
 
       // Ship #191 — reschedule request (post-approval two-party).
       requestReschedule: (leadId, requestedBy, proposedDate, proposedTime, originalDate, originalTime, reason) => {
+        const reschedReq = {
+          requestedBy,
+          requestedAt: new Date().toISOString(),
+          proposedDate,
+          proposedTime,
+          originalDate,
+          originalTime,
+          status: 'pending' as const,
+          ...(reason ? { reason } : {}),
+        }
         set((state) => ({
           rescheduleRequestsByLead: {
             ...state.rescheduleRequestsByLead,
-            [leadId]: {
-              requestedBy,
-              requestedAt: new Date().toISOString(),
-              proposedDate,
-              proposedTime,
-              originalDate,
-              originalTime,
-              status: 'pending',
-              ...(reason ? { reason } : {}),
-            },
+            [leadId]: reschedReq,
           },
         }))
         logEvent({ eventType: 'reschedule_requested', leadId, meta: { requestedBy, proposedDate, proposedTime } })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { reschedule_request: reschedReq })
+        }
       },
 
       approveReschedule: (leadId) => {
@@ -750,13 +807,7 @@ export const useProjectsStore = create<ProjectsState>()(
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
           // Ship #239 — approval atomically transitions the lead to
-          // confirmed across BOTH shape-equivalent status stores:
-          //   · leadStatusOverrides covers MOCK_LEADS entries
-          //   · sentProjects.status covers homeowner-created flow
-          // Unified with #239's drop of vendor-reschedule first-acceptance
-          // optimization: pending leads that get approved via reschedule
-          // must transition to confirmed as part of the approval. Confirmed
-          // leads stay confirmed (idempotent map-write).
+          // confirmed across BOTH shape-equivalent status stores.
           return {
             rescheduleRequestsByLead: {
               ...state.rescheduleRequestsByLead,
@@ -778,6 +829,9 @@ export const useProjectsStore = create<ProjectsState>()(
           }
         })
         logEvent({ eventType: 'reschedule_resolved', leadId, meta: { resolution: 'approved' } })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
+        }
       },
 
       counterReschedule: (leadId, proposedDate, proposedTime, reason) => {
@@ -788,11 +842,8 @@ export const useProjectsStore = create<ProjectsState>()(
             rescheduleRequestsByLead: {
               ...state.rescheduleRequestsByLead,
               [leadId]: {
-                // Counter flips the proposer to the other party; clears
-                // resolvedAt; resets status to pending on the other side.
-                // originalDate/originalTime stay as the FIRST-proposed
-                // slot so the thread of negotiation has a consistent
-                // anchor.
+                // Counter flips the proposer; clears resolvedAt; resets status to pending.
+                // originalDate/originalTime stay as the FIRST-proposed slot.
                 ...prev,
                 requestedBy: prev.requestedBy === 'homeowner' ? 'vendor' : 'homeowner',
                 proposedDate,
@@ -806,6 +857,9 @@ export const useProjectsStore = create<ProjectsState>()(
           }
         })
         logEvent({ eventType: 'reschedule_requested', leadId, meta: { proposedDate, proposedTime, counter: true } })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
+        }
       },
 
       rejectReschedule: (leadId) => {
@@ -824,6 +878,9 @@ export const useProjectsStore = create<ProjectsState>()(
           }
         })
         logEvent({ eventType: 'reschedule_resolved', leadId, meta: { resolution: 'rejected' } })
+        if (get().sentProjects.find((p) => p.id === leadId)) {
+          updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
+        }
       },
     }),
     {
