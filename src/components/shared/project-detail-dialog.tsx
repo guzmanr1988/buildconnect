@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { User, Phone, Mail, MapPin, Calendar, Clock, UserCheck, RefreshCw, FileText } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { User, Phone, Mail, MapPin, Calendar, Clock, UserCheck, RefreshCw, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { mapsUrl, telHref } from '@/lib/contact-links'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -39,6 +40,9 @@ interface ProjectDetailDialogProps {
     amount: number
     date: string
   } | null
+  // Ship #363 — scope admin-workflow layout changes to the workflow
+  // pop-menu only. All other consumers omit this prop (default layout).
+  viewMode?: 'admin-workflow' | 'default'
 }
 
 function fmtDate(iso?: string) {
@@ -46,7 +50,7 @@ function fmtDate(iso?: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function ProjectDetailDialog({ open, onClose, projectId, transactionFallback }: ProjectDetailDialogProps) {
+export function ProjectDetailDialog({ open, onClose, projectId, transactionFallback, viewMode = 'default' }: ProjectDetailDialogProps) {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
@@ -67,6 +71,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
   const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
+  const isAdminWorkflow = viewMode === 'admin-workflow'
+  const [windowsExpanded, setWindowsExpanded] = useState(false)
+  const [doorsExpanded, setDoorsExpanded] = useState(false)
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -161,6 +168,17 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     // MOCK_LEADS fields so Customer Info + Project Selections sections
     // render on the lead-bridge path (apollo caught these missing on
     // tx-row-opened Dialogs where bridge resolves to a MOCK_LEAD).
+    // Synthesize priceLineItems so Pricing Breakdown total matches the tile value.
+    // Preset amounts often sum lower than the hardcoded mock lead value; add an
+    // Upsale line to close the gap (mirrors the auto_sold_adjustment injected by markSold).
+    const mockServiceId = l.service_category as keyof typeof PRICE_LINE_ITEM_PRESETS
+    const mockPresetLines = PRICE_LINE_ITEM_PRESETS[mockServiceId] ?? []
+    const mockPresetSum = mockPresetLines.reduce((s, line) => s + line.amount, 0)
+    const mockEffectiveValue = closedSale?.sale_amount ?? l.value
+    const mockDelta = mockEffectiveValue - mockPresetSum
+    const syntheticPriceLineItems = mockDelta > 0
+      ? [...mockPresetLines, { id: 'mock-upsale', label: 'Upsale', amount: mockDelta, originalAmount: 0, source: 'auto_sold_adjustment' as const }]
+      : mockPresetLines
     const syntheticProjectData = {
       homeowner: {
         name: l.homeowner_name,
@@ -173,6 +191,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
         serviceId: l.service_category,
         selections: l.pack_items as Record<string, string[]>,
       },
+      priceLineItems: syntheticPriceLineItems,
     }
     return {
       id: l.id,
@@ -260,6 +279,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     <div className="flex items-center gap-2">
                       <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{selectedItem.project_data.homeowner.phone}</span>
+                      <a href={telHref(selectedItem.project_data.homeowner.phone)} className="inline-flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={`Call ${selectedItem.project_data.homeowner.name}`}>
+                        <Phone className="h-3 w-3" />
+                      </a>
                     </div>
                     <div className="flex items-center gap-2">
                       <Mail className="h-3.5 w-3.5 text-muted-foreground" />
@@ -267,11 +289,161 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{selectedItem.project_data.homeowner.address}</span>
+                      <a href={mapsUrl(selectedItem.project_data.homeowner.address)} target="_blank" rel="noopener noreferrer" className="hover:text-foreground hover:underline transition-colors">{selectedItem.project_data.homeowner.address}</a>
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* Commission card — left col only in admin-workflow mode. */}
+              {(() => {
+                if (!isAdminWorkflow) return null
+                const isTxContext = !!transactionFallback && transactionFallback.type === 'commission'
+                const statusGateHeld = selectedItem.status === 'sold' && selectedItem.saleAmount && selectedItem.saleAmount > 0
+                if (!isTxContext && !statusGateHeld) return null
+                const vendorPct = 100 - commissionPct
+                const txAmount = transactionFallback?.type === 'commission' ? transactionFallback.amount : null
+                const saleAmount = (selectedItem.saleAmount && selectedItem.saleAmount > 0)
+                  ? selectedItem.saleAmount
+                  : (txAmount && commissionPct > 0 ? Math.round((txAmount * 100) / commissionPct) : 0)
+                if (saleAmount <= 0) return null
+                const bcAmount = Math.round(saleAmount * (commissionPct / 100))
+                const vendorAmount = saleAmount - bcAmount
+                return (
+                  <div className="rounded-xl border p-4 space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Commission</h4>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Sale Total</span>
+                        <span className="font-bold">${saleAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                        <span className="font-medium">Vendor's Share {vendorPct}%</span>
+                        <span className="font-bold">${vendorAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 mt-1">
+                        <span className="text-xs font-semibold text-amber-800 dark:text-amber-400">BuildConnect Commission {commissionPct}%</span>
+                        <span className="text-xl font-bold text-amber-700 dark:text-amber-400">${bcAmount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Audit Trail — admin-workflow mode: left col under Commission. */}
+              {(() => {
+                if (!isAdminWorkflow) return null
+                const extra = selectedItem as typeof selectedItem & {
+                  _bookingDate?: string
+                  _bookingTime?: string
+                  _confirmedAt?: string
+                  _repAssignedAt?: string
+                  _rescheduleRequest?: { requestedBy: string; proposedDate: string; proposedTime: string; originalDate: string; originalTime: string; status: string; reason?: string }
+                  _cancellationRequest?: { status: string; reason?: string; explanation?: string }
+                  _idDocument?: string
+                  _homeownerId?: string
+                }
+                const hasAny =
+                  extra._bookingDate ||
+                  extra._confirmedAt ||
+                  extra._repAssignedAt ||
+                  extra._rescheduleRequest ||
+                  extra._cancellationRequest ||
+                  extra._idDocument ||
+                  extra._homeownerId
+                if (!hasAny) return null
+                return (
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Trail</h4>
+                    <div className="space-y-2 text-sm">
+                      {extra._bookingDate && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">Booked slot</span>
+                          <span className="font-medium">
+                            {extra._bookingDate}{extra._bookingTime ? ` · ${extra._bookingTime}` : ''}
+                          </span>
+                        </div>
+                      )}
+                      {extra._confirmedAt && (
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">Vendor confirmed</span>
+                          <span className="font-medium">{fmtDate(extra._confirmedAt)}</span>
+                        </div>
+                      )}
+                      {extra._repAssignedAt && (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">Rep assigned</span>
+                          <span className="font-medium">{fmtDate(extra._repAssignedAt)}</span>
+                        </div>
+                      )}
+                      {extra._cancellationRequest && (
+                        <div className="flex items-start gap-2">
+                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="flex items-center gap-2">
+                              <span className="text-muted-foreground min-w-[108px]">Cancellation</span>
+                              <Badge variant="outline" className="text-[10px] capitalize">{extra._cancellationRequest.status}</Badge>
+                            </p>
+                            {extra._cancellationRequest.reason && (
+                              <p className="text-xs text-muted-foreground italic mt-0.5">
+                                "{extra._cancellationRequest.reason}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {extra._rescheduleRequest && (
+                        <div className="flex items-start gap-2">
+                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="flex-1 space-y-0.5">
+                            <p className="flex items-center gap-2">
+                              <span className="text-muted-foreground min-w-[108px]">Reschedule</span>
+                              <Badge variant="outline" className="text-[10px] capitalize">{extra._rescheduleRequest.status}</Badge>
+                              <span className="text-[10px] text-muted-foreground">
+                                {extra._rescheduleRequest.requestedBy}-initiated
+                              </span>
+                            </p>
+                            <p className="text-xs text-foreground/80">
+                              {extra._rescheduleRequest.proposedDate} · {extra._rescheduleRequest.proposedTime}
+                              <span className="text-muted-foreground ml-1.5">
+                                (was {extra._rescheduleRequest.originalDate} · {extra._rescheduleRequest.originalTime})
+                              </span>
+                            </p>
+                            {extra._rescheduleRequest.reason && (
+                              <p className="text-xs text-muted-foreground italic">
+                                "{extra._rescheduleRequest.reason}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {extra._idDocument && (
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">ID on file</span>
+                          <img
+                            src={extra._idDocument}
+                            alt="Customer ID"
+                            className="h-12 w-20 rounded border object-cover"
+                          />
+                        </div>
+                      )}
+                      {extra._homeownerId && (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground min-w-[108px]">Homeowner ID</span>
+                          <span className="font-mono text-[11px] text-foreground/80 break-all">
+                            {extra._homeownerId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             {/* RIGHT COLUMN — selections + audit + commission */}
             <div className="space-y-4">
@@ -300,37 +472,55 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const totalDQty: number = (pd.item.doorSelections ?? []).reduce((s: number, d: any) => s + d.quantity, 0)
                     const totalUnits = totalWQty + totalDQty
                     const fmt = (n: number) => `$${n.toLocaleString()}`
+                    type WRow = { w: any; unitPrice: number; hasCatalogPrice: boolean; lineTotal: number | null }
+                    const windowRows: WRow[] = pd.item.windowSelections.map((w: any) => {
+                      const unitPrice = windowCatalogUnitPrice(w, getVendorPrice, pd.item.serviceId)
+                      const hasCatalogPrice = unitPrice > 0
+                      const lineTotal = hasCatalogPrice
+                        ? unitPrice * w.quantity
+                        : (wdProductLine && totalUnits > 0 ? Math.round(wdProductLine.amount / totalUnits * w.quantity) : null)
+                      return { w, unitPrice, hasCatalogPrice, lineTotal }
+                    })
+                    const windowsTotal = windowRows.reduce((s: number, r: WRow) => s + (r.lineTotal ?? 0), 0)
+                    const wVisible = isAdminWorkflow ? windowsExpanded : true
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
-                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
-                        {pd.item.windowSelections.map((w: any) => {
-                          const unitPrice = windowCatalogUnitPrice(w, getVendorPrice, pd.item.serviceId)
-                          const hasCatalogPrice = unitPrice > 0
-                          const lineTotal = hasCatalogPrice
-                            ? unitPrice * w.quantity
-                            : (wdProductLine && totalUnits > 0 ? Math.round(wdProductLine.amount / totalUnits * w.quantity) : null)
-                          return (
-                            <div key={w.id} className="flex items-center justify-between text-[10px]">
-                              <div className="flex flex-wrap gap-1.5">
-                                <Badge variant="outline">{w.size.replace('x', '"×')}" ×{w.quantity}</Badge>
-                                <Badge variant="secondary">{w.type}</Badge>
-                                <Badge variant="outline">{w.frameColor}</Badge>
-                                <Badge variant="outline">{w.glassColor}</Badge>
-                              </div>
-                              {hasCatalogPrice ? (
-                                <div className="flex items-center gap-1 text-xs ml-2">
-                                  <span className="text-muted-foreground">{w.quantity}</span>
-                                  <span className="text-muted-foreground">×</span>
-                                  <span className="font-medium">{fmt(unitPrice)}</span>
-                                  <span className="text-muted-foreground">=</span>
-                                  <span className="font-bold text-primary">{fmt(unitPrice * w.quantity)}</span>
-                                </div>
-                              ) : lineTotal !== null ? (
-                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
-                              ) : null}
+                        {isAdminWorkflow ? (
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between"
+                            onClick={() => setWindowsExpanded((e) => !e)}
+                          >
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{totalWQty} window{totalWQty !== 1 ? 's' : ''} · {fmt(windowsTotal)}</span>
+                              {windowsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                             </div>
-                          )
-                        })}
+                          </button>
+                        ) : (
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Windows</h4>
+                        )}
+                        {wVisible && windowRows.map(({ w, unitPrice, hasCatalogPrice, lineTotal }) => (
+                          <div key={w.id} className="flex items-center justify-between text-[10px]">
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge variant="outline">{w.size.replace('x', '"×')}" ×{w.quantity}</Badge>
+                              <Badge variant="secondary">{w.type}</Badge>
+                              <Badge variant="outline">{w.frameColor}</Badge>
+                              <Badge variant="outline">{w.glassColor}</Badge>
+                            </div>
+                            {hasCatalogPrice ? (
+                              <div className="flex items-center gap-1 text-xs ml-2">
+                                <span className="text-muted-foreground">{w.quantity}</span>
+                                <span className="text-muted-foreground">×</span>
+                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                <span className="text-muted-foreground">=</span>
+                                <span className="font-bold text-primary">{fmt(unitPrice * w.quantity)}</span>
+                              </div>
+                            ) : lineTotal !== null ? (
+                              <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     )
                   })()}
@@ -346,37 +536,55 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const totalDQty: number = pd.item.doorSelections.reduce((s: number, d: any) => s + d.quantity, 0)
                     const totalUnits2 = totalWQty2 + totalDQty
                     const fmt = (n: number) => `$${n.toLocaleString()}`
+                    type DRow = { d: any; unitPrice: number; hasCatalogPrice: boolean; lineTotal: number | null }
+                    const doorRows: DRow[] = pd.item.doorSelections.map((d: any) => {
+                      const unitPrice = doorCatalogUnitPrice(d, getVendorPrice, pd.item.serviceId)
+                      const hasCatalogPrice = unitPrice > 0
+                      const lineTotal = hasCatalogPrice
+                        ? unitPrice * d.quantity
+                        : (wdProductLine2 && totalUnits2 > 0 ? Math.round(wdProductLine2.amount / totalUnits2 * d.quantity) : null)
+                      return { d, unitPrice, hasCatalogPrice, lineTotal }
+                    })
+                    const doorsTotal = doorRows.reduce((s: number, r: DRow) => s + (r.lineTotal ?? 0), 0)
+                    const dVisible = isAdminWorkflow ? doorsExpanded : true
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
-                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
-                        {pd.item.doorSelections.map((d: any) => {
-                          const unitPrice = doorCatalogUnitPrice(d, getVendorPrice, pd.item.serviceId)
-                          const hasCatalogPrice = unitPrice > 0
-                          const lineTotal = hasCatalogPrice
-                            ? unitPrice * d.quantity
-                            : (wdProductLine2 && totalUnits2 > 0 ? Math.round(wdProductLine2.amount / totalUnits2 * d.quantity) : null)
-                          return (
-                            <div key={d.id} className="flex items-center justify-between text-[10px]">
-                              <div className="flex flex-wrap gap-1.5">
-                                <Badge variant="outline">{d.size.replace('x', '"×')}" ×{d.quantity}</Badge>
-                                <Badge variant="secondary">{d.type}</Badge>
-                                <Badge variant="outline">{d.frameColor}</Badge>
-                                <Badge variant="outline">{d.glassColor}</Badge>
-                              </div>
-                              {hasCatalogPrice ? (
-                                <div className="flex items-center gap-1 text-xs ml-2">
-                                  <span className="text-muted-foreground">{d.quantity}</span>
-                                  <span className="text-muted-foreground">×</span>
-                                  <span className="font-medium">{fmt(unitPrice)}</span>
-                                  <span className="text-muted-foreground">=</span>
-                                  <span className="font-bold text-primary">{fmt(unitPrice * d.quantity)}</span>
-                                </div>
-                              ) : lineTotal !== null ? (
-                                <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
-                              ) : null}
+                        {isAdminWorkflow ? (
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between"
+                            onClick={() => setDoorsExpanded((e) => !e)}
+                          >
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{totalDQty} door{totalDQty !== 1 ? 's' : ''} · {fmt(doorsTotal)}</span>
+                              {doorsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                             </div>
-                          )
-                        })}
+                          </button>
+                        ) : (
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doors</h4>
+                        )}
+                        {dVisible && doorRows.map(({ d, unitPrice, hasCatalogPrice, lineTotal }) => (
+                          <div key={d.id} className="flex items-center justify-between text-[10px]">
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge variant="outline">{d.size.replace('x', '"×')}" ×{d.quantity}</Badge>
+                              <Badge variant="secondary">{d.type}</Badge>
+                              <Badge variant="outline">{d.frameColor}</Badge>
+                              <Badge variant="outline">{d.glassColor}</Badge>
+                            </div>
+                            {hasCatalogPrice ? (
+                              <div className="flex items-center gap-1 text-xs ml-2">
+                                <span className="text-muted-foreground">{d.quantity}</span>
+                                <span className="text-muted-foreground">×</span>
+                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                <span className="text-muted-foreground">=</span>
+                                <span className="font-bold text-primary">{fmt(unitPrice * d.quantity)}</span>
+                              </div>
+                            ) : lineTotal !== null ? (
+                              <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     )
                   })()}
@@ -507,6 +715,21 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                             </div>
                           )
                         })()}
+                        {(() => {
+                          if (!pd.saleAmount || pd.status !== 'sold') return null
+                          const catalogTotal = computeWindowsDoorsCatalogTotal(pd.item as any, lineItems, getVendorPrice)
+                          const upsaleAmount = pd.saleAmount - catalogTotal
+                          if (upsaleAmount <= 0) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upsale</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="text-muted-foreground">Upsale</span>
+                                <span className="font-bold text-primary">{fmtD(upsaleAmount)}</span>
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </>
                     )
                   })()}
@@ -532,25 +755,100 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       : undefined
                     const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
                     if (!priceLineItems || priceLineItems.length === 0) return null
-                    // For windows_doors pre-sale: compute headline from catalog-first item totals.
-                    // Sold projects keep priceLineItems sum (saleAmount locked at sale time).
+
                     const isSold = pd.status === 'sold'
-                    const catalogTotal = (serviceId === 'windows_doors' && !isSold)
-                      ? computeWindowsDoorsCatalogTotal(pd.item as any, priceLineItems, getVendorPrice)
-                      : 0
-                    const displayTotal = catalogTotal > 0
-                      ? catalogTotal
-                      : priceLineItems.reduce((sum: number, l: { amount: number }) => sum + (l.amount || 0), 0)
+                    type LineItem = { id: string; label: string; amount: number }
+                    let displayLineItems: LineItem[] = priceLineItems as LineItem[]
+                    let displayTotal = (priceLineItems as LineItem[]).reduce((sum, l) => sum + (l.amount || 0), 0)
+
+                    // For windows_doors (pre-sale and sold): compute catalog-priced subtotals.
+                    // Pre-sale: displayTotal = catalogSum. Sold: append Upsale = saleAmount - catalogSum
+                    // so breakdown total = saleAmount (Rodolfo: Upsale is delta over original quoted price).
+                    if (serviceId === 'windows_doors') {
+                      const item = pd.item as any
+                      const totalWQty = item.windowSelections?.reduce((s: number, w: any) => s + w.quantity, 0) ?? 0
+                      const totalDQty = item.doorSelections?.reduce((s: number, d: any) => s + d.quantity, 0) ?? 0
+                      const totalUnits = totalWQty + totalDQty
+                      const wdProductLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-product')
+
+                      let windowsAmt = 0
+                      for (const w of item.windowSelections ?? []) {
+                        const unit = windowCatalogUnitPrice(w, getVendorPrice, serviceId)
+                        if (unit > 0) windowsAmt += unit * w.quantity
+                        else if (wdProductLine && totalUnits > 0) windowsAmt += Math.round(wdProductLine.amount / totalUnits * w.quantity)
+                      }
+                      let doorsAmt = 0
+                      for (const d of item.doorSelections ?? []) {
+                        const unit = doorCatalogUnitPrice(d, getVendorPrice, serviceId)
+                        if (unit > 0) doorsAmt += unit * d.quantity
+                        else if (wdProductLine && totalUnits > 0) doorsAmt += Math.round(wdProductLine.amount / totalUnits * d.quantity)
+                      }
+                      let garageAmt = 0
+                      const gd = item.garageDoorSelection
+                      if (gd?.type) {
+                        const gdUnit = garageDoorCatalogUnitPrice(gd, getVendorPrice, serviceId)
+                        const gdLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-garage-door')
+                        garageAmt = gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
+                      }
+                      let installWAmt = 0
+                      if (totalWQty > 0) {
+                        const catalogInstallW = getVendorPrice(serviceId, 'install_windows')
+                        const wInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-windows')
+                        installWAmt = catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
+                      }
+                      let installDAmt = 0
+                      if (totalDQty > 0) {
+                        const catalogInstallD = getVendorPrice(serviceId, 'install_doors')
+                        const dInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-doors')
+                        installDAmt = catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+                      }
+                      let permitAmt = 0
+                      const hasPermit = item.selections && Object.values(item.selections as Record<string, string[]>).flat().includes('permit')
+                      if (hasPermit) {
+                        const catalogPermit = getVendorPrice(serviceId, 'permit')
+                        const permitLine = (priceLineItems as LineItem[]).find((l) => l.label?.toLowerCase().includes('permit'))
+                        permitAmt = catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
+                      }
+
+                      const catalogLines: LineItem[] = [
+                        { id: 'wd-product', label: 'Windows & Doors (Product)', amount: windowsAmt + doorsAmt },
+                        { id: 'wd-install-windows', label: 'Window Installation', amount: installWAmt },
+                        { id: 'wd-install-doors', label: 'Door Installation', amount: installDAmt },
+                        { id: 'wd-garage-door', label: 'Garage Door', amount: garageAmt },
+                        { id: 'wd-permit', label: 'Permit Fee', amount: permitAmt },
+                      ].filter((l) => l.amount > 0)
+                      const catalogSum = catalogLines.reduce((s, l) => s + l.amount, 0)
+                      if (catalogSum > 0) {
+                        const saleAmt = selectedItem.saleAmount ?? 0
+                        const upsale = isSold && saleAmt > catalogSum ? saleAmt - catalogSum : 0
+                        const finalLines: LineItem[] = upsale > 0
+                          ? [...catalogLines, { id: 'upsale-adj', label: 'Upsale', amount: upsale }]
+                          : catalogLines
+                        displayLineItems = finalLines
+                        displayTotal = finalLines.reduce((s, l) => s + l.amount, 0)
+                      }
+                    }
+
                     return (
                       <div className="rounded-xl border p-4 space-y-2">
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing Breakdown</h4>
                         <div className="space-y-1.5 text-sm">
-                          {priceLineItems.map((line: { id: string; label: string; amount: number }) => (
-                            <div key={line.id} className="flex justify-between">
-                              <span className="text-muted-foreground">{line.label}</span>
-                              <span className="font-medium">${line.amount.toLocaleString()}</span>
-                            </div>
-                          ))}
+                          {displayLineItems.map((line) => {
+                            const li = line as typeof line & { priceUnit?: string; unitRate?: number; unitQuantity?: number }
+                            return (
+                              <div key={line.id} className="flex justify-between items-start gap-2">
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-muted-foreground">{line.label}</span>
+                                  {li.priceUnit && li.unitRate !== undefined && li.unitQuantity !== undefined && (
+                                    <span className="text-[10px] text-muted-foreground/70">
+                                      ${li.unitRate.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/{li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'} × {li.unitQuantity.toLocaleString()} {li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-medium shrink-0">${line.amount.toLocaleString()}</span>
+                              </div>
+                            )
+                          })}
                           <div className="border-t pt-1.5 flex justify-between">
                             <span className="font-semibold">Total</span>
                             <span className="font-bold">${displayTotal.toLocaleString()}</span>
@@ -569,15 +867,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 </>
               )}
 
-              {/* Ship #197 (Rodolfo-direct pivot #16) — audit trail
-                  section. Surfaces the store additions from this
-                  session that admin needs for "full project details":
-                  booking slot, vendor-confirm timestamp, rep-assign
-                  timestamp, active reschedule negotiation, cancellation
-                  request state, ID document thumbnail. Each sub-row
-                  renders only when the underlying field is present so
-                  empty pipelines don't bloat with placeholders. */}
+              {/* Audit Trail — default mode only; admin-workflow moves this to left col. */}
               {(() => {
+                if (isAdminWorkflow) return null
                 const extra = selectedItem as typeof selectedItem & {
                   _bookingDate?: string
                   _bookingTime?: string
@@ -690,28 +982,13 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 )
               })()}
 
-              {/* Commission breakdown — two render paths:
-                  (a) bridge-resolved project with status==='sold' + saleAmount
-                      (existing ship #142 status-gate guards against seed
-                      inconsistency on direct-project drill-in).
-                  (b) transaction-fallback context (ship #150): commission is
-                      source-of-truth from tx-row context — money flowed,
-                      render the split regardless of linked-project status.
-                      Uses transactionFallback.amount as authoritative
-                      commission figure; reverse-derives saleAmount via
-                      commissionPct. */}
+              {/* Commission — default mode: tail of right col (original position). */}
               {(() => {
+                if (isAdminWorkflow) return null
                 const isTxContext = !!transactionFallback && transactionFallback.type === 'commission'
                 const statusGateHeld = selectedItem.status === 'sold' && selectedItem.saleAmount && selectedItem.saleAmount > 0
                 if (!isTxContext && !statusGateHeld) return null
-                return true
-              })() && (() => {
                 const vendorPct = 100 - commissionPct
-                // Prefer selectedItem.saleAmount (bridge-resolved authoritative
-                // value). Fall back to reverse-derived saleAmount from
-                // transactionFallback.amount when the bridge resolved a lead
-                // with no associated sold amount (#150 — commission exists as
-                // fact even if project.status != sold).
                 const txAmount = transactionFallback?.type === 'commission' ? transactionFallback.amount : null
                 const saleAmount = (selectedItem.saleAmount && selectedItem.saleAmount > 0)
                   ? selectedItem.saleAmount

@@ -407,6 +407,7 @@ export default function WorkflowPage() {
         open={!!selectedProjectId}
         onClose={() => setSelectedProjectId(null)}
         projectId={selectedProjectId}
+        viewMode="admin-workflow"
       />
     </motion.div>
   )

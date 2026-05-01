@@ -50,9 +50,19 @@ export default function VendorDashboard() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
+  const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const { vendorId: VENDOR_ID } = useVendorScope()
   const vendor = useResolvedVendor()
-  const mockLeads = useEffectiveMockLeads()
+  const allMockLeads = useEffectiveMockLeads()
+  const mockLeads = useMemo(() => {
+    const vendorScoped = allMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
+    if (profile?.role === 'account_rep') {
+      return vendorScoped.filter(
+        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
+      )
+    }
+    return vendorScoped
+  }, [allMockLeads, VENDOR_ID, profile?.role, profile?.id, accountRepIdByLead])
 
   // Auth-redirect guard: non-vendor-family profile shouldn't render this
   // page. Redirect homeowners + admins to their respective home routes.
@@ -112,8 +122,11 @@ export default function VendorDashboard() {
   // Same shape as pre-#293; live-status overrides + cancellation
   // sub-state both flow through.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
-  const homeownerLeads: Lead[] = useMemo(() => sentProjects
-    .map((p) => ({
+  // account_rep sees only mock leads stamped with their id.
+  // homeownerLeads (sentProjects) have no account_rep_id, so reps get an empty list here.
+  const homeownerLeads: Lead[] = useMemo(() => {
+    if (profile?.role === 'account_rep') return []
+    return sentProjects.map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
@@ -131,7 +144,8 @@ export default function VendorDashboard() {
       pack_items: p.item.selections,
       slot: p.sentAt,
       received_at: p.sentAt,
-    })), [sentProjects, VENDOR_ID])
+    }))
+  }, [sentProjects, VENDOR_ID, profile?.role])
 
   const leads = useMemo(() => {
     const combined = [...homeownerLeads, ...mockLeads]
@@ -302,8 +316,8 @@ export default function VendorDashboard() {
       <motion.div variants={item}>
         <div className="rounded-xl bg-muted/30 dark:bg-muted/10 px-3 py-3 sm:px-4 sm:py-4">
           <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Lead Workflow</p>
-          <div className="grid grid-cols-5 gap-2 sm:gap-3">
-            {LEAD_STAGES.map((stage) => {
+          <div className={cn('grid gap-2 sm:gap-3', profile?.role === 'account_rep' ? 'grid-cols-4' : 'grid-cols-5')}>
+            {LEAD_STAGES.filter((s) => profile?.role !== 'account_rep' || s.key !== 'new').map((stage) => {
               const StageIcon = stage.icon
               return (
                 <Link
@@ -376,16 +390,9 @@ export default function VendorDashboard() {
         </motion.div>
       </div>
 
-      {/* Ship #294 — Performance Stats moved from /vendor/profile per
-          Rodolfo "move service categories and performance stats to
-          dashboard". Quality metrics complement KPI Row pipeline metrics.
-          Ship #299 — mobile layout fix: 3-col grid on mobile.
-          Ship #327 — Review Breakdown merged in per Rodolfo "convined
-          performance stats and review breakdown into one on dashboard
-          and review breakdown removed from profile". Single Card hosts
-          both quality-metrics (top) + star-distribution (below); content-
-          merge not a layout-refactor so mobile stack is a natural
-          single-column flow under the existing 3-col grid. */}
+      {/* Performance Stats — hidden for account_rep (vendor-wide metrics
+          like rating + total_reviews can't be rep-scoped; MATH IS GOD). */}
+      {profile?.role !== 'account_rep' && (
       <motion.div variants={item}>
         <Card className="rounded-xl">
           <CardHeader>
@@ -449,6 +456,7 @@ export default function VendorDashboard() {
           </CardContent>
         </Card>
       </motion.div>
+      )}
 
       {/* Ship #304 — "View Lead Workflow ->" CTA removed per Rodolfo
           "remove view lead workflow letters and arrow". Redundant with

@@ -7,6 +7,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { getVendorPriceMap } from '@/lib/api/pricing'
+import { getOptionMetadata } from '@/lib/option-metadata'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import type { PriceLineItem } from '@/types'
+import type { CartItem } from '@/stores/cart-store'
 
 type BookingDetails = { service: string; vendor: string; date: string; time: string }
 type ConfirmationState = 'loading' | 'success' | 'refreshed' | 'incomplete'
@@ -42,6 +48,115 @@ function formatBookingTime(timeStr: string) {
 // than this is treated as stale and triggers the explicit error state.
 const RECENT_SEND_WINDOW_MS = 5 * 60 * 1000
 
+// Build computed roofing price-line-items from a vendor's Supabase catalog.
+// Each selected material gets its own line ($X/sqft × areaSqft). Selected
+// addons (gutters/soffit/fascia) get their own line ($X/lin ft × linFt).
+// Other roofing lines (permit/tearoff/install) fall through to preset.
+// Flat-roof option id for split detection
+const FLAT_ROOF_OPTION_ID = 'flat_roof'
+
+async function buildRoofingLineItems(
+  item: CartItem,
+  vendorMockId: string,
+): Promise<PriceLineItem[] | null> {
+  const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendorMockId]
+  if (!uuid) return null
+
+  let priceMap: ReturnType<typeof getVendorPriceMap> extends Promise<infer T> ? T : never
+  try {
+    priceMap = await getVendorPriceMap(uuid)
+  } catch {
+    return null
+  }
+
+  const areaSqft = item.roofMeasurement?.areaSqft ?? 0
+  const pitchedAreaSqft = item.roofMeasurement?.pitchedAreaSqft
+  const flatAreaSqft = item.roofMeasurement?.flatAreaSqft
+  const hasFlatSection = item.roofMeasurement?.pitchedAreaSqft !== undefined && item.roofMeasurement?.flatAreaSqft !== undefined
+
+  // Determine if this cart item has both a pitched material AND flat_roof selected.
+  // When hasFlatSection, each material gets its own area slice.
+  const allMaterialIds = Object.values(item.selections ?? {}).flat()
+  const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID)
+  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && getOptionMetadata(id).priceUnit === 'sqft')
+  const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
+
+  const presets = PRICE_LINE_ITEM_PRESETS['roofing']
+  const lines: PriceLineItem[] = []
+  let anyComputed = false
+
+  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
+    for (const optionId of optionIds) {
+      const key = `roofing|${groupId}|${optionId}`
+      const priceCents = priceMap.get(key)
+      if (priceCents === undefined) continue
+
+      const meta = getOptionMetadata(optionId)
+      const unitRateDollars = priceCents / 100
+
+      if (meta.priceUnit === 'sqft') {
+        // Split mode: flat_roof material uses flatAreaSqft, pitched uses pitchedAreaSqft.
+        // Non-split mode (single material): use full areaSqft.
+        const isFlat = optionId === FLAT_ROOF_OPTION_ID
+        let qty: number
+        let note: string | undefined
+        if (useSplit) {
+          if (isFlat) {
+            qty = flatAreaSqft ?? 0
+            if (qty === 0) note = 'No flat section detected by satellite imagery — confirm with vendor.'
+          } else {
+            qty = pitchedAreaSqft ?? 0
+            if (qty === 0) note = 'No pitched section detected by satellite imagery — confirm with vendor.'
+          }
+        } else {
+          qty = areaSqft
+        }
+        const amount = Math.round(unitRateDollars * qty * 100) / 100
+        const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''
+        lines.push({
+          id: `roofing-material-${optionId}`,
+          label: `Material — ${labelName}${areaLabel}`,
+          amount,
+          originalAmount: amount,
+          source: 'preset_calculated',
+          priceUnit: 'sqft',
+          unitRate: unitRateDollars,
+          unitQuantity: qty,
+          ...(note ? { note } : {}),
+        } as PriceLineItem & { note?: string })
+        anyComputed = true
+      } else if (meta.priceUnit === 'linear_ft') {
+        const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
+        if (linFt > 0) {
+          const amount = Math.round(unitRateDollars * linFt * 100) / 100
+          lines.push({
+            id: `roofing-addon-${optionId}`,
+            label: `${optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
+            amount,
+            originalAmount: amount,
+            source: 'preset_calculated',
+            priceUnit: 'linear_ft',
+            unitRate: unitRateDollars,
+            unitQuantity: linFt,
+          })
+          anyComputed = true
+        }
+      }
+    }
+  }
+
+  if (!anyComputed) return null
+
+  // Append non-material preset lines (permit, tearoff, install) unchanged
+  for (const preset of presets) {
+    if (preset.id === 'roofing-material') continue
+    lines.push({ ...preset })
+  }
+
+  return lines
+}
+
 export function BookingConfirmationPage() {
   const navigate = useNavigate()
   const removeItem = useCartStore((s) => s.removeItem)
@@ -76,43 +191,73 @@ export function BookingConfirmationPage() {
     logDiag('MOUNT')
 
     if (pendingItemStr && contractorStr && bookingStr) {
-      try {
-        const pendingItem = JSON.parse(pendingItemStr)
-        const contractor = JSON.parse(contractorStr)
-        const booking = JSON.parse(bookingStr)
-        const homeownerStr = localStorage.getItem('buildconnect-homeowner-info')
-        const homeowner = homeownerStr ? JSON.parse(homeownerStr) : undefined
+      // async IIFE so we can await buildRoofingLineItems without restructuring
+      // the outer useEffect (which must stay sync for the cleanup return).
+      // On parse failure the IIFE falls through to the refresh-window
+      // detection logic below via setState('loading') remaining (incomplete
+      // state fires after IIFE resolves via the else branch).
+      ;(async () => {
+        try {
+          const pendingItem = JSON.parse(pendingItemStr)
+          const contractor = JSON.parse(contractorStr)
+          const booking = JSON.parse(bookingStr)
+          const homeownerStr = localStorage.getItem('buildconnect-homeowner-info')
+          const homeowner = homeownerStr ? JSON.parse(homeownerStr) : undefined
 
-        setDetails({
-          service: pendingItem.serviceName,
-          vendor: contractor.company,
-          date: booking.date,
-          time: booking.time,
-        })
+          setDetails({
+            service: pendingItem.serviceName,
+            vendor: contractor.company,
+            date: booking.date,
+            time: booking.time,
+          })
 
-        const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
-        logDiag('BRANCH=success (calling sendProject)', {
-          serviceName: pendingItem.serviceName,
-          vendor: contractor.company,
-          vendor_id: contractor.vendor_id,
-        })
-        // Ship #269 — pass profile.id as homeowner_id snapshot for admin
-        // auditing. Optional on the SentProject side, so undefined here
-        // (e.g. unauthed-flow regression) just falls back to display-only
-        // homeowner fields.
-        sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id)
-        removeItem(pendingItem.id)
+          const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
+          logDiag('BRANCH=success (calling sendProject)', {
+            serviceName: pendingItem.serviceName,
+            vendor: contractor.company,
+            vendor_id: contractor.vendor_id,
+          })
 
-        localStorage.removeItem('buildconnect-pending-item')
-        localStorage.removeItem('buildconnect-selected-contractor')
-        localStorage.removeItem('buildconnect-selected-booking')
-        localStorage.removeItem('buildconnect-homeowner-info')
-        setState('success')
-        return
-      } catch (err) {
-        logDiag('BRANCH=parse-failure', { error: String(err) })
-        // Fall through to detection branches below
-      }
+          // For roofing: build computed $/sqft line items from vendor's
+          // Supabase catalog. Falls back to preset on error or missing data.
+          let computedLineItems: PriceLineItem[] | undefined
+          if (pendingItem.serviceId === 'roofing' && contractor.vendor_id) {
+            const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id)
+            if (built) computedLineItems = built
+          }
+
+          // Ship #269 — pass profile.id as homeowner_id snapshot for admin
+          // auditing. Optional on the SentProject side, so undefined here
+          // (e.g. unauthed-flow regression) just falls back to display-only
+          // homeowner fields.
+          sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)
+          removeItem(pendingItem.id)
+
+          localStorage.removeItem('buildconnect-pending-item')
+          localStorage.removeItem('buildconnect-selected-contractor')
+          localStorage.removeItem('buildconnect-selected-booking')
+          localStorage.removeItem('buildconnect-homeowner-info')
+          setState('success')
+        } catch (err) {
+          logDiag('BRANCH=parse-failure', { error: String(err) })
+          // Parse failed — fall through to refresh-window detection
+          const latest = sentProjects[sentProjects.length - 1]
+          const latestAge = latest ? Date.now() - new Date(latest.sentAt).getTime() : Infinity
+          const isRecent = latest && latestAge < RECENT_SEND_WINDOW_MS
+          if (isRecent && latest) {
+            setDetails({
+              service: latest.item.serviceName,
+              vendor: latest.contractor.company,
+              date: latest.booking.date,
+              time: latest.booking.time,
+            })
+            setState('refreshed')
+          } else {
+            setState('incomplete')
+          }
+        }
+      })()
+      return
     }
 
     // Preconditions missing (or parse failed). Distinguish:

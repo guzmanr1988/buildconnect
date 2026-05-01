@@ -5,6 +5,7 @@ import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -23,10 +24,20 @@ import { WindowConfigurator, type WindowSelection } from '../components/window-c
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
+import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof-measurement-wizard'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { getOptionMetadata } from '@/lib/option-metadata'
+import { geocodeAddressToCoords } from '@/lib/geo-distance'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+
+const ADDON_LINEAR_FT_CONFIG = [
+  { id: 'gutters', label: 'Gutter linear feet' },
+  { id: 'soffit_wood', label: 'Soffit linear feet' },
+  { id: 'fascia_wood', label: 'Fascia linear feet' },
+] as const
+const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -118,6 +129,15 @@ export function ServiceDetailPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(
     (editItemForService?.id as string) || null
   )
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number } | null>(null)
+  const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
+    editItemForService?.roofAddonLinearFt
+      ? Object.fromEntries(Object.entries(editItemForService.roofAddonLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
+      : {}
+  )
+
+  const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
@@ -155,6 +175,19 @@ export function ServiceDetailPage() {
     return match?.key ?? 'primary'
   })
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
+
+  const handleWizardComplete = (result: RoofWizardResult) => {
+    const materials = [result.material]
+    if (result.hasFlatSection) materials.push('flat_roof')
+    setSelections((prev) => ({ ...prev, material: materials }))
+    if (result.material === 'metal') {
+      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(result.areaSqft) }))
+      setMetalRoofConfigOpen(true)
+    }
+    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
+    setWizardOpen(false)
+    toast.success('Roof measured — your config is pre-filled!')
+  }
 
   // Legacy localStorage-based trigger: some older callers may still set
   // 'buildconnect-edit-item' instead of using the location.state channel.
@@ -347,6 +380,60 @@ export function ServiceDetailPage() {
         <MeasurementTutorialCTA serviceId={service.id} />
       </motion.div>
 
+      {/* Roof measurement wizard CTA — roofing only, additive (CHAIN IS GOD) */}
+      {serviceId === 'roofing' && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.12 }}
+        >
+          <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                <Home className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {roofMeasurement ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">Roof measured</p>
+                    <p className="text-[13px] text-muted-foreground mt-0.5">
+                      {roofMeasurement.areaSqft.toLocaleString()} sq ft · Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''} · {roofMeasurement.address}
+                    </p>
+                    <button
+                      className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                      onClick={() => setWizardOpen(true)}
+                    >
+                      Re-measure
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
+                    <p className="text-[13px] text-muted-foreground mt-0.5">
+                      We'll measure your roof from satellite data and pre-fill your configuration. Skip this if you already know your measurements.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setWizardOpen(true)}
+                    >
+                      Measure My Roof
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <RoofMeasurementWizard
+            open={wizardOpen}
+            onClose={() => setWizardOpen(false)}
+            defaultAddress={selectedAddress?.full ?? ''}
+            onComplete={handleWizardComplete}
+          />
+        </motion.div>
+      )}
+
       {/* Configuration section */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -455,6 +542,14 @@ export function ServiceDetailPage() {
                           if (serviceId === 'windows_doors' && option.id === 'garage_doors') {
                             setGarageDoorConfigOpen((prev) => selected.includes('garage_doors') ? !prev : true)
                           }
+                          if (serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_IDS.includes(option.id)) {
+                            const wasSelected = selected.includes(option.id)
+                            if (wasSelected) {
+                              setAddonLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                            } else {
+                              setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
+                            }
+                          }
                         }}
                         className={cn(
                           'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-150',
@@ -529,6 +624,24 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
+                {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only */}
+                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.some((c) => selected.includes(c.id)) && (
+                  <div className="mt-3 space-y-2">
+                    {ADDON_LINEAR_FT_CONFIG.filter((c) => selected.includes(c.id)).map((c) => (
+                      <div key={c.id} className="flex items-center gap-3">
+                        <Label className="text-sm w-36 shrink-0">{c.label}</Label>
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          className="max-w-[140px]"
+                          placeholder="linear feet"
+                          value={addonLinearFt[c.id] ?? ''}
+                          onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
@@ -748,7 +861,7 @@ export function ServiceDetailPage() {
               added && 'bg-green-600 hover:bg-green-700'
             )}
             disabled={!allRequiredDone || added || alreadyInCart}
-            onClick={() => {
+            onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
                 : undefined
@@ -774,6 +887,29 @@ export function ServiceDetailPage() {
               const itemAddress: CartItemAddress | undefined = selectedAddress?.full
                 ? { label: selectedAddress.label, full: selectedAddress.full }
                 : undefined
+
+              // Geocode project address for distance-based vendor matching.
+              // Falls through silently on failure — widen-reads-narrow-writes.
+              let projectLat: number | undefined
+              let projectLng: number | undefined
+              if (getFlag('googleMapsPlatform') && getFlag('realGeocoding') && selectedAddress?.full) {
+                const coords = await geocodeAddressToCoords(
+                  selectedAddress.full,
+                  import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string,
+                )
+                if (coords) { projectLat = coords.lat; projectLng = coords.lng }
+              }
+
+              const roofAddonLinearFt: Record<string, number> = {}
+              if (serviceId === 'roofing') {
+                for (const { id } of ADDON_LINEAR_FT_CONFIG) {
+                  const val = addonLinearFt[id]
+                  if (val && (selections['addons'] ?? []).includes(id)) {
+                    const n = Number(val)
+                    if (!isNaN(n) && n > 0) roofAddonLinearFt[id] = n
+                  }
+                }
+              }
               const itemData = {
                 serviceId: service.id,
                 serviceName: service.name,
@@ -783,8 +919,11 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && doorSelections.length > 0 && { doorSelections }),
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
+                ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
+                ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(addonQuantities && { addonQuantities }),
                 ...(itemAddress && { address: itemAddress }),
+                ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),
               }
               if (editingItemId) {
                 // Update existing item
@@ -823,6 +962,8 @@ export function ServiceDetailPage() {
               setGarageDoorConfigOpen(true)
               setMetalRoofSelection({ color: '', roofSize: '' })
               setMetalRoofConfigOpen(true)
+              setRoofMeasurement(null)
+              setAddonLinearFt({})
               setAdded(true)
               setTimeout(() => setAdded(false), 1200)
             }}
@@ -891,8 +1032,124 @@ export function ServiceDetailPage() {
               <p className="text-xs text-muted-foreground mt-1">{service.description}</p>
             </div>
 
-            {/* Selected options */}
-            {service.optionGroups.filter(g => (selections[g.id]?.length ?? 0) > 0).map((group) => {
+            {/* ── Roofing: Measurement card ── */}
+            {serviceId === 'roofing' && roofMeasurement && (
+              <div className="border-b border-border/50 pb-4">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Roof Measurement
+                </h4>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border w-full truncate">
+                      {roofMeasurement.address}
+                    </span>
+                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                      {roofMeasurement.areaSqft.toLocaleString()} Sq Ft
+                    </span>
+                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                      Pitch {roofMeasurement.pitch}
+                    </span>
+                    {roofMeasurement.perimeterFt && (
+                      <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                        ~{roofMeasurement.perimeterFt.toLocaleString()} lin ft perimeter
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Roofing: Materials card ── */}
+            {serviceId === 'roofing' && (selections['material'] ?? []).length > 0 && (() => {
+              const matOpts = service.optionGroups.find(g => g.id === 'material')?.options ?? []
+              const matIds = selections['material'] ?? []
+              const hasFlatInSelection = matIds.includes('flat_roof')
+              const hasPitchedInSelection = matIds.some(id => id !== 'flat_roof')
+              const showSplit = hasFlatInSelection && hasPitchedInSelection
+                && roofMeasurement?.pitchedAreaSqft !== undefined
+                && roofMeasurement?.flatAreaSqft !== undefined
+              return (
+                <div className="border-b border-border/50 pb-4">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Materials
+                  </h4>
+                  <div className="flex flex-col gap-2">
+                    {matIds.map((matId) => {
+                      const label = matOpts.find(o => o.id === matId)?.label ?? matId
+                      const areaLabel = showSplit
+                        ? matId === 'flat_roof'
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat`
+                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched`
+                        : undefined
+                      return (
+                        <div key={matId} className="rounded-lg bg-muted/50 p-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <p className="text-sm font-semibold text-foreground">{label}</p>
+                            {areaLabel && (
+                              <span className="text-[11px] bg-primary/10 text-primary rounded px-2 py-0.5">
+                                {areaLabel}
+                              </span>
+                            )}
+                          </div>
+                          {matId === 'metal' && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {metalRoofSelection.color ? (
+                                <>
+                                  <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                                    Color: {metalRoofSelection.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                                  </span>
+                                  {metalRoofSelection.roofSize && (
+                                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                                      {Number(metalRoofSelection.roofSize).toLocaleString()} Sq Ft
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground italic">Not yet configured</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Roofing: Addons card ── */}
+            {serviceId === 'roofing' && (selections['addons'] ?? []).length > 0 && (() => {
+              const addonOpts = service.optionGroups.find(g => g.id === 'addons')?.options ?? []
+              return (
+                <div className="border-b border-border/50 pb-4">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Add-Ons
+                  </h4>
+                  <div className="flex flex-col gap-1.5">
+                    {(selections['addons'] ?? []).map((optId) => {
+                      const label = addonOpts.find(o => o.id === optId)?.label ?? optId
+                      const linFt = ADDON_LINEAR_FT_IDS.includes(optId) ? addonLinearFt[optId] : undefined
+                      return (
+                        <div key={optId} className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
+                            {label}
+                          </span>
+                          {linFt && (
+                            <span className="text-xs text-muted-foreground">· {linFt} lin ft</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Selected options — skip material+addons for roofing (rendered above) */}
+            {service.optionGroups
+              .filter(g => (selections[g.id]?.length ?? 0) > 0)
+              .filter(g => !(serviceId === 'roofing' && (g.id === 'material' || g.id === 'addons')))
+              .map((group) => {
               const selected = selections[group.id] ?? []
               return (
                 <div key={group.id} className="border-b border-border/50 pb-4 last:border-0">
@@ -1026,27 +1283,6 @@ export function ServiceDetailPage() {
                     {garageDoorSelection.glass && (
                       <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                         Glass: {garageDoorSelection.glass.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Metal Roof selection */}
-            {serviceId === 'roofing' && metalRoofSelection.color && (
-              <div className="border-b border-border/50 pb-4">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Standing Seam Metal
-                </h4>
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border font-medium">
-                      Color: {metalRoofSelection.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                    </span>
-                    {metalRoofSelection.roofSize && (
-                      <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                        Roof Size: {Number(metalRoofSelection.roofSize).toLocaleString()} Sq Ft
                       </span>
                     )}
                   </div>

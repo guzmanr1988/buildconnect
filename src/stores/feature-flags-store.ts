@@ -57,6 +57,16 @@ export const useFeatureFlagsStore = create<FeatureFlagsState>()(
 
       resetFlags: () => set({ flags: { ...DEFAULT_FEATURE_FLAGS } }),
     }),
-    { name: 'buildconnect-feature-flags' },
+    {
+      name: 'buildconnect-feature-flags',
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as { flags: Record<string, boolean> }
+        if (version === 0) {
+          return { flags: { ...state.flags, realGeocoding: true, googleMapsPlatform: true } }
+        }
+        return state
+      },
+    },
   ),
 )

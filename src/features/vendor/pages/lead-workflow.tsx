@@ -29,10 +29,13 @@ import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { computeWindowsDoorsCatalogTotal, windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Lead, VendorRep } from '@/types'
+import { mapsUrl, telHref } from '@/lib/contact-links'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -92,6 +95,7 @@ export default function VendorLeadWorkflow() {
   // source per Rodolfo's "open list from account rep tab to select"
   // directive.
   const employeesMap = useVendorEmployeesStore((s) => s.employeesByVendor)
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
 
   // Auth guard — redirect unauth'd or non-vendor-family roles to /login.
   // Ship #333 Phase A — account_rep is part of the vendor-family
@@ -133,6 +137,16 @@ export default function VendorLeadWorkflow() {
         phone: e.phone,
       }))
   }, [employeesMap, VENDOR_ID])
+
+  // Vendor self-assignment: vendor.id in the rep-assignment slot so leads
+  // they personally handle are distinguishable from unassigned/rep-assigned.
+  // Prepended to allAssignees so it's always the first option and the
+  // dropdown never shows empty even when no account reps exist yet.
+  const allAssignees: VendorRep[] = useMemo(() => {
+    if (!profile?.id || !profile?.name) return accountReps
+    const self: VendorRep = { id: profile.id, name: profile.name, role: 'Owner' }
+    return [self, ...accountReps]
+  }, [accountReps, profile?.id, profile?.name])
 
   // Vendor display-data: extracted to useResolvedVendor (ship #263).
   // Role-gate is preserved by the helper — a homeowner profile (e.g.
@@ -184,13 +198,23 @@ export default function VendorLeadWorkflow() {
     const map: Record<string, number> = {}
     for (const p of sentProjects) {
       if (!p || typeof p.id !== 'string') continue
+      const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
       if (p.saleAmount && p.saleAmount > 0) {
-        const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
         map[leadId] = p.saleAmount
+      } else if (p.quotedPriceCents && p.quotedPriceCents > 0) {
+        map[leadId] = Math.round(p.quotedPriceCents / 100)
+      } else {
+        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
+          ? p.priceLineItems
+          : (PRICE_LINE_ITEM_PRESETS[p.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+        const value = p.item?.serviceId === 'windows_doors'
+          ? computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+          : lineItems.reduce((s: number, l: { amount: number }) => s + (l.amount || 0), 0)
+        if (value > 0) map[leadId] = value
       }
     }
     return map
-  }, [sentProjects])
+  }, [sentProjects, getVendorPrice])
 
   // Sheet / dialog state
   const [selected, setSelected] = useState<Lead | null>(null)
@@ -407,7 +431,7 @@ export default function VendorLeadWorkflow() {
     // Ship #224 — rep resolution via accountReps (useVendorEmployeesStore)
     // instead of vendor.reps (MOCK_VENDORS) + adhoc-text path. Dropdown
     // is the sole input; no fallback.
-    const rep: VendorRep | undefined = accountReps.find((r) => r.id === editRepChoice)
+    const rep: VendorRep | undefined = allAssignees.find((r) => r.id === editRepChoice)
     if (!rep) return
     assignRepByLead(editRepLeadId, rep)
     const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === editRepLeadId)
@@ -714,23 +738,25 @@ export default function VendorLeadWorkflow() {
       {/* Lead Status Tiles — vertical accordion. Each tile owns its own expand
           content inline beneath its summary row (kratos msg 1776576002292). */}
       <motion.div variants={item} className="flex flex-col gap-2">
-        <LeadStatusTile
-          title="New Leads"
-          count={newLeads.length}
-          color={STAGE_COLOR_BY_KEY.new}
-          pulse={STAGE_PULSE_BY_KEY.new}
-          icon={Inbox}
-          open={openTile === 'new'}
-          onToggle={() => toggleTile('new')}
-        >
-          <div className="grid gap-3">
-            {newLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
-            ) : (
-              newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
+        {profile?.role !== 'account_rep' && (
+          <LeadStatusTile
+            title="New Leads"
+            count={newLeads.length}
+            color={STAGE_COLOR_BY_KEY.new}
+            pulse={STAGE_PULSE_BY_KEY.new}
+            icon={Inbox}
+            open={openTile === 'new'}
+            onToggle={() => toggleTile('new')}
+          >
+            <div className="grid gap-3">
+              {newLeads.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
+              ) : (
+                newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              )}
+            </div>
+          </LeadStatusTile>
+        )}
         <LeadStatusTile
           title="Scheduled Leads"
           count={confirmedLeads.length}
@@ -1056,11 +1082,14 @@ export default function VendorLeadWorkflow() {
                 <div className="space-y-1.5 text-sm">
                   <div className="flex items-center gap-2 text-foreground/90">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{selected.address}</span>
+                    <a href={mapsUrl(selected.address)} target="_blank" rel="noopener noreferrer" className="truncate hover:text-foreground hover:underline transition-colors">{selected.address}</a>
                   </div>
                   <div className="flex items-center gap-2 text-foreground/90">
                     <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span>{selected.phone}</span>
+                    <a href={telHref(selected.phone)} className="inline-flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={`Call ${selected.homeowner_name}`}>
+                      <Phone className="h-3 w-3" />
+                    </a>
                   </div>
                   <div className="flex items-center gap-2 text-foreground/90">
                     <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -1345,7 +1374,7 @@ export default function VendorLeadWorkflow() {
                         Account Representative
                         <span className="text-destructive">*</span>
                       </label>
-                      {accountReps.length > 0 ? (
+                      {allAssignees.length > 0 ? (
                         <>
                           <Select value={selectedRepId} onValueChange={(value) => setSelectedRepId(value ?? '')}>
                             <SelectTrigger id="assign-rep" className="h-10 text-sm">
@@ -1354,9 +1383,9 @@ export default function VendorLeadWorkflow() {
                                   for picking context. SelectValue children
                                   override the default (mirror-SelectItem-
                                   children) render. */}
-                              <SelectValue placeholder="Choose an account representative…">
+                              <SelectValue placeholder="Choose who's handling this lead…">
                                 {selectedRepId
-                                  ? accountReps.find((r) => r.id === selectedRepId)?.name
+                                  ? allAssignees.find((r) => r.id === selectedRepId)?.name
                                   : null}
                               </SelectValue>
                             </SelectTrigger>
@@ -1368,19 +1397,19 @@ export default function VendorLeadWorkflow() {
                                 options had mismatched heights that made the
                                 overlay read as visual overlap. */}
                             <SelectContent alignItemWithTrigger={false}>
-                              {accountReps.map((rep) => (
+                              {allAssignees.map((rep) => (
                                 <SelectItem key={rep.id} value={rep.id}>
                                   <span className="font-medium">{rep.name}</span>
-                                  {rep.role && (
-                                    <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
-                                  )}
+                                  {rep.id === profile?.id
+                                    ? <span className="ml-2 text-xs text-primary font-medium">you</span>
+                                    : rep.role && <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           {!selectedRepId && (
                             <p className="text-[11px] text-muted-foreground">
-                              Pick an account representative before confirming or rescheduling so the homeowner knows who's coming out.
+                              Assign to yourself or an account representative before confirming.
                             </p>
                           )}
                         </>
@@ -1432,7 +1461,7 @@ export default function VendorLeadWorkflow() {
                             // (useVendorEmployeesStore) instead of
                             // vendor.reps (MOCK_VENDORS). Adhoc-text
                             // path removed.
-                            const rep: VendorRep | undefined = accountReps.find((r) => r.id === selectedRepId)
+                            const rep: VendorRep | undefined = allAssignees.find((r) => r.id === selectedRepId)
                             const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selectedLeadId)
                             if (rep) {
                               assignRepByLead(selectedLeadId, rep)
@@ -1549,16 +1578,98 @@ export default function VendorLeadWorkflow() {
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                 const snapshot = sp?.priceLineItems
-                const fallback = PRICE_LINE_ITEM_PRESETS[selected.service_category as keyof typeof PRICE_LINE_ITEM_PRESETS]
+                const serviceId = selected.service_category as string
+                const fallback = PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
                 const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
                 if (!priceLineItems || priceLineItems.length === 0) return null
+
+                const isSold = sp?.status === 'sold'
+                type LineItem = { id: string; label: string; amount: number }
+                let displayLineItems: LineItem[] = priceLineItems as LineItem[]
+                let displayTotal = (priceLineItems as LineItem[]).reduce((s, l) => s + (l.amount || 0), 0)
+
+                // Mock-only leads (no sentProject): add Upsale to match tile value.
+                if (!sp) {
+                  const effectiveValue = saleAmountByLeadId[selected.id] ?? selected.value
+                  const delta = effectiveValue - displayTotal
+                  if (delta > 0) {
+                    displayLineItems = [...displayLineItems, { id: 'mock-upsale', label: 'Upsale', amount: delta }]
+                    displayTotal = effectiveValue
+                  }
+                }
+
+                if (serviceId === 'windows_doors' && sp) {
+                  const item = sp.item as any
+                  const totalWQty = item.windowSelections?.reduce((s: number, w: any) => s + w.quantity, 0) ?? 0
+                  const totalDQty = item.doorSelections?.reduce((s: number, d: any) => s + d.quantity, 0) ?? 0
+                  const totalUnits = totalWQty + totalDQty
+                  const wdProductLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-product')
+
+                  let windowsAmt = 0
+                  for (const w of item.windowSelections ?? []) {
+                    const unit = windowCatalogUnitPrice(w, getVendorPrice, serviceId)
+                    if (unit > 0) windowsAmt += unit * w.quantity
+                    else if (wdProductLine && totalUnits > 0) windowsAmt += Math.round(wdProductLine.amount / totalUnits * w.quantity)
+                  }
+                  let doorsAmt = 0
+                  for (const d of item.doorSelections ?? []) {
+                    const unit = doorCatalogUnitPrice(d, getVendorPrice, serviceId)
+                    if (unit > 0) doorsAmt += unit * d.quantity
+                    else if (wdProductLine && totalUnits > 0) doorsAmt += Math.round(wdProductLine.amount / totalUnits * d.quantity)
+                  }
+                  let garageAmt = 0
+                  const gd = item.garageDoorSelection
+                  if (gd?.type) {
+                    const gdUnit = garageDoorCatalogUnitPrice(gd, getVendorPrice, serviceId)
+                    const gdLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-garage-door')
+                    garageAmt = gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
+                  }
+                  let installWAmt = 0
+                  if (totalWQty > 0) {
+                    const catalogInstallW = getVendorPrice(serviceId, 'install_windows')
+                    const wInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-windows')
+                    installWAmt = catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
+                  }
+                  let installDAmt = 0
+                  if (totalDQty > 0) {
+                    const catalogInstallD = getVendorPrice(serviceId, 'install_doors')
+                    const dInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-doors')
+                    installDAmt = catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+                  }
+                  let permitAmt = 0
+                  const hasPermit = item.selections && Object.values(item.selections as Record<string, string[]>).flat().includes('permit')
+                  if (hasPermit) {
+                    const catalogPermit = getVendorPrice(serviceId, 'permit')
+                    const permitLine = (priceLineItems as LineItem[]).find((l) => l.label?.toLowerCase().includes('permit'))
+                    permitAmt = catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
+                  }
+
+                  const catalogLines: LineItem[] = [
+                    { id: 'wd-product', label: 'Windows & Doors (Product)', amount: windowsAmt + doorsAmt },
+                    { id: 'wd-install-windows', label: 'Window Installation', amount: installWAmt },
+                    { id: 'wd-install-doors', label: 'Door Installation', amount: installDAmt },
+                    { id: 'wd-garage-door', label: 'Garage Door', amount: garageAmt },
+                    { id: 'wd-permit', label: 'Permit Fee', amount: permitAmt },
+                  ].filter((l) => l.amount > 0)
+                  const catalogSum = catalogLines.reduce((s, l) => s + l.amount, 0)
+                  if (catalogSum > 0) {
+                    const spSaleAmt = sp.saleAmount ?? 0
+                    const upsale = isSold && spSaleAmt > catalogSum ? spSaleAmt - catalogSum : 0
+                    const finalLines: LineItem[] = upsale > 0
+                      ? [...catalogLines, { id: 'upsale-adj', label: 'Upsale', amount: upsale }]
+                      : catalogLines
+                    displayLineItems = finalLines
+                    displayTotal = finalLines.reduce((s, l) => s + l.amount, 0)
+                  }
+                }
+
                 return (
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Pricing Breakdown
                     </p>
                     <div className="space-y-1.5 text-xs sm:text-sm">
-                      {priceLineItems.map((line) => (
+                      {displayLineItems.map((line) => (
                         <div key={line.id} className="flex justify-between">
                           <span className="text-muted-foreground">{line.label}</span>
                           <span className="font-medium">${line.amount.toLocaleString()}</span>
@@ -1566,9 +1677,7 @@ export default function VendorLeadWorkflow() {
                       ))}
                       <div className="border-t border-border/60 pt-1.5 flex justify-between">
                         <span className="font-semibold">Total</span>
-                        <span className="font-bold">
-                          ${priceLineItems.reduce((sum, l) => sum + (l.amount || 0), 0).toLocaleString()}
-                        </span>
+                        <span className="font-bold">${displayTotal.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
@@ -1637,7 +1746,7 @@ export default function VendorLeadWorkflow() {
                 // the post-approve-reschedule transition to "scheduled"
                 // carries the rep. Pre-#249 the Reschedule path bypassed
                 // rep-assign entirely — Rodolfo-surfaced gap.
-                const rep = accountReps.find((r) => r.id === selectedRepId)
+                const rep = allAssignees.find((r) => r.id === selectedRepId)
                 if (rep) assignRepByLead(lead.id, rep)
                 // Ship #239 — UNIFIED vendor-reschedule flow. Regardless of
                 // lead status (pending / confirmed / rescheduled), the
@@ -2118,26 +2227,26 @@ export default function VendorLeadWorkflow() {
             <DialogTitle className="font-heading">Change Account Representative</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            {accountReps.length > 0 ? (
+            {allAssignees.length > 0 ? (
               <Select value={editRepChoice} onValueChange={(value) => setEditRepChoice(value ?? '')}>
                 <SelectTrigger className="h-10 text-sm">
                   {/* Ship #229 — same name-only selected-display pattern as
                       the assign-rep dropdown. Options below keep name+title. */}
-                  <SelectValue placeholder="Choose an account representative…">
+                  <SelectValue placeholder="Choose who's handling this lead…">
                     {editRepChoice
-                      ? accountReps.find((r) => r.id === editRepChoice)?.name
+                      ? allAssignees.find((r) => r.id === editRepChoice)?.name
                       : null}
                   </SelectValue>
                 </SelectTrigger>
                 {/* Ship #230 — alignItemWithTrigger=false, same rationale
                     as the Assign dropdown above. */}
                 <SelectContent alignItemWithTrigger={false}>
-                  {accountReps.map((rep) => (
+                  {allAssignees.map((rep) => (
                     <SelectItem key={rep.id} value={rep.id}>
                       <span className="font-medium">{rep.name}</span>
-                      {rep.role && (
-                        <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>
-                      )}
+                      {rep.id === profile?.id
+                        ? <span className="ml-2 text-xs text-primary font-medium">you</span>
+                        : rep.role && <span className="ml-2 text-xs text-muted-foreground">{rep.role}</span>}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  Settings, Wrench, Eye, Layers,
+  Settings, Wrench, Eye, EyeOff, Layers,
   Banknote, Save, CheckCircle, Bell, Shield, Clock, MapPin, Building2,
-  Mail, Phone, Key, Lock, Globe,
+  Mail, Phone, Key, Lock, Globe, Copy,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +41,7 @@ export default function SettingsPage() {
   const setMatchRadius = useAdminModerationStore((s) => s.setMatchRadius)
   // Ship #325 — per-feature admin-toggleable flags.
   const featureFlags = useFeatureFlagsStore((s) => s.flags)
+  const [revealedKeys, setRevealedKeys] = useState<Record<number, boolean>>({})
   const setFeatureFlag = useFeatureFlagsStore((s) => s.setFlag)
 
   // Extended settings state
@@ -343,6 +345,112 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Wired API Keys — read-only display of keys baked into the client
+            bundle via VITE_ env vars. Server-only keys (service role, PAT,
+            etc.) show a placeholder — they are never exposed to the browser. */}
+        {(() => {
+        const WIRED_KEYS = [
+          {
+            name: 'Google Maps Platform',
+            description: 'Solar API · Geocoding · Maps JS',
+            value: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined,
+            serverOnly: false,
+          },
+          {
+            name: 'Supabase URL',
+            description: 'Database + Auth endpoint',
+            value: import.meta.env.VITE_SUPABASE_URL as string | undefined,
+            serverOnly: false,
+          },
+          {
+            name: 'Supabase Anon Key',
+            description: 'Client-side auth key',
+            value: import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined,
+            serverOnly: false,
+          },
+          {
+            name: 'Supabase Service Role',
+            description: 'Full database access (server-side only)',
+            value: undefined as string | undefined,
+            serverOnly: true,
+          },
+          {
+            name: 'Gemini API (RAG)',
+            description: 'Knowledge base processing',
+            value: undefined as string | undefined,
+            serverOnly: true,
+          },
+          {
+            name: 'GitHub PAT',
+            description: 'Agent fleet operations',
+            value: undefined as string | undefined,
+            serverOnly: true,
+          },
+          {
+            name: 'Cloudflare API Token',
+            description: 'Deployment pipeline',
+            value: undefined as string | undefined,
+            serverOnly: true,
+          },
+        ]
+        function maskKey(key: string): string {
+          if (key.length <= 10) return key
+          return `${key.slice(0, 6)}...${key.slice(-4)}`
+        }
+        return (
+          <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible">
+            <Card className="rounded-xl shadow-sm hover:shadow-md transition h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-4 w-4 text-primary" />
+                  Wired API Keys
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 max-h-[360px] overflow-y-auto">
+                {WIRED_KEYS.map((k, i) => (
+                  <div key={k.name} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{k.name}</p>
+                      <p className="text-xs text-muted-foreground">{k.description}</p>
+                    </div>
+                    {k.serverOnly ? (
+                      <span className="text-xs text-muted-foreground italic shrink-0">SERVER-ONLY</span>
+                    ) : k.value ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-xs text-foreground">
+                          {revealedKeys[i] ? k.value : maskKey(k.value)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={revealedKeys[i] ? 'Hide key' : 'Reveal key'}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => setRevealedKeys((prev) => ({ ...prev, [i]: !prev[i] }))}
+                        >
+                          {revealedKeys[i] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Copy key"
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => {
+                            navigator.clipboard.writeText(k.value!)
+                            toast.success('Copied')
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">Not configured</span>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )
+      })()}
       </div>
 
       {/* Ship #246 — Match Radius (geo-match Phase 1). Platform-wide

@@ -46,39 +46,9 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/shared/page-header'
 import { matchesSearch } from '@/lib/search-match'
+import { useUsersStore, type MockUser, type UserStatus } from '@/stores/users-store'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import type { UserRole } from '@/types'
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-type UserStatus = 'active' | 'pending' | 'suspended'
-
-interface MockUser {
-  id: string
-  name: string
-  email: string
-  role: UserRole
-  status: UserStatus
-  joined_at: string
-}
-
-/* ------------------------------------------------------------------ */
-/*  Mock Data                                                          */
-/* ------------------------------------------------------------------ */
-
-const INITIAL_USERS: MockUser[] = [
-  { id: 'u1', name: 'Alex Rivera', email: 'alex@buildconnect.io', role: 'admin', status: 'active', joined_at: '2025-01-10' },
-  { id: 'u2', name: 'Jordan Lee', email: 'jordan@buildconnect.io', role: 'admin', status: 'active', joined_at: '2025-02-14' },
-  { id: 'u3', name: 'Sam Patel', email: 'sam@eliteroofing.com', role: 'vendor', status: 'active', joined_at: '2025-03-01' },
-  { id: 'u4', name: 'Maria Gonzalez', email: 'maria@premiumwindows.com', role: 'vendor', status: 'active', joined_at: '2025-03-18' },
-  { id: 'u5', name: 'Chen Wei', email: 'chen@poolpros.com', role: 'vendor', status: 'pending', joined_at: '2025-04-02' },
-  { id: 'u6', name: 'Lisa Thompson', email: 'lisa.t@gmail.com', role: 'homeowner', status: 'active', joined_at: '2025-04-05' },
-  { id: 'u7', name: 'Derek Williams', email: 'derek.w@outlook.com', role: 'homeowner', status: 'active', joined_at: '2025-04-08' },
-  { id: 'u8', name: 'Priya Sharma', email: 'priya.s@yahoo.com', role: 'homeowner', status: 'suspended', joined_at: '2025-02-20' },
-  { id: 'u9', name: 'Carlos Mendez', email: 'carlos@drivewayking.com', role: 'vendor', status: 'suspended', joined_at: '2025-01-25' },
-  { id: 'u10', name: 'Nina Okafor', email: 'nina.o@gmail.com', role: 'homeowner', status: 'pending', joined_at: '2025-04-10' },
-]
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -98,6 +68,7 @@ const ROLE_TABS: { value: UserRole | 'all'; label: string; icon: React.ElementTy
   { value: 'admin', label: 'Admin', icon: Shield },
   { value: 'vendor', label: 'Vendor', icon: Briefcase },
   { value: 'homeowner', label: 'Homeowner', icon: Home },
+  { value: 'account_rep', label: 'Account Rep', icon: KeyRound },
 ]
 
 function roleBadge(role: UserRole) {
@@ -136,7 +107,10 @@ function statusBadge(status: UserStatus) {
 /* ------------------------------------------------------------------ */
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<MockUser[]>(INITIAL_USERS)
+  const users = useUsersStore((s) => s.users)
+  const addUserToStore = useUsersStore((s) => s.addUser)
+  const updateUserInStore = useUsersStore((s) => s.updateUser)
+  const toggleStatusInStore = useUsersStore((s) => s.toggleStatus)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
 
@@ -219,13 +193,7 @@ export default function UsersPage() {
 
   /* ---- Actions ---- */
   function toggleStatus(id: string) {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id
-          ? { ...u, status: u.status === 'suspended' ? 'active' : 'suspended' }
-          : u,
-      ),
-    )
+    toggleStatusInStore(id)
   }
 
   function openEdit(user: MockUser) {
@@ -235,19 +203,14 @@ export default function UsersPage() {
 
   function saveEdit() {
     if (!editUser) return
-    setUsers((prev) => prev.map((u) => (u.id === editUser.id ? editUser : u)))
+    updateUserInStore(editUser.id, editUser)
     setEditOpen(false)
     setEditUser(null)
   }
 
   function addUser() {
     if (!newUser.name.trim() || !newUser.email.trim()) return
-    const user: MockUser = {
-      ...newUser,
-      id: `u${Date.now()}`,
-      joined_at: new Date().toISOString().slice(0, 10),
-    }
-    setUsers((prev) => [user, ...prev])
+    addUserToStore(newUser)
     setAddOpen(false)
     setNewUser({ name: '', email: '', role: 'homeowner', status: 'active' })
   }
@@ -331,7 +294,13 @@ export default function UsersPage() {
                   ) : (
                     filtered.map((user) => (
                       <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{user.name}</div>
+                          {user.role === 'account_rep' && user.account_rep_for_vendor_id && (() => {
+                            const v = MOCK_VENDORS.find((v) => v.id === user.account_rep_for_vendor_id)
+                            return v ? <div className="text-xs text-muted-foreground font-normal">{v.company}</div> : null
+                          })()}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{user.email}</TableCell>
                         <TableCell>{roleBadge(user.role)}</TableCell>
                         <TableCell>{statusBadge(user.status)}</TableCell>

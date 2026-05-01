@@ -120,6 +120,9 @@ export interface Lead {
   // Ship #246 — geo-match Phase 1; optional demo-seeded lat/lng.
   latitude?: number
   longitude?: number
+  // Rep-scoped assignment. When set, only the account_rep whose
+  // profile.id matches sees this lead. Absent = vendor-admin visible only.
+  account_rep_id?: string
 }
 
 export interface ClosedSale {
@@ -224,7 +227,7 @@ export interface Bug {
 // (audit-trail per banked feedback_immutable_ledger_freeze_at_write);
 // source distinguishes preset-original from auto-injected adjustment
 // (Phase A) and from vendor-edited (Phase B / #344).
-export type PriceLineItemSource = 'preset' | 'vendor_edit' | 'auto_sold_adjustment'
+export type PriceLineItemSource = 'preset' | 'preset_calculated' | 'vendor_edit' | 'auto_sold_adjustment'
 
 export interface PriceLineItem {
   id: string
@@ -236,10 +239,18 @@ export interface PriceLineItem {
   // (delta-only) so the EXTRA $ line surfaces without a paired arrow.
   originalAmount?: number
   // Source of the line. preset = from PRICE_LINE_ITEM_PRESETS at
-  // sendProject snapshot. vendor_edit = vendor-modified amount in #344
-  // Phase B. auto_sold_adjustment = injected by markSold when sold-final
+  // sendProject snapshot. preset_calculated = computed from vendor's
+  // unit rate × homeowner measured quantity (roofing sqft/linear_ft).
+  // vendor_edit = vendor-modified amount in #344 Phase B.
+  // auto_sold_adjustment = injected by markSold when sold-final
   // exceeds sum-of-preset-originals.
   source?: PriceLineItemSource
+  // Unit-rate breakdown for preset_calculated lines. Frozen at sendProject
+  // time per immutable-ledger-freeze-at-write: vendor price changes after
+  // booking don't retroactively alter old line items.
+  priceUnit?: 'sqft' | 'linear_ft'
+  unitRate?: number   // vendor's rate in dollars (e.g. 8 = $8/sqft)
+  unitQuantity?: number  // homeowner's measured quantity
 }
 
 export interface VendorRep {

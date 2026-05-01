@@ -36,3 +36,26 @@ export function haversineMiles(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return EARTH_RADIUS_MILES * c
 }
+
+/**
+ * Geocode a free-text address to lat/lng via Google Geocoding API.
+ * Returns null on any failure — callers must fall through gracefully.
+ */
+export async function geocodeAddressToCoords(
+  address: string,
+  apiKey: string,
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const res = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`,
+    )
+    const json = await res.json() as {
+      status: string
+      results: Array<{ geometry: { location: { lat: number; lng: number } } }>
+    }
+    if (json.status !== 'OK' || !json.results.length) return null
+    return json.results[0].geometry.location
+  } catch {
+    return null
+  }
+}

@@ -34,11 +34,18 @@ export const FEATURE_FLAGS_INVENTORY: FeatureFlagDefinition[] = [
     defaultEnabled: false,
   },
   {
+    key: 'googleMapsPlatform',
+    label: 'Google Maps Platform',
+    description: 'Master switch for all Google Maps API usage: Solar API (roof measurement), Geocoding (vendor distance), Maps JavaScript. When off, features fall back to manual entry.',
+    category: 'platform',
+    defaultEnabled: true,
+  },
+  {
     key: 'realGeocoding',
     label: 'Real Address Geocoding',
-    description: 'Use a mapping API to geocode homeowner addresses for real distance-based vendor matching.',
+    description: 'Geocode homeowner project addresses for real distance-based vendor matching. Requires Google Maps Platform to be ON.',
     category: 'platform',
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     key: 'imageModeration',

@@ -3,6 +3,7 @@ import { Inbox, CalendarCheck, Handshake, Archive, X } from 'lucide-react'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope } from '@/lib/vendor-scope'
+import { useAuthStore } from '@/stores/auth-store'
 import type { Lead } from '@/types'
 
 export type LeadStageKey = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
@@ -94,15 +95,24 @@ export function useVendorLeadStages(): {
   // + label-derivation read lead.completedAt downstream so the
   // override-aware value propagates to all consumers transparently.
   const leadCompletedAtByLead = useProjectsStore((s) => s.leadCompletedAtByLead)
+  const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
+  const profile = useAuthStore((s) => s.profile)
   const effectiveMockLeads = useEffectiveMockLeads()
-  // Gate seeded MOCK_LEADS to the 5 featured mock vendors (v-1..v-5)
-  // per Rod P0 2026-04-20 — synthesized/unmapped vendors must NOT
-  // inherit Maria L-0001 + James L-0005 as their own leads.
-  const mockLeads = useMemo(
-    () => (mockVendorId ? effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID) : []),
-    [VENDOR_ID, mockVendorId, effectiveMockLeads],
-  )
+  // account_rep gate: checks both hardcoded account_rep_id (mock-data stamps)
+  // AND accountRepIdByLead (UI-driven vendor assignment). Two legitimate sources,
+  // not a seed-fallback OR-leak (banked feedback_redundant_or_fallback_leak doesn't
+  // apply here — both sides are profile.id-specific).
+  const mockLeads = useMemo(() => {
+    if (!mockVendorId) return []
+    const vendorScoped = effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
+    if (profile?.role === 'account_rep') {
+      return vendorScoped.filter(
+        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
+      )
+    }
+    return vendorScoped
+  }, [VENDOR_ID, mockVendorId, effectiveMockLeads, profile?.role, profile?.id, accountRepIdByLead])
 
   const homeownerLeads = useMemo<LeadExt[]>(
     // Ship #319 — defensive filter on malformed entries (Rodolfo

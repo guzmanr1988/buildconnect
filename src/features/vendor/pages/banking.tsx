@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
   DollarSign, Wallet, Building2, AlertTriangle, CreditCard,
-  CheckCircle2, Clock, Landmark, ArrowUpRight,
+  CheckCircle2, Clock, Landmark, ArrowUpRight, Users, MinusCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -34,10 +36,145 @@ import {
   type VendorPaymentMethod,
 } from '@/stores/vendor-billing-store'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
+import { useUsersStore } from '@/stores/users-store'
 import { useVendorPaymentsStore } from '@/stores/vendor-payments-store'
+import { useCommissionPaymentsStore, type CommissionPayment } from '@/stores/commission-payments-store'
+import { useRepPayConfigStore, type RepPayMode } from '@/stores/rep-pay-config-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
+
+interface PartialPaymentDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  sale: ClosedSale | null
+  payments: CommissionPayment[]
+  addPayment: (saleId: string, amount: number, totalCommission: number, note?: string) => void
+}
+
+function PartialPaymentDialog({ open, onOpenChange, sale, payments, addPayment }: PartialPaymentDialogProps) {
+  const [amountStr, setAmountStr] = useState('')
+  const [note, setNote] = useState('')
+
+  if (!sale) return null
+
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
+  const remaining = sale.commission - totalPaid
+  const parsed = parseFloat(amountStr)
+  const isValid = !isNaN(parsed) && parsed > 0 && parsed <= remaining
+
+  const handleSubmit = () => {
+    if (!isValid) return
+    addPayment(sale.id, parsed, sale.commission, note)
+    setAmountStr('')
+    setNote('')
+    onOpenChange(false)
+  }
+
+  const handleClose = (o: boolean) => {
+    if (!o) { setAmountStr(''); setNote('') }
+    onOpenChange(o)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-heading">Pay Commission</DialogTitle>
+          <DialogDescription className="font-mono text-xs">
+            {sale.lead_id} · {sale.homeowner_name}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Commission</span>
+              <span className="font-semibold">{fmt(sale.commission)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Already Paid</span>
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(totalPaid)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between">
+              <span className="text-muted-foreground font-semibold">Remaining</span>
+              <span className={cn('font-bold', remaining > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+                {fmt(remaining)}
+              </span>
+            </div>
+          </div>
+
+          {remaining > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium block">Payment amount</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground shrink-0">$</span>
+                <Input
+                  type="number"
+                  min={0.01}
+                  max={remaining}
+                  step={0.01}
+                  placeholder="0.00"
+                  value={amountStr}
+                  onChange={(e) => setAmountStr(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              {parsed > remaining && !isNaN(parsed) && (
+                <p className="text-xs text-destructive">Exceeds remaining balance of {fmt(remaining)}</p>
+              )}
+            </div>
+          )}
+
+          {remaining > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium block">Note (optional)</label>
+              <Input
+                placeholder="e.g. Phase 1 complete, cash down payment…"
+                value={note}
+                maxLength={140}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+          )}
+
+          {payments.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment History</p>
+              <div className="space-y-1 max-h-36 overflow-y-auto">
+                {payments.map((p) => (
+                  <div key={p.id} className="rounded-md bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">
+                        {new Date(p.paidAt).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric',
+                          hour: 'numeric', minute: '2-digit',
+                        })}
+                      </span>
+                      <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(p.amount)}</span>
+                    </div>
+                    <p className="text-muted-foreground italic">{p.note ?? '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>
+            {remaining <= 0 ? 'Close' : 'Cancel'}
+          </Button>
+          {remaining > 0 && (
+            <Button className="w-full sm:w-auto gap-1.5" disabled={!isValid} onClick={handleSubmit}>
+              <CreditCard className="h-4 w-4" /> Record Payment
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -119,13 +256,8 @@ export default function VendorBanking() {
   const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
   const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
   const removePaymentMethod = useVendorBillingStore((s) => s.removePaymentMethod)
-  // Commission-source lookup for the Pay Commission dialog — first
-  // method whose purpose is 'commissions' or 'both'.
-  const commissionMethod = useVendorBillingStore((s) =>
-    s.paymentMethodsByVendor[billingVendorId]?.find(
-      (m) => m.purpose === 'commissions' || m.purpose === 'both',
-    ),
-  )
+  const commissionPaymentsBySale = useCommissionPaymentsStore((s) => s.paymentsBySale)
+  const addCommissionPayment = useCommissionPaymentsStore((s) => s.addPayment)
 
   // Ship #21 — Account Rep Payments toggle (bottom of page). Shares
   // state with the /vendor/account-reps header Switch via
@@ -139,6 +271,23 @@ export default function VendorBanking() {
   const payrollBankEnabled = bankEnabledMap[payrollVendorId] ?? false
   const setPayrollBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
 
+  // Per-rep pay config — config-only (no payout math per banked
+  // project_buildconnect_vendor_compensation_private rule).
+  const allUsers = useUsersStore((s) => s.users)
+  const vendorReps = useMemo(
+    () => allUsers.filter((u) => u.role === 'account_rep' && u.account_rep_for_vendor_id === payrollVendorId),
+    [allUsers, payrollVendorId],
+  )
+  const repPayConfigs = useRepPayConfigStore((s) => s.configByRep)
+  const setRepPayConfig = useRepPayConfigStore((s) => s.setRepPayConfig)
+  // Local draft state: repId → { mode, valueStr } for controlled inputs
+  const [repPayDrafts, setRepPayDrafts] = useState<Record<string, { mode: RepPayMode; valueStr: string }>>({})
+  const getRepDraft = useCallback((repId: string) => {
+    if (repPayDrafts[repId]) return repPayDrafts[repId]
+    const saved = repPayConfigs[repId]
+    return { mode: (saved?.mode ?? 'flat') as RepPayMode, valueStr: saved ? String(saved.value) : '' }
+  }, [repPayDrafts, repPayConfigs])
+
   // Ship #22 — Account Rep payment history. Keyed via the same
   // useVendorScope vendorId as the #21 toggle (shared key-source
   // per banked key-source-consistency rule). Raw-map selector +
@@ -146,10 +295,8 @@ export default function VendorBanking() {
   const accountRepPaymentsMap = useVendorPaymentsStore((s) => s.paymentsByVendor)
   const accountRepPayments = accountRepPaymentsMap[payrollVendorId] ?? []
 
-  const [payDialogOpen, setPayDialogOpen] = useState(false)
-  const [payingSale, setPayingSale] = useState<ClosedSale | null>(null)
-  const [payStep, setPayStep] = useState<1 | 2>(1)
-  const [paidSales, setPaidSales] = useState<Set<string>>(new Set())
+  const [detailSale, setDetailSale] = useState<ClosedSale | null>(null)
+  const [payTarget, setPayTarget] = useState<ClosedSale | null>(null)
   // Ship #189 — dialog state tracks which method is being edited
   // (null = add-new-mode). Separate deleteTarget state for the
   // last-for-purpose confirmation.
@@ -160,26 +307,16 @@ export default function VendorBanking() {
   const totalSales = sales.reduce((s, x) => s + x.sale_amount, 0)
   const totalEarnings = sales.reduce((s, x) => s + x.vendor_share, 0)
   const totalCommission = sales.reduce((s, x) => s + x.commission, 0)
-  const paidCommission = sales.filter((s) => s.commission_paid || paidSales.has(s.id)).reduce((s, x) => s + x.commission, 0)
+  const paidCommission = useMemo(() =>
+    sales.reduce((acc, sale) => {
+      if (sale.commission_paid) return acc + sale.commission
+      const payments = commissionPaymentsBySale[sale.id] ?? []
+      return acc + payments.reduce((s, p) => s + p.amount, 0)
+    }, 0),
+    [sales, commissionPaymentsBySale],
+  )
   const unpaidCommission = totalCommission - paidCommission
   const hasUnpaid = unpaidCommission > 0
-
-  const openPayDialog = (sale: ClosedSale) => {
-    setPayingSale(sale)
-    setPayStep(1)
-    setPayDialogOpen(true)
-  }
-
-  const confirmPay = () => {
-    if (payStep === 1) {
-      setPayStep(2)
-      return
-    }
-    if (payingSale) {
-      setPaidSales((prev) => new Set([...prev, payingSale.id]))
-    }
-    setPayDialogOpen(false)
-  }
 
   const container = {
     hidden: { opacity: 0 },
@@ -255,9 +392,18 @@ export default function VendorBanking() {
                 </TableHeader>
                 <TableBody>
                   {sales.map((sale) => {
-                    const isPaid = sale.commission_paid || paidSales.has(sale.id)
+                    const salePayments = commissionPaymentsBySale[sale.id] ?? []
+                    const salePaid = salePayments.reduce((s, p) => s + p.amount, 0)
+                    const saleRemaining = sale.commission - salePaid
+                    const status = sale.commission_paid || saleRemaining <= 0
+                      ? 'paid'
+                      : salePaid > 0 ? 'partial' : 'pending'
                     return (
-                      <TableRow key={sale.id}>
+                      <TableRow
+                        key={sale.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setDetailSale(sale)}
+                      >
                         <TableCell className="font-mono text-xs">{sale.lead_id}</TableCell>
                         <TableCell className="font-medium">{sale.homeowner_name}</TableCell>
                         <TableCell className="text-muted-foreground text-sm hidden md:table-cell">{sale.project}</TableCell>
@@ -266,9 +412,13 @@ export default function VendorBanking() {
                         <TableCell className="text-right text-amber-700 dark:text-amber-400 font-medium">{fmt(sale.commission)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">{fmtDate(sale.closed_at)}</TableCell>
                         <TableCell className="text-center">
-                          {isPaid ? (
+                          {status === 'paid' ? (
                             <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
                               <CheckCircle2 className="h-3 w-3 mr-1" /> Paid
+                            </Badge>
+                          ) : status === 'partial' ? (
+                            <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 text-xs">
+                              <MinusCircle className="h-3 w-3 mr-1" /> Partial
                             </Badge>
                           ) : (
                             <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
@@ -277,8 +427,13 @@ export default function VendorBanking() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {!isPaid && (
-                            <Button size="sm" variant="outline" onClick={() => openPayDialog(sale)} className="text-xs">
+                          {status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => { e.stopPropagation(); setPayTarget(sale) }}
+                              className="text-xs"
+                            >
                               <CreditCard className="h-3 w-3 mr-1" /> Pay
                             </Button>
                           )}
@@ -485,6 +640,87 @@ export default function VendorBanking() {
                 </Label>
               </div>
             </div>
+
+            {/* Per-rep pay config — gated on payroll integration ON.
+                Config only: flat amount or %; no payout computed here. */}
+            {payrollBankEnabled && vendorReps.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2 pt-1">
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rep Pay Configuration</p>
+                </div>
+                {vendorReps.map((rep) => {
+                  const draft = getRepDraft(rep.id)
+                  const saved = repPayConfigs[rep.id]
+                  const isDirty =
+                    draft.mode !== (saved?.mode ?? 'flat') ||
+                    draft.valueStr !== (saved ? String(saved.value) : '')
+                  return (
+                    <div key={rep.id} className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{rep.name}</p>
+                          <p className="text-xs text-muted-foreground">{rep.email}</p>
+                        </div>
+                        {saved && (
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {saved.mode === 'flat' ? `$${saved.value.toLocaleString()} flat` : `${saved.value}% commission`}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={draft.mode}
+                          onValueChange={(v) =>
+                            setRepPayDrafts((prev) => ({
+                              ...prev,
+                              [rep.id]: { ...draft, mode: v as RepPayMode },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-36 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="flat">Flat amount</SelectItem>
+                            <SelectItem value="percent">% commission</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          className="h-8 w-28 text-xs"
+                          type="number"
+                          min={0}
+                          placeholder={draft.mode === 'flat' ? '0.00' : '0'}
+                          value={draft.valueStr}
+                          onChange={(e) =>
+                            setRepPayDrafts((prev) => ({
+                              ...prev,
+                              [rep.id]: { ...draft, valueStr: e.target.value },
+                            }))
+                          }
+                        />
+                        <span className="text-xs text-muted-foreground shrink-0">{draft.mode === 'flat' ? 'USD' : '%'}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs ml-auto"
+                          disabled={!isDirty || draft.valueStr === '' || Number(draft.valueStr) < 0}
+                          onClick={() => {
+                            const val = Number(draft.valueStr)
+                            if (isNaN(val) || val < 0) return
+                            setRepPayConfig(rep.id, { mode: draft.mode, value: val })
+                            setRepPayDrafts((prev) => { const n = { ...prev }; delete n[rep.id]; return n })
+                            toast.success(`Pay config saved for ${rep.name}`)
+                          }}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -542,6 +778,124 @@ export default function VendorBanking() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Closed Sales detail popup — read-only; all numbers from the
+          same ClosedSale object + commission store so MATH IS GOD */}
+      <Dialog open={!!detailSale} onOpenChange={(open) => !open && setDetailSale(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Sale Details</DialogTitle>
+            <DialogDescription className="font-mono text-xs">{detailSale?.lead_id}</DialogDescription>
+          </DialogHeader>
+          {detailSale && (() => {
+            const salePayments = commissionPaymentsBySale[detailSale.id] ?? []
+            const storePaid = salePayments.reduce((s, p) => s + p.amount, 0)
+            // fixture commission_paid flag = fully paid outside the store
+            const salePaid = detailSale.commission_paid && storePaid === 0 ? detailSale.commission : storePaid
+            const saleRemaining = detailSale.commission - salePaid
+            const status = saleRemaining <= 0
+              ? 'paid'
+              : salePaid > 0 ? 'partial' : 'pending'
+            return (
+              <>
+                <div className="space-y-4 py-1">
+                  <div className="rounded-xl bg-muted/50 p-4 space-y-2.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Customer</span>
+                      <span className="font-medium">{detailSale.homeowner_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Project</span>
+                      <span className="font-medium">{detailSale.project || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Close Date</span>
+                      <span className="font-medium">{fmtDate(detailSale.closed_at)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sale Total</span>
+                      <span className="font-semibold">{fmt(detailSale.sale_amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Your Share ({vendorPct}%)</span>
+                      <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(detailSale.vendor_share)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Commission ({commPct}%)</span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{fmt(detailSale.commission)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paid to Date</span>
+                      <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(salePaid)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Remaining</span>
+                      <span className={cn('font-medium', saleRemaining > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+                        {fmt(saleRemaining)}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Commission Status</span>
+                      {status === 'paid' ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Paid
+                        </Badge>
+                      ) : status === 'partial' ? (
+                        <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 text-xs">
+                          <MinusCircle className="h-3 w-3 mr-1" /> Partial
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                          <Clock className="h-3 w-3 mr-1" /> Unpaid
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {salePayments.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment History</p>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {salePayments.map((p) => (
+                          <div key={p.id} className="rounded-md bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-muted-foreground">
+                                {new Date(p.paidAt).toLocaleString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric',
+                                  hour: 'numeric', minute: '2-digit',
+                                })}
+                              </span>
+                              <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(p.amount)}</span>
+                            </div>
+                            <p className="text-muted-foreground italic">{p.note ?? '—'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter className="flex-col sm:flex-row gap-2">
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => setDetailSale(null)}>
+                    Close
+                  </Button>
+                  {status !== 'paid' && (
+                    <Button
+                      className="w-full sm:w-auto gap-1.5"
+                      onClick={() => setPayTarget(detailSale)}
+                    >
+                      <CreditCard className="h-4 w-4" /> Pay Commission
+                    </Button>
+                  )}
+                </DialogFooter>
+              </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Ship #189 — single VendorPaymentDialog handles both Add and
           Edit. When editingMethodId is set, pre-fills kind/holder/
@@ -621,73 +975,13 @@ export default function VendorBanking() {
         </DialogContent>
       </Dialog>
 
-      {/* Pay Commission Dialog */}
-      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">
-              {payStep === 1 ? 'Pay Commission' : 'Confirm Payment'}
-            </DialogTitle>
-            <DialogDescription>
-              {payStep === 1
-                ? 'Review the commission details before proceeding.'
-                : 'This action cannot be undone. Confirm to process payment.'}
-            </DialogDescription>
-          </DialogHeader>
-          {payingSale && (
-            <div className="space-y-4 py-2">
-              {payStep === 1 ? (
-                <>
-                  <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Lead</span>
-                      <span className="font-medium">{payingSale.lead_id}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Homeowner</span>
-                      <span className="font-medium">{payingSale.homeowner_name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Sale Total</span>
-                      <span className="font-medium">{fmt(payingSale.sale_amount)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Commission (15%)</span>
-                      <span className="font-bold text-amber-700 dark:text-amber-400">{fmt(payingSale.commission)}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-4 inline-block mb-3">
-                    <CreditCard className="h-8 w-8 text-amber-700 dark:text-amber-400" />
-                  </div>
-                  <p className="text-lg font-bold font-heading">{fmt(payingSale.commission)}</p>
-                  <p className="text-sm text-muted-foreground mt-1">will be sent to BuildConnect</p>
-                  {/* Ship #189 — Pay Commission source reads the first
-                      method tagged 'commissions' or 'both'. If no such
-                      method exists, line is hidden (matches #188 empty
-                      state). */}
-                  {commissionMethod && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      From {commissionMethod.kind === 'checking'
-                        ? `${commissionMethod.bankName ?? 'Checking'} ****${commissionMethod.last4}`
-                        : `${commissionMethod.brand ?? PAYMENT_METHOD_LABELS[commissionMethod.kind]} ****${commissionMethod.last4}`}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
-            <Button onClick={confirmPay}>
-              {payStep === 1 ? 'Continue' : 'Confirm & Pay'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PartialPaymentDialog
+        open={!!payTarget}
+        onOpenChange={(open) => !open && setPayTarget(null)}
+        sale={payTarget}
+        payments={payTarget ? (commissionPaymentsBySale[payTarget.id] ?? []) : []}
+        addPayment={addCommissionPayment}
+      />
 
     </motion.div>
   )

@@ -90,7 +90,7 @@ export default function ReportsPage() {
     const mockGMV = mockSoldSales.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
     const mockCommission = mockSoldSales.reduce((s, p) => {
       const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
-      const pct = (v ? resolveCommissionPct(v.id, v.commission_pct) : 15) / 100
+      const pct = (v ? resolveCommissionPct(v.id, v.commission_pct) : 10) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
 

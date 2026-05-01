@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, Briefcase, Phone, MapPin, Users, CreditCard, Download } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, ChevronDown, Briefcase, Phone, MapPin, Users, CreditCard, Download, Mail, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,11 +15,12 @@ import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS } from '@/stores/vendor-employees-store'
+import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS, type VendorEmployee } from '@/stores/vendor-employees-store'
 import { useVendorBillingStore, PAYMENT_METHOD_LABELS } from '@/stores/vendor-billing-store'
 import { useVendorHomeownerDocsStore, VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS } from '@/stores/vendor-homeowner-documents-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
 import type { LeadStatus } from '@/types'
 
 // Ship #284 — admin per-vendor detail page (Rodolfo-direct, mock-data
@@ -64,12 +65,15 @@ export default function AdminVendorDetail() {
   const mockLeads = useEffectiveMockLeads()
 
   const employeesByVendor = useVendorEmployeesStore((s) => s.employeesByVendor)
-  const paymentMethods = useVendorBillingStore((s) => s.getPaymentMethodsForVendor(vendorId))
+  const paymentMethodsByVendor = useVendorBillingStore((s) => s.paymentMethodsByVendor)
+  const paymentMethods = useMemo(() => paymentMethodsByVendor[vendorId] ?? [], [paymentMethodsByVendor, vendorId])
   const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [agreementViewOpen, setAgreementViewOpen] = useState(false)
   const [repromptConfirmOpen, setRepromptConfirmOpen] = useState(false)
+  const [repsExpanded, setRepsExpanded] = useState(false)
+  const [selectedRep, setSelectedRep] = useState<VendorEmployee | null>(null)
 
   // Ship #286 — Rodolfo-direct: explicit Save button on Commission Fee
   // so user sees confirmation that their % is persisted, not implicit
@@ -85,10 +89,11 @@ export default function AdminVendorDetail() {
   useEffect(() => {
     setDraftCommission(String(persistedCommissionPct))
   }, [persistedCommissionPct])
+  const assigneeMap = useAssigneeMap(vendor?.id ?? '')
 
   const allProjects = useMemo(() => {
     if (!vendor) return []
-    const rows: { id: string; date: string; project: string; status: string; clickId: string; source: 'sent' | 'lead' }[] = []
+    const rows: { id: string; date: string; project: string; status: string; clickId: string; leadId: string; source: 'sent' | 'lead' }[] = []
 
     sentProjects
       .filter((sp) => {
@@ -102,6 +107,7 @@ export default function AdminVendorDetail() {
           project: sp.item.serviceName + (sp.homeowner?.name ? ` · ${sp.homeowner.name}` : ''),
           status: sp.status,
           clickId: sp.id,
+          leadId: `L-${sp.id.slice(0, 4).toUpperCase()}`,
           source: 'sent',
         })
       })
@@ -118,6 +124,7 @@ export default function AdminVendorDetail() {
           project: l.project + ` · ${l.homeowner_name}`,
           status: effectiveStatus,
           clickId: l.id,
+          leadId: l.id,
           source: 'lead',
         })
       })
@@ -325,6 +332,18 @@ export default function AdminVendorDetail() {
                       <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', STATUS_BADGE_CLASS[p.status as LeadStatus | string] ?? 'bg-muted text-muted-foreground')}>
                         {p.status}
                       </span>
+                      {(() => {
+                        const a = assigneeMap[p.leadId]
+                        return a ? (
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {a.name}
+                            {a.isSelf && <span className="text-primary font-medium">you</span>}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50">Unassigned</span>
+                        )
+                      })()}
                     </p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -335,50 +354,160 @@ export default function AdminVendorDetail() {
         )}
       </section>
 
-      {/* Section: Account Reps */}
+      {/* Section: Account Reps — collapsible, default collapsed */}
       {(() => {
         const employees = employeesByVendor[vendor.id] ?? []
         return (
           <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              <h2 className="font-heading text-lg font-semibold">Account Reps</h2>
+            <button
+              className="flex items-center gap-2 w-full text-left group"
+              onClick={() => setRepsExpanded((v) => !v)}
+            >
+              <Users className="h-5 w-5 text-primary shrink-0" />
+              <h2 className="font-heading text-lg font-semibold flex-1">Account Reps</h2>
               <span className="text-sm text-muted-foreground">({employees.length})</span>
-            </div>
-            {employees.length === 0 ? (
-              <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No staff on file for {vendor.company}.</CardContent></Card>
-            ) : (
-              <div className="space-y-2">
-                {employees.map((emp) => (
-                  <Card key={emp.id} className="rounded-xl">
-                    <CardContent className="p-4 flex items-start gap-4">
-                      <div
-                        className="mt-0.5 h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                        style={{ backgroundColor: emp.avatarColor }}
-                      >
-                        {emp.firstName[0]}{emp.lastName[0]}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <p className="font-medium text-foreground">{emp.firstName} {emp.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{emp.title} — {emp.department}</p>
-                        <p className="text-xs text-muted-foreground">{emp.email} · {emp.phone}</p>
-                      </div>
-                      <span className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
-                        emp.status === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                        emp.status === 'on_leave' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                        'bg-muted text-muted-foreground'
-                      )}>
-                        {EMPLOYEE_STATUS_LABELS[emp.status]}
-                      </span>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {repsExpanded
+                ? <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                : <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform" />}
+            </button>
+            {repsExpanded && (
+              employees.length === 0 ? (
+                <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No staff on file for {vendor.company}.</CardContent></Card>
+              ) : (
+                <div className="space-y-2">
+                  {employees.map((emp) => (
+                    <Card
+                      key={emp.id}
+                      className="rounded-xl cursor-pointer hover:bg-muted/40 transition-colors"
+                      onClick={() => setSelectedRep(emp)}
+                    >
+                      <CardContent className="p-4 flex items-start gap-4">
+                        <div
+                          className="mt-0.5 h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                          style={{ backgroundColor: emp.avatarColor }}
+                        >
+                          {emp.firstName[0]}{emp.lastName[0]}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <p className="font-medium text-foreground">{emp.firstName} {emp.lastName}</p>
+                          <p className="text-xs text-muted-foreground">{emp.title} — {emp.department}</p>
+                          <p className="text-xs text-muted-foreground">{emp.email} · {emp.phone}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                            emp.status === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                            emp.status === 'on_leave' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                            'bg-muted text-muted-foreground'
+                          )}>
+                            {EMPLOYEE_STATUS_LABELS[emp.status]}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )
             )}
           </section>
         )
       })()}
+
+      {/* Rep detail dialog */}
+      <Dialog open={!!selectedRep} onOpenChange={(open) => !open && setSelectedRep(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Account Rep Profile</DialogTitle>
+            <DialogDescription>{vendor.company}</DialogDescription>
+          </DialogHeader>
+          {selectedRep && (
+            <div className="space-y-4 py-1">
+              <div className="flex items-center gap-4">
+                <div
+                  className="h-14 w-14 shrink-0 rounded-full flex items-center justify-center text-lg font-bold text-white"
+                  style={{ backgroundColor: selectedRep.avatarColor }}
+                >
+                  {selectedRep.firstName[0]}{selectedRep.lastName[0]}
+                </div>
+                <div>
+                  <p className="text-lg font-semibold font-heading">{selectedRep.firstName} {selectedRep.lastName}</p>
+                  <p className="text-sm text-muted-foreground">{selectedRep.title}</p>
+                  <span className={cn(
+                    'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium mt-1',
+                    selectedRep.status === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                    selectedRep.status === 'on_leave' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                    'bg-muted text-muted-foreground'
+                  )}>
+                    {EMPLOYEE_STATUS_LABELS[selectedRep.status]}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl bg-muted/50 p-4 space-y-2.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Employee Code</span>
+                  <span className="font-mono font-medium">{selectedRep.employeeCode}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Department</span>
+                  <span className="font-medium">{selectedRep.department}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Start Date</span>
+                  <span className="font-medium">{new Date(selectedRep.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                {selectedRep.managerName && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Reports To</span>
+                    <span className="font-medium">{selectedRep.managerName}</span>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl bg-muted/50 p-4 space-y-2.5 text-sm">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="font-medium ml-auto">{selectedRep.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">Phone</span>
+                  <span className="font-medium ml-auto">{selectedRep.phone}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground">Address</span>
+                  <span className="font-medium ml-auto text-right max-w-[60%]">{selectedRep.address}</span>
+                </div>
+              </div>
+              {(selectedRep.emergencyContactName) && (
+                <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emergency Contact</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Name</span>
+                    <span className="font-medium">{selectedRep.emergencyContactName}</span>
+                  </div>
+                  {selectedRep.emergencyContactRelationship && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Relationship</span>
+                      <span className="font-medium">{selectedRep.emergencyContactRelationship}</span>
+                    </div>
+                  )}
+                  {selectedRep.emergencyContactPhone && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Phone</span>
+                      <span className="font-medium">{selectedRep.emergencyContactPhone}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setSelectedRep(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Section: Banking */}
       <section className="space-y-3">

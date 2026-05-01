@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays, ChevronLeft } from 'lucide-react'
+import { DollarSign, CreditCard, Wallet, ArrowDownToLine, CheckCircle2, Clock, ChevronDown, ChevronRight, CalendarDays, ChevronLeft, MinusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -19,8 +22,9 @@ import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useCommissionPaymentsStore, type CommissionPayment } from '@/stores/commission-payments-store'
 import { MOCK_TRANSACTIONS, MOCK_VENDORS } from '@/lib/mock-data'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
+import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
@@ -66,19 +70,137 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
   { key: 'payout', type: 'payout', title: 'Payouts', icon: ArrowDownToLine, iconColor: 'bg-amber-500', headerColor: 'text-amber-700 dark:text-amber-400', isCommission: false },
 ]
 
+function saleIdFromTxId(txId: string): string | null {
+  if (txId.startsWith('mock-cs-tx-')) return txId.slice('mock-cs-tx-'.length)
+  if (txId.startsWith('mock-tx-')) return `live-${txId.slice('mock-tx-'.length)}`
+  return null
+}
+
+interface AdminCommissionPaymentsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  tx: Transaction | null
+  payments: CommissionPayment[]
+}
+
+function AdminCommissionPaymentsDialog({ open, onOpenChange, tx, payments }: AdminCommissionPaymentsDialogProps) {
+  if (!tx) return null
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
+  // Use frozen totalCommissionAtWrite (set at first payment write). For no-payment rows
+  // tx.amount = original commission; for rows where amount was overridden to remaining,
+  // totalCommissionAtWrite restores the original.
+  const originalTotal = payments[0]?.totalCommissionAtWrite ?? (totalPaid + tx.amount)
+  const remaining = originalTotal - totalPaid
+  const status = remaining <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-heading">Commission Payment Detail</DialogTitle>
+          <DialogDescription>{tx.company}{tx.customer ? ` · ${tx.customer}` : ''}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          {/* Source context */}
+          <div className="rounded-xl bg-muted/50 p-4 space-y-2.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Vendor</span>
+              <span className="font-medium">{tx.company}</span>
+            </div>
+            {tx.detail && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Project</span>
+                <span className="font-medium text-right max-w-[60%]">{tx.detail}</span>
+              </div>
+            )}
+            {tx.customer && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Customer</span>
+                <span className="font-medium">{tx.customer}</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Commission</span>
+              <span className="font-semibold">{fmt(originalTotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Paid to Date</span>
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(totalPaid)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground font-semibold">Remaining</span>
+              <span className={cn('font-bold', remaining > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400')}>
+                {fmt(remaining)}
+              </span>
+            </div>
+            <Separator />
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Status</span>
+              {status === 'paid' ? (
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Paid
+                </Badge>
+              ) : status === 'partial' ? (
+                <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 text-xs">
+                  <MinusCircle className="h-3 w-3 mr-1" /> Partial
+                </Badge>
+              ) : (
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                  <Clock className="h-3 w-3 mr-1" /> Unpaid
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {payments.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment History</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {payments.map((p) => (
+                  <div key={p.id} className="rounded-md bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">
+                        {new Date(p.paidAt).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric',
+                          hour: 'numeric', minute: '2-digit',
+                        })}
+                      </span>
+                      <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(p.amount)}</span>
+                    </div>
+                    <p className="text-muted-foreground italic">{p.note ?? '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-2">No payments recorded yet.</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function TransactionsPage() {
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
+  const mockClosedSales = useEffectiveMockClosedSales()
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
   // In-place project-detail Dialog (ship #140): opens on same surface
   // without navigating away.
+  const commissionPaymentsBySale = useCommissionPaymentsStore((s) => s.paymentsBySale)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   // Ship #148: for commission rows the fallback tx is kept so Dialog can
   // synthesize a commission-view when projectId fails to resolve.
   const [selectedCommissionTx, setSelectedCommissionTx] = useState<Transaction | null>(null)
   // Transaction-detail Dialog (ship #143) for membership + payout rows.
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [adminPaymentsTarget, setAdminPaymentsTarget] = useState<Transaction | null>(null)
+  const [adminPaymentsPayments, setAdminPaymentsPayments] = useState<CommissionPayment[]>([])
   // Ship #159: month-grouping expand/collapse state per `${catKey}-${monthKey}`.
   // Default state: current month expanded + prior months collapsed.
   const currentMonthKey = useMemo(() => {
@@ -150,7 +272,7 @@ export default function TransactionsPage() {
           : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
         const effectivePct = vendor
           ? (vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct)
-          : 15
+          : 10
         return {
           id: `mock-tx-${p.id}`,
           type: 'commission' as TransactionType,
@@ -165,6 +287,25 @@ export default function TransactionsPage() {
       })
   }, [sentProjects, vendorCommissionOverrides])
 
+  // Synthesize commission rows from fixture closed sales (MOCK_CLOSED_SALES)
+  // so seed data appears even before any live markSold flow runs.
+  // Uses closedSale.commission (already 10% post-#360). Shares shape with
+  // mockSoldTransactions — see feedback_format_sot_shared_helper for future
+  // extraction if synthesis logic grows beyond these two paths.
+  const mockFixtureCommissions = useMemo<Transaction[]>(() => {
+    return mockClosedSales.map((cs) => ({
+      id: `mock-cs-tx-${cs.id}`,
+      type: 'commission' as TransactionType,
+      status: 'paid' as TransactionStatus,
+      vendor_id: cs.vendor_id ?? '',
+      company: MOCK_VENDORS.find((v) => v.id === cs.vendor_id)?.company ?? 'Unknown vendor',
+      detail: cs.project?.split('—')[0].trim() ?? '',
+      customer: cs.homeowner_name ?? '',
+      amount: cs.commission,
+      date: cs.closed_at,
+    }))
+  }, [mockClosedSales])
+
   // Ship #196 — all years that have at least one transaction (merged
   // mock + real + MOCK_TRANSACTIONS fixture), always includes the
   // current year so Rodolfo can select forward-looking months even
@@ -174,9 +315,10 @@ export default function TransactionsPage() {
     years.add(new Date().getFullYear())
     for (const tx of transactions) years.add(new Date(tx.date).getFullYear())
     for (const tx of mockSoldTransactions) years.add(new Date(tx.date).getFullYear())
+    for (const tx of mockFixtureCommissions) years.add(new Date(tx.date).getFullYear())
     for (const tx of MOCK_TRANSACTIONS) years.add(new Date(tx.date).getFullYear())
     return Array.from(years).sort((a, b) => a - b)
-  }, [transactions, mockSoldTransactions])
+  }, [transactions, mockSoldTransactions, mockFixtureCommissions])
 
   const grouped = useMemo(() => {
     const result: Record<SectionKey, Transaction[]> = {
@@ -199,12 +341,35 @@ export default function TransactionsPage() {
     const unified = [
       ...transactions,
       ...mockSoldTransactions.filter((t) => !supabaseIds.has(t.id)),
+      ...mockFixtureCommissions.filter((t) => !supabaseIds.has(t.id)),
       ...mockPayouts,
     ]
     for (const tx of unified) {
       if (tx.type === 'commission') {
-        if (tx.status === 'paid') result.commission_paid.push(tx)
-        else result.commission_pending.push(tx)
+        // Rodolfo spec: each payment entry becomes its own row in Commissions Paid.
+        // Pending Commissions shows one row per sale with amount = remaining balance.
+        // If no store payments, fall back to tx.status (fixture/Supabase paid→paid, pending→pending).
+        const saleId = saleIdFromTxId(tx.id)
+        const salePayments = saleId ? (commissionPaymentsBySale[saleId] ?? []) : []
+        if (salePayments.length > 0) {
+          const salePaid = salePayments.reduce((s, p) => s + p.amount, 0)
+          for (const p of salePayments) {
+            result.commission_paid.push({
+              ...tx,
+              id: `comm-partial-${p.id}`,
+              amount: p.amount,
+              date: p.paidAt,
+              status: 'paid',
+            })
+          }
+          const remaining = tx.amount - salePaid
+          if (remaining > 0) {
+            result.commission_pending.push({ ...tx, amount: remaining, status: 'pending' })
+          }
+        } else {
+          if (tx.status === 'paid') result.commission_paid.push(tx)
+          else result.commission_pending.push(tx)
+        }
       } else if (tx.type === 'membership') {
         result.membership.push(tx)
       } else {
@@ -227,7 +392,7 @@ export default function TransactionsPage() {
       }
     }
     return result
-  }, [transactions, mockSoldTransactions, monthFilter])
+  }, [transactions, mockSoldTransactions, mockFixtureCommissions, monthFilter, commissionPaymentsBySale])
 
   const sectionTotals = useMemo(() => ({
     commission_paid: grouped.commission_paid.reduce((s, t) => s + t.amount, 0),
@@ -537,11 +702,28 @@ export default function TransactionsPage() {
                         // if bridge fails, transactionFallback lets Dialog
                         // synthesize commission view from tx fields. No
                         // empty-shell route for commission rows anymore.
+                        const _commRowSaleId = tx.type === 'commission' ? saleIdFromTxId(tx.id) : null
+                        const _commRowPayments = _commRowSaleId ? (commissionPaymentsBySale[_commRowSaleId] ?? []) : []
                         const onRowClick = tx.type === 'commission'
-                          ? () => {
-                              setSelectedProjectId(projectId)
-                              setSelectedCommissionTx(tx)
-                            }
+                          ? tx.id.startsWith('comm-partial-')
+                            ? () => {
+                                const pid = tx.id.slice('comm-partial-'.length)
+                                const sid = Object.keys(commissionPaymentsBySale).find(k =>
+                                  (commissionPaymentsBySale[k] ?? []).some(p => p.id === pid)
+                                ) ?? null
+                                const resolved = sid ? (commissionPaymentsBySale[sid] ?? []) : []
+                                setAdminPaymentsTarget(tx)
+                                setAdminPaymentsPayments(resolved)
+                              }
+                            : _commRowPayments.length > 0
+                              ? () => {
+                                  setAdminPaymentsTarget(tx)
+                                  setAdminPaymentsPayments(_commRowPayments)
+                                }
+                              : () => {
+                                  setSelectedProjectId(projectId)
+                                  setSelectedCommissionTx(tx)
+                                }
                           : () => setSelectedTransaction(tx)
                         return (
                         <TableRow
@@ -565,14 +747,54 @@ export default function TransactionsPage() {
                           <TableCell className="text-right font-semibold">{fmt(tx.amount)}</TableCell>
                           <TableCell className="text-muted-foreground">{fmtDate(tx.date)}</TableCell>
                           <TableCell>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                STATUS_CONFIG[tx.status].className
-                              )}
-                            >
-                              {STATUS_CONFIG[tx.status].label}
-                            </span>
+                            {cat.isCommission ? (() => {
+                              const saleId = saleIdFromTxId(tx.id)
+                              const salePayments = saleId ? (commissionPaymentsBySale[saleId] ?? []) : []
+                              const salePaid = salePayments.reduce((s, p) => s + p.amount, 0)
+                              const saleRemaining = tx.amount - salePaid
+                              const status = saleRemaining <= 0 ? 'paid' : salePaid > 0 ? 'partial' : 'pending'
+                              return (
+                                <button
+                                  className="text-left"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    let saleId = saleIdFromTxId(tx.id)
+                                    if (!saleId && tx.id.startsWith('comm-partial-')) {
+                                      const pid = tx.id.slice('comm-partial-'.length)
+                                      saleId = Object.keys(commissionPaymentsBySale).find(k =>
+                                        (commissionPaymentsBySale[k] ?? []).some(p => p.id === pid)
+                                      ) ?? null
+                                    }
+                                    const resolved = saleId ? (commissionPaymentsBySale[saleId] ?? []) : []
+                                    setAdminPaymentsTarget(tx)
+                                    setAdminPaymentsPayments(resolved)
+                                  }}
+                                >
+                                  {status === 'paid' ? (
+                                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs cursor-pointer hover:opacity-80">
+                                      <CheckCircle2 className="h-3 w-3 mr-1" /> Paid
+                                    </Badge>
+                                  ) : status === 'partial' ? (
+                                    <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 text-xs cursor-pointer hover:opacity-80">
+                                      <MinusCircle className="h-3 w-3 mr-1" /> Partial
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs cursor-pointer hover:opacity-80">
+                                      <Clock className="h-3 w-3 mr-1" /> Unpaid
+                                    </Badge>
+                                  )}
+                                </button>
+                              )
+                            })() : (
+                              <span
+                                className={cn(
+                                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                  STATUS_CONFIG[tx.status].className
+                                )}
+                              >
+                                {STATUS_CONFIG[tx.status].label}
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                         )
@@ -613,6 +835,12 @@ export default function TransactionsPage() {
         open={!!selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
         transaction={selectedTransaction}
+      />
+      <AdminCommissionPaymentsDialog
+        open={!!adminPaymentsTarget}
+        onOpenChange={(open) => { if (!open) { setAdminPaymentsTarget(null); setAdminPaymentsPayments([]) } }}
+        tx={adminPaymentsTarget}
+        payments={adminPaymentsPayments}
       />
     </div>
   )

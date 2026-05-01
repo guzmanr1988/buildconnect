@@ -20,6 +20,11 @@ export type OptionMetadata = {
   // Tranche-2 adds a Supabase column for the percent (vendor_option_prices
   // has only price_cents today, no percent column).
   supportsPercentMarkup?: boolean
+  // Unit pricing mode for this option. When set, the vendor enters a
+  // per-unit rate and the total is computed at booking time by multiplying
+  // rate × homeowner's measured quantity (areaSqft or roofAddonLinearFt).
+  // flat = single dollar amount (default, all non-roofing options).
+  priceUnit?: 'flat' | 'sqft' | 'linear_ft'
 }
 
 export const OPTION_METADATA: Record<string, OptionMetadata> = {
@@ -27,6 +32,15 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   install_doors: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
   low_e: { supportsPercentMarkup: true },
   casement: { supportsPercentMarkup: true },
+  // Roofing materials — vendor enters $/sqft; quantity = homeowner's roof area
+  metal: { priceUnit: 'sqft' },
+  shingle: { priceUnit: 'sqft' },
+  barrel_tile: { priceUnit: 'sqft' },
+  flat_roof: { priceUnit: 'sqft' },
+  // Roofing addons — vendor enters $/lin ft; quantity = homeowner's addon linear ft
+  gutters: { priceUnit: 'linear_ft' },
+  soffit_wood: { priceUnit: 'linear_ft' },
+  fascia_wood: { priceUnit: 'linear_ft' },
 }
 
 export function getOptionMetadata(optionId: string): OptionMetadata {
