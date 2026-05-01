@@ -307,6 +307,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjArea, setAdjArea] = useState('')
   const [adjPitch, setAdjPitch] = useState('')
   const [adjFlatArea, setAdjFlatArea] = useState('')
+  const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
   const [includeFlat, setIncludeFlat] = useState(false)
   const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
   const [flatSelected, setFlatSelected] = useState(false)
@@ -324,6 +325,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setMeasurement(null)
       setShowAdjust(false)
       setAdjFlatArea('')
+      setAdjPerimeterFt('')
       setIncludeFlat(false)
       setMaterial(null)
       setFlatSelected(false)
@@ -353,6 +355,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setAdjArea(String(result.areaSqft))
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
+      setAdjPerimeterFt(String(result.perimeterFt))
       setIncludeFlat(result.flatAreaSqft > 0)
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
@@ -374,11 +377,9 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
   }
 
-  const finalArea = showAdjust && adjArea ? Math.max(100, Number(adjArea) || 0) : (measurement?.areaSqft ?? 0)
-  const finalWaste = showAdjust && adjArea
-    ? Math.round(Math.max(100, Number(adjArea) || 0) * ROOF_WASTE_FACTOR)
-    : (measurement?.wasteSqft ?? 0)
-  const finalPitch = showAdjust ? (adjPitch || (measurement?.pitch ?? '')) : (measurement?.pitch ?? '')
+  const finalArea = adjArea ? Math.max(100, Number(adjArea) || 0) : (measurement?.areaSqft ?? 0)
+  const finalWaste = Math.round(finalArea * ROOF_WASTE_FACTOR)
+  const finalPitch = adjPitch || (measurement?.pitch ?? '')
   const finalFlatAreaSqft = measurement
     ? Math.min(Math.max(0, Number(adjFlatArea) || 0), finalArea)
     : 0
@@ -394,7 +395,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       pitch: finalPitch,
       material: dominantMaterial,
       hasFlatSection,
-      perimeterFt: measurement?.perimeterFt ?? 0,
+      perimeterFt: Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0),
       // Persist split areas so pricing engine can bill each material
       // against its own slice. Undefined when manual entry (no Solar data).
       pitchedAreaSqft: measurement ? Math.round(derivedPitchedAreaSqft) : undefined,
@@ -497,7 +498,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </span>
                         </div>
                         {(() => {
-                          const { totalSqft, totalSquares, pitchedWaste, flatWaste } = computeRoofTotal({
+                          const { totalSqft, totalSquares, pitchedWaste } = computeRoofTotal({
                             pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
                             flatAreaSqft: Math.round(finalFlatAreaSqft),
                             includeFlat,
@@ -511,11 +512,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                               <p className="text-[11px] text-muted-foreground mt-0.5">
                                 Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)
                               </p>
-                              {includeFlat && finalFlatAreaSqft > 0 && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste ({flatWaste.toLocaleString()} sqft)
-                                </p>
-                              )}
                             </>
                           )
                         })()}
@@ -562,26 +558,15 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                             />
                           </div>
                         </div>
-                        {/* Flat area — mirrors Material Order big-number pattern */}
+                        {/* Flat area */}
                         <div>
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-                          <div className="flex items-baseline justify-between gap-8 mt-0.5">
-                            <p className="text-xl font-bold text-foreground">
-                              {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
-                              </span>
-                            </p>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <Label className="text-xs text-muted-foreground whitespace-nowrap">Adjust</Label>
-                              <Input
-                                value={adjFlatArea}
-                                onChange={(e) => setAdjFlatArea(e.target.value)}
-                                placeholder="0"
-                                className="h-7 text-sm w-20 text-right"
-                              />
-                            </div>
-                          </div>
+                          <p className="text-xl font-bold text-foreground mt-0.5">
+                            {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
+                            </span>
+                          </p>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
                           </p>
@@ -598,20 +583,24 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     )}
                   </div>
 
-                  {!showAdjust ? (
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-                      onClick={() => setShowAdjust(true)}
-                    >
-                      Looks wrong? Adjust manually
-                    </button>
-                  ) : (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                    onClick={() => setShowAdjust((v) => !v)}
+                  >
+                    {showAdjust ? 'Hide adjustments' : 'Adjust manually'}
+                  </button>
+                  {showAdjust && (
                     <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-xs font-medium">Manual adjustment</p>
                         <button
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                          onClick={() => { setShowAdjust(false); setAdjArea(String(measurement.areaSqft)); setAdjPitch(measurement.pitch) }}
+                          onClick={() => {
+                            setAdjArea(String(measurement!.areaSqft))
+                            setAdjPitch(measurement!.pitch)
+                            setAdjFlatArea(String(measurement!.flatAreaSqft))
+                            setAdjPerimeterFt(String(measurement!.perimeterFt))
+                          }}
                         >
                           <RotateCcw className="h-3 w-3" /> Reset
                         </button>
@@ -619,21 +608,19 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className="mb-1 block text-xs">Area (sq ft)</Label>
-                          <Input
-                            value={adjArea}
-                            onChange={(e) => setAdjArea(e.target.value)}
-                            placeholder="e.g. 1800"
-                            className="h-8 text-sm"
-                          />
+                          <Input value={adjArea} onChange={(e) => setAdjArea(e.target.value)} placeholder="e.g. 1800" className="h-8 text-sm" />
                         </div>
                         <div>
                           <Label className="mb-1 block text-xs">Pitch</Label>
-                          <Input
-                            value={adjPitch}
-                            onChange={(e) => setAdjPitch(e.target.value)}
-                            placeholder="e.g. 4/12"
-                            className="h-8 text-sm"
-                          />
+                          <Input value={adjPitch} onChange={(e) => setAdjPitch(e.target.value)} placeholder="e.g. 4/12" className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-xs">Flat (sq ft)</Label>
+                          <Input value={adjFlatArea} onChange={(e) => setAdjFlatArea(e.target.value)} placeholder="0" className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-xs">Perimeter (lin ft)</Label>
+                          <Input value={adjPerimeterFt} onChange={(e) => setAdjPerimeterFt(e.target.value)} placeholder="e.g. 180" className="h-8 text-sm" />
                         </div>
                       </div>
                     </div>
