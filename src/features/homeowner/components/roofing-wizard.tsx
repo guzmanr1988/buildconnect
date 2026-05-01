@@ -119,7 +119,7 @@ export function RoofingWizard({
 
   function handleWizardComplete(result: RoofWizardResult) {
     const materials = [result.material]
-    if (result.hasFlatSection) materials.push('flat_roof')
+    if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
     setSelections((prev) => ({ ...prev, material: materials }))
     if (result.material === 'metal') {
       const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
@@ -384,7 +384,9 @@ export function RoofingWizard({
         {/* S3 — Material */}
         {step === 3 && (
           <div className="flex flex-col gap-3">
-            {materialGroup.options.map((opt) => {
+            {materialGroup.options.filter((opt) =>
+              !(opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false)
+            ).map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
               return (
                 <button
