@@ -536,7 +536,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         </span>
                       </div>
                       <p className="text-xl font-bold text-foreground">
-                        ~{measurement.perimeterFt.toLocaleString()}{' '}
+                        ~{(Number(adjPerimeterFt) || measurement.perimeterFt).toLocaleString()}{' '}
                         <span className="text-sm font-normal text-muted-foreground">lin ft</span>
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -776,7 +776,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   rows.push({ label: 'Material Order', value: `${finalWaste.toLocaleString()} sqft (${sqftToSquares(finalWaste)} squares)` })
                 }
                 rows.push({ label: 'Roof Pitch', value: finalPitch })
-                if (measurement?.perimeterFt) rows.push({ label: 'Perimeter', value: `~${measurement.perimeterFt.toLocaleString()} lin ft` })
+                const finalPerimeterFt = Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0)
+                if (finalPerimeterFt) rows.push({ label: 'Perimeter', value: `~${finalPerimeterFt.toLocaleString()} lin ft` })
                 rows.push({ label: 'Material', value: materialLabel })
                 rows.push({ label: 'Permit', value: permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit (cash-only)' })
                 return (
