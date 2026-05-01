@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
+import { PoolWizard } from '../components/pool-wizard'
 import {
   GenericServiceWizard,
   DRIVEWAYS_STEPS,
@@ -305,6 +306,27 @@ export function ServiceDetailPage() {
         service={service}
         editItem={editData2}
         addressOptions={addrOpts}
+        defaultAddressKey={defaultAddrKey}
+        editingItemId={editId}
+        onCancel={() => navigate('/home')}
+        onDone={() => navigate('/home/cart')}
+      />
+    )
+  }
+
+  if (serviceId === 'pool') {
+    const editId = editItemForService?.id as string | null ?? null
+    const defaultAddrKey = (() => {
+      const edit = editItemForService?.address as CartItemAddress | undefined
+      if (!edit) return 'primary'
+      const match = addressOptions.find((o) => o.label === edit.label)
+      return match?.key ?? 'primary'
+    })()
+    return (
+      <PoolWizard
+        service={service}
+        editItem={editItemForService}
+        addressOptions={addressOptions}
         defaultAddressKey={defaultAddrKey}
         editingItemId={editId}
         onCancel={() => navigate('/home')}
