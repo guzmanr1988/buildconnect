@@ -3,6 +3,7 @@ import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2 } from 'lucide-react'
+import { computeRoofTotal } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -382,8 +383,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     ? Math.min(Math.max(0, Number(adjFlatArea) || 0), finalArea)
     : 0
   const derivedPitchedAreaSqft = Math.max(0, finalArea - finalFlatAreaSqft)
-  const pitchedWasteSqft = Math.round(derivedPitchedAreaSqft * 1.02)
-  const flatWasteSqft = Math.round(finalFlatAreaSqft * 1.01)
 
   const handleComplete = () => {
     if (!stepThreeComplete || !permit) return
@@ -498,20 +497,23 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </span>
                         </div>
                         {(() => {
-                          const totalWaste = includeFlat ? (pitchedWasteSqft + flatWasteSqft) : pitchedWasteSqft
-                          const squares = Math.ceil(totalWaste / 100)
+                          const { totalSqft, totalSquares, pitchedWaste, flatWaste } = computeRoofTotal({
+                            pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
+                            flatAreaSqft: Math.round(finalFlatAreaSqft),
+                            includeFlat,
+                          })
                           return (
                             <>
                               <p className="text-xl font-bold text-foreground">
-                                {totalWaste.toLocaleString()}{' '}
-                                <span className="text-sm font-normal text-muted-foreground">sqft ({squares} squares)</span>
+                                {totalSqft.toLocaleString()}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste
+                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)
                               </p>
                               {includeFlat && finalFlatAreaSqft > 0 && (
                                 <p className="text-[11px] text-muted-foreground">
-                                  Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
+                                  Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste ({flatWaste.toLocaleString()} sqft)
                                 </p>
                               )}
                             </>

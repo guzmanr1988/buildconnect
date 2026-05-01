@@ -15,6 +15,7 @@ import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
 
@@ -88,7 +89,7 @@ export function RoofingWizard({
   )
   const [roofMeasurement, setRoofMeasurement] = useState<{
     areaSqft: number; pitch: string; address: string
-    perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number
+    perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean
   } | null>(null)
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(
     (editItem?.roofPermit as 'yes' | 'no') ?? null
@@ -127,7 +128,7 @@ export function RoofingWizard({
     setRoofMeasurement({
       areaSqft: result.areaSqft, pitch: result.pitch, address: result.address,
       perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft,
-      flatAreaSqft: result.flatAreaSqft,
+      flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat,
     })
     setRoofPermit(result.permit)
     setWizardOpen(false)
@@ -568,7 +569,13 @@ export function RoofingWizard({
                 <div className="rounded-xl border bg-muted/40 p-4">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Measurement</p>
                   <p className="text-sm text-foreground">
-                    {roofMeasurement.areaSqft.toLocaleString()} sq ft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))} squares w/waste
+                    {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
+                      const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
+                      if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                        return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                      }
+                      return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                    })()} squares w/waste
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
