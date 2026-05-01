@@ -4,6 +4,7 @@ import type { CartItem } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useActivityLogStore } from './activity-log-store'
+import { supabase } from '@/lib/supabase'
 
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
   useActivityLogStore.getState().logEvent(entry)
@@ -268,22 +269,155 @@ interface ProjectsState {
   // + admin visibility); fresh requestReschedule replaces on future need.
   rejectReschedule: (leadId: string) => void
   removeProject: (id: string) => void
-  // Internal Surface-2 hydration state (preserved across sessions via
-  // partialize). Full hydrateFromSupabase implementation ships when
-  // Surface 2 migration lands — these fields gate the one-time migration.
   _supabaseMigrationDone: boolean
   _userUuid: string | null
+  // Surface-2 Supabase hydration — mirrors vendor-catalog pattern.
+  // Call once per session after auth resolves. Loads sent_projects rows for
+  // this user, merges into local store (Supabase wins on conflict by id),
+  // then one-time-migrates any localStorage-only homeowner rows to Supabase.
+  hydrateFromSupabase: (userUuid: string, role: 'homeowner' | 'vendor' | 'account_rep' | 'admin') => Promise<void>
 }
 
 export const useProjectsStore = create<ProjectsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       sentProjects: [],
       assignedRepByLead: {},
       accountRepIdByLead: {},
       repAcceptanceByLead: {},
       _supabaseMigrationDone: false,
       _userUuid: null,
+
+      hydrateFromSupabase: async (userUuid, role) => {
+        set({ _userUuid: userUuid })
+
+        // 1. Load rows from Supabase scoped to this user's role.
+        let query = supabase.from('sent_projects').select('*')
+        if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
+        else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
+        else if (role === 'account_rep') query = query.eq('account_rep_id', userUuid)
+        // admin: no filter — full access
+
+        const { data: dbRows, error: loadErr } = await query
+        if (loadErr) {
+          console.error('[projects] hydrate load failed:', loadErr.message)
+          return
+        }
+
+        // 2. Map DB rows to SentProject shape.
+        const dbProjects: SentProject[] = (dbRows ?? []).map((row) => ({
+          id:              row.id,
+          item:            row.item as CartItem,
+          status:          row.status as SentProject['status'],
+          contractor:      row.contractor as ContractorInfo,
+          booking:         { date: row.booking_date, time: row.booking_time },
+          homeowner:       row.homeowner_name ? {
+            name:    row.homeowner_name,
+            phone:   row.homeowner_phone ?? '',
+            email:   row.homeowner_email ?? '',
+            address: row.homeowner_address ?? '',
+          } : undefined,
+          homeowner_id:    row.homeowner_id ?? undefined,
+          sentAt:          row.sent_at,
+          soldAt:          row.sold_at ?? undefined,
+          completedAt:     row.completed_at ?? undefined,
+          saleAmount:      row.sale_amount != null ? Number(row.sale_amount) : undefined,
+          rejectionReason: row.rejection_reason ?? undefined,
+          idDocument:      row.id_document ?? undefined,
+          assignedRep:     row.assigned_rep as VendorRep | undefined,
+          confirmedAt:     row.confirmed_at ?? undefined,
+          repAssignedAt:   row.rep_assigned_at ?? undefined,
+          reviewStatus:    row.review_status as SentProject['reviewStatus'],
+          reviewedAt:      row.reviewed_at ?? undefined,
+          reviewedBy:      row.reviewed_by ?? undefined,
+          reviewNote:      row.review_note ?? undefined,
+          priceLineItems:  row.price_line_items as PriceLineItem[] | undefined,
+          quotedPriceCents:row.quoted_price_cents ?? undefined,
+        }))
+
+        const dbById = new Map(dbProjects.map((p) => [p.id, p]))
+
+        // 3. Merge: Supabase wins on conflict by id; local-only rows kept.
+        set((state) => {
+          const seen = new Set<string>()
+          const merged: SentProject[] = []
+          for (const p of [...dbProjects, ...state.sentProjects]) {
+            if (!seen.has(p.id)) { seen.add(p.id); merged.push(dbById.get(p.id) ?? p) }
+          }
+          const newAssignedRep: Record<string, VendorRep> = { ...state.assignedRepByLead }
+          const newAccountRep: Record<string, string> = { ...state.accountRepIdByLead }
+          const newRepAcceptance: Record<string, 'pending' | 'accepted' | 'reschedule_requested'> = { ...state.repAcceptanceByLead }
+          const newConfirmedAt: Record<string, string> = { ...state.leadConfirmedAtByLead }
+          const newRepAssignedAt: Record<string, string> = { ...state.repAssignedAtByLead }
+          for (const row of (dbRows ?? []) as Record<string, unknown>[]) {
+            const rowId = row.id as string
+            if (row.assigned_rep)   newAssignedRep[rowId]    = row.assigned_rep as VendorRep
+            if (row.account_rep_id) newAccountRep[rowId]     = row.account_rep_id as string
+            if (row.rep_acceptance) newRepAcceptance[rowId]  = row.rep_acceptance as 'pending' | 'accepted' | 'reschedule_requested'
+            if (row.confirmed_at)   newConfirmedAt[rowId]    = row.confirmed_at as string
+            if (row.rep_assigned_at)newRepAssignedAt[rowId]  = row.rep_assigned_at as string
+          }
+          return {
+            sentProjects:          merged,
+            assignedRepByLead:     newAssignedRep,
+            accountRepIdByLead:    newAccountRep,
+            repAcceptanceByLead:   newRepAcceptance,
+            leadConfirmedAtByLead: newConfirmedAt,
+            repAssignedAtByLead:   newRepAssignedAt,
+          }
+        })
+
+        // 4. One-time migration: upsert homeowner localStorage-only rows to Supabase.
+        if (role !== 'homeowner' || get()._supabaseMigrationDone) {
+          set({ _supabaseMigrationDone: true })
+          return
+        }
+
+        const state = get()
+        const upsertRows = state.sentProjects
+          .filter((sp) => !dbById.has(sp.id) && sp.contractor?.vendor_id)
+          .map((sp) => ({
+            id:                sp.id,
+            homeowner_id:      sp.homeowner_id ?? userUuid,
+            vendor_id:         sp.contractor.vendor_id as string,
+            item:              sp.item,
+            contractor:        sp.contractor,
+            booking_date:      sp.booking.date,
+            booking_time:      sp.booking.time,
+            homeowner_name:    sp.homeowner?.name ?? null,
+            homeowner_phone:   sp.homeowner?.phone ?? null,
+            homeowner_email:   sp.homeowner?.email ?? null,
+            homeowner_address: sp.homeowner?.address ?? null,
+            status:            sp.status,
+            sent_at:           sp.sentAt,
+            confirmed_at:      sp.confirmedAt ?? null,
+            sold_at:           sp.soldAt ?? null,
+            completed_at:      sp.completedAt ?? null,
+            sale_amount:       sp.saleAmount ?? null,
+            quoted_price_cents:sp.quotedPriceCents ?? null,
+            price_line_items:  sp.priceLineItems ?? null,
+            rejection_reason:  sp.rejectionReason ?? null,
+            review_status:     sp.reviewStatus ?? null,
+            reviewed_at:       sp.reviewedAt ?? null,
+            reviewed_by:       sp.reviewedBy ?? null,
+            review_note:       sp.reviewNote ?? null,
+            assigned_rep:      sp.assignedRep ?? null,
+            rep_assigned_at:   sp.repAssignedAt ?? null,
+            rep_acceptance:    state.repAcceptanceByLead[sp.id] ?? null,
+            account_rep_id:    state.accountRepIdByLead[sp.id] ?? null,
+          }))
+
+        if (upsertRows.length > 0) {
+          const { error: migErr } = await supabase
+            .from('sent_projects')
+            .upsert(upsertRows, { onConflict: 'id' })
+          if (migErr) console.error('[projects] localStorage migration failed:', migErr.message)
+          else console.log(`[projects] migrated ${upsertRows.length} rows to Supabase`)
+        }
+
+        set({ _supabaseMigrationDone: true })
+      },
+
       leadStatusOverrides: {},
       cancellationRequestsByLead: {},
       rescheduleRequestsByLead: {},
