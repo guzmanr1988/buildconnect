@@ -339,24 +339,51 @@ export default function HomeownersPage() {
                   </div>
 
                   {/* Stats */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Projects
-                      </p>
-                      <p className="text-lg font-bold font-heading">
-                        {projects.length}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Completed
-                      </p>
-                      <p className="text-lg font-bold font-heading">
-                        {projects.filter((p) => p.status === 'completed').length}
-                      </p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const activeCount = projects.filter((p) => p.status === 'pending' || p.status === 'confirmed' || p.status === 'rescheduled').length
+                    const completedCount = projects.filter((p) => p.status === 'completed').length
+                    const serviceTypes = [...new Set(projects.map((p) => p.service_type))].slice(0, 2)
+                    const lastActivity = projects.length > 0
+                      ? new Date(Math.max(...projects.map((p) => new Date(p.date_submitted).getTime())))
+                      : null
+                    return (
+                      <>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Total</p>
+                            <p className="text-base font-bold font-heading">{projects.length}</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Active</p>
+                            <p className="text-base font-bold font-heading">{activeCount}</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">Done</p>
+                            <p className="text-base font-bold font-heading">{completedCount}</p>
+                          </div>
+                        </div>
+                        {serviceTypes.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {serviceTypes.map((st) => (
+                              <span key={st} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                {st}
+                              </span>
+                            ))}
+                            {projects.length > 0 && new Set(projects.map((p) => p.service_type)).size > 2 && (
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                                +{new Set(projects.map((p) => p.service_type)).size - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {lastActivity && (
+                          <p className="text-[11px] text-muted-foreground mb-3">
+                            Last activity {lastActivity.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
 
                   {/* Action Buttons */}
                   <div className="flex gap-2 mb-4">
