@@ -82,27 +82,52 @@ function degreesToPitch(deg: number): string {
   return `${rounded}/12`
 }
 
-async function geocodeOnce(address: string) {
-  const geoRes = await fetch(
-    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`,
-  )
+// Expand common US street-suffix abbreviations so Google Geocoding parses
+// them reliably (it usually does, but "Ter" for Terrace is one of the
+// shorter forms it sometimes mis-resolves, especially without zip context).
+function expandStreetAbbrev(street: string): string {
+  return street
+    .replace(/\b(ter|ter\.)\b/gi, 'Terrace')
+    .replace(/\b(st|st\.)\b/gi, 'Street')
+    .replace(/\b(ave|ave\.)\b/gi, 'Avenue')
+    .replace(/\b(blvd|blvd\.)\b/gi, 'Boulevard')
+    .replace(/\b(dr|dr\.)\b/gi, 'Drive')
+    .replace(/\b(rd|rd\.)\b/gi, 'Road')
+    .replace(/\b(ln|ln\.)\b/gi, 'Lane')
+    .replace(/\b(ct|ct\.)\b/gi, 'Court')
+    .replace(/\b(pl|pl\.)\b/gi, 'Place')
+    .replace(/\b(pkwy|pkwy\.)\b/gi, 'Parkway')
+    .replace(/\b(cir|cir\.)\b/gi, 'Circle')
+}
+
+interface AddressParts { street: string; city: string; state: string; zip: string }
+
+async function geocodeOnce(parts: AddressParts) {
+  // Use Google's structured components for reliable parsing. address= holds
+  // the street; components pin country/state/city/zip so partial street input
+  // resolves against the right region.
+  const params = new URLSearchParams({
+    address: expandStreetAbbrev(parts.street),
+    components: [
+      'country:US',
+      parts.state ? `administrative_area:${parts.state}` : '',
+      parts.city ? `locality:${parts.city}` : '',
+      parts.zip ? `postal_code:${parts.zip}` : '',
+    ].filter(Boolean).join('|'),
+    key: MAPS_KEY,
+  })
+  const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`)
   return await geoRes.json() as {
     status: string
     results: Array<{ geometry: { location: { lat: number; lng: number } }; formatted_address: string }>
   }
 }
 
-async function measureRoofFromAddress(address: string): Promise<MeasurementData & { canonicalAddress?: string }> {
-  // Stage 1: Geocode — try input as-is, then retry with ", Florida" if partial.
-  // BuildConnect's market is South Florida; appending state context resolves
-  // partial inputs like "10990 sw 225 ter" that Google rejects without context.
-  let geoJson = await geocodeOnce(address)
-  if (geoJson.status !== 'OK' || !geoJson.results.length) {
-    const hasContext = /,/.test(address) || /\b(FL|florida|miami|hialeah|hollywood|fort lauderdale|kendall|homestead|aventura)\b/i.test(address)
-    if (!hasContext) {
-      geoJson = await geocodeOnce(`${address}, Florida`)
-    }
-  }
+async function measureRoofFromParts(parts: AddressParts): Promise<MeasurementData & { canonicalAddress?: string }> {
+  // Stage 1: Structured geocode. Default state to FL when blank
+  // (BuildConnect's market is South Florida).
+  const normalized: AddressParts = { ...parts, state: parts.state.trim() || 'FL' }
+  const geoJson = await geocodeOnce(normalized)
   if (geoJson.status !== 'OK' || !geoJson.results.length) {
     throw new Error('Could not find address')
   }
@@ -204,10 +229,34 @@ interface Props {
   onComplete: (result: RoofWizardResult) => void
 }
 
+// Best-effort split of a single-line address into {street, city, state, zip}.
+// Falls back to putting the whole string in `street` when parsing fails.
+function splitAddress(input: string): AddressParts {
+  const trimmed = input.trim()
+  if (!trimmed) return { street: '', city: '', state: '', zip: '' }
+  const parts = trimmed.split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length >= 3) {
+    const stateZip = parts[parts.length - 1]
+    const m = stateZip.match(/^([A-Za-z]{2})\s*(\d{5})?$/)
+    if (m) {
+      return { street: parts[0], city: parts[1], state: m[1].toUpperCase(), zip: m[2] ?? '' }
+    }
+  }
+  if (parts.length === 2) {
+    return { street: parts[0], city: parts[1], state: '', zip: '' }
+  }
+  return { street: trimmed, city: '', state: '', zip: '' }
+}
+
 export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
-  const [address, setAddress] = useState(defaultAddress)
+  const initialParts = splitAddress(defaultAddress)
+  const [street, setStreet] = useState(initialParts.street)
+  const [city, setCity] = useState(initialParts.city)
+  const [stateCode, setStateCode] = useState(initialParts.state || 'FL')
+  const [zip, setZip] = useState(initialParts.zip)
+  const [canonicalAddress, setCanonicalAddress] = useState('')
   const [measuring, setMeasuring] = useState(false)
   const [measureError, setMeasureError] = useState(false)
   const [measureErrorMsg, setMeasureErrorMsg] = useState('')
@@ -220,8 +269,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
 
   useEffect(() => {
     if (open) {
+      const seed = splitAddress(defaultAddress)
       setStep(1)
-      setAddress(defaultAddress)
+      setStreet(seed.street)
+      setCity(seed.city)
+      setStateCode(seed.state || 'FL')
+      setZip(seed.zip)
+      setCanonicalAddress('')
       setMeasuring(false)
       setMeasureError(false)
       setMeasureErrorMsg('')
@@ -232,10 +286,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
   }, [open, defaultAddress])
 
+  const formAddress = canonicalAddress || [street, city, [stateCode, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  const canMeasure = street.trim().length > 0 && city.trim().length > 0 && stateCode.trim().length > 0
+
   const anyMaterialSelected = material !== null || flatSelected
 
   const startMeasuring = async () => {
-    if (!address.trim()) return
+    if (!canMeasure) return
     setStep(2)
     setMeasureError(false)
     setMeasureErrorMsg('')
@@ -247,15 +304,15 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
     setMeasuring(true)
     try {
-      const result = await measureRoofFromAddress(address.trim())
-      if (result.canonicalAddress) setAddress(result.canonicalAddress)
+      const result = await measureRoofFromParts({ street: street.trim(), city: city.trim(), state: stateCode.trim(), zip: zip.trim() })
+      if (result.canonicalAddress) setCanonicalAddress(result.canonicalAddress)
       setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
       setAdjArea(String(result.areaSqft))
       setAdjPitch(result.pitch)
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
-        setMeasureErrorMsg("Couldn't find that address. Include the city, state, and zip (e.g. 10990 SW 225 Ter, Miami, FL 33170) and try again.")
+        setMeasureErrorMsg("Couldn't find that address. Double-check the street, city, state, and zip and try again.")
         setStep(1)
       } else if (msg === 'NO_BUILDING') {
         setMeasureErrorMsg("Couldn't measure — no building found at that address. Enter manually.")
@@ -283,7 +340,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatSection = material !== null && flatSelected
     onComplete({
-      address: address.trim(),
+      address: formAddress,
       areaSqft: finalArea,
       pitch: finalPitch,
       material: dominantMaterial,
@@ -320,17 +377,51 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 <p className="text-[13px] text-muted-foreground mb-3">
                   We'll measure your roof from satellite imagery.
                 </p>
-                <Label className="mb-1.5 block text-xs">Address</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    className="pl-9"
-                    placeholder="1234 Coral Way, Miami, FL 33145"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && address.trim() && startMeasuring()}
-                    autoFocus
-                  />
+                <div className="space-y-2.5">
+                  <div>
+                    <Label className="mb-1.5 block text-xs">Street</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="pl-9"
+                        placeholder="10990 SW 225 Ter"
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <Label className="mb-1.5 block text-xs">City</Label>
+                      <Input
+                        placeholder="Miami"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1.5 block text-xs">Zip</Label>
+                      <Input
+                        placeholder="33170"
+                        value={zip}
+                        onChange={(e) => setZip(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && canMeasure && startMeasuring()}
+                        inputMode="numeric"
+                        maxLength={5}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs">State</Label>
+                    <Input
+                      placeholder="FL"
+                      value={stateCode}
+                      onChange={(e) => setStateCode(e.target.value.toUpperCase().slice(0, 2))}
+                      maxLength={2}
+                      className="w-20"
+                    />
+                  </div>
                 </div>
                 {measureErrorMsg && step === 1 && (
                   <p className="mt-2 text-xs text-destructive">{measureErrorMsg}</p>
@@ -338,7 +429,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-                <Button size="sm" disabled={!address.trim()} onClick={startMeasuring}>
+                <Button size="sm" disabled={!canMeasure} onClick={startMeasuring}>
                   Measure My Roof →
                 </Button>
               </div>
@@ -350,7 +441,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-foreground mb-0.5">Measuring your roof…</p>
-                <p className="text-[13px] text-muted-foreground mb-4 truncate">{address}</p>
+                <p className="text-[13px] text-muted-foreground mb-4 truncate">{formAddress}</p>
               </div>
 
               {measuring && (
@@ -585,7 +676,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   ? `${pitchedLabel} + Flat Roof`
                   : pitchedLabel ?? FLAT_ROOF_OPTION.label
                 const rows: { label: string; value: string }[] = [
-                  { label: 'Address', value: address },
+                  { label: 'Address', value: formAddress },
                 ]
                 if (hasFlatSection && measurement?.pitchedAreaSqft !== undefined) {
                   rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft` })
