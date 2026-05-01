@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
+import { GenericServiceWizard, DRIVEWAYS_STEPS } from '../components/generic-service-wizard'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -280,6 +281,29 @@ export function ServiceDetailPage() {
         editItem={editData2}
         addressOptions={addrOpts}
         defaultAddressKey={defaultAddrKey}
+        editingItemId={editId}
+        onCancel={() => navigate('/home')}
+        onDone={() => navigate('/home/cart')}
+      />
+    )
+  }
+
+  // Card-slide wizard delegates — one per service (propagating roofing pilot pattern).
+  if (serviceId === 'driveways') {
+    const editId = editItemForService?.id as string | null ?? null
+    const defaultAddrKey = (() => {
+      const edit = editItemForService?.address as CartItemAddress | undefined
+      if (!edit) return 'primary'
+      const match = addressOptions.find((o) => o.label === edit.label)
+      return match?.key ?? 'primary'
+    })()
+    return (
+      <GenericServiceWizard
+        service={service}
+        steps={DRIVEWAYS_STEPS}
+        addressOptions={addressOptions}
+        defaultAddressKey={defaultAddrKey}
+        editItem={editItemForService}
         editingItemId={editId}
         onCancel={() => navigate('/home')}
         onDone={() => navigate('/home/cart')}
