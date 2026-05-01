@@ -18,6 +18,7 @@ import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
+import { sqftToSquares } from '@/lib/option-metadata'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
@@ -674,7 +675,8 @@ export default function LeadInbox() {
                                     </Badge>
                                     {sp.item.metalRoofSelection.roofSize && (
                                       <Badge variant="outline" className="text-[10px]">
-                                        {Number(sp.item.metalRoofSelection.roofSize).toLocaleString()} Sq Ft
+                                        {/* Legacy values were sqft (>200); post-ship values are squares. */}
+                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * 1.12)) : n })()}{' '}squares
                                       </Badge>
                                     )}
                                   </div>

@@ -132,11 +132,12 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
 
         {/* Roof size input */}
         <div>
-          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Roof Size (Sq Ft)</span>
+          <span className="text-xs font-medium text-muted-foreground mb-0.5 block">Roof Size (Squares)</span>
+          <span className="text-[10px] text-muted-foreground/70 mb-1.5 block">1 square = 100 sqft</span>
           <Input
             type="number"
             min="0"
-            placeholder="Enter square footage"
+            placeholder="e.g. 18"
             value={selection.roofSize}
             onChange={(e) => onChange({ ...selection, roofSize: e.target.value })}
             className="h-10"
@@ -159,7 +160,7 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
             )}
             {selection.roofSize && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-                {Number(selection.roofSize).toLocaleString()} Sq Ft
+                {Number(selection.roofSize).toLocaleString()} squares
               </span>
             )}
           </div>
