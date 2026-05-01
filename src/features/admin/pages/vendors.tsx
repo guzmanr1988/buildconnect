@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
   MapPin,
-  Calendar,
   MessageSquare,
   ShieldCheck,
   Ban,
@@ -15,6 +14,9 @@ import {
   Check,
   X,
   Search,
+  Phone,
+  Mail,
+  Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
@@ -444,7 +446,7 @@ export default function VendorsPage() {
 
       {/* Vendor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredVendorData.map(({ vendor, closedSales, totalRevenue }, i) => (
+        {filteredVendorData.map(({ vendor, closedSales, totalRevenue, statusCounts }, i) => (
           <motion.div key={vendor.id} custom={i} variants={fadeUp} initial="hidden" animate="visible">
             <Card
               className="rounded-xl shadow-sm hover:shadow-md transition flex flex-col cursor-pointer"
@@ -482,33 +484,49 @@ export default function VendorsPage() {
                 {/* Info */}
                 <div className="space-y-2 mb-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span>{vendor.phone}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{vendor.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{vendor.address}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Joined{' '}
-                      {new Date(vendor.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </span>
+                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span>{vendor.rating} · {vendor.total_reviews} reviews · joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
                   </div>
                 </div>
 
-                {/* Revenue Stats */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Closed Sales</p>
-                    <p className="text-lg font-bold font-heading">{closedSales.length}</p>
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Active</p>
+                    <p className="text-base font-bold font-heading">{(statusCounts['pending'] ?? 0) + (statusCounts['confirmed'] ?? 0)}</p>
                   </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
-                    <p className="text-lg font-bold font-heading">${totalRevenue.toLocaleString()}</p>
+                  <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Closed</p>
+                    <p className="text-base font-bold font-heading">{closedSales.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Revenue</p>
+                    <p className="text-base font-bold font-heading">${(totalRevenue / 1000).toFixed(0)}k</p>
                   </div>
                 </div>
+
+                {/* Service category chips */}
+                {vendor.service_categories && vendor.service_categories.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {vendor.service_categories.map((cat) => (
+                      <span key={cat} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary capitalize">
+                        {cat.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Action Buttons — Ship #284: Commission Fee + Agreement
                     + Lead Accordion moved to /admin/vendors/:vendorId
