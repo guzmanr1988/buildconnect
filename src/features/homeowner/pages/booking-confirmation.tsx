@@ -1,3 +1,4 @@
+import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, FileText, ArrowRight, Home, AlertTriangle } from 'lucide-react'
@@ -114,7 +115,7 @@ async function buildRoofingLineItems(
         }
         // For square pricing: apply 2% waste then convert to squares.
         // For legacy sqft pricing: bill directly against raw sqft.
-        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * 1.02)) : rawSqft
+        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * ROOF_WASTE_FACTOR)) : rawSqft
         const amount = Math.round(unitRateDollars * qty * 100) / 100
         const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
         const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''
