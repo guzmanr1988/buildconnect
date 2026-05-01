@@ -1,3 +1,4 @@
+import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
@@ -676,7 +677,7 @@ export default function LeadInbox() {
                                     {sp.item.metalRoofSelection.roofSize && (
                                       <Badge variant="outline" className="text-[10px]">
                                         {/* Legacy values were sqft (>200); post-ship values are squares. */}
-                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * 1.02)) : n })()}{' '}squares
+                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n })()}{' '}squares
                                       </Badge>
                                     )}
                                   </div>

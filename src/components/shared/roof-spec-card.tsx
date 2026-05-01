@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { sqftToSquares } from '@/lib/option-metadata'
+import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { cn } from '@/lib/utils'
 
 interface RoofMeasurement {
@@ -46,7 +47,7 @@ export function RoofSpecCard({
     : undefined
   const metalSquares = mrs?.roofSize
     ? Number(mrs.roofSize) > 200
-      ? sqftToSquares(Math.round(Number(mrs.roofSize) * 1.02))
+      ? sqftToSquares(Math.round(Number(mrs.roofSize) * ROOF_WASTE_FACTOR))
       : Number(mrs.roofSize)
     : undefined
 
@@ -65,7 +66,7 @@ export function RoofSpecCard({
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground min-w-[72px]">Area</span>
               <span className="font-medium">
-                {rm.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(rm.areaSqft * 1.02))} squares w/waste
+                {rm.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))} squares w/waste
               </span>
             </div>
             {rm.pitch && (
@@ -85,13 +86,13 @@ export function RoofSpecCard({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Pitched</span>
                   <span className="font-medium">
-                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.pitchedAreaSqft! * 1.02))} sq)
+                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.pitchedAreaSqft! * ROOF_WASTE_FACTOR))} sq)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Flat</span>
                   <span className="font-medium">
-                    {rm.flatAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.flatAreaSqft! * 1.02))} sq)
+                    {rm.flatAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.flatAreaSqft! * ROOF_WASTE_FACTOR))} sq)
                   </span>
                 </div>
               </>

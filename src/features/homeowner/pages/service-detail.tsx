@@ -1,3 +1,4 @@
+import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -73,7 +74,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
 // Post-ship values are squares (e.g. "29"). Detect by magnitude: >200 = sqft, ≤200 = squares.
 function metalRoofDisplaySquares(roofSize: string): number {
   const n = Number(roofSize)
-  return n > 200 ? sqftToSquares(Math.round(n * 1.02)) : n
+  return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n
 }
 
 export function ServiceDetailPage() {
@@ -189,7 +190,7 @@ export function ServiceDetailPage() {
     if (result.hasFlatSection) materials.push('flat_roof')
     setSelections((prev) => ({ ...prev, material: materials }))
     if (result.material === 'metal') {
-      const wasteSqft = Math.round(result.areaSqft * 1.02)
+      const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
       setMetalRoofConfigOpen(true)
     }
@@ -1067,7 +1068,7 @@ export function ServiceDetailPage() {
                       {roofMeasurement.address}
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * 1.02))} squares w/waste
+                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))} squares w/waste
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                       Pitch {roofMeasurement.pitch}
@@ -1111,8 +1112,8 @@ export function ServiceDetailPage() {
                       const label = matOpts.find(o => o.id === matId)?.label ?? matId
                       const areaLabel = showSplit
                         ? matId === 'flat_roof'
-                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${sqftToSquares(Math.round(roofMeasurement!.flatAreaSqft! * 1.02))} sq)`
-                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${sqftToSquares(Math.round(roofMeasurement!.pitchedAreaSqft! * 1.02))} sq)`
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${sqftToSquares(Math.round(roofMeasurement!.flatAreaSqft! * ROOF_WASTE_FACTOR))} sq)`
+                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${sqftToSquares(Math.round(roofMeasurement!.pitchedAreaSqft! * ROOF_WASTE_FACTOR))} sq)`
                         : undefined
                       return (
                         <div key={matId} className="rounded-lg bg-muted/50 p-3">

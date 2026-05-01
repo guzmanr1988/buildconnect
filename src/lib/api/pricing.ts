@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import type { CartItem } from '@/stores/cart-store'
 
 /*
@@ -104,7 +105,7 @@ export function computeVendorTotal(
           const rawSqft = useSplit
             ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
             : (item.roofMeasurement?.areaSqft ?? 0)
-          const wasteSqft = Math.round(rawSqft * 1.02)
+          const wasteSqft = Math.round(rawSqft * ROOF_WASTE_FACTOR)
           totalCents += basePrice * sqftToSquares(wasteSqft)
         } else if (meta.priceUnit === 'sqft') {
           // Legacy: vendor entered $/sqft (old persisted line items). Bill flat against areaSqft.
