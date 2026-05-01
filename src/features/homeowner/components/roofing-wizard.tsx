@@ -278,18 +278,29 @@ export function RoofingWizard({
                           <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
                         )}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                          <span className="text-[12px] text-muted-foreground">Total area</span>
-                          <span className="text-[12px] font-medium text-foreground">{roofMeasurement.areaSqft.toLocaleString()} sq ft</span>
-                          {roofMeasurement.pitchedAreaSqft !== undefined && (
+                          {/* Main roof — pitched portion (or total when no split) */}
+                          <span className="text-[12px] text-muted-foreground">Main roof</span>
+                          <span className="text-[12px] font-medium text-foreground">
+                            {(() => {
+                              const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
+                              const sq = Math.ceil((sqft * 1.02) / 100)
+                              return `${sqft.toLocaleString()} sqft (${sq} sq)`
+                            })()}
+                          </span>
+                          {/* Perimeter / linear ft */}
+                          {roofMeasurement.perimeterFt ? (
                             <>
-                              <span className="text-[12px] text-muted-foreground">Pitched</span>
-                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitchedAreaSqft.toLocaleString()} sq ft</span>
+                              <span className="text-[12px] text-muted-foreground">Linear ft</span>
+                              <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
                             </>
-                          )}
-                          {roofMeasurement.flatAreaSqft !== undefined && (
+                          ) : null}
+                          {/* Flat — conditional on split data + includeFlat */}
+                          {roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Flat</span>
-                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.flatAreaSqft.toLocaleString()} sq ft</span>
+                              <span className="text-[12px] font-medium text-foreground">
+                                {roofMeasurement.flatAreaSqft.toLocaleString()} sqft ({Math.ceil((roofMeasurement.flatAreaSqft * 1.01) / 100)} sq)
+                              </span>
                             </>
                           )}
                           {roofMeasurement.pitch && (
@@ -298,12 +309,22 @@ export function RoofingWizard({
                               <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
                             </>
                           )}
-                          {roofMeasurement.perimeterFt ? (
+                          {/* Total — only when split data available; uses computeRoofTotal SoT */}
+                          {roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
                             <>
-                              <span className="text-[12px] text-muted-foreground">Perimeter</span>
-                              <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
+                              <span className="text-[12px] text-muted-foreground font-semibold">Total</span>
+                              <span className="text-[12px] font-semibold text-foreground">
+                                {(() => {
+                                  const { totalSqft, totalSquares } = computeRoofTotal({
+                                    pitchedAreaSqft: roofMeasurement.pitchedAreaSqft!,
+                                    flatAreaSqft: roofMeasurement.flatAreaSqft!,
+                                    includeFlat: roofMeasurement.includeFlat ?? (roofMeasurement.flatAreaSqft! > 0),
+                                  })
+                                  return `${totalSqft.toLocaleString()} sqft (${totalSquares} sq)`
+                                })()}
+                              </span>
                             </>
-                          ) : null}
+                          )}
                         </div>
                       </div>
                       <button
