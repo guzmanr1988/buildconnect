@@ -538,24 +538,26 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         {/* Flat area — mirrors Material Order big-number pattern */}
                         <div>
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-                          <p className="text-xl font-bold text-foreground mt-0.5">
-                            {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
-                            </span>
-                          </p>
+                          <div className="flex items-baseline justify-between gap-8 mt-0.5">
+                            <p className="text-xl font-bold text-foreground">
+                              {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
+                              <span className="text-sm font-normal text-muted-foreground">
+                                sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
+                              </span>
+                            </p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Label className="text-xs text-muted-foreground whitespace-nowrap">Adjust</Label>
+                              <Input
+                                value={adjFlatArea}
+                                onChange={(e) => setAdjFlatArea(e.target.value)}
+                                placeholder="0"
+                                className="h-7 text-sm w-20 text-right"
+                              />
+                            </div>
+                          </div>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
                           </p>
-                          <div className="mt-2">
-                            <Label className="mb-1 block text-xs">Adjust flat area (sq ft)</Label>
-                            <Input
-                              value={adjFlatArea}
-                              onChange={(e) => setAdjFlatArea(e.target.value)}
-                              placeholder="0"
-                              className="h-8 text-sm"
-                            />
-                          </div>
                         </div>
                         {/* Pitched (auto) — unchanged */}
                         <div>
