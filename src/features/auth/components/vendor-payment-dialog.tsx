@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { CheckCircle2, CreditCard, Landmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
@@ -85,8 +85,10 @@ export function VendorPaymentDialog({
   const [uiState, setUIState] = useState<UIState>('entering')
 
   // Card fields
-  const [holder, setHolder] = useState(initialHolder)
-  const [cardNumber, setCardNumber] = useState('')
+  const [firstName, setFirstName] = useState(() => initialHolder.split(' ')[0] ?? '')
+  const [lastName, setLastName] = useState(() => initialHolder.split(' ').slice(1).join(' '))
+  const [cardSlots, setCardSlots] = useState<[string, string, string, string]>(['', '', '', ''])
+  const slotRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
   const [expiry, setExpiry] = useState('')
   const [cvv, setCvv] = useState('')
   // Ship #275 — defensive: guard setUIState with mountedRef so
@@ -105,6 +107,7 @@ export function VendorPaymentDialog({
     }
   }, [])
   // Checking fields
+  const [holder, setHolder] = useState(initialHolder)
   const [bankName, setBankName] = useState('')
   const [routing, setRouting] = useState('')
   const [account, setAccount] = useState('')
@@ -115,19 +118,40 @@ export function VendorPaymentDialog({
       setKind(normalizeInitialKind(initialKind))
       setPurpose(initialPurpose)
       setUIState('entering')
-      setHolder(initialHolder)
-      setCardNumber('')
+      setFirstName(initialHolder.split(' ')[0] ?? '')
+      setLastName(initialHolder.split(' ').slice(1).join(' '))
+      setCardSlots(['', '', '', ''])
       setExpiry('')
       setCvv('')
+      setHolder(initialHolder)
       setBankName('')
       setRouting('')
       setAccount('')
     }
   }, [open, initialKind, initialHolder, initialPurpose])
 
+  const handleSlotChange = useCallback((idx: number, raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 4)
+    setCardSlots((prev) => {
+      const next = [...prev] as [string, string, string, string]
+      next[idx] = digits
+      return next
+    })
+    if (digits.length === 4 && idx < 3) {
+      slotRefs[idx + 1].current?.focus()
+    }
+  }, [])
+
+  const handleSlotKeyDown = useCallback((idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && cardSlots[idx] === '' && idx > 0) {
+      slotRefs[idx - 1].current?.focus()
+    }
+  }, [cardSlots])
+
   // Ship #185 — live card-brand detection. Recomputed on every
   // cardNumber keystroke. Memoized so the render-time brand chip
   // doesn't re-run the regex unnecessarily on unrelated re-renders.
+  const cardNumber = cardSlots.join('')
   const detectedBrand = useMemo(() => detectCardBrand(cardNumber), [cardNumber])
 
   // Validate + return the normalized method object. Null = form not
@@ -136,14 +160,15 @@ export function VendorPaymentDialog({
   // segmented toggle; caller decides whether to add or update.
   function buildMethod(): Omit<VendorPaymentMethod, 'id'> | null {
     if (kind === 'card') {
-      if (!holder.trim() || !cardNumber.trim() || !expiry.trim() || !cvv.trim()) return null
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim()
+      if (!fullName || !cardNumber || !expiry.trim() || !cvv.trim()) return null
       const digits = cardNumber.replace(/\D/g, '')
       if (digits.length < 12) return null
       return {
         purpose,
         kind: 'card',
         last4: digits.slice(-4),
-        holder: holder.trim(),
+        holder: fullName,
         // Snapshot brand at submit time; falls through to undefined if
         // the number didn't match any known IIN prefix. Membership
         // display treats absent brand as plain "Card" label.
@@ -311,39 +336,35 @@ export function VendorPaymentDialog({
               </TabsList>
 
               <TabsContent value="card" className="space-y-3 mt-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="vpd-holder" className="text-xs font-semibold">Name on card</Label>
-                  <Input
-                    id="vpd-holder"
-                    data-payment-field="holder"
-                    autoComplete="cc-name"
-                    value={holder}
-                    onChange={(e) => setHolder(e.target.value)}
-                    placeholder="First Last"
-                    className="h-10 text-sm"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vpd-first-name" className="text-xs font-semibold">First name</Label>
+                    <Input
+                      id="vpd-first-name"
+                      data-payment-field="first-name"
+                      autoComplete="cc-given-name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="First"
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="vpd-last-name" className="text-xs font-semibold">Last name</Label>
+                    <Input
+                      id="vpd-last-name"
+                      data-payment-field="last-name"
+                      autoComplete="cc-family-name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Last"
+                      className="h-10 text-sm"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="vpd-card" className="text-xs font-semibold">Card number</Label>
-                  <div className="relative">
-                    <Input
-                      id="vpd-card"
-                      data-payment-field="card-number"
-                      autoComplete="cc-number"
-                      inputMode="numeric"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      placeholder="1234 5678 9012 3456"
-                      className={cn('h-10 text-sm font-mono tracking-wide', detectedBrand && 'pr-24')}
-                    />
-                    {/* Ship #185 — live brand chip inline-end of the
-                        number input. Updates as user types via the
-                        detectCardBrand IIN-prefix match. Hidden when no
-                        brand match yet, so empty/unknown prefixes don't
-                        render a bogus label.
-                        Ship #186 — data-payment-brand carries the
-                        detected brand text so probes can verify
-                        detection without Base-UI auto-ID discovery. */}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Card number</Label>
                     {detectedBrand && (
                       <motion.span
                         key={detectedBrand}
@@ -351,11 +372,29 @@ export function VendorPaymentDialog({
                         initial={{ opacity: 0, x: 4 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary"
+                        className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary"
                       >
                         {detectedBrand}
                       </motion.span>
                     )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2" data-payment-field="card-number">
+                    {([0, 1, 2, 3] as const).map((idx) => (
+                      <Input
+                        key={idx}
+                        ref={slotRefs[idx]}
+                        id={idx === 0 ? 'vpd-card' : undefined}
+                        data-payment-slot={idx}
+                        autoComplete={idx === 0 ? 'cc-number' : 'off'}
+                        inputMode="numeric"
+                        value={cardSlots[idx]}
+                        onChange={(e) => handleSlotChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleSlotKeyDown(idx, e)}
+                        placeholder="••••"
+                        maxLength={4}
+                        className="h-10 text-sm font-mono tracking-widest text-center"
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
