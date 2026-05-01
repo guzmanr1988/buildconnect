@@ -169,6 +169,7 @@ export function BookingConfirmationPage() {
   const profile = useAuthStore((s) => s.profile)
   const [details, setDetails] = useState<BookingDetails | null>(null)
   const [state, setState] = useState<ConfirmationState>('loading')
+  const [cashOnlyProject, setCashOnlyProject] = useState<string | null>(null) // service name when permit=no
 
   useEffect(() => {
     const pendingItemStr = localStorage.getItem('buildconnect-pending-item')
@@ -234,6 +235,9 @@ export function BookingConfirmationPage() {
           // auditing. Optional on the SentProject side, so undefined here
           // (e.g. unauthed-flow regression) just falls back to display-only
           // homeowner fields.
+          if ((pendingItem as any).roofPermit === 'no') {
+            setCashOnlyProject(pendingItem.serviceName)
+          }
           sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)
           removeItem(pendingItem.id)
 
@@ -368,6 +372,16 @@ export function BookingConfirmationPage() {
         <p className="mb-6 text-sm text-muted-foreground">
           Your site visit has been scheduled successfully.
         </p>
+
+        {/* Cash-only notice when permit=no */}
+        {cashOnlyProject && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 text-left">
+            <p className="font-medium mb-0.5">Payment: Cash, check, or wire only</p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+              Financing is not available for this project — No Permit was selected. Your contractor will confirm accepted payment methods.
+            </p>
+          </div>
+        )}
 
         {/* Summary card */}
         <Card className="mb-6 text-left">

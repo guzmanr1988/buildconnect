@@ -459,6 +459,17 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ))}
                       </div>
                     ))}
+                    {(selectedItem.project_data.item as any).roofPermit && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-muted-foreground capitalize min-w-[60px]">Permit:</span>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] ${(selectedItem.project_data.item as any).roofPermit === 'yes' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
+                        >
+                          {(selectedItem.project_data.item as any).roofPermit === 'yes' ? 'Yes — permit will be pulled' : 'No permit — cash only'}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {

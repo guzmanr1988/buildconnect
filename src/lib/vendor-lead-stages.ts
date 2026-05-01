@@ -142,7 +142,9 @@ export function useVendorLeadStages(): {
       email: p.homeowner?.email || '—',
       sq_ft: 0,
       service_category: (p.item?.serviceId ?? '') as Lead['service_category'],
-      permit_choice: Object.values(p.item?.selections ?? {}).flat().includes('permit'),
+      // For roofing: permit comes from wizard-captured roofPermit field (not selections).
+      // Legacy non-roofing (windows/doors etc): permit is derived from selections.
+      permit_choice: (p.item as any)?.roofPermit ? (p.item as any).roofPermit === 'yes' : Object.values(p.item?.selections ?? {}).flat().includes('permit'),
       financing: Object.values(p.item?.selections ?? {}).flat().includes('financed'),
       pack_items: p.item?.selections ?? {},
       slot: p.sentAt,
