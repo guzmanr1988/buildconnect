@@ -82,14 +82,26 @@ function degreesToPitch(deg: number): string {
   return `${rounded}/12`
 }
 
-async function measureRoofFromAddress(address: string): Promise<MeasurementData & { canonicalAddress?: string }> {
-  // Stage 1: Geocode
+async function geocodeOnce(address: string) {
   const geoRes = await fetch(
     `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`,
   )
-  const geoJson = await geoRes.json() as {
+  return await geoRes.json() as {
     status: string
     results: Array<{ geometry: { location: { lat: number; lng: number } }; formatted_address: string }>
+  }
+}
+
+async function measureRoofFromAddress(address: string): Promise<MeasurementData & { canonicalAddress?: string }> {
+  // Stage 1: Geocode — try input as-is, then retry with ", Florida" if partial.
+  // BuildConnect's market is South Florida; appending state context resolves
+  // partial inputs like "10990 sw 225 ter" that Google rejects without context.
+  let geoJson = await geocodeOnce(address)
+  if (geoJson.status !== 'OK' || !geoJson.results.length) {
+    const hasContext = /,/.test(address) || /\b(FL|florida|miami|hialeah|hollywood|fort lauderdale|kendall|homestead|aventura)\b/i.test(address)
+    if (!hasContext) {
+      geoJson = await geocodeOnce(`${address}, Florida`)
+    }
   }
   if (geoJson.status !== 'OK' || !geoJson.results.length) {
     throw new Error('Could not find address')
@@ -243,7 +255,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
-        setMeasureErrorMsg("We couldn't find that address — try again.")
+        setMeasureErrorMsg("Couldn't find that address. Include the city, state, and zip (e.g. 10990 SW 225 Ter, Miami, FL 33170) and try again.")
         setStep(1)
       } else if (msg === 'NO_BUILDING') {
         setMeasureErrorMsg("Couldn't measure — no building found at that address. Enter manually.")
