@@ -4,6 +4,7 @@ import { getProfile } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { useProjectsStore } from '@/stores/projects-store'
 
 export function AuthBootstrap() {
   useEffect(() => {
@@ -82,6 +83,8 @@ export function AuthBootstrap() {
         if (merged.role === 'vendor') {
           useVendorCatalogStore.getState().hydrateFromSupabase(userId)
         }
+        // Surface-2: wire projects to Supabase for all authed roles.
+        useProjectsStore.getState().hydrateFromSupabase(userId, merged.role as 'homeowner' | 'vendor' | 'account_rep' | 'admin')
       } catch (err) {
         diagLog('AuthBootstrap.hydrate:getProfile-FAILED', { error: String(err) })
         console.error('[AuthBootstrap] getProfile failed:', err)
