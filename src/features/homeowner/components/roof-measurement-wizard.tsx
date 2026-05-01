@@ -3,9 +3,11 @@ import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2 } from 'lucide-react'
+import { computeRoofTotal } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -107,6 +109,9 @@ export interface RoofWizardResult {
   // Permit choice — mandatory, set by Step 3 radio selection.
   // 'no' makes this project cash-only (financing unavailable).
   permit: 'yes' | 'no'
+  // When true, flat area is included in cart (pitched 2% + flat 1% waste).
+  // When false, areaSqft = pitched only, flatAreaSqft = 0.
+  includeFlat?: boolean
 }
 
 interface MeasurementData {
@@ -302,6 +307,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjArea, setAdjArea] = useState('')
   const [adjPitch, setAdjPitch] = useState('')
   const [adjFlatArea, setAdjFlatArea] = useState('')
+  const [includeFlat, setIncludeFlat] = useState(false)
   const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
   const [flatSelected, setFlatSelected] = useState(false)
   const [permit, setPermit] = useState<'yes' | 'no' | null>(null)
@@ -318,6 +324,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setMeasurement(null)
       setShowAdjust(false)
       setAdjFlatArea('')
+      setIncludeFlat(false)
       setMaterial(null)
       setFlatSelected(false)
       setPermit(null)
@@ -346,6 +353,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setAdjArea(String(result.areaSqft))
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
+      setIncludeFlat(result.flatAreaSqft > 0)
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
@@ -382,7 +390,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     const hasFlatSection = material !== null && flatSelected
     onComplete({
       address: address.trim(),
-      areaSqft: finalArea,
+      areaSqft: includeFlat ? finalArea : Math.round(derivedPitchedAreaSqft),
       pitch: finalPitch,
       material: dominantMaterial,
       hasFlatSection,
@@ -390,7 +398,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       // Persist split areas so pricing engine can bill each material
       // against its own slice. Undefined when manual entry (no Solar data).
       pitchedAreaSqft: measurement ? Math.round(derivedPitchedAreaSqft) : undefined,
-      flatAreaSqft: measurement ? Math.round(finalFlatAreaSqft) : undefined,
+      flatAreaSqft: measurement ? (includeFlat ? Math.round(finalFlatAreaSqft) : 0) : undefined,
+      includeFlat,
       permit,
     })
   }
@@ -488,17 +497,25 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </span>
                         </div>
                         {(() => {
-                          const wSqft = showAdjust && adjArea ? finalWaste : measurement.wasteSqft
-                          const squares = sqftToSquares(wSqft)
+                          const { totalSqft, totalSquares, pitchedWaste, flatWaste } = computeRoofTotal({
+                            pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
+                            flatAreaSqft: Math.round(finalFlatAreaSqft),
+                            includeFlat,
+                          })
                           return (
                             <>
                               <p className="text-xl font-bold text-foreground">
-                                {wSqft.toLocaleString()}{' '}
-                                <span className="text-sm font-normal text-muted-foreground">sqft ({squares} squares)</span>
+                                {totalSqft.toLocaleString()}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Roof: {(showAdjust && adjArea ? (Math.max(100, Number(adjArea) || 0)) : measurement.areaSqft).toLocaleString()} sqft + 2% waste
+                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)
                               </p>
+                              {includeFlat && finalFlatAreaSqft > 0 && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste ({flatWaste.toLocaleString()} sqft)
+                                </p>
+                              )}
                             </>
                           )
                         })()}
@@ -532,9 +549,19 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     </div>
                     {measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
                       <div className="border-t pt-3 space-y-3">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Area Breakdown
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Area Breakdown
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="include-flat" className="text-xs text-muted-foreground">Include flat area</Label>
+                            <Switch
+                              id="include-flat"
+                              checked={includeFlat}
+                              onCheckedChange={setIncludeFlat}
+                            />
+                          </div>
+                        </div>
                         {/* Flat area — mirrors Material Order big-number pattern */}
                         <div>
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>

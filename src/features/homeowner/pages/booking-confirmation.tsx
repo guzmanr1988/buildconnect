@@ -1,4 +1,3 @@
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, FileText, ArrowRight, Home, AlertTriangle } from 'lucide-react'
@@ -81,6 +80,7 @@ async function buildRoofingLineItems(
   const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID)
   const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && (getOptionMetadata(id).priceUnit === 'square' || getOptionMetadata(id).priceUnit === 'sqft'))
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
+    && (item.roofMeasurement?.includeFlat !== false)
 
   const presets = PRICE_LINE_ITEM_PRESETS['roofing']
   const lines: PriceLineItem[] = []
@@ -113,9 +113,10 @@ async function buildRoofingLineItems(
         } else {
           rawSqft = areaSqft
         }
-        // For square pricing: apply 2% waste then convert to squares.
+        // For square pricing: apply per-component waste (flat=1%, pitched=2%) then convert.
         // For legacy sqft pricing: bill directly against raw sqft.
-        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * ROOF_WASTE_FACTOR)) : rawSqft
+        const wasteFactor = (useSplit && isFlat) ? 1.01 : 1.02
+        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * wasteFactor)) : rawSqft
         const amount = Math.round(unitRateDollars * qty * 100) / 100
         const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
         const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''

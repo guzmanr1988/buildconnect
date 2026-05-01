@@ -1,4 +1,5 @@
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { computeRoofTotal } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -166,7 +167,7 @@ export function ServiceDetailPage() {
     (editItemForService?.id as string) || null
   )
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number } | null>(null)
+  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean } | null>(null)
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
     editItemForService?.roofAddonLinearFt
@@ -222,7 +223,7 @@ export function ServiceDetailPage() {
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
       setMetalRoofConfigOpen(true)
     }
-    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
+    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat })
     setRoofPermit(result.permit)
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
@@ -1175,7 +1176,13 @@ export function ServiceDetailPage() {
                       {roofMeasurement.address}
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))} squares w/waste
+                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {(() => {
+                        const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
+                        if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                          return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                        }
+                        return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                      })()} squares w/waste
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                       Pitch {roofMeasurement.pitch}
@@ -1219,8 +1226,8 @@ export function ServiceDetailPage() {
                       const label = matOpts.find(o => o.id === matId)?.label ?? matId
                       const areaLabel = showSplit
                         ? matId === 'flat_roof'
-                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${sqftToSquares(Math.round(roofMeasurement!.flatAreaSqft! * ROOF_WASTE_FACTOR))} sq)`
-                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${sqftToSquares(Math.round(roofMeasurement!.pitchedAreaSqft! * ROOF_WASTE_FACTOR))} sq)`
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${Math.ceil((roofMeasurement!.flatAreaSqft! * 1.01) / 100)} sq)`
+                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${Math.ceil((roofMeasurement!.pitchedAreaSqft! * 1.02) / 100)} sq)`
                         : undefined
                       return (
                         <div key={matId} className="rounded-lg bg-muted/50 p-3">

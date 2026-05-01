@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 
 interface RoofMeasurement {
@@ -10,6 +11,7 @@ interface RoofMeasurement {
   perimeterFt?: number
   pitchedAreaSqft?: number
   flatAreaSqft?: number
+  includeFlat?: boolean
 }
 
 interface MetalRoofSelection {
@@ -66,7 +68,13 @@ export function RoofSpecCard({
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground min-w-[72px]">Area</span>
               <span className="font-medium">
-                {rm.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))} squares w/waste
+                {rm.areaSqft.toLocaleString()} sqft · {(() => {
+                  const { pitchedAreaSqft, flatAreaSqft, includeFlat } = rm
+                  if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                    return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                  }
+                  return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
+                })()} squares w/waste
               </span>
             </div>
             {rm.pitch && (
@@ -86,13 +94,13 @@ export function RoofSpecCard({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Pitched</span>
                   <span className="font-medium">
-                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.pitchedAreaSqft! * ROOF_WASTE_FACTOR))} sq)
+                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.pitchedAreaSqft! * 1.02) / 100)} sq)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Flat</span>
                   <span className="font-medium">
-                    {rm.flatAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.flatAreaSqft! * ROOF_WASTE_FACTOR))} sq)
+                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * 1.01) / 100)} sq)
                   </span>
                 </div>
               </>
