@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { getProfile } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 
 export function AuthBootstrap() {
   useEffect(() => {
@@ -75,6 +76,12 @@ export function AuthBootstrap() {
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
         useCatalogStore.getState().hydrateFromServer()
+        // Vendor catalog pricing: sync from Supabase so the vendor's prices
+        // are canonical from DB, not localStorage-only. Fire-and-forget;
+        // errors logged inside the store.
+        if (merged.role === 'vendor') {
+          useVendorCatalogStore.getState().hydrateFromSupabase(userId)
+        }
       } catch (err) {
         diagLog('AuthBootstrap.hydrate:getProfile-FAILED', { error: String(err) })
         console.error('[AuthBootstrap] getProfile failed:', err)
