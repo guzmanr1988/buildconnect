@@ -262,3 +262,60 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Google Places Autocomplete — themed for light + dark mode.
+   CSS variables swap automatically under html.dark so a single
+   ruleset covers both themes. */
+.pac-container {
+  background-color: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px -4px oklch(0 0 0 / 0.18), 0 2px 8px -2px oklch(0 0 0 / 0.12);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  padding: 0.25rem;
+  margin-top: 4px;
+  /* Prevent Google's inline z-index from conflicting with dialog overlay */
+  z-index: 9999 !important;
+}
+.pac-container::after {
+  /* Hide "Powered by Google" logo strip */
+  display: none !important;
+}
+.pac-item {
+  background-color: transparent;
+  color: var(--popover-foreground);
+  border-top: none;
+  border-radius: calc(var(--radius-lg) - 2px);
+  padding: 0.5rem 0.625rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  line-height: 1.4;
+  transition: background-color 0.1s;
+}
+.pac-item:hover,
+.pac-item-selected {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+.pac-item-query {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--popover-foreground);
+  padding-right: 0.25rem;
+}
+.pac-matched {
+  font-weight: 600;
+  color: var(--primary);
+}
+.pac-item:hover .pac-item-query,
+.pac-item-selected .pac-item-query,
+.pac-item:hover .pac-matched,
+.pac-item-selected .pac-matched {
+  color: var(--accent-foreground);
+}
+.pac-icon {
+  display: none;
+}
