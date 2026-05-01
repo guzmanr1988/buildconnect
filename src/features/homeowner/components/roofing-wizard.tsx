@@ -271,14 +271,42 @@ export function RoofingWizard({
                 <div className="flex-1 min-w-0">
                   {roofMeasurement ? (
                     <>
-                      <p className="text-sm font-semibold text-foreground">Roof measured</p>
-                      <p className="text-[13px] text-muted-foreground mt-0.5">
-                        {roofMeasurement.areaSqft.toLocaleString()} sq ft · Pitch {roofMeasurement.pitch}
-                        {roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
-                        {' · '}{roofMeasurement.address}
-                      </p>
+                      <p className="text-sm font-semibold text-foreground mb-2">Roof measured</p>
+                      <div className="space-y-1">
+                        {roofMeasurement.address && (
+                          <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                          <span className="text-[12px] text-muted-foreground">Total area</span>
+                          <span className="text-[12px] font-medium text-foreground">{roofMeasurement.areaSqft.toLocaleString()} sq ft</span>
+                          {roofMeasurement.pitchedAreaSqft !== undefined && (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Pitched</span>
+                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitchedAreaSqft.toLocaleString()} sq ft</span>
+                            </>
+                          )}
+                          {roofMeasurement.flatAreaSqft !== undefined && (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Flat</span>
+                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.flatAreaSqft.toLocaleString()} sq ft</span>
+                            </>
+                          )}
+                          {roofMeasurement.pitch && (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Pitch</span>
+                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
+                            </>
+                          )}
+                          {roofMeasurement.perimeterFt ? (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Perimeter</span>
+                              <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
                       <button
-                        className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                        className="mt-3 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
                         onClick={() => setWizardOpen(true)}
                       >
                         Re-measure
