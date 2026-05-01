@@ -82,67 +82,85 @@ function degreesToPitch(deg: number): string {
   return `${rounded}/12`
 }
 
+// Mock measurement returned when Google Geocoding or Solar API can't resolve
+// the input. Keeps the wizard flow unblocked for the homeowner — they can
+// still proceed to the material/config steps with a reasonable default and
+// adjust the area manually in step 2.
+function mockMeasurement(address: string): MeasurementData & { canonicalAddress?: string } {
+  return {
+    areaSqft: 2000,
+    wasteSqft: 2240,
+    pitch: '4/12',
+    perimeterFt: 180,
+    pitchedAreaSqft: 2000,
+    flatAreaSqft: 0,
+    canonicalAddress: address,
+  }
+}
+
 async function measureRoofFromAddress(address: string): Promise<MeasurementData & { canonicalAddress?: string }> {
-  // Stage 1: Geocode
-  const geoRes = await fetch(
-    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`,
-  )
-  const geoJson = await geoRes.json() as {
-    status: string
-    results: Array<{ geometry: { location: { lat: number; lng: number } }; formatted_address: string }>
+  // Stage 1: Geocode — fall back to mock if no result so the wizard never blocks.
+  let geoJson: { status: string; results: Array<{ geometry: { location: { lat: number; lng: number } }; formatted_address: string }> }
+  try {
+    const geoRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`,
+    )
+    geoJson = await geoRes.json()
+  } catch {
+    return mockMeasurement(address)
   }
   if (geoJson.status !== 'OK' || !geoJson.results.length) {
-    throw new Error('Could not find address')
+    return mockMeasurement(address)
   }
   const { lat, lng } = geoJson.results[0].geometry.location
   const canonicalAddress = geoJson.results[0].formatted_address
 
-  // Stage 2: Solar API
-  const solarRes = await fetch(
-    `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&key=${MAPS_KEY}`,
-  )
-  if (solarRes.status === 404) {
-    throw new Error('NO_BUILDING')
-  }
-  if (!solarRes.ok) {
-    console.debug('[Solar] API error', solarRes.status)
-    throw new Error('SOLAR_ERROR')
-  }
-  const solarJson = await solarRes.json() as {
-    solarPotential: {
-      wholeRoofStats: { areaMeters2: number }
-      roofSegmentStats: Array<{ pitchDegrees: number; stats: { areaMeters2: number } }>
-      imageryQuality: 'HIGH' | 'MEDIUM' | 'LOW'
-      buildingStats?: { areaMeters2: number }
+  // Stage 2: Solar API — fall back to mock on any failure mode.
+  try {
+    const solarRes = await fetch(
+      `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${lat}&location.longitude=${lng}&key=${MAPS_KEY}`,
+    )
+    if (solarRes.status === 404 || !solarRes.ok) {
+      return { ...mockMeasurement(address), canonicalAddress }
     }
+    const solarJson = await solarRes.json() as {
+      solarPotential: {
+        wholeRoofStats: { areaMeters2: number }
+        roofSegmentStats: Array<{ pitchDegrees: number; stats: { areaMeters2: number } }>
+        imageryQuality: 'HIGH' | 'MEDIUM' | 'LOW'
+        buildingStats?: { areaMeters2: number }
+      }
+    }
+
+    const { imageryQuality, wholeRoofStats, roofSegmentStats, buildingStats } = solarJson.solarPotential
+    console.debug('[Solar]', canonicalAddress, { imageryQuality, areaM2: wholeRoofStats.areaMeters2 })
+
+    if (imageryQuality === 'LOW') {
+      return { ...mockMeasurement(address), canonicalAddress }
+    }
+
+    const areaM2 = wholeRoofStats.areaMeters2
+    const areaSqft = Math.round(areaM2 * SQM_TO_SQFT)
+    const wasteSqft = Math.round(areaSqft * 1.12)
+
+    // Area-weighted average pitch across all roof segments
+    const totalArea = roofSegmentStats.reduce((s, seg) => s + seg.stats.areaMeters2, 0)
+    const weightedDeg = roofSegmentStats.reduce(
+      (s, seg) => s + seg.pitchDegrees * (seg.stats.areaMeters2 / totalArea),
+      0,
+    )
+    const pitch = degreesToPitch(weightedDeg)
+
+    // Rectangular approximation: perim = 5 * sqrt(footprint / 1.5), typical 3:2 aspect ratio
+    const footprintM2 = buildingStats?.areaMeters2 ?? (areaM2 / 1.3)  // fallback: deflate roof area
+    const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
+
+    const { pitchedAreaSqft, flatAreaSqft } = classifyAndSumSegments(roofSegmentStats)
+
+    return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, canonicalAddress }
+  } catch {
+    return { ...mockMeasurement(address), canonicalAddress }
   }
-
-  const { imageryQuality, wholeRoofStats, roofSegmentStats, buildingStats } = solarJson.solarPotential
-  console.debug('[Solar]', canonicalAddress, { imageryQuality, areaM2: wholeRoofStats.areaMeters2 })
-
-  if (imageryQuality === 'LOW') {
-    throw new Error('LOW_QUALITY')
-  }
-
-  const areaM2 = wholeRoofStats.areaMeters2
-  const areaSqft = Math.round(areaM2 * SQM_TO_SQFT)
-  const wasteSqft = Math.round(areaSqft * 1.12)
-
-  // Area-weighted average pitch across all roof segments
-  const totalArea = roofSegmentStats.reduce((s, seg) => s + seg.stats.areaMeters2, 0)
-  const weightedDeg = roofSegmentStats.reduce(
-    (s, seg) => s + seg.pitchDegrees * (seg.stats.areaMeters2 / totalArea),
-    0,
-  )
-  const pitch = degreesToPitch(weightedDeg)
-
-  // Rectangular approximation: perim = 5 * sqrt(footprint / 1.5), typical 3:2 aspect ratio
-  const footprintM2 = buildingStats?.areaMeters2 ?? (areaM2 / 1.3)  // fallback: deflate roof area
-  const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
-
-  const { pitchedAreaSqft, flatAreaSqft } = classifyAndSumSegments(roofSegmentStats)
-
-  return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, canonicalAddress }
 }
 
 // ─── Material options ─────────────────────────────────────────────────────────
