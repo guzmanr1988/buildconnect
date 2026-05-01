@@ -279,8 +279,11 @@ input[type="number"] {
   z-index: 9999 !important;
 }
 .pac-container::after {
-  /* Hide "Powered by Google" logo strip */
-  display: none !important;
+  /* Themed Powered-by-Google strip — only surroundings, not the logo itself (Maps Platform brand rules). */
+  background-color: var(--popover);
+  border-top: 1px solid var(--border);
+  padding: 0.375rem 0.625rem;
+  display: block;
 }
 .pac-item {
   background-color: transparent;
