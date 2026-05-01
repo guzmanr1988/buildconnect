@@ -12,7 +12,7 @@ import { useCatalogStore } from '@/stores/catalog-store'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { CartItem } from '@/stores/cart-store'
-import { sqftToSquares } from '@/lib/option-metadata'
+import { RoofSpecCard } from '@/components/shared/roof-spec-card'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
   roofing: Home,
@@ -844,101 +844,15 @@ export function CartPage() {
                     </div>
                   )}
                   {/* Roof Spec — roofing items only */}
-                  {(viewItem.serviceId === 'roofing' || viewItem.roofMeasurement) && (() => {
-                    const rm = viewItem.roofMeasurement
-                    const mrs = viewItem.metalRoofSelection
-                    const linFt = (viewItem as any).roofAddonLinearFt as Record<string, number> | undefined
-                    const permit = viewItem.roofPermit
-                    const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0
-                    const metalColorLabel = mrs?.color
-                      ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-                      : undefined
-                    const metalSquares = mrs?.roofSize
-                      ? (Number(mrs.roofSize) > 200 ? sqftToSquares(Math.round(Number(mrs.roofSize) * 1.12)) : Number(mrs.roofSize))
-                      : undefined
-                    const addonEntries = linFt ? Object.entries(linFt).filter(([, v]) => v > 0) : []
-                    const addonLabel: Record<string, string> = { gutters: 'Gutters', soffit_wood: 'Soffit', fascia_wood: 'Fascia' }
-                    if (!rm && !mrs && !permit && addonEntries.length === 0) return null
-                    return (
-                      <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">Roof Spec</p>
-                        <div className="space-y-1.5 text-sm">
-                          {rm && (
-                            <>
-                              {rm.address && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-muted-foreground min-w-[72px]">Address</span>
-                                  <span className="font-medium text-xs leading-snug">{rm.address}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground min-w-[72px]">Area</span>
-                                <span className="font-medium">{rm.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(rm.areaSqft * 1.12))} squares w/waste</span>
-                              </div>
-                              {rm.pitch && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground min-w-[72px]">Pitch</span>
-                                  <span className="font-medium">{rm.pitch}</span>
-                                </div>
-                              )}
-                              {rm.perimeterFt && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground min-w-[72px]">Perimeter</span>
-                                  <span className="font-medium">~{rm.perimeterFt.toLocaleString()} lin ft</span>
-                                </div>
-                              )}
-                              {hasSplit && (
-                                <>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-muted-foreground min-w-[72px]">Pitched</span>
-                                    <span className="font-medium">{rm.pitchedAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.pitchedAreaSqft! * 1.12))} sq)</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-muted-foreground min-w-[72px]">Flat</span>
-                                    <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.flatAreaSqft! * 1.12))} sq)</span>
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          )}
-                          {metalColorLabel && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[72px]">Color</span>
-                              <span className="font-medium">{metalColorLabel}</span>
-                            </div>
-                          )}
-                          {metalSquares !== undefined && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[72px]">Metal size</span>
-                              <span className="font-medium">{metalSquares} squares</span>
-                            </div>
-                          )}
-                          {addonEntries.map(([id, ft]) => (
-                            <div key={id} className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[72px]">{addonLabel[id] ?? id}</span>
-                              <span className="font-medium">{ft.toLocaleString()} lin ft</span>
-                            </div>
-                          ))}
-                          {permit && (
-                            <div className="flex items-start gap-2 pt-0.5">
-                              <span className="text-muted-foreground min-w-[72px]">Permit</span>
-                              <div className="flex flex-col gap-1">
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-[10px] w-fit ${permit === 'yes' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
-                                >
-                                  {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
-                                </Badge>
-                                {permit === 'no' && (
-                                  <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })()}
+                  {(viewItem.serviceId === 'roofing' || viewItem.roofMeasurement) && (
+                    <RoofSpecCard
+                      roofMeasurement={viewItem.roofMeasurement}
+                      metalRoofSelection={viewItem.metalRoofSelection}
+                      roofAddonLinearFt={(viewItem as any).roofAddonLinearFt}
+                      roofPermit={viewItem.roofPermit}
+                      className="bg-muted/30"
+                    />
+                  )}
 
                   <h3 className="text-sm font-semibold text-foreground">Project Summary</h3>
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
