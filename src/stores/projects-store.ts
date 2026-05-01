@@ -655,6 +655,7 @@ export const useProjectsStore = create<ProjectsState>()(
           ),
         }))
         logEvent({ eventType: 'review_reset', projectId })
+        updateProject(projectId, { review_status: 'pending', reviewed_at: null, reviewed_by: null, review_note: null })
       },
 
       assignRep: (id, rep) => {
