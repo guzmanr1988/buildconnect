@@ -16,7 +16,29 @@ import type { Vendor } from '@/types'
  * whose id happens to coincide with 'v-1'..'v-5' strings could collide. The
  * Set + helper make the test-harness scope explicit.
  */
-export const MOCK_VENDOR_IDS = new Set(['v-1', 'v-2', 'v-3', 'v-4', 'v-5'])
+// Source-of-truth union for featured mock-vendor IDs.
+// Add/remove here AND in MOCK_VENDORS — the compile-time guard below
+// will error at build time if the two fall out of sync.
+export type MockVendorId = 'v-1' | 'v-2' | 'v-3' | 'v-4' | 'v-5'
+
+// Compile-time guard (hardcoded-fixture-shape-assumption class).
+// If any MockVendorId is absent from MOCK_VENDORS, Exclude<> produces a
+// non-never type and the export fails tsc — surfacing the breakage at
+// build time instead of as a silent undefined at runtime.
+type _AssertNever<T extends never> = T
+export type _FixtureGuard_MockVendorId = _AssertNever<
+  Exclude<MockVendorId, (typeof MOCK_VENDORS)[number]['id']>
+>
+
+// Keep as Set<string> so callers can pass arbitrary strings without casting.
+export const MOCK_VENDOR_IDS = new Set<string>(['v-1', 'v-2', 'v-3', 'v-4', 'v-5'])
+
+// Keyed lookup record — O(1) access, no non-null assertion needed.
+// Type is `Record<MockVendorId, Vendor>` so TypeScript knows every
+// known ID resolves to a Vendor (not Vendor | undefined).
+export const MOCK_VENDOR_BY_ID = Object.fromEntries(
+  MOCK_VENDORS.map((v) => [v.id, v])
+) as Record<MockVendorId, Vendor>
 
 export function isMockVendor(id: string | null | undefined): boolean {
   return !!id && MOCK_VENDOR_IDS.has(id)

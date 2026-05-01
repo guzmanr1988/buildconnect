@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
 import { useEffectiveMockLeads, useEffectiveMockMessages } from '@/lib/mock-data-effective'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { cn } from '@/lib/utils'
@@ -38,7 +38,7 @@ const QUICK_REPLIES = [
 ]
 
 export default function VendorMessages() {
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
   // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const mockMessages = useEffectiveMockMessages()
