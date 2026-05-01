@@ -272,7 +272,7 @@ export default function LeadInbox() {
             const packEntries = Object.entries(lead.pack_items)
 
             return (
-              <motion.div key={lead.id} variants={item}>
+              <motion.div key={lead.id} variants={item} data-lead-id={lead.id} data-lead-status={lead.status}>
                 {/* Ship #292 — drop inline shadow-sm/hover:shadow-md/transition
                     overrides that masked the platform-wide floating-card
                     default applied at the Card primitive level (#245).
@@ -289,6 +289,7 @@ export default function LeadInbox() {
                     className="w-full text-left"
                     aria-expanded={isExpanded}
                     aria-controls={`lead-inbox-panel-${lead.id}`}
+                    data-lead-expanded={isExpanded ? 'true' : 'false'}
                     onClick={() => setExpandedId(isExpanded ? null : lead.id)}
                   >
                     <CardContent className="p-4 sm:p-5">
@@ -324,7 +325,7 @@ export default function LeadInbox() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-bold">{fmt(lead.value)}</span>
+                          <span className="text-sm font-bold" data-lead-value={lead.value}>{fmt(lead.value)}</span>
                           {isExpanded ? (
                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
                           ) : (
