@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
 import { useNavigate } from 'react-router-dom'
-import { MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 
@@ -25,7 +25,7 @@ export default function VendorProfile() {
   const logout = useAuthStore((s) => s.logout)
   const profile = useAuthStore((s) => s.profile)
   const updateProfile = useAuthStore((s) => s.updateProfile)
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID)!
+  const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
   const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
   // Zustand-selector-returns-new-array-every-render = React error #185
   // infinite loop (ship #111 regression caught by apollo 1776720418731).

@@ -268,6 +268,11 @@ interface ProjectsState {
   // + admin visibility); fresh requestReschedule replaces on future need.
   rejectReschedule: (leadId: string) => void
   removeProject: (id: string) => void
+  // Internal Surface-2 hydration state (preserved across sessions via
+  // partialize). Full hydrateFromSupabase implementation ships when
+  // Surface 2 migration lands — these fields gate the one-time migration.
+  _supabaseMigrationDone: boolean
+  _userUuid: string | null
 }
 
 export const useProjectsStore = create<ProjectsState>()(
@@ -277,6 +282,8 @@ export const useProjectsStore = create<ProjectsState>()(
       assignedRepByLead: {},
       accountRepIdByLead: {},
       repAcceptanceByLead: {},
+      _supabaseMigrationDone: false,
+      _userUuid: null,
       leadStatusOverrides: {},
       cancellationRequestsByLead: {},
       rescheduleRequestsByLead: {},
@@ -720,6 +727,9 @@ export const useProjectsStore = create<ProjectsState>()(
           rescheduleRequestsByLead: { ...(ps.rescheduleRequestsByLead ?? {}), ...(currentState.rescheduleRequestsByLead ?? {}) },
           leadConfirmedAtByLead: { ...(ps.leadConfirmedAtByLead ?? {}), ...(currentState.leadConfirmedAtByLead ?? {}) },
           repAssignedAtByLead: { ...(ps.repAssignedAtByLead ?? {}), ...(currentState.repAssignedAtByLead ?? {}) },
+          // Preserve migration flag across sessions so one-time upsert doesn't re-fire.
+          _supabaseMigrationDone: ps._supabaseMigrationDone ?? currentState._supabaseMigrationDone,
+          _userUuid: ps._userUuid ?? currentState._userUuid,
         }
       },
     }
