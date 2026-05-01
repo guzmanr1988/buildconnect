@@ -9,7 +9,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap } from '@/lib/api/pricing'
-import { getOptionMetadata } from '@/lib/option-metadata'
+import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import type { PriceLineItem } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
@@ -49,7 +49,7 @@ function formatBookingTime(timeStr: string) {
 const RECENT_SEND_WINDOW_MS = 5 * 60 * 1000
 
 // Build computed roofing price-line-items from a vendor's Supabase catalog.
-// Each selected material gets its own line ($X/sqft × areaSqft). Selected
+// Each selected material gets its own line ($X/square × squares, waste-included). Selected
 // addons (gutters/soffit/fascia) get their own line ($X/lin ft × linFt).
 // Other roofing lines (permit/tearoff/install) fall through to preset.
 // Flat-roof option id for split detection
@@ -78,7 +78,7 @@ async function buildRoofingLineItems(
   // When hasFlatSection, each material gets its own area slice.
   const allMaterialIds = Object.values(item.selections ?? {}).flat()
   const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID)
-  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && getOptionMetadata(id).priceUnit === 'sqft')
+  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && (getOptionMetadata(id).priceUnit === 'square' || getOptionMetadata(id).priceUnit === 'sqft'))
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
 
   const presets = PRICE_LINE_ITEM_PRESETS['roofing']
@@ -94,23 +94,27 @@ async function buildRoofingLineItems(
       const meta = getOptionMetadata(optionId)
       const unitRateDollars = priceCents / 100
 
-      if (meta.priceUnit === 'sqft') {
-        // Split mode: flat_roof material uses flatAreaSqft, pitched uses pitchedAreaSqft.
-        // Non-split mode (single material): use full areaSqft.
+      if (meta.priceUnit === 'square' || meta.priceUnit === 'sqft') {
+        // Split mode: flat_roof material uses its own area slice; pitched uses the other.
+        // Non-split mode (single material): use full area.
         const isFlat = optionId === FLAT_ROOF_OPTION_ID
-        let qty: number
+        const useSquares = meta.priceUnit === 'square'
+        let rawSqft: number
         let note: string | undefined
         if (useSplit) {
           if (isFlat) {
-            qty = flatAreaSqft ?? 0
-            if (qty === 0) note = 'No flat section detected by satellite imagery — confirm with vendor.'
+            rawSqft = flatAreaSqft ?? 0
+            if (rawSqft === 0) note = 'No flat section detected by satellite imagery — confirm with vendor.'
           } else {
-            qty = pitchedAreaSqft ?? 0
-            if (qty === 0) note = 'No pitched section detected by satellite imagery — confirm with vendor.'
+            rawSqft = pitchedAreaSqft ?? 0
+            if (rawSqft === 0) note = 'No pitched section detected by satellite imagery — confirm with vendor.'
           }
         } else {
-          qty = areaSqft
+          rawSqft = areaSqft
         }
+        // For square pricing: apply 12% waste then convert to squares.
+        // For legacy sqft pricing: bill directly against raw sqft.
+        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * 1.12)) : rawSqft
         const amount = Math.round(unitRateDollars * qty * 100) / 100
         const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
         const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''
@@ -120,7 +124,7 @@ async function buildRoofingLineItems(
           amount,
           originalAmount: amount,
           source: 'preset_calculated',
-          priceUnit: 'sqft',
+          priceUnit: useSquares ? 'square' : 'sqft',
           unitRate: unitRateDollars,
           unitQuantity: qty,
           ...(note ? { note } : {}),

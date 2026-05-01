@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { sqftToSquares } from '@/lib/option-metadata'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -468,15 +469,24 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <Layers className="h-3.5 w-3.5 text-primary" />
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Total Area w/Waste
+                            Material Order
                           </span>
                         </div>
-                        <p className="text-xl font-bold text-foreground">
-                          {showAdjust && adjArea
-                            ? finalWaste.toLocaleString()
-                            : measurement.wasteSqft.toLocaleString()}{' '}
-                          <span className="text-sm font-normal text-muted-foreground">sq ft</span>
-                        </p>
+                        {(() => {
+                          const wSqft = showAdjust && adjArea ? finalWaste : measurement.wasteSqft
+                          const squares = sqftToSquares(wSqft)
+                          return (
+                            <>
+                              <p className="text-xl font-bold text-foreground">
+                                {wSqft.toLocaleString()}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">sqft ({squares} squares)</span>
+                              </p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                Roof: {(showAdjust && adjArea ? (Math.max(100, Number(adjArea) || 0)) : measurement.areaSqft).toLocaleString()} sqft + 12% waste
+                              </p>
+                            </>
+                          )
+                        })()}
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -511,9 +521,9 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           Area Breakdown
                         </span>
                         <p className="text-[12px] text-foreground mt-1">
-                          Pitched: <span className="font-semibold">{measurement.pitchedAreaSqft.toLocaleString()} sqft</span>
+                          Pitched: <span className="font-semibold">{measurement.pitchedAreaSqft.toLocaleString()} sqft ({sqftToSquares(Math.round(measurement.pitchedAreaSqft * 1.12))} sq)</span>
                           {' · '}
-                          Flat deck: <span className="font-semibold">{measurement.flatAreaSqft.toLocaleString()} sqft</span>
+                          Flat deck: <span className="font-semibold">{measurement.flatAreaSqft.toLocaleString()} sqft ({sqftToSquares(Math.round(measurement.flatAreaSqft * 1.12))} sq)</span>
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">Used when Flat Roof is selected alongside a pitched material</p>
                       </div>
@@ -672,10 +682,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   { label: 'Address', value: address },
                 ]
                 if (hasFlatSection && measurement?.pitchedAreaSqft !== undefined) {
-                  rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft` })
-                  rows.push({ label: 'Flat section', value: `${measurement.flatAreaSqft.toLocaleString()} sqft` })
+                  const pitchedWaste = Math.round(measurement.pitchedAreaSqft * 1.12)
+                  const flatWaste = Math.round(measurement.flatAreaSqft * 1.12)
+                  rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft → ${pitchedWaste.toLocaleString()} sqft w/waste (${sqftToSquares(pitchedWaste)} squares)` })
+                  rows.push({ label: 'Flat section', value: `${measurement.flatAreaSqft.toLocaleString()} sqft → ${flatWaste.toLocaleString()} sqft w/waste (${sqftToSquares(flatWaste)} squares)` })
                 } else {
-                  rows.push({ label: 'Roof Area', value: `${finalWaste.toLocaleString()} sq ft (with waste)` })
+                  rows.push({ label: 'Material Order', value: `${finalWaste.toLocaleString()} sqft (${sqftToSquares(finalWaste)} squares)` })
                 }
                 rows.push({ label: 'Roof Pitch', value: finalPitch })
                 if (measurement?.perimeterFt) rows.push({ label: 'Perimeter', value: `~${measurement.perimeterFt.toLocaleString()} lin ft` })

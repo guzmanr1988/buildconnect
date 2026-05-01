@@ -248,7 +248,7 @@ export interface PriceLineItem {
   // Unit-rate breakdown for preset_calculated lines. Frozen at sendProject
   // time per immutable-ledger-freeze-at-write: vendor price changes after
   // booking don't retroactively alter old line items.
-  priceUnit?: 'sqft' | 'linear_ft'
+  priceUnit?: 'square' | 'sqft' | 'linear_ft'
   unitRate?: number   // vendor's rate in dollars (e.g. 8 = $8/sqft)
   unitQuantity?: number  // homeowner's measured quantity
 }

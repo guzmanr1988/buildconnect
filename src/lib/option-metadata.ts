@@ -22,9 +22,25 @@ export type OptionMetadata = {
   supportsPercentMarkup?: boolean
   // Unit pricing mode for this option. When set, the vendor enters a
   // per-unit rate and the total is computed at booking time by multiplying
-  // rate × homeowner's measured quantity (areaSqft or roofAddonLinearFt).
+  // rate × homeowner's measured quantity.
   // flat = single dollar amount (default, all non-roofing options).
-  priceUnit?: 'flat' | 'sqft' | 'linear_ft'
+  // square = $/roofing-square (1 square = 100 sqft); quantity = sqftToSquares(wasteSqft).
+  // sqft = legacy per-sqft (widen-reads: keep valid for older persisted line items).
+  // linear_ft = per linear foot for gutters/soffit/fascia.
+  priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft'
+}
+
+// 1 roofing square = 100 sqft. Returns the square count rounded to nearest integer.
+// Dev-mode invariant: result × 100 is within ±50 sqft of the input.
+export function sqftToSquares(sqft: number): number {
+  const squares = Math.round(sqft / 100)
+  if (import.meta.env.DEV) {
+    console.assert(
+      Math.abs(squares * 100 - sqft) <= 50,
+      `[roof-squares] rounding gap > 50: ${squares * 100} vs ${sqft}`,
+    )
+  }
+  return squares
 }
 
 export const OPTION_METADATA: Record<string, OptionMetadata> = {
@@ -32,11 +48,11 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   install_doors: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
   low_e: { supportsPercentMarkup: true },
   casement: { supportsPercentMarkup: true },
-  // Roofing materials — vendor enters $/sqft; quantity = homeowner's roof area
-  metal: { priceUnit: 'sqft' },
-  shingle: { priceUnit: 'sqft' },
-  barrel_tile: { priceUnit: 'sqft' },
-  flat_roof: { priceUnit: 'sqft' },
+  // Roofing materials — vendor enters $/square (1 sq = 100 sqft); quantity = waste-included squares
+  metal: { priceUnit: 'square' },
+  shingle: { priceUnit: 'square' },
+  barrel_tile: { priceUnit: 'square' },
+  flat_roof: { priceUnit: 'square' },
   // Roofing addons — vendor enters $/lin ft; quantity = homeowner's addon linear ft
   gutters: { priceUnit: 'linear_ft' },
   soffit_wood: { priceUnit: 'linear_ft' },

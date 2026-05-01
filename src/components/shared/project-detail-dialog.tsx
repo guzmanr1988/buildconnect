@@ -841,7 +841,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                                   <span className="text-muted-foreground">{line.label}</span>
                                   {li.priceUnit && li.unitRate !== undefined && li.unitQuantity !== undefined && (
                                     <span className="text-[10px] text-muted-foreground/70">
-                                      ${li.unitRate.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/{li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'} × {li.unitQuantity.toLocaleString()} {li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'}
+                                      ${li.unitRate.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/{li.priceUnit === 'square' ? 'square' : li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'} × {li.unitQuantity.toLocaleString()} {li.priceUnit === 'square' ? 'squares' : li.priceUnit === 'sqft' ? 'sqft' : 'lin ft'}
                                     </span>
                                   )}
                                 </div>

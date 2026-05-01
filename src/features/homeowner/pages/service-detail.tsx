@@ -28,7 +28,7 @@ import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
-import { getOptionMetadata } from '@/lib/option-metadata'
+import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 
@@ -1044,7 +1044,7 @@ export function ServiceDetailPage() {
                       {roofMeasurement.address}
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      {roofMeasurement.areaSqft.toLocaleString()} Sq Ft
+                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * 1.12))} squares w/waste
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                       Pitch {roofMeasurement.pitch}
@@ -1078,8 +1078,8 @@ export function ServiceDetailPage() {
                       const label = matOpts.find(o => o.id === matId)?.label ?? matId
                       const areaLabel = showSplit
                         ? matId === 'flat_roof'
-                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat`
-                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched`
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${sqftToSquares(Math.round(roofMeasurement!.flatAreaSqft! * 1.12))} sq)`
+                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${sqftToSquares(Math.round(roofMeasurement!.pitchedAreaSqft! * 1.12))} sq)`
                         : undefined
                       return (
                         <div key={matId} className="rounded-lg bg-muted/50 p-3">
