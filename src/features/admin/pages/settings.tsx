@@ -372,6 +372,7 @@ export default function SettingsPage() {
                   max={300}
                   step={5}
                   value={matchRadiusMiles}
+                  data-match-radius-miles={matchRadiusMiles}
                   onChange={(e) => {
                     const n = Number(e.target.value)
                     if (Number.isFinite(n)) setMatchRadius(n)
@@ -424,7 +425,12 @@ export default function SettingsPage() {
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {flagsInCategory.map((flag) => (
-                        <div key={flag.key} className="flex items-start justify-between gap-4 rounded-lg border border-border/50 p-4">
+                        <div
+                          key={flag.key}
+                          data-feature-flag={flag.key}
+                          data-feature-flag-enabled={!!featureFlags[flag.key] ? 'true' : 'false'}
+                          className="flex items-start justify-between gap-4 rounded-lg border border-border/50 p-4"
+                        >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{flag.label}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{flag.description}</p>
@@ -488,7 +494,12 @@ export default function SettingsPage() {
       {/* Save Button */}
       <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible">
         <div className="flex items-center gap-3">
-          <Button onClick={handleSave} className="gap-2 px-6" size="lg">
+          <Button
+            onClick={handleSave}
+            className="gap-2 px-6"
+            size="lg"
+            data-settings-save-state={saved ? 'saved' : 'idle'}
+          >
             <Save className="h-4 w-4" />
             Save All Settings
           </Button>

@@ -190,6 +190,10 @@ export function VendorComparePage() {
           return (
             <motion.div
               key={vendor.id}
+              data-vendor-id={vendor.id}
+              data-vendor-company={vendor.company}
+              data-best-price={isBestPrice ? 'true' : 'false'}
+              data-highest-rated={isHighestRated ? 'true' : 'false'}
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
@@ -257,7 +261,11 @@ export function VendorComparePage() {
                   </div>
 
                   {/* Price */}
-                  <div className="rounded-lg bg-muted/50 p-3">
+                  <div
+                    className="rounded-lg bg-muted/50 p-3"
+                    data-vendor-price={result?.totalCents ?? 0}
+                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
+                  >
                     <p className="text-xs text-muted-foreground mb-1">Price</p>
                     <p className={cn(
                       'text-lg font-bold font-heading',
@@ -285,6 +293,7 @@ export function VendorComparePage() {
                   <Button
                     size="lg"
                     className="mt-auto w-full h-11 text-sm font-medium"
+                    data-book-vendor={vendor.id}
                     onClick={() => {
                       localStorage.setItem('buildconnect-selected-contractor', JSON.stringify({
                         vendor_id: vendor.id,
