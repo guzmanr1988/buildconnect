@@ -102,18 +102,21 @@ function expandStreetAbbrev(street: string): string {
 
 interface AddressParts { street: string; city: string; state: string; zip: string }
 
+function joinAddress(parts: AddressParts): string {
+  const street = expandStreetAbbrev(parts.street.trim())
+  const stateZip = [parts.state.trim(), parts.zip.trim()].filter(Boolean).join(' ')
+  return [street, parts.city.trim(), stateZip].filter(Boolean).join(', ')
+}
+
 async function geocodeOnce(parts: AddressParts) {
-  // Use Google's structured components for reliable parsing. address= holds
-  // the street; components pin country/state/city/zip so partial street input
-  // resolves against the right region.
+  // Send the four boxes as one concatenated free-text address. Google's
+  // geocoder is more forgiving on a single string than with components-based
+  // filtering (zip 33170 is Cutler Bay/Miami-Dade, not "Miami" proper, so
+  // locality:Miami filter rejects valid matches). country:US still pins the
+  // search to the US to avoid international ambiguity.
   const params = new URLSearchParams({
-    address: expandStreetAbbrev(parts.street),
-    components: [
-      'country:US',
-      parts.state ? `administrative_area:${parts.state}` : '',
-      parts.city ? `locality:${parts.city}` : '',
-      parts.zip ? `postal_code:${parts.zip}` : '',
-    ].filter(Boolean).join('|'),
+    address: joinAddress(parts),
+    components: 'country:US',
     key: MAPS_KEY,
   })
   const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`)
