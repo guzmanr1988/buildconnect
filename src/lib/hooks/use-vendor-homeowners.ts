@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 
 // Ship #278 — extracted from src/features/vendor/pages/homeowners.tsx
@@ -51,7 +52,10 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
   const { vendorId } = useVendorScope()
   const vendor = useResolvedVendor()
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const mockLeads = useEffectiveMockLeads()
+  const profile = useAuthStore((s) => s.profile)
+  const isRep = profile?.role === 'account_rep'
 
   return useMemo(() => {
     if (!vendor) return []
@@ -69,7 +73,13 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
     // phone + address per lead row. Look up MOCK_HOMEOWNERS for
     // avatar/initials when matchable.
     mockLeads
-      .filter((l) => l.vendor_id === vendorId)
+      .filter((l) => {
+        if (l.vendor_id !== vendorId) return false
+        if (isRep && profile?.id) {
+          return l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
+        }
+        return true
+      })
       .forEach((l) => {
         const fixtureMatch = MOCK_HOMEOWNERS.find((h) => h.email === l.email)
         bumpProjectCount({
@@ -85,11 +95,16 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
       })
 
     // (b) sentProjects filtered by contractor.vendor_id (preferred) or
-    // contractor.company (legacy fallback). #214 strict-filter shape.
+    // contractor.company (legacy fallback). Rep-scope: only assigned.
     sentProjects
       .filter((sp) => {
-        if (sp.contractor?.vendor_id) return sp.contractor.vendor_id === vendor.id
-        return sp.contractor?.company === vendor.company
+        if (sp.contractor?.vendor_id) { if (sp.contractor.vendor_id !== vendor.id) return false }
+        else if (sp.contractor?.company !== vendor.company) return false
+        if (isRep && profile?.id) {
+          const leadId = `L-${sp.id.slice(0, 4).toUpperCase()}`
+          return accountRepIdByLead[leadId] === profile.id
+        }
+        return true
       })
       .forEach((sp) => {
         if (!sp.homeowner?.email) return
@@ -108,9 +123,9 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
         })
       })
 
-    // (c) Admin-fixture homeowners whose CUSTOMER_PROJECTS reference
-    // this vendor.company. Surfaces ho-N entries from the admin demo
-    // seed even when no MOCK_LEADS or sentProjects exist for them.
+    // (c) Admin-fixture homeowners — only for vendor-admin, not reps.
+    // Reps see only their assigned homeowners (sources a + b above).
+    if (isRep) return Array.from(byEmail.values()).sort((a, b) => a.name.localeCompare(b.name))
     Object.entries(HOMEOWNER_VENDOR_COMPANIES).forEach(([hoId, companies]) => {
       if (!companies.includes(vendor.company)) return
       const entry = ADMIN_FIXTURE_HOMEOWNERS.find((h) => h.id === hoId)
@@ -120,5 +135,5 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
     })
 
     return Array.from(byEmail.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [vendor, vendorId, mockLeads, sentProjects])
+  }, [vendor, vendorId, mockLeads, sentProjects, isRep, profile?.id, accountRepIdByLead])
 }

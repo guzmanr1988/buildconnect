@@ -43,6 +43,7 @@ export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> =
     lineItem('wd-permit', 'Permit Price', 350),
     lineItem('wd-install-windows', 'Install Windows Price', 1900),
     lineItem('wd-install-doors', 'Install Doors Price', 800),
+    lineItem('wd-garage-door', 'Garage Door', 1800),
   ],
   pool: [
     lineItem('pool-excavation', 'Excavation', 8500),

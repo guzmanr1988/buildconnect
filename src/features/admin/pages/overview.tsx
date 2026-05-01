@@ -38,6 +38,7 @@ import {
 } from '@/lib/mock-data'
 import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
@@ -87,6 +88,7 @@ export default function OverviewPage() {
   // and synthesize commission rows for the transaction-totals card. Phase 2b
   // admin-SoT per kratos msg 1776725252468.
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const mockClosedSales = useEffectiveMockClosedSales()
   // Ship #192 — admin visibility of reschedule activity. Selector
   // returns the raw map (stable reference under reducer writes);
   // derivation into sorted list happens in render body.
@@ -110,22 +112,24 @@ export default function OverviewPage() {
   const totalGMV = useMemo(() => {
     const supabaseGMV = closedSales.reduce((s, c) => s + c.sale_amount, 0)
     const mockGMV = mockSoldSales.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
-    return supabaseGMV + mockGMV
-  }, [closedSales, mockSoldSales])
+    const fixtureGMV = mockClosedSales.reduce((s, c) => s + c.sale_amount, 0)
+    return supabaseGMV + mockGMV + fixtureGMV
+  }, [closedSales, mockSoldSales, mockClosedSales])
   const appRevenue = useMemo(() => {
     const supabaseComm = closedSales.reduce((s, c) => s + c.commission, 0)
     // Use each vendor's effective commission_pct (admin override or default);
-    // fall back to 15% if the vendor can't be resolved by company name.
+    // fall back to 10% if the vendor can't be resolved by company name.
     const mockComm = mockSoldSales.reduce((s, p) => {
       // Ship #165: prefer contractor.vendor_id FK over company-name match.
       const vendor = p.contractor?.vendor_id
         ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
         : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 10) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
-    return supabaseComm + mockComm
-  }, [closedSales, mockSoldSales, resolveCommissionPct])
+    const fixtureComm = mockClosedSales.reduce((s, c) => s + c.commission, 0)
+    return supabaseComm + mockComm + fixtureComm
+  }, [closedSales, mockSoldSales, mockClosedSales, resolveCommissionPct])
 
   // Synthesize mock commission rows for the transaction-totals card so
   // Paid-Commissions + GMV stay visually aligned. Effective commission_pct
@@ -136,7 +140,7 @@ export default function OverviewPage() {
       const vendor = p.contractor?.vendor_id
         ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
         : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 15) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 10) / 100
       return {
         id: `mock-tx-${p.id}`,
         type: 'commission',
@@ -150,10 +154,27 @@ export default function OverviewPage() {
       }
     })
   }, [mockSoldSales, resolveCommissionPct])
+  const fixtureCommissions = useMemo<Transaction[]>(() => {
+    return mockClosedSales.map((cs) => ({
+      id: `mock-cs-tx-${cs.id}`,
+      type: 'commission' as Transaction['type'],
+      status: 'paid' as Transaction['status'],
+      vendor_id: cs.vendor_id ?? '',
+      company: MOCK_VENDORS.find((v) => v.id === cs.vendor_id)?.company ?? 'Unknown vendor',
+      detail: cs.project?.split('—')[0].trim() ?? '',
+      customer: cs.homeowner_name ?? '',
+      amount: cs.commission,
+      date: cs.closed_at,
+    }))
+  }, [mockClosedSales])
   const MOCK_TRANSACTIONS = useMemo(() => {
     const supabaseIds = new Set(transactions.map((t) => t.id))
-    return [...transactions, ...mockCommissions.filter((t) => !supabaseIds.has(t.id))]
-  }, [transactions, mockCommissions])
+    return [
+      ...transactions,
+      ...mockCommissions.filter((t) => !supabaseIds.has(t.id)),
+      ...fixtureCommissions.filter((t) => !supabaseIds.has(t.id)),
+    ]
+  }, [transactions, mockCommissions, fixtureCommissions])
 
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', icon: Wrench },
@@ -232,7 +253,7 @@ export default function OverviewPage() {
             iconColor: 'bg-emerald-500',
           },
           {
-            title: 'App Revenue (15%)',
+            title: 'App Revenue (10%)',
             value: `$${appRevenue.toLocaleString()}`,
             change: '+8.2% vs last month',
             trend: 'up' as const,

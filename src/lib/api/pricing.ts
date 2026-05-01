@@ -92,6 +92,23 @@ export function computeVendorTotal(
         if (meta.requiresQuantity) {
           const qty = item.selectionQuantities?.[optionId] ?? meta.quantityRange?.min ?? 1
           totalCents += basePrice * qty
+        } else if (meta.priceUnit === 'sqft') {
+          // When both materials are selected (hasFlatSection) and split areas
+          // are available, bill each material against its own area slice.
+          const isFlatOpt = optionId === 'flat_roof'
+          const allMatIds = Object.values(item.selections ?? {}).flat()
+          const hasSplitData = item.roofMeasurement?.pitchedAreaSqft !== undefined
+            && item.roofMeasurement?.flatAreaSqft !== undefined
+          const hasFlatSelected = allMatIds.includes('flat_roof')
+          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id).priceUnit === 'sqft')
+          const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
+          const areaSqft = useSplit
+            ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
+            : (item.roofMeasurement?.areaSqft ?? 0)
+          totalCents += basePrice * areaSqft
+        } else if (meta.priceUnit === 'linear_ft') {
+          const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
+          totalCents += basePrice * linFt
         } else {
           totalCents += basePrice
         }

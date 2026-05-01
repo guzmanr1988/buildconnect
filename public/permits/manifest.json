@@ -1,0 +1,14 @@
+{
+  "_comment": "Set available:true once the real PDF is in /public/permits/<path>. UI reads at runtime — no deploy needed to flip availability.",
+  "available": {
+    "city-permit/miami": true,
+    "city-permit/miami-dade": true,
+    "city-permit/fort-lauderdale": true,
+    "city-permit/west-palm-beach": true,
+    "city-permit/doral": true,
+    "city-permit/cutler-bay": true,
+    "city-permit/homestead": true,
+    "notice-of-commencement/miami-dade": true,
+    "notice-of-commencement/monroe-county": true
+  }
+}

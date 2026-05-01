@@ -36,8 +36,12 @@ import VendorMembership from '@/features/vendor/pages/membership'
 import VendorMessages from '@/features/vendor/pages/messages'
 import VendorProfile from '@/features/vendor/pages/profile'
 import VendorEmployeesPage from '@/features/vendor/pages/employees'
+import VendorAccountRepsPage from '@/features/vendor/pages/account-reps'
+import VendorSettingsPage from '@/features/vendor/pages/settings'
 import VendorHomeowners from '@/features/vendor/pages/homeowners'
 import VendorHomeownerDetail from '@/features/vendor/pages/homeowner-detail'
+import VendorReportsPage from '@/features/vendor/pages/reports'
+import VendorPermitsPage from '@/features/vendor/pages/permits'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -119,10 +123,14 @@ export const router = createBrowserRouter([
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
-          { path: 'account-reps', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Account Reps' } },
+          { path: 'account-reps', element: <VendorAccountRepsPage />, handle: { title: 'Vendor · Account Reps' } },
+          { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
           { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
           { path: 'messages', element: <VendorMessages />, handle: { title: 'Vendor · Messages' } },
           { path: 'profile', element: <VendorProfile />, handle: { title: 'Vendor · Profile' } },
+          { path: 'settings', element: <VendorSettingsPage />, handle: { title: 'Vendor · Settings' } },
+          { path: 'reports', element: <VendorReportsPage />, handle: { title: 'Vendor · Reports' } },
+          { path: 'permits', element: <VendorPermitsPage />, handle: { title: 'Vendor · Permits' } },
         ],
       },
 

@@ -11,6 +11,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useCartStore } from '@/stores/cart-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { haversineMiles } from '@/lib/geo-distance'
 import {
   computeVendorTotal,
@@ -26,22 +27,30 @@ export function VendorComparePage() {
   const cartItems = useCartStore((s) => s.items)
   const profile = useAuthStore((s) => s.profile)
   const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
+  const realGeoEnabled = useFeatureFlagsStore((s) => s.getFlag('realGeocoding'))
 
-  // Ship #246 — geo-match Phase 1 filter.
-  // Category match: vendor covers at least one service_category the
-  //   homeowner has in cart (cartItems.serviceId).
-  // Distance match: haversine(vendor, homeowner) <= admin matchRadiusMiles.
-  //   If homeowner has no lat/lng on profile (unseeded demo addresses,
-  //   new signups pre-geocoding), distance filter falls through permissive
-  //   — the empty-state messaging surfaces this case. Tranche-2 geocoding
-  //   replaces the demo-seeded lat/lng with real coords and the fall-through
-  //   narrows to "geocoding failed" edge cases only.
   const cartCategories = useMemo<Set<string>>(
     () => new Set(cartItems.map((i) => i.serviceId)),
     [cartItems],
   )
-  const hasHomeownerCoord =
-    typeof profile?.latitude === 'number' && typeof profile?.longitude === 'number'
+
+  // Resolve homeowner coords — prefer geocoded project address from cart items
+  // (projectLat/Lng set at add-to-cart when both flags ON), fall back to profile
+  // lat/lng (demo-seeded / Supabase-stored). If flags are OFF, no distance filter.
+  const projectCoords = useMemo<{ lat: number; lng: number } | null>(() => {
+    if (!gmpEnabled || !realGeoEnabled) return null
+    const withCoords = cartItems.find(
+      (i) => typeof i.projectLat === 'number' && typeof i.projectLng === 'number',
+    )
+    if (withCoords) return { lat: withCoords.projectLat!, lng: withCoords.projectLng! }
+    if (typeof profile?.latitude === 'number' && typeof profile?.longitude === 'number') {
+      return { lat: profile.latitude, lng: profile.longitude }
+    }
+    return null
+  }, [cartItems, profile, gmpEnabled, realGeoEnabled])
+
+  const hasHomeownerCoord = projectCoords !== null
 
   const featuredVendors = useMemo(() => {
     const base = MOCK_VENDORS.filter((v) => {
@@ -51,15 +60,17 @@ export function VendorComparePage() {
         const covers = v.service_categories.some((c) => cartCategories.has(c))
         if (!covers) return false
       }
-      // Distance filter — only applies when homeowner has lat/lng.
-      if (hasHomeownerCoord && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
-        const miles = haversineMiles(profile!.latitude, profile!.longitude, v.latitude, v.longitude)
+      // Distance filter — only applies when GMP+realGeocoding are ON and
+      // homeowner has coords. Vendors missing lat/lng fall through permissive
+      // (widen-reads-narrow-writes — don't silently drop legacy records).
+      if (projectCoords && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
+        const miles = haversineMiles(projectCoords.lat, projectCoords.lng, v.latitude, v.longitude)
         if (miles > matchRadiusMiles) return false
       }
       return true
     })
     return base
-  }, [cartCategories, hasHomeownerCoord, profile, matchRadiusMiles])
+  }, [cartCategories, projectCoords, matchRadiusMiles])
 
   const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
   const [loading, setLoading] = useState(true)
@@ -280,6 +291,10 @@ export function VendorComparePage() {
                         name: vendor.name,
                         company: vendor.company,
                         rating: vendor.rating,
+                        // Ship #355 — freeze the price the homeowner sees at
+                        // booking time. Only set when vendor has a full quote
+                        // (totalCents > 0); absent when "Contact for quote".
+                        ...(result?.totalCents > 0 ? { quotedPriceCents: result.totalCents } : {}),
                       }))
                       navigate('/home/booking')
                     }}

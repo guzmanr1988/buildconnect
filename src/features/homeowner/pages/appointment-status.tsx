@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
@@ -76,19 +77,30 @@ export function AppointmentStatusPage() {
   const sentProject = !mockLead
     ? sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
     : undefined
+
+  // Ship #355 — frozen price SoT. Priority: saleAmount (post-sale) →
+  // quotedPriceCents (vendor-compare price frozen at booking) → preset
+  // fallback (legacy / no catalog price). Removes the catalog-store
+  // recompute (#352) that diverged from vendor-compare's Supabase path.
+  const sentProjectValue: number = sentProject
+    ? sentProject.saleAmount
+      ?? (sentProject.quotedPriceCents && sentProject.quotedPriceCents > 0
+          ? Math.round(sentProject.quotedPriceCents / 100)
+          : (() => {
+              const lineItems = (sentProject.priceLineItems && sentProject.priceLineItems.length > 0)
+                ? sentProject.priceLineItems
+                : (PRICE_LINE_ITEM_PRESETS[sentProject.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+              return lineItems.reduce((sum, l) => sum + l.amount, 0)
+            })())
+    : 0
+
   const baseLead = mockLead
     ?? (sentProject && {
       id: `L-${sentProject.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
       vendor_id: 'v-1', // display-only fallback; real vendor lookup lives on sentProject.contractor
       project: sentProject.item.serviceName,
-      // Ship #342 — bridge sp.saleAmount → lead.value at this synthesis
-      // site (homeowner-side appointment-status own-synth, not chain
-      // primitive). Matches the lead-inbox.tsx fix pattern from #338.
-      // Per banked feedback_silent_undefined_field_mismatch sibling-class:
-      // hardcoded zero silently degrades the homeowner-side Price display
-      // to $0; bridge gap at synthesis without modifying chain.
-      value: sentProject.saleAmount ?? 0,
+      value: sentProjectValue,
       status: sentProjectStatusMap[sentProject.status] ?? 'pending',
       slot: sentProject.sentAt,
       permit_choice: Object.values(sentProject.item.selections ?? {}).flat().includes('permit'),

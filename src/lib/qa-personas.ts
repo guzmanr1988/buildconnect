@@ -268,7 +268,7 @@ const PERSONA_4_MIXED: QAPersona = {
           ...PRICE_LINE_ITEM_PRESETS.roofing.map((p) => ({ ...p })),
           {
             id: 'auto-extra-qa4-roof',
-            label: 'EXTRA $',
+            label: 'Upsale',
             amount: 3550,
             originalAmount: 0,
             source: 'auto_sold_adjustment' as const,

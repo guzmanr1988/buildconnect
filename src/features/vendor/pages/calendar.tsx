@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
-import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Plus, Ban, Sparkles, RotateCcw } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Plus, Ban, Sparkles, RotateCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { useVendorEventsStore, type VendorEventType } from '@/stores/vendor-events-store'
 import { useVendorScope } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,13 @@ const STATUS_DOT: Record<string, string> = {
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function fmtDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -67,6 +75,10 @@ export default function VendorCalendar() {
   // Ship #339 Phase A — vendor-events parallel data layer (PTO + custom).
   const eventsByVendor = useVendorEventsStore((s) => s.eventsByVendor)
   const addVendorEvent = useVendorEventsStore((s) => s.addEvent)
+  const removeVendorEvent = useVendorEventsStore((s) => s.removeEvent)
+  const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
+  const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
+  const profile = useAuthStore((s) => s.profile)
   const vendorEvents = useMemo(
     () => eventsByVendor[VENDOR_ID] ?? [],
     [eventsByVendor, VENDOR_ID],
@@ -83,16 +95,26 @@ export default function VendorCalendar() {
     type: VendorEventType
     date: string
     time: string
+    duration: string
     label: string
     notes: string
-  }>({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+  }>({ type: 'block_day', date: '', time: '', duration: '', label: '', notes: '' })
+  const [deleteTarget, setDeleteTarget] = useState<typeof vendorEvents[0] | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   // Ship #339 Phase A — Reschedule picker (cross-callable from
   // calendar lead-card per #103 SoT shared-component).
   const [rescheduleLeadId, setRescheduleLeadId] = useState<string | null>(null)
   const [rescheduleSentProjectId, setRescheduleSentProjectId] = useState<string | null>(null)
 
   const confirmedProjectLeads: Lead[] = useMemo(() => sentProjects
-    .filter((p) => p.status === 'approved')
+    .filter((p) => {
+      if (p.status !== 'approved') return false
+      if (profile?.role === 'account_rep' && profile.id) {
+        const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
+        return accountRepIdByLead[leadId] === profile.id
+      }
+      return true
+    })
     .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
@@ -111,18 +133,22 @@ export default function VendorCalendar() {
       pack_items: p.item.selections,
       slot: p.booking?.date ? `${p.booking.date}T${p.booking.time || '09:00'}` : p.sentAt,
       received_at: p.sentAt,
-    })), [sentProjects])
+    })), [sentProjects, profile?.role, profile?.id, accountRepIdByLead, VENDOR_ID])
 
-  const mockConfirmed = useMemo(
-    () => (
-      isMock
-        ? mockLeads.filter(
-            (l) => l.vendor_id === VENDOR_ID && ['confirmed', 'rescheduled'].includes(l.status)
-          )
-        : []
-    ),
-    [VENDOR_ID, isMock, mockLeads]
-  )
+  const mockConfirmed = useMemo(() => {
+    if (!isMock) return []
+    const vendorScoped = mockLeads.filter((l) => {
+      if (l.vendor_id !== VENDOR_ID) return false
+      const effectiveStatus = leadStatusOverrides[l.id] ?? l.status
+      return ['confirmed', 'rescheduled'].includes(effectiveStatus)
+    })
+    if (profile?.role === 'account_rep') {
+      return vendorScoped.filter(
+        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
+      )
+    }
+    return vendorScoped
+  }, [VENDOR_ID, isMock, mockLeads, profile?.role, profile?.id, accountRepIdByLead, leadStatusOverrides])
 
   const leads = useMemo(
     () => [...confirmedProjectLeads, ...mockConfirmed]
@@ -207,6 +233,7 @@ export default function VendorCalendar() {
                 type: 'block_day',
                 date: selectedDate ?? todayStr,
                 time: '',
+                duration: '',
                 label: '',
                 notes: '',
               })
@@ -363,12 +390,23 @@ export default function VendorCalendar() {
                       </Badge>
                     </div>
                     {evt.time && (
-                      <p className="text-xs text-muted-foreground">{evt.time}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {evt.time}
+                        {evt.duration ? ` · ${fmtDuration(evt.duration)}` : ''}
+                      </p>
                     )}
                     {evt.notes && (
                       <p className="text-xs text-muted-foreground mt-1">{evt.notes}</p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteTarget(evt); setDeleteOpen(true) }}
+                    className="shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    aria-label={`Delete ${evt.label}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </CardContent>
             </Card>
@@ -470,7 +508,7 @@ export default function VendorCalendar() {
         onOpenChange={(o) => {
           setAddEventOpen(o)
           if (!o) {
-            setEventForm({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+            setEventForm({ type: 'block_day', date: '', time: '', duration: '', label: '', notes: '' })
           }
         }}
       >
@@ -501,14 +539,44 @@ export default function VendorCalendar() {
               />
             </div>
             {eventForm.type === 'custom' && (
-              <div className="space-y-2">
-                <Label className="text-sm">Time</Label>
-                <Input
-                  type="time"
-                  value={eventForm.time}
-                  onChange={(e) => setEventForm((f) => ({ ...f, time: e.target.value }))}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label className="text-sm">Time</Label>
+                  <Input
+                    type="time"
+                    value={eventForm.time}
+                    onChange={(e) => setEventForm((f) => ({ ...f, time: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Duration</Label>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[15, 30, 60, 120].map((min) => (
+                      <button
+                        key={min}
+                        type="button"
+                        onClick={() => setEventForm((f) => ({ ...f, duration: f.duration === String(min) ? '' : String(min) }))}
+                        className={cn(
+                          'px-2.5 py-1 rounded-md text-xs font-medium border transition-colors',
+                          eventForm.duration === String(min)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-input bg-background hover:bg-muted',
+                        )}
+                      >
+                        {fmtDuration(min)}
+                      </button>
+                    ))}
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="min"
+                      value={[15, 30, 60, 120].includes(Number(eventForm.duration)) ? '' : eventForm.duration}
+                      onChange={(e) => setEventForm((f) => ({ ...f, duration: e.target.value }))}
+                      className="w-20 h-7 text-xs"
+                    />
+                  </div>
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label className="text-sm">Label <span className="text-destructive">*</span></Label>
@@ -533,20 +601,64 @@ export default function VendorCalendar() {
             <Button
               disabled={!eventForm.date.trim() || !eventForm.label.trim()}
               onClick={() => {
+                const durationNum = eventForm.type === 'custom' && eventForm.duration
+                  ? Number(eventForm.duration)
+                  : undefined
                 addVendorEvent({
                   vendor_id: VENDOR_ID,
                   type: eventForm.type,
                   date: eventForm.date,
                   time: eventForm.type === 'custom' ? eventForm.time : undefined,
+                  duration: durationNum && durationNum > 0 ? durationNum : undefined,
                   label: eventForm.label.trim(),
                   notes: eventForm.notes.trim() || undefined,
                 })
                 setAddEventOpen(false)
-                setEventForm({ type: 'block_day', date: '', time: '', label: '', notes: '' })
+                setEventForm({ type: 'block_day', date: '', time: '', duration: '', label: '', notes: '' })
                 toast.success(eventForm.type === 'block_day' ? 'Day blocked' : 'Event added')
               }}
             >
               Add Event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete event confirm — four destructive-confirm refinements per banked pattern. */}
+      <Dialog open={deleteOpen} onOpenChange={(o) => { setDeleteOpen(o); if (!o) setDeleteTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-destructive">
+              Remove {deleteTarget?.label}?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Permanently removes this event from{' '}
+              {deleteTarget?.date
+                ? new Date(deleteTarget.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+                : 'the calendar'}
+              . This cannot be undone.
+            </p>
+            <p className="text-xs text-muted-foreground border-t pt-3">
+              Need to block a different day instead? Add a new event from the calendar.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setDeleteOpen(false); setDeleteTarget(null) }}>
+              Keep event
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!deleteTarget) return
+                removeVendorEvent(VENDOR_ID, deleteTarget.id)
+                toast.success(`${deleteTarget.label} removed.`)
+                setDeleteOpen(false)
+                setDeleteTarget(null)
+              }}
+            >
+              Remove permanently
             </Button>
           </DialogFooter>
         </DialogContent>

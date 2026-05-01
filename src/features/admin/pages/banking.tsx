@@ -112,7 +112,7 @@ export default function BankingPage() {
       .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0)
       .reduce((s, p) => {
         const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
-        const pct = (v ? (vendorCommissionOverrides[v.id] ?? v.commission_pct) : 15) / 100
+        const pct = (v ? (vendorCommissionOverrides[v.id] ?? v.commission_pct) : 10) / 100
         return s + Math.round((p.saleAmount ?? 0) * pct)
       }, 0)
   }, [sentProjects, vendorCommissionOverrides])
@@ -130,21 +130,21 @@ export default function BankingPage() {
     const months: { month: string; gmv: number; commission: number; payouts: number; net: number }[] = []
     // 12 months backward from current, with smooth growth-curve + current-month
     // using live data. Baseline ~$40k GMV at oldest month growing to ~$110k
-    // at current; commission tracks ~15% of GMV; payouts ~60% of commission.
+    // at current; commission tracks ~10% of GMV; payouts ~60% of commission.
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const monthLabel = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
       const growthFactor = 0.4 + (11 - i) * 0.06 // 0.4 → 1.06
       const noise = 1 + ((i * 7 + 13) % 10) / 100 - 0.05 // ±5%
       const gmv = Math.round(100000 * growthFactor * noise)
-      const commission = Math.round(gmv * 0.15)
+      const commission = Math.round(gmv * 0.10)
       const payouts = Math.round(commission * 0.6)
       const net = commission - payouts
       months.push({ month: monthLabel, gmv, commission, payouts, net })
     }
     // Override current month (i=0) with actual data from store + Supabase.
     if (months.length > 0) {
-      const currentMonthGmv = Math.round(totalRevenue / 0.15)
+      const currentMonthGmv = Math.round(totalRevenue / 0.10)
       const currentMonthCommission = totalRevenue
       const currentMonthPayouts = Math.round(totalDisbursed)
       months[months.length - 1] = {

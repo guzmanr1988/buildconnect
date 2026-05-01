@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
+import { updateVendor } from '@/lib/api/vendors'
 import {
   AGREEMENT_DRAFT_BANNER,
   AGREEMENT_EMAIL_FOOTER,
@@ -54,41 +55,53 @@ function SignMode({ open }: { open: boolean }) {
   const recordSign = useAgreementEventsStore((s) => s.recordSign)
   const [typedName, setTypedName] = useState('')
   const [agreed, setAgreed] = useState(false)
-  const canSubmit = typedName.trim().length > 0 && agreed
+  const [submitting, setSubmitting] = useState(false)
+  const canSubmit = typedName.trim().length > 0 && agreed && !submitting
 
-  const handleSubmit = () => {
-    if (!canSubmit) return
+  const handleSubmit = async () => {
+    if (!canSubmit || !profile) return
     const snapshot = getCurrentAgreementSnapshot()
     const signedAt = new Date().toISOString()
-    updateProfile({
+    const patch = {
       noncircumvention_agreement_signed_at: signedAt,
       noncircumvention_agreement_signed_name: typedName.trim(),
       noncircumvention_agreement_version: snapshot.version,
       noncircumvention_agreement_text_snapshot: snapshot.text,
       noncircumvention_agreement_signature_metadata: {
         ua: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-        // IP capture would need a server round-trip — Phase 2 wires real.
+        // IP capture requires a server round-trip — Phase 2.
       },
-    })
+    }
+    setSubmitting(true)
+    try {
+      await updateVendor(profile.id, patch)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[NCA] Supabase write failed:', err)
+      toast.error('Agreement could not be saved — please try again.')
+      setSubmitting(false)
+      return
+    }
+    setSubmitting(false)
+    // Write succeeded — commit to local state.
+    updateProfile(patch)
     // Ship #276 — cross-role notification: admin sees the agreement
     // signing in their notification rail (48h window). Pushes to the
     // agreement-events-store ledger; admin-layout reads + filters.
-    if (profile) {
-      recordSign({
-        vendorId: profile.id,
-        vendorName: profile.name,
-        vendorEmail: profile.email,
-        version: snapshot.version,
-        signedAt,
-      })
-    }
+    recordSign({
+      vendorId: profile.id,
+      vendorName: profile.name,
+      vendorEmail: profile.email,
+      version: snapshot.version,
+      signedAt,
+    })
     // TODO Tranche-2: replace mock with real email-send via SendGrid /
     // Mailgun / Resend integration. For Phase 1 this is toast + ledger
     // record only; admin sees the event in the notification rail.
     // Ship #276 — second mock email to admin destination per Rodolfo
     // selection (C: both vendor + admin notified). Tranche-2 replaces
     // hardcoded admin@ with role-based-recipients query (all role=admin).
-    toast.success(`Agreement sent to your email at ${profile?.email ?? 'your account'}`)
+    toast.success(`Agreement sent to your email at ${profile.email ?? 'your account'}`)
     toast.success(`Copy also sent to ${ADMIN_EMAIL_DESTINATION}`)
     setTypedName('')
     setAgreed(false)
@@ -166,7 +179,7 @@ function SignMode({ open }: { open: boolean }) {
             disabled={!canSubmit}
             onClick={handleSubmit}
           >
-            Sign Agreement
+            {submitting ? 'Saving…' : 'Sign Agreement'}
           </Button>
         </DialogFooter>
       </DialogContent>

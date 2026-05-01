@@ -36,6 +36,7 @@ export interface VendorEvent {
   // 24h 'HH:MM' time. Optional for block_day events; required for
   // custom events at write-time (UI form should validate).
   time?: string
+  duration?: number
   label: string
   notes?: string
   createdAt: string

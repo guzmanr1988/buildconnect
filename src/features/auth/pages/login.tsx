@@ -15,6 +15,7 @@ import {
   Wrench,
   Shield,
   ChevronRight,
+  UserCheck,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -81,6 +82,15 @@ const demoAccounts = [
     icon: Shield,
     gradient: 'from-emerald-500 to-emerald-600',
   },
+  {
+    role: 'account_rep' as const,
+    email: 'account_rep@buildc.net',
+    password: import.meta.env.VITE_DEMO_ACCOUNT_REP_PW as string | undefined,
+    label: 'Account Rep',
+    desc: 'Rep portal (vendor team)',
+    icon: UserCheck,
+    gradient: 'from-sky-500 to-sky-600',
+  },
 ]
 
 export function LoginPage() {
@@ -139,7 +149,7 @@ export function LoginPage() {
     }
   }
 
-  async function demoLogin(email: string, password: string | undefined, role: 'homeowner' | 'vendor' | 'admin') {
+  async function demoLogin(email: string, password: string | undefined, role: 'homeowner' | 'vendor' | 'admin' | 'account_rep') {
     if (!password) {
       toast.error('Demo credentials not configured for this build')
       return
@@ -178,6 +188,10 @@ export function LoginPage() {
             ? latestBookingVendorId
             : 'v-1'
         localStorage.setItem('buildconnect-demo-mock-vendor-id', aliasMockId)
+      } else if (role === 'account_rep') {
+        // Account rep demo scoped to v-1 (Apex Roofing) — the canonical
+        // featured mock vendor for demo sessions.
+        localStorage.setItem('buildconnect-demo-mock-vendor-id', 'v-1')
       } else {
         localStorage.removeItem('buildconnect-demo-mock-vendor-id')
       }

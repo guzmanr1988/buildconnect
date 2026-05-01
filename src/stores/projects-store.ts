@@ -16,6 +16,10 @@ export interface ContractorInfo {
   company: string
   rating: number
   avatar?: string
+  // Ship #355 — vendor-compare price frozen at booking per
+  // immutable-ledger-freeze-at-write. Optional: absent when vendor has
+  // no catalog price (falls back to preset on appointment-status).
+  quotedPriceCents?: number
 }
 
 export interface BookingInfo {
@@ -83,6 +87,12 @@ export interface SentProject {
   // Read-only across vendor (Lead Detail Modal sold-branch) + admin
   // (ProjectDetailDialog n=7 consumers) surfaces.
   priceLineItems?: PriceLineItem[]
+  // Ship #355 — price the homeowner saw on vendor-compare at booking
+  // time. Source: computeVendorTotal(priceMaps[vendorId], cartItems).totalCents
+  // frozen via sendProject. appointment-status reads this instead of
+  // recomputing via catalog store (different SoT). Optional: absent on
+  // legacy records + when vendor has no Supabase catalog price set.
+  quotedPriceCents?: number
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -99,7 +109,7 @@ type LeadStatusOverride = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' |
 // a two-party negotiation is needed — pre-approval homeowner reschedules
 // just updateBooking directly since the vendor hasn't accepted yet and
 // there's nothing to negotiate.
-export type RescheduleParty = 'homeowner' | 'vendor'
+export type RescheduleParty = 'homeowner' | 'vendor' | 'rep'
 
 export interface RescheduleRequest {
   // Who is proposing this new time. Counter-proposal flips this.
@@ -138,6 +148,15 @@ interface ProjectsState {
   // sentProject when a sentProject exists; homeowner + admin read from here
   // keyed by lead.id, falling back to sentProject.assignedRep when needed.
   assignedRepByLead: Record<string, VendorRep>
+  // Lead-id → account-rep profile.id. Written when vendor assigns a rep
+  // via assignRepByLead; consumed by rep-scope filters in hook/inbox/dashboard
+  // as the UI-assignment counterpart to the hardcoded account_rep_id field on
+  // mock Lead objects.
+  accountRepIdByLead: Record<string, string>
+  // Lead-id → rep acceptance status. 'pending' on assignment, 'accepted' when
+  // rep confirms the homeowner schedule, 'reschedule_requested' when rep
+  // proposes a new time. Orthogonal to lead.status (chain is untouched).
+  repAcceptanceByLead: Record<string, 'pending' | 'accepted' | 'reschedule_requested'>
   // Lead-id → status override map. Vendor actions (Confirm / Reject /
   // Reschedule / Mark-as-Sold) on MOCK_LEADS need to survive page refresh —
   // previously this was component-useState and wiped on reload (Rod-surfaced
@@ -165,7 +184,7 @@ interface ProjectsState {
   // Written whenever assignRepByLead fires; consumed by homeowner
   // timeline on "Representative assigned" entry.
   repAssignedAtByLead: Record<string, string>
-  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string, homeownerId?: string) => void
+  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string, homeownerId?: string, computedLineItems?: PriceLineItem[]) => void
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
@@ -200,8 +219,16 @@ interface ProjectsState {
   resetReviewStatus: (projectId: string) => void
   assignRep: (id: string, rep: VendorRep) => void
   // Assign a rep to a lead-id (mock-lead path; sentProject.assignedRep is
-  // handled via assignRep).
+  // handled via assignRep). Side-effects: stamps accountRepIdByLead +
+  // repAcceptanceByLead='pending' so rep-scope filters and acceptance UI
+  // see the assignment immediately.
   assignRepByLead: (leadId: string, rep: VendorRep) => void
+  // Rep acknowledges the homeowner schedule. Sets repAcceptanceByLead='accepted'.
+  // Does NOT touch lead.status — chain is vendor-driven.
+  acceptRepLead: (leadId: string) => void
+  // Rep requests a new time. Sets repAcceptanceByLead='reschedule_requested'.
+  // Caller also fires requestReschedule(leadId, 'rep', ...) for the chain entry.
+  markRepRescheduleRequested: (leadId: string) => void
   setLeadStatus: (leadId: string, status: LeadStatusOverride) => void
   requestCancellation: (leadId: string, reason?: string, explanation?: string) => void
   approveCancellation: (leadId: string) => void
@@ -244,6 +271,8 @@ export const useProjectsStore = create<ProjectsState>()(
     (set) => ({
       sentProjects: [],
       assignedRepByLead: {},
+      accountRepIdByLead: {},
+      repAcceptanceByLead: {},
       leadStatusOverrides: {},
       cancellationRequestsByLead: {},
       rescheduleRequestsByLead: {},
@@ -251,17 +280,26 @@ export const useProjectsStore = create<ProjectsState>()(
       repAssignedAtByLead: {},
       leadCompletedAtByLead: {},
 
-      sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId) => {
+      sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId, computedLineItems) => {
         set((state) => {
           // Ship #336 Phase A — snapshot priceLineItems from preset map
           // at write-time per banked feedback_immutable_ledger_freeze_at_write.
           // Snapshot vs lookup-at-render: locks the price-detail to the
           // preset-state-as-of-intake; future preset-map edits do NOT
           // retroactively rewrite this record.
+          // When computedLineItems are provided (roofing with vendor $/sqft
+          // catalog), they replace the roofing-material preset line with
+          // per-material computed lines; other lines (permit/tearoff/install)
+          // are kept from the preset. Unit-rate fields are also frozen here.
           const presetLineItems = PRICE_LINE_ITEM_PRESETS[item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-          const priceLineItemsSnapshot = presetLineItems
-            ? presetLineItems.map((p) => ({ ...p }))
-            : undefined
+          let priceLineItemsSnapshot: PriceLineItem[] | undefined
+          if (computedLineItems && computedLineItems.length > 0) {
+            priceLineItemsSnapshot = computedLineItems.map((p) => ({ ...p }))
+          } else {
+            priceLineItemsSnapshot = presetLineItems
+              ? presetLineItems.map((p) => ({ ...p }))
+              : undefined
+          }
           const next: SentProject = {
             id: crypto.randomUUID(),
             item,
@@ -273,6 +311,9 @@ export const useProjectsStore = create<ProjectsState>()(
             homeowner_id: homeownerId,
             sentAt: new Date().toISOString(),
             ...(priceLineItemsSnapshot ? { priceLineItems: priceLineItemsSnapshot } : {}),
+            ...(contractor.quotedPriceCents && contractor.quotedPriceCents > 0
+              ? { quotedPriceCents: contractor.quotedPriceCents }
+              : {}),
           }
           const nextSentProjects = [...state.sentProjects, next]
           // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
@@ -345,19 +386,26 @@ export const useProjectsStore = create<ProjectsState>()(
             const presetSum = (p.priceLineItems ?? [])
               .filter((line) => (line.source ?? 'preset') === 'preset')
               .reduce((sum, line) => sum + (line.originalAmount ?? line.amount ?? 0), 0)
+            // Upsale anchor = what homeowner saw at booking (quotedPriceCents frozen
+            // at vendor-select per Ship #355). Falls back to presetSum for legacy
+            // records without quotedPriceCents. Fixes Upsale = saleAmount minus
+            // catalog-total (not minus flat-preset) per Rodolfo clarification.
+            const anchor = (p.quotedPriceCents && p.quotedPriceCents > 0)
+              ? Math.round(p.quotedPriceCents / 100)
+              : presetSum
             // Strip prior auto_sold_adjustment lines so re-mark replaces
             // (not appends) the EXTRA $ line.
             const baseLines = (p.priceLineItems ?? []).filter(
               (line) => line.source !== 'auto_sold_adjustment',
             )
-            const delta = saleAmount - presetSum
+            const delta = saleAmount - anchor
             const nextLineItems =
               delta > 0
                 ? [
                     ...baseLines,
                     {
                       id: `auto-extra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      label: `EXTRA $`,
+                      label: `Upsale`,
                       amount: delta,
                       originalAmount: 0,
                       source: 'auto_sold_adjustment' as const,
@@ -424,11 +472,27 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       assignRepByLead: (leadId, rep) => {
+        // Hookpoint: notifyRepOfAssignment(rep.id, leadId)
+        // Tranche-2: wire real SMS + email here (Twilio + email infra).
+        // eslint-disable-next-line no-console
+        console.log('[notifyRepOfAssignment]', { repId: rep.id, leadId })
         set((state) => ({
           assignedRepByLead: { ...state.assignedRepByLead, [leadId]: rep },
           repAssignedAtByLead: { ...state.repAssignedAtByLead, [leadId]: new Date().toISOString() },
+          accountRepIdByLead: { ...state.accountRepIdByLead, [leadId]: rep.id },
+          repAcceptanceByLead: { ...state.repAcceptanceByLead, [leadId]: 'pending' },
         }))
       },
+
+      acceptRepLead: (leadId) =>
+        set((state) => ({
+          repAcceptanceByLead: { ...state.repAcceptanceByLead, [leadId]: 'accepted' },
+        })),
+
+      markRepRescheduleRequested: (leadId) =>
+        set((state) => ({
+          repAcceptanceByLead: { ...state.repAcceptanceByLead, [leadId]: 'reschedule_requested' },
+        })),
 
       setLeadStatus: (leadId, status) => {
         set((state) => ({
@@ -625,6 +689,8 @@ export const useProjectsStore = create<ProjectsState>()(
           ...ps,
           sentProjects: mergedProjects,
           assignedRepByLead: { ...(ps.assignedRepByLead ?? {}), ...(currentState.assignedRepByLead ?? {}) },
+          accountRepIdByLead: { ...(ps.accountRepIdByLead ?? {}), ...(currentState.accountRepIdByLead ?? {}) },
+          repAcceptanceByLead: { ...(ps.repAcceptanceByLead ?? {}), ...(currentState.repAcceptanceByLead ?? {}) },
           leadStatusOverrides: { ...(ps.leadStatusOverrides ?? {}), ...(currentState.leadStatusOverrides ?? {}) },
           cancellationRequestsByLead: { ...(ps.cancellationRequestsByLead ?? {}), ...(currentState.cancellationRequestsByLead ?? {}) },
           rescheduleRequestsByLead: { ...(ps.rescheduleRequestsByLead ?? {}), ...(currentState.rescheduleRequestsByLead ?? {}) },

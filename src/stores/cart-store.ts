@@ -36,11 +36,22 @@ export interface CartItem {
   doorSelections?: ConfiguratorEntry[]
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
   metalRoofSelection?: { color: string; roofSize: string }
+  // Roof measurement wizard output — area + pitch captured before manual config.
+  // Stored regardless of material so pitch is preserved for all material types.
+  roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number }
+  // Linear feet per roofing addon (gutters, soffit_wood, fascia_wood). Keyed by option id.
+  roofAddonLinearFt?: Record<string, number>
   addonQuantities?: AddonQuantities
   // Which property this line item applies to. Phase B2: primary OR one of
   // profile.additional_addresses, selected at add-to-project time. Optional
   // because older cart items predating the selector have no address.
   address?: CartItemAddress
+  // Geocoded lat/lng for the project address — populated at add-to-cart
+  // time when googleMapsPlatform + realGeocoding flags are ON. Used by
+  // vendor-compare for per-project distance filtering. Optional for
+  // widen-reads-narrow-writes on legacy items.
+  projectLat?: number
+  projectLng?: number
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string

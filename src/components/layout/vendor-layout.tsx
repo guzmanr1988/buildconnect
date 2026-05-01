@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -16,6 +16,7 @@ import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorSettingsStore } from '@/stores/vendor-settings-store'
 import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
@@ -36,10 +37,14 @@ const navItems = [
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
-  { to: '/vendor/account-reps', icon: UsersRound, label: 'Account Reps' },
+  { to: '/vendor/reports', icon: FileText, label: 'Tax Reports' },
+  { to: '/vendor/permits', icon: FileCheck2, label: 'Project Permits' },
+  { to: '/vendor/employees', icon: UsersRound, label: 'Account Reps' },
+  { to: '/vendor/account-reps', icon: KeyRound, label: 'Users' },
   { to: '/vendor/membership', icon: BadgeCheck, label: 'Membership' },
   { to: '/vendor/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/vendor/profile', icon: User, label: 'Profile' },
+  { to: '/vendor/settings', icon: Settings2, label: 'Settings' },
 ]
 
 // Ship #333 Phase A — account_rep sees a SUBSET of vendor sidebar per
@@ -53,6 +58,7 @@ const REP_VISIBLE_ROUTES = new Set([
   '/vendor/leads',
   '/vendor/homeowners',
   '/vendor/calendar',
+  '/vendor/permits',
 ])
 
 function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
@@ -60,12 +66,15 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   // (Dashboard / Lead Workflow / Projects / Homeowners / Calendar) per
   // Rodolfo "Calendar up" framing. vendor sees full sidebar unchanged.
   const profileForGate = useAuthStore((s) => s.profile)
+  const usersTabEnabled = useVendorSettingsStore((s) => s.usersTabEnabled)
   const visibleNavItems = useMemo(() => {
     if (profileForGate?.role === 'account_rep') {
       return navItems.filter((item) => REP_VISIBLE_ROUTES.has(item.to))
     }
-    return navItems
-  }, [profileForGate?.role])
+    return navItems.filter((item) =>
+      item.to !== '/vendor/account-reps' || usersTabEnabled
+    )
+  }, [profileForGate?.role, usersTabEnabled])
 
   // Ship #328 — nav-badges per Rodolfo "in projects how the number of
   // projects next to the name and on lead workflow show only new lead
@@ -119,12 +128,24 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   // any post-#330 surface that wants the permissive count — none here.
   void counts
 
+  // Rep-side: pending-acceptance count drives the Lead Workflow badge (amber).
+  const repAcceptanceByLead = useProjectsStore((s) => s.repAcceptanceByLead)
+  const repPendingCount = useMemo(() => {
+    if (profileForGate?.role !== 'account_rep') return 0
+    return strictScopedLeads.filter((l) => repAcceptanceByLead[l.id] === 'pending').length
+  }, [profileForGate?.role, strictScopedLeads, repAcceptanceByLead])
+
   const badgesByRoute: Record<string, { count: number; tone: NavBadgeTone }> = collapsed
     ? {}
-    : {
-        '/vendor/leads': { count: strictScopedLeads.length, tone: 'neutral' },
-        '/vendor/lead-workflow': { count: strictNewLeadsCount, tone: 'amber' },
-      }
+    : profileForGate?.role === 'account_rep'
+      ? {
+          '/vendor/leads': { count: strictScopedLeads.length, tone: 'neutral' },
+          '/vendor/lead-workflow': { count: repPendingCount, tone: 'amber' },
+        }
+      : {
+          '/vendor/leads': { count: strictScopedLeads.length, tone: 'neutral' },
+          '/vendor/lead-workflow': { count: strictNewLeadsCount, tone: 'amber' },
+        }
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
@@ -259,15 +280,38 @@ export function VendorLayout() {
       return []
     })
 
+  // Ship — rep-assignment notifications. When role=account_rep, surface
+  // each pending-acceptance lead as a "New lead assigned" notification.
+  // Scoped to leads where accountRepIdByLead or account_rep_id matches profile.id.
+  const repAcceptanceMap = useProjectsStore((s) => s.repAcceptanceByLead)
+  const accountRepIdMap = useProjectsStore((s) => s.accountRepIdByLead)
+  const repAssignmentNotifications: NotificationItem[] = useMemo(() => {
+    if (profile?.role !== 'account_rep') return []
+    return mockLeads
+      .filter(
+        (l) =>
+          (l.account_rep_id === profile.id || accountRepIdMap[l.id] === profile.id) &&
+          repAcceptanceMap[l.id] === 'pending',
+      )
+      .map((l) => ({
+        id: `rep-assigned-${l.id}`,
+        title: 'New lead assigned',
+        description: `${l.homeowner_name} — ${l.project}`,
+        icon: InboxIcon,
+        iconColor: 'text-primary',
+        tint: 'bg-primary/5',
+      }))
+  }, [profile?.role, profile?.id, mockLeads, accountRepIdMap, repAcceptanceMap])
+
   const notifications: NotificationItem[] = [
-    ...pendingLeads.map((l) => ({
+    ...(profile?.role === 'account_rep' ? repAssignmentNotifications : pendingLeads.map((l) => ({
       id: l.id,
       title: 'New Lead',
       description: `${l.homeowner_name} — ${l.project}`,
       icon: InboxIcon,
       iconColor: 'text-primary',
       tint: 'bg-primary/5',
-    })),
+    }))),
     ...rescheduleNotifications,
     ...cancellationNotifications,
   ]

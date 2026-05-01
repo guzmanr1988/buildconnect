@@ -257,6 +257,12 @@ export default function VendorCatalog() {
                                       placeholder="0"
                                       className="h-10 w-24 text-base text-right"
                                     />
+                                    {getOptionMetadata(option.id).priceUnit === 'sqft' && (
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
+                                    )}
+                                    {getOptionMetadata(option.id).priceUnit === 'linear_ft' && (
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
+                                    )}
                                     {/* Top-level options can also opt into dual-pricing via
                                         OPTION_METADATA.supportsPercentMarkup. Currently only
                                         sub-options carry the flag (low_e + casement), but if a
