@@ -103,6 +103,9 @@ export interface RoofWizardResult {
   // Available for gutter/fascia/soffit downstream consumption when those
   // config questions gain a linear-feet input field.
   perimeterFt: number
+  // Permit choice — mandatory, set by Step 3 radio selection.
+  // 'no' makes this project cash-only (financing unavailable).
+  permit: 'yes' | 'no'
 }
 
 interface MeasurementData {
@@ -299,6 +302,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPitch, setAdjPitch] = useState('')
   const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
   const [flatSelected, setFlatSelected] = useState(false)
+  const [permit, setPermit] = useState<'yes' | 'no' | null>(null)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -313,10 +317,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setShowAdjust(false)
       setMaterial(null)
       setFlatSelected(false)
+      setPermit(null)
     }
   }, [open, defaultAddress])
 
   const anyMaterialSelected = material !== null || flatSelected
+  const stepThreeComplete = anyMaterialSelected && permit !== null
 
   const startMeasuring = async () => {
     if (!address.trim()) return
@@ -363,7 +369,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const finalPitch = showAdjust ? (adjPitch || (measurement?.pitch ?? '')) : (measurement?.pitch ?? '')
 
   const handleComplete = () => {
-    if (!anyMaterialSelected) return
+    if (!stepThreeComplete || !permit) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatSection = material !== null && flatSelected
     onComplete({
@@ -377,6 +383,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       // against its own slice. Undefined when manual entry (no Solar data).
       pitchedAreaSqft: measurement?.pitchedAreaSqft,
       flatAreaSqft: measurement?.flatAreaSqft,
+      permit,
     })
   }
 
@@ -654,9 +661,40 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
               <p className="text-[11px] text-muted-foreground -mt-2 px-1">
                 Add Flat Roof if part of the home has a flat section like a porch or garage. The measurement will split into pitched and flat areas automatically.
               </p>
+
+              {/* ── Permit selection ── */}
+              <div className="border-t pt-4 space-y-2">
+                <p className="text-sm font-semibold text-foreground">Permit</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'yes' as const, label: 'Yes, pull a permit', sub: 'Required by county. Unlocks financing.' },
+                    { value: 'no' as const, label: 'No permit needed', sub: 'Cash, check, or wire only.' },
+                  ] as const).map(({ value, label, sub }) => (
+                    <button
+                      key={value}
+                      onClick={() => setPermit(value)}
+                      className={cn(
+                        'rounded-xl border p-3 text-left transition-all',
+                        permit === value
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                          : 'border-border bg-card hover:bg-muted/40',
+                      )}
+                    >
+                      <p className={cn('text-sm font-semibold', permit === value ? 'text-primary' : 'text-foreground')}>{label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+                    </button>
+                  ))}
+                </div>
+                {permit === 'no' && (
+                  <p className="text-xs text-muted-foreground italic px-0.5">
+                    If you choose No Permit, financing won't be available for this project — payment must be made by cash, check, or wire transfer.
+                  </p>
+                )}
+              </div>
+
               <div className="flex justify-between gap-2 pt-1">
                 <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
-                <Button size="sm" disabled={!anyMaterialSelected} onClick={() => setStep(4)}>
+                <Button size="sm" disabled={!stepThreeComplete} onClick={() => setStep(4)}>
                   Next →
                 </Button>
               </div>
@@ -664,7 +702,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
           )}
 
           {/* ── Step 4: Ready ── */}
-          {step === 4 && anyMaterialSelected && (
+          {step === 4 && stepThreeComplete && (
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-foreground mb-0.5">You're all set!</p>
@@ -692,6 +730,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 rows.push({ label: 'Roof Pitch', value: finalPitch })
                 if (measurement?.perimeterFt) rows.push({ label: 'Perimeter', value: `~${measurement.perimeterFt.toLocaleString()} lin ft` })
                 rows.push({ label: 'Material', value: materialLabel })
+                rows.push({ label: 'Permit', value: permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit (cash-only)' })
                 return (
                   <div className="rounded-xl border bg-muted/20 divide-y divide-border">
                     {rows.map(({ label, value }) => (

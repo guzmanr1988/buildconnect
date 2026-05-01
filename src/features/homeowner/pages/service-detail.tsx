@@ -131,6 +131,7 @@ export function ServiceDetailPage() {
   )
   const [wizardOpen, setWizardOpen] = useState(false)
   const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number } | null>(null)
+  const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
     editItemForService?.roofAddonLinearFt
       ? Object.fromEntries(Object.entries(editItemForService.roofAddonLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
@@ -185,6 +186,7 @@ export function ServiceDetailPage() {
       setMetalRoofConfigOpen(true)
     }
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
+    setRoofPermit(result.permit)
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
   }
@@ -920,6 +922,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
                 ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
+                ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(addonQuantities && { addonQuantities }),
                 ...(itemAddress && { address: itemAddress }),
@@ -963,6 +966,7 @@ export function ServiceDetailPage() {
               setMetalRoofSelection({ color: '', roofSize: '' })
               setMetalRoofConfigOpen(true)
               setRoofMeasurement(null)
+              setRoofPermit(null)
               setAddonLinearFt({})
               setAdded(true)
               setTimeout(() => setAdded(false), 1200)
@@ -1054,7 +1058,17 @@ export function ServiceDetailPage() {
                         ~{roofMeasurement.perimeterFt.toLocaleString()} lin ft perimeter
                       </span>
                     )}
+                    {roofPermit && (
+                      <span className={`text-[11px] rounded px-2 py-0.5 border font-medium ${roofPermit === 'yes' ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400' : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400'}`}>
+                        {roofPermit === 'yes' ? 'Permit: Yes' : 'Permit: No — cash only'}
+                      </span>
+                    )}
                   </div>
+                  {roofPermit === 'no' && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 italic">
+                      Financing is not available for this project. Payment will be cash, check, or wire transfer.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
