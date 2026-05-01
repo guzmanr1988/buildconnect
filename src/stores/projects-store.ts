@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware'
 import type { CartItem } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { useActivityLogStore } from './activity-log-store'
+
+const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
+  useActivityLogStore.getState().logEvent(entry)
 
 export interface ContractorInfo {
   // Ship #165 per task_1776731114470_226 — vendor_id FK is the stable
@@ -334,6 +338,7 @@ export const useProjectsStore = create<ProjectsState>()(
           }
           return { sentProjects: nextSentProjects }
         })
+        logEvent({ eventType: 'submitted', projectId: undefined, meta: { serviceName: item.serviceName, vendor: contractor.company } })
       },
 
       updateStatus: (id, status) => {
@@ -350,6 +355,7 @@ export const useProjectsStore = create<ProjectsState>()(
               : p
           ),
         }))
+        if (status === 'approved') logEvent({ eventType: 'confirmed', projectId: id })
       },
 
       updateBooking: (id, booking) => {
@@ -421,6 +427,7 @@ export const useProjectsStore = create<ProjectsState>()(
             }
           }),
         }))
+        logEvent({ eventType: 'sold', projectId: id, meta: { saleAmount } })
       },
 
       markCompleted: (id) => {
@@ -429,6 +436,7 @@ export const useProjectsStore = create<ProjectsState>()(
             p.id === id ? { ...p, completedAt: new Date().toISOString() } : p
           ),
         }))
+        logEvent({ eventType: 'completed', projectId: id })
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {
@@ -451,6 +459,7 @@ export const useProjectsStore = create<ProjectsState>()(
               : p
           ),
         }))
+        logEvent({ eventType: 'review_set', projectId, meta: { status, reviewedBy } })
       },
 
       resetReviewStatus: (projectId) => {
@@ -461,6 +470,7 @@ export const useProjectsStore = create<ProjectsState>()(
               : p
           ),
         }))
+        logEvent({ eventType: 'review_reset', projectId })
       },
 
       assignRep: (id, rep) => {
@@ -469,6 +479,7 @@ export const useProjectsStore = create<ProjectsState>()(
             p.id === id ? { ...p, assignedRep: rep, repAssignedAt: new Date().toISOString() } : p
           ),
         }))
+        logEvent({ eventType: 'rep_assigned', projectId: id, meta: { repName: rep.name } })
       },
 
       assignRepByLead: (leadId, rep) => {
@@ -482,6 +493,7 @@ export const useProjectsStore = create<ProjectsState>()(
           accountRepIdByLead: { ...state.accountRepIdByLead, [leadId]: rep.id },
           repAcceptanceByLead: { ...state.repAcceptanceByLead, [leadId]: 'pending' },
         }))
+        logEvent({ eventType: 'rep_assigned', leadId, meta: { repName: rep.name } })
       },
 
       acceptRepLead: (leadId) =>
@@ -503,6 +515,7 @@ export const useProjectsStore = create<ProjectsState>()(
             ? { leadConfirmedAtByLead: { ...state.leadConfirmedAtByLead, [leadId]: new Date().toISOString() } }
             : {}),
         }))
+        if (status === 'confirmed') logEvent({ eventType: 'confirmed', leadId })
       },
 
       requestCancellation: (leadId, reason, explanation) => {
@@ -517,6 +530,7 @@ export const useProjectsStore = create<ProjectsState>()(
             },
           },
         }))
+        logEvent({ eventType: 'cancellation_requested', leadId, meta: { reason } })
       },
 
       approveCancellation: (leadId) => {
@@ -542,6 +556,7 @@ export const useProjectsStore = create<ProjectsState>()(
             leadStatusOverrides: { ...state.leadStatusOverrides, [leadId]: 'cancelled' },
           }
         })
+        logEvent({ eventType: 'cancellation_approved', leadId })
       },
 
       denyCancellation: (leadId) => {
@@ -560,6 +575,7 @@ export const useProjectsStore = create<ProjectsState>()(
             },
           }
         })
+        logEvent({ eventType: 'cancellation_denied', leadId })
       },
 
       removeProject: (id) => {
@@ -569,7 +585,7 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       // Ship #191 — reschedule request (post-approval two-party).
-      requestReschedule: (leadId, requestedBy, proposedDate, proposedTime, originalDate, originalTime, reason) =>
+      requestReschedule: (leadId, requestedBy, proposedDate, proposedTime, originalDate, originalTime, reason) => {
         set((state) => ({
           rescheduleRequestsByLead: {
             ...state.rescheduleRequestsByLead,
@@ -584,9 +600,11 @@ export const useProjectsStore = create<ProjectsState>()(
               ...(reason ? { reason } : {}),
             },
           },
-        })),
+        }))
+        logEvent({ eventType: 'reschedule_requested', leadId, meta: { requestedBy, proposedDate, proposedTime } })
+      },
 
-      approveReschedule: (leadId) =>
+      approveReschedule: (leadId) => {
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
@@ -617,9 +635,11 @@ export const useProjectsStore = create<ProjectsState>()(
                 : p
             ),
           }
-        }),
+        })
+        logEvent({ eventType: 'reschedule_resolved', leadId, meta: { resolution: 'approved' } })
+      },
 
-      counterReschedule: (leadId, proposedDate, proposedTime, reason) =>
+      counterReschedule: (leadId, proposedDate, proposedTime, reason) => {
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
@@ -643,9 +663,11 @@ export const useProjectsStore = create<ProjectsState>()(
               },
             },
           }
-        }),
+        })
+        logEvent({ eventType: 'reschedule_requested', leadId, meta: { proposedDate, proposedTime, counter: true } })
+      },
 
-      rejectReschedule: (leadId) =>
+      rejectReschedule: (leadId) => {
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
@@ -659,7 +681,9 @@ export const useProjectsStore = create<ProjectsState>()(
               },
             },
           }
-        }),
+        })
+        logEvent({ eventType: 'reschedule_resolved', leadId, meta: { resolution: 'rejected' } })
+      },
     }),
     {
       name: 'buildconnect-projects',
