@@ -676,7 +676,7 @@ export default function LeadInbox() {
                                     {sp.item.metalRoofSelection.roofSize && (
                                       <Badge variant="outline" className="text-[10px]">
                                         {/* Legacy values were sqft (>200); post-ship values are squares. */}
-                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * 1.12)) : n })()}{' '}squares
+                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * 1.02)) : n })()}{' '}squares
                                       </Badge>
                                     )}
                                   </div>
