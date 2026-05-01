@@ -14,6 +14,7 @@ import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
+import { sqftToSquares } from '@/lib/option-metadata'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -459,18 +460,106 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ))}
                       </div>
                     ))}
-                    {(selectedItem.project_data.item as any).roofPermit && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-medium text-muted-foreground capitalize min-w-[60px]">Permit:</span>
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] ${(selectedItem.project_data.item as any).roofPermit === 'yes' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
-                        >
-                          {(selectedItem.project_data.item as any).roofPermit === 'yes' ? 'Yes — permit will be pulled' : 'No permit — cash only'}
-                        </Badge>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Roof Spec — shown for roofing items only */}
+                  {(() => {
+                    const item = selectedItem.project_data.item as any
+                    if (item.serviceId !== 'roofing') return null
+                    const rm = item.roofMeasurement as { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number } | undefined
+                    const mrs = item.metalRoofSelection as { color: string; roofSize: string } | undefined
+                    const linFt = item.roofAddonLinearFt as Record<string, number> | undefined
+                    const permit = item.roofPermit as 'yes' | 'no' | undefined
+                    const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0
+                    const metalColorLabel = mrs?.color
+                      ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                      : undefined
+                    const metalSquares = mrs?.roofSize
+                      ? (Number(mrs.roofSize) > 200 ? sqftToSquares(Math.round(Number(mrs.roofSize) * 1.12)) : Number(mrs.roofSize))
+                      : undefined
+                    const addonEntries = linFt ? Object.entries(linFt).filter(([, v]) => v > 0) : []
+                    const addonLabel: Record<string, string> = { gutters: 'Gutters', soffit_wood: 'Soffit', fascia_wood: 'Fascia' }
+                    if (!rm && !mrs && !permit && addonEntries.length === 0) return null
+                    return (
+                      <div className="rounded-xl border p-4 space-y-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Roof Spec</h4>
+                        <div className="space-y-1.5 text-sm">
+                          {rm && (
+                            <>
+                              {rm.address && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-muted-foreground min-w-[72px]">Address</span>
+                                  <span className="font-medium text-xs leading-snug">{rm.address}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground min-w-[72px]">Area</span>
+                                <span className="font-medium">{rm.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(rm.areaSqft * 1.12))} squares w/waste</span>
+                              </div>
+                              {rm.pitch && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground min-w-[72px]">Pitch</span>
+                                  <span className="font-medium">{rm.pitch}</span>
+                                </div>
+                              )}
+                              {rm.perimeterFt && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground min-w-[72px]">Perimeter</span>
+                                  <span className="font-medium">~{rm.perimeterFt.toLocaleString()} lin ft</span>
+                                </div>
+                              )}
+                              {hasSplit && (
+                                <>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground min-w-[72px]">Pitched</span>
+                                    <span className="font-medium">{rm.pitchedAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.pitchedAreaSqft! * 1.12))} sq)</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground min-w-[72px]">Flat</span>
+                                    <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sqft ({sqftToSquares(Math.round(rm.flatAreaSqft! * 1.12))} sq)</span>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          )}
+                          {metalColorLabel && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground min-w-[72px]">Color</span>
+                              <span className="font-medium">{metalColorLabel}</span>
+                            </div>
+                          )}
+                          {metalSquares !== undefined && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground min-w-[72px]">Metal size</span>
+                              <span className="font-medium">{metalSquares} squares</span>
+                            </div>
+                          )}
+                          {addonEntries.map(([id, ft]) => (
+                            <div key={id} className="flex items-center gap-2">
+                              <span className="text-muted-foreground min-w-[72px]">{addonLabel[id] ?? id}</span>
+                              <span className="font-medium">{ft.toLocaleString()} lin ft</span>
+                            </div>
+                          ))}
+                          {permit && (
+                            <div className="flex items-start gap-2 pt-0.5">
+                              <span className="text-muted-foreground min-w-[72px]">Permit</span>
+                              <div className="flex flex-col gap-1">
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-[10px] w-fit ${permit === 'yes' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
+                                >
+                                  {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
+                                </Badge>
+                                {permit === 'no' && (
+                                  <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
                     const pd = selectedItem.project_data
