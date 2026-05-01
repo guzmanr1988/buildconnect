@@ -531,13 +531,24 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       </p>
                     </div>
                     {measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
-                      <div className="border-t pt-3 space-y-2">
+                      <div className="border-t pt-3 space-y-3">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           Area Breakdown
                         </span>
-                        <div className="grid grid-cols-2 gap-2 mt-1">
-                          <div>
-                            <Label className="mb-1 block text-xs">Flat area (sq ft)</Label>
+                        {/* Flat area — mirrors Material Order big-number pattern */}
+                        <div>
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
+                          <p className="text-xl font-bold text-foreground mt-0.5">
+                            {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
+                          </p>
+                          <div className="mt-2">
+                            <Label className="mb-1 block text-xs">Adjust flat area (sq ft)</Label>
                             <Input
                               value={adjFlatArea}
                               onChange={(e) => setAdjFlatArea(e.target.value)}
@@ -545,12 +556,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                               className="h-8 text-sm"
                             />
                           </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">Pitched (auto)</p>
-                            <p className="h-8 flex items-center text-sm font-semibold text-foreground">
-                              {derivedPitchedAreaSqft.toLocaleString()} sqft
-                            </p>
-                          </div>
+                        </div>
+                        {/* Pitched (auto) — unchanged */}
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">Pitched (auto)</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {derivedPitchedAreaSqft.toLocaleString()} sqft
+                          </p>
                         </div>
                         <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
                       </div>
