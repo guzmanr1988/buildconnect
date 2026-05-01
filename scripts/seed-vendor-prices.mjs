@@ -53,7 +53,14 @@ const FEATURED_VENDORS = [
     priceFor: ({ serviceId, groupId, optionId }) => {
       if (serviceId === 'roofing') {
         // Apex is the higher-quality roofer.
-        const baseByGroup = { roof_type: 1200_000, roofing_material: 800_000, scope: 150_000, addons: 80_000, payment: 0 }
+        if (groupId === 'addons') {
+          // Linear-ft addons: price is per-lin-ft (multiplied by footage in engine).
+          // Flat-rate addons: price is a one-time amount.
+          const linearFtByOption = { gutters: 1_000, soffit_wood: 1_000, fascia_wood: 800 }
+          if (optionId in linearFtByOption) return linearFtByOption[optionId]
+          return 80_000 // flat-rate addons (insulation, solar_prep, etc.)
+        }
+        const baseByGroup = { roof_type: 1200_000, roofing_material: 800_000, scope: 150_000, payment: 0 }
         const multByOption = { barrel_tile: 1.25, metal: 1.45, architectural: 0.9, flat_tile: 1.05, shingles: 0.8 }
         const base = baseByGroup[groupId] ?? 60_000
         const mult = multByOption[optionId] ?? 1.0
