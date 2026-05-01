@@ -4,6 +4,32 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
+import {
+  GenericServiceWizard,
+  DRIVEWAYS_STEPS,
+  PERGOLAS_STEPS,
+  AIR_CONDITIONING_STEPS,
+  WALL_PANELING_STEPS,
+  HOUSE_PAINTING_STEPS,
+  GARAGE_STEPS,
+  BLINDS_STEPS,
+  housePaintingGetNext,
+  housePaintingGetPrev,
+  type GenericWizardStep,
+} from '../components/generic-service-wizard'
+
+function getStepsForService(id: string): GenericWizardStep[] {
+  switch (id) {
+    case 'driveways':        return DRIVEWAYS_STEPS
+    case 'pergolas':         return PERGOLAS_STEPS
+    case 'air_conditioning': return AIR_CONDITIONING_STEPS
+    case 'wall_paneling':    return WALL_PANELING_STEPS
+    case 'house_painting':   return HOUSE_PAINTING_STEPS
+    case 'garage':           return GARAGE_STEPS
+    case 'blinds':           return BLINDS_STEPS
+    default:                 return DRIVEWAYS_STEPS
+  }
+}
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -280,6 +306,33 @@ export function ServiceDetailPage() {
         editItem={editData2}
         addressOptions={addrOpts}
         defaultAddressKey={defaultAddrKey}
+        editingItemId={editId}
+        onCancel={() => navigate('/home')}
+        onDone={() => navigate('/home/cart')}
+      />
+    )
+  }
+
+  // Card-slide wizard delegates — propagated from roofing pilot (PR #30).
+  // All chip-select services route through GenericServiceWizard + dispatch table.
+  const GENERIC_WIZARD_SERVICES = ['driveways', 'pergolas', 'air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
+  if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
+    const editId = editItemForService?.id as string | null ?? null
+    const defaultAddrKey = (() => {
+      const edit = editItemForService?.address as CartItemAddress | undefined
+      if (!edit) return 'primary'
+      const match = addressOptions.find((o) => o.label === edit.label)
+      return match?.key ?? 'primary'
+    })()
+    const isHousePainting = serviceId === 'house_painting'
+    return (
+      <GenericServiceWizard
+        service={service}
+        steps={getStepsForService(serviceId ?? '')}
+        {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
+        addressOptions={addressOptions}
+        defaultAddressKey={defaultAddrKey}
+        editItem={editItemForService}
         editingItemId={editId}
         onCancel={() => navigate('/home')}
         onDone={() => navigate('/home/cart')}
