@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
+import { RoofingWizard } from '../components/roofing-wizard'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -252,6 +253,37 @@ export function ServiceDetailPage() {
           Go back
         </Button>
       </div>
+    )
+  }
+
+  // Roofing delegates to the card-slide wizard (pilot — propagate to other services post-launch).
+  if (serviceId === 'roofing') {
+    const editData2 = editItemForService
+    const editId = editData2?.id as string | null ?? null
+    const addrOpts: Array<{ key: string; label: string; full: string }> = [
+      { key: 'primary', label: 'Primary', full: homeownerProfile.address || '' },
+      ...(homeownerProfile.additional_addresses ?? []).map((a) => ({
+        key: a.id,
+        label: a.label,
+        full: [a.street, a.city, a.state, a.zip].filter(Boolean).join(', '),
+      })),
+    ]
+    const defaultAddrKey = (() => {
+      const edit = editData2?.address as CartItemAddress | undefined
+      if (!edit) return 'primary'
+      const match = addrOpts.find((o) => o.label === edit.label)
+      return match?.key ?? 'primary'
+    })()
+    return (
+      <RoofingWizard
+        service={service}
+        editItem={editData2}
+        addressOptions={addrOpts}
+        defaultAddressKey={defaultAddrKey}
+        editingItemId={editId}
+        onCancel={() => navigate('/home')}
+        onDone={() => navigate('/home/cart')}
+      />
     )
   }
 
