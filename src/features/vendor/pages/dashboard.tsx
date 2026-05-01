@@ -329,6 +329,8 @@ export default function VendorDashboard() {
                   to={`/vendor/lead-workflow?stage=${stage.key}`}
                   className="group flex flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-background/60 transition"
                   aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
+                  data-stage-key={stage.key}
+                  data-stage-count={leadStageCounts[stage.key]}
                 >
                   {/* Ship #306 — colored square per stage, lifted from
                       lead-workflow.tsx tile color SoT (STAGE_COLOR_BY_KEY).
@@ -376,16 +378,16 @@ export default function VendorDashboard() {
 
       {/* KPI Row */}
       <div className="kpi-grid grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
-        <motion.div variants={item}>
+        <motion.div variants={item} data-kpi="active-leads" data-kpi-value={activeLeads.length}>
           <KpiCard title="Active Leads" value={String(activeLeads.length)} change="+12% vs last month" trend="up" icon={Inbox} iconColor="bg-primary" />
         </motion.div>
-        <motion.div variants={item}>
+        <motion.div variants={item} data-kpi="pipeline-value" data-kpi-value={pipelineValue}>
           <KpiCard title="Pipeline Value" value={fmt(pipelineValue)} change="+8% vs last month" trend="up" icon={DollarSign} iconColor="bg-amber-500" />
         </motion.div>
-        <motion.div variants={item}>
+        <motion.div variants={item} data-kpi="booked-this-month" data-kpi-value={bookedThisMonth}>
           <KpiCard title="Booked This Month" value={String(bookedThisMonth)} change="+2 from last week" trend="up" icon={CalendarCheck} iconColor="bg-emerald-500" />
         </motion.div>
-        <motion.div variants={item}>
+        <motion.div variants={item} data-kpi="win-rate" data-kpi-value={winRate}>
           <KpiCard title="Win Rate" value={`${winRate}%`} change="+5pp vs last quarter" trend="up" icon={Target} iconColor="bg-violet-500" />
         </motion.div>
       </div>

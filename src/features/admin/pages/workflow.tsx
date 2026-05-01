@@ -247,7 +247,7 @@ export default function WorkflowPage() {
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {stages.map((stage, idx) => (
             <div key={stage.title} className="flex items-center gap-2 sm:gap-3 flex-1">
-              <div className={cn('flex-1 rounded-xl border p-3 sm:p-4 text-center', stage.bgColor, stage.borderColor)}>
+              <div className={cn('flex-1 rounded-xl border p-3 sm:p-4 text-center', stage.bgColor, stage.borderColor)} data-workflow-stage={stage.title} data-workflow-count={stage.items.length}>
                 <div className={cn('inline-flex items-center justify-center rounded-lg p-2 mb-2', stage.color)}>
                   <stage.icon className="h-4 w-4 text-white" />
                 </div>
@@ -322,6 +322,8 @@ export default function WorkflowPage() {
                         'rounded-lg border p-3 space-y-2 hover:shadow-md transition cursor-pointer',
                         stage.bgColor
                       )}
+                      data-workflow-lead={lead.id}
+                      data-workflow-lead-stage={stage.title}
                       onClick={() => setSelectedProjectId(lead.id)}
                     >
                       <div className="flex items-center gap-2">
