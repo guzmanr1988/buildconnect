@@ -216,7 +216,7 @@ export function ServiceDetailPage() {
 
   const handleWizardComplete = (result: RoofWizardResult) => {
     const materials = [result.material]
-    if (result.hasFlatSection) materials.push('flat_roof')
+    if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
     setSelections((prev) => ({ ...prev, material: materials }))
     if (result.material === 'metal') {
       const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
