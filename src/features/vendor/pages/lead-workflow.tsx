@@ -1663,6 +1663,44 @@ export default function VendorLeadWorkflow() {
                   }
                 }
 
+                // MATH IS GOD — reconcile breakdown to headline price.
+                // Headline is canonical; breakdown serves it. Applies to
+                // all sentProject paths (not mock-only which already
+                // reconciles above). Over-count case: static preset
+                // Permit/Tearoff/Install were appended on top of a
+                // vendor $/square that was priced all-in → sum > headline.
+                // Option (a): reduce material line(s) to headline - non-material
+                // sum. Falls back to option (b) (drop non-material) if
+                // non-material lines alone would exceed headline.
+                if (sp) {
+                  const headline = saleAmountByLeadId[selected.id] ?? sp.saleAmount ?? selected.value
+                  if (headline > 0 && Math.abs(displayTotal - headline) > 0.01) {
+                    if (displayTotal > headline) {
+                      const materialLines = displayLineItems.filter((l) => l.id.startsWith('roofing-material'))
+                      const nonMaterialLines = displayLineItems.filter((l) => !l.id.startsWith('roofing-material'))
+                      const nonMaterialSum = nonMaterialLines.reduce((s, l) => s + l.amount, 0)
+                      const rebalancedMat = headline - nonMaterialSum
+                      if (rebalancedMat >= 0 && materialLines.length > 0) {
+                        const totalMat = materialLines.reduce((s, l) => s + l.amount, 0)
+                        displayLineItems = [
+                          ...materialLines.map((l) => ({
+                            ...l,
+                            amount: totalMat > 0 ? Math.round(rebalancedMat * (l.amount / totalMat)) : rebalancedMat,
+                          })),
+                          ...nonMaterialLines,
+                        ]
+                      } else {
+                        displayLineItems = [{ id: 'roofing-total', label: 'Material (all-in)', amount: headline }]
+                      }
+                      displayTotal = headline
+                    } else {
+                      // Under-count: add Upsale to close the gap
+                      displayLineItems = [...displayLineItems, { id: 'upsale-adj', label: 'Upsale', amount: headline - displayTotal }]
+                      displayTotal = headline
+                    }
+                  }
+                }
+
                 return (
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
