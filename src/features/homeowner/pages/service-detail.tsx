@@ -69,6 +69,13 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   blinds: 'from-indigo-400 to-purple-500',
 }
 
+// Legacy metalRoofSelection.roofSize values were sqft strings (e.g. "2916").
+// Post-ship values are squares (e.g. "29"). Detect by magnitude: >200 = sqft, ≤200 = squares.
+function metalRoofDisplaySquares(roofSize: string): number {
+  const n = Number(roofSize)
+  return n > 200 ? sqftToSquares(Math.round(n * 1.12)) : n
+}
+
 export function ServiceDetailPage() {
   const { serviceId } = useParams<{ serviceId: string }>()
   const navigate = useNavigate()
@@ -182,7 +189,8 @@ export function ServiceDetailPage() {
     if (result.hasFlatSection) materials.push('flat_roof')
     setSelections((prev) => ({ ...prev, material: materials }))
     if (result.material === 'metal') {
-      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(result.areaSqft) }))
+      const wasteSqft = Math.round(result.areaSqft * 1.12)
+      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
       setMetalRoofConfigOpen(true)
     }
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
@@ -592,7 +600,7 @@ export function ServiceDetailPage() {
                         )}
                         {serviceId === 'roofing' && option.id === 'metal' && metalRoofSelection.color && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {metalRoofSelection.roofSize ? `${Number(metalRoofSelection.roofSize).toLocaleString()} ft` : 'Configured'}
+                            {metalRoofSelection.roofSize ? `${metalRoofDisplaySquares(metalRoofSelection.roofSize)} sq` : 'Configured'}
                           </span>
                         )}
                         {serviceId === 'pool' && option.id === 'led' && ledCount > 0 && (
@@ -650,7 +658,18 @@ export function ServiceDetailPage() {
                     {selected.includes('metal') && metalRoofConfigOpen && (
                       <MetalRoofConfigurator
                         selection={metalRoofSelection}
-                        onChange={setMetalRoofSelection}
+                        onChange={(updated) => {
+                          setMetalRoofSelection(updated)
+                          // Squares are the source of truth; reverse-derive sqft for pricing engine.
+                          if (updated.roofSize) {
+                            const sq = Number(updated.roofSize)
+                            if (!isNaN(sq) && sq > 0) {
+                              setRoofMeasurement((prev) => prev
+                                ? { ...prev, areaSqft: sq * 100 }
+                                : { areaSqft: sq * 100, pitch: '', address: '' })
+                            }
+                          }
+                        }}
                         onSave={() => setMetalRoofConfigOpen(false)}
                       />
                     )}
@@ -1114,7 +1133,7 @@ export function ServiceDetailPage() {
                                   </span>
                                   {metalRoofSelection.roofSize && (
                                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                                      {Number(metalRoofSelection.roofSize).toLocaleString()} Sq Ft
+                                      {metalRoofDisplaySquares(metalRoofSelection.roofSize)} squares
                                     </span>
                                   )}
                                 </>
