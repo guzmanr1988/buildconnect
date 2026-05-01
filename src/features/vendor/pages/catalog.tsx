@@ -257,6 +257,12 @@ export default function VendorCatalog() {
                                       placeholder="0"
                                       className="h-10 w-24 text-base text-right"
                                     />
+                                    {getOptionMetadata(option.id).priceUnit === 'square' && (
+                                      <div className="flex flex-col">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
+                                        <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
+                                      </div>
+                                    )}
                                     {getOptionMetadata(option.id).priceUnit === 'sqft' && (
                                       <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
                                     )}

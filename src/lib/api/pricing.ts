@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { getOptionMetadata } from '@/lib/option-metadata'
+import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import type { CartItem } from '@/stores/cart-store'
 
 /*
@@ -92,19 +92,23 @@ export function computeVendorTotal(
         if (meta.requiresQuantity) {
           const qty = item.selectionQuantities?.[optionId] ?? meta.quantityRange?.min ?? 1
           totalCents += basePrice * qty
-        } else if (meta.priceUnit === 'sqft') {
-          // When both materials are selected (hasFlatSection) and split areas
-          // are available, bill each material against its own area slice.
-          const isFlatOpt = optionId === 'flat_roof'
+        } else if (meta.priceUnit === 'square') {
+          // Vendor entered $/square (1 square = 100 sqft). Bill against waste-included squares.
           const allMatIds = Object.values(item.selections ?? {}).flat()
+          const isFlatOpt = optionId === 'flat_roof'
           const hasSplitData = item.roofMeasurement?.pitchedAreaSqft !== undefined
             && item.roofMeasurement?.flatAreaSqft !== undefined
           const hasFlatSelected = allMatIds.includes('flat_roof')
-          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id).priceUnit === 'sqft')
+          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id).priceUnit === 'square')
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
-          const areaSqft = useSplit
+          const rawSqft = useSplit
             ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
             : (item.roofMeasurement?.areaSqft ?? 0)
+          const wasteSqft = Math.round(rawSqft * 1.12)
+          totalCents += basePrice * sqftToSquares(wasteSqft)
+        } else if (meta.priceUnit === 'sqft') {
+          // Legacy: vendor entered $/sqft (old persisted line items). Bill flat against areaSqft.
+          const areaSqft = item.roofMeasurement?.areaSqft ?? 0
           totalCents += basePrice * areaSqft
         } else if (meta.priceUnit === 'linear_ft') {
           const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
