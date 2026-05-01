@@ -301,6 +301,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [showAdjust, setShowAdjust] = useState(false)
   const [adjArea, setAdjArea] = useState('')
   const [adjPitch, setAdjPitch] = useState('')
+  const [adjFlatArea, setAdjFlatArea] = useState('')
   const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
   const [flatSelected, setFlatSelected] = useState(false)
   const [permit, setPermit] = useState<'yes' | 'no' | null>(null)
@@ -316,6 +317,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setMeasureErrorMsg('')
       setMeasurement(null)
       setShowAdjust(false)
+      setAdjFlatArea('')
       setMaterial(null)
       setFlatSelected(false)
       setPermit(null)
@@ -343,6 +345,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
       setAdjArea(String(result.areaSqft))
       setAdjPitch(result.pitch)
+      setAdjFlatArea(String(result.flatAreaSqft))
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
@@ -368,6 +371,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     ? Math.round(Math.max(100, Number(adjArea) || 0) * ROOF_WASTE_FACTOR)
     : (measurement?.wasteSqft ?? 0)
   const finalPitch = showAdjust ? (adjPitch || (measurement?.pitch ?? '')) : (measurement?.pitch ?? '')
+  const finalFlatAreaSqft = measurement
+    ? Math.min(Math.max(0, Number(adjFlatArea) || 0), finalArea)
+    : 0
+  const derivedPitchedAreaSqft = Math.max(0, finalArea - finalFlatAreaSqft)
 
   const handleComplete = () => {
     if (!stepThreeComplete || !permit) return
@@ -382,8 +389,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       perimeterFt: measurement?.perimeterFt ?? 0,
       // Persist split areas so pricing engine can bill each material
       // against its own slice. Undefined when manual entry (no Solar data).
-      pitchedAreaSqft: measurement?.pitchedAreaSqft,
-      flatAreaSqft: measurement?.flatAreaSqft,
+      pitchedAreaSqft: measurement ? Math.round(derivedPitchedAreaSqft) : undefined,
+      flatAreaSqft: measurement ? Math.round(finalFlatAreaSqft) : undefined,
       permit,
     })
   }
@@ -524,16 +531,28 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       </p>
                     </div>
                     {measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
-                      <div className="border-t pt-3">
+                      <div className="border-t pt-3 space-y-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           Area Breakdown
                         </span>
-                        <p className="text-[12px] text-foreground mt-1">
-                          Pitched: <span className="font-semibold">{measurement.pitchedAreaSqft.toLocaleString()} sqft ({sqftToSquares(Math.round(measurement.pitchedAreaSqft * ROOF_WASTE_FACTOR))} sq)</span>
-                          {' · '}
-                          Flat deck: <span className="font-semibold">{measurement.flatAreaSqft.toLocaleString()} sqft ({sqftToSquares(Math.round(measurement.flatAreaSqft * ROOF_WASTE_FACTOR))} sq)</span>
-                        </p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">Used when Flat Roof is selected alongside a pitched material</p>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          <div>
+                            <Label className="mb-1 block text-xs">Flat area (sq ft)</Label>
+                            <Input
+                              value={adjFlatArea}
+                              onChange={(e) => setAdjFlatArea(e.target.value)}
+                              placeholder="0"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Pitched (auto)</p>
+                            <p className="h-8 flex items-center text-sm font-semibold text-foreground">
+                              {derivedPitchedAreaSqft.toLocaleString()} sqft
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
                       </div>
                     )}
                   </div>

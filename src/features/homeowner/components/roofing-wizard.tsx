@@ -364,6 +364,11 @@ export function RoofingWizard({
                     {opt.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                     )}
+                    {opt.id === 'flat_roof' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Add Flat Roof if part of your home has a flat section like a porch or garage. We estimate the flat area from satellite — you can adjust it in the measurement step if it looks off.
+                      </p>
+                    )}
                   </div>
                 </button>
               )
