@@ -547,13 +547,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
                           </p>
-                          <div className="mt-2">
-                            <Label className="mb-1 block text-xs">Adjust flat area (sq ft)</Label>
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <Label className="text-xs text-muted-foreground shrink-0">Adjust (sq ft)</Label>
                             <Input
                               value={adjFlatArea}
                               onChange={(e) => setAdjFlatArea(e.target.value)}
                               placeholder="0"
-                              className="h-8 text-sm"
+                              className="h-8 text-sm w-20 text-right"
                             />
                           </div>
                         </div>
