@@ -21,8 +21,8 @@ function getFirstDayOfMonth(year: number, month: number) {
 
 export function BookingCalendarPage() {
   const navigate = useNavigate()
-  const [currentMonth, setCurrentMonth] = useState(3) // April (0-indexed)
-  const [currentYear] = useState(2026)
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
@@ -91,8 +91,11 @@ export function BookingCalendarPage() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setCurrentMonth((m) => Math.max(0, m - 1))}
-                  disabled={currentMonth === 0}
+                  onClick={() => {
+                    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear((y) => y - 1) }
+                    else setCurrentMonth((m) => m - 1)
+                    setSelectedDate(null)
+                  }}
                   aria-label="Previous month"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -100,8 +103,11 @@ export function BookingCalendarPage() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setCurrentMonth((m) => Math.min(11, m + 1))}
-                  disabled={currentMonth === 11}
+                  onClick={() => {
+                    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear((y) => y + 1) }
+                    else setCurrentMonth((m) => m + 1)
+                    setSelectedDate(null)
+                  }}
                   aria-label="Next month"
                 >
                   <ChevronRight className="h-4 w-4" />
