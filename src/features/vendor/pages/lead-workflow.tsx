@@ -1166,11 +1166,84 @@ export default function VendorLeadWorkflow() {
                       ))
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground italic pt-0.5">
-                    Full project details available in the Projects tab.
-                  </p>
                 </div>
               </div>
+
+              {/* Roof Measurements, No-Permit Waiver, Roof Add-ons */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp) return null
+                const rm = sp.item?.roofMeasurement
+                const waiver = (sp.item as any)?.permitWaiver
+                const addons = sp.item?.roofAddonLinearFt
+                return (
+                  <>
+                    {rm && (
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Measurements</p>
+                        <div className="space-y-1 text-sm">
+                          {rm.pitchedAreaSqft != null && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Pitched area</span>
+                              <span className="font-medium">{rm.pitchedAreaSqft.toLocaleString()} sq ft</span>
+                            </div>
+                          )}
+                          {rm.includeFlat && (rm.flatAreaSqft ?? 0) > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Flat area</span>
+                              <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sq ft</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Total</span>
+                            <span className="font-medium">{rm.areaSqft.toLocaleString()} sq ft</span>
+                          </div>
+                          {rm.pitch && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Pitch</span>
+                              <span className="font-medium">{rm.pitch}</span>
+                            </div>
+                          )}
+                          {(rm.perimeterFt ?? 0) > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Perimeter</span>
+                              <span className="font-medium">{rm.perimeterFt!.toLocaleString()} ft</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {waiver?.acknowledged && (
+                      <div className="rounded-lg border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">No-Permit Waiver</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed by</span>
+                            <span className="font-medium text-amber-900 dark:text-amber-100">{waiver.signedName}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed at</span>
+                            <span className="font-medium text-amber-900 dark:text-amber-100">{new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {addons && Object.keys(addons).length > 0 && (
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Add-ons</p>
+                        <div className="space-y-1 text-sm">
+                          {Object.entries(addons).map(([key, ft]) => (
+                            <div key={key} className="flex items-center justify-between">
+                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                              <span className="font-medium">{ft} ft</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
               {/* Appointment — mobile-only slot. Ship #323 PC-only refinement:
                   mobile view preserved (left col single-column stack); PC view

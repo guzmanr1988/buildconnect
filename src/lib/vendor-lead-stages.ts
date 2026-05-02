@@ -137,10 +137,10 @@ export function useVendorLeadStages(): {
       project: (p.item?.serviceName ?? 'Unknown service') + ' — ' + Object.values(p.item?.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (sentProjectStatusMap[p.status] || 'pending') as Lead['status'],
       value: 0,
-      address: p.homeowner?.address || 'Pending site visit',
+      address: p.item?.roofMeasurement?.address ?? p.homeowner?.address ?? 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',
-      sq_ft: 0,
+      sq_ft: p.item?.roofMeasurement?.areaSqft ?? 0,
       service_category: (p.item?.serviceId ?? '') as Lead['service_category'],
       // For roofing: permit comes from wizard-captured roofPermit field (not selections).
       // Legacy non-roofing (windows/doors etc): permit is derived from selections.

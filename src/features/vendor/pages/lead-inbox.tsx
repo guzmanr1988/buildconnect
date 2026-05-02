@@ -127,10 +127,10 @@ export default function LeadInbox() {
         }
         return lineItems.reduce((s, l) => s + l.amount, 0)
       })(),
-      address: p.homeowner?.address || 'Pending site visit',
+      address: p.item.roofMeasurement?.address ?? p.homeowner?.address ?? 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',
-      sq_ft: 0,
+      sq_ft: p.item.roofMeasurement?.areaSqft ?? 0,
       service_category: p.item.serviceId as any,
       permit_choice: Object.values(p.item.selections).flat().includes('permit'),
       financing: Object.values(p.item.selections).flat().includes('financed'),
@@ -682,6 +682,76 @@ export default function LeadInbox() {
                                       </Badge>
                                     )}
                                   </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Roof Measurements */}
+                            {sp.item.roofMeasurement && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Roof Measurements</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {sp.item.roofMeasurement.pitchedAreaSqft != null && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Pitched area</span>
+                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.pitchedAreaSqft.toLocaleString()} sq ft</span>
+                                    </div>
+                                  )}
+                                  {sp.item.roofMeasurement.includeFlat && (sp.item.roofMeasurement.flatAreaSqft ?? 0) > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Flat area</span>
+                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.flatAreaSqft!.toLocaleString()} sq ft</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                    <span className="text-sm text-foreground">Total</span>
+                                    <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.areaSqft.toLocaleString()} sq ft</span>
+                                  </div>
+                                  {sp.item.roofMeasurement.pitch && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Pitch</span>
+                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.pitch}</span>
+                                    </div>
+                                  )}
+                                  {(sp.item.roofMeasurement.perimeterFt ?? 0) > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Perimeter</span>
+                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.perimeterFt!.toLocaleString()} ft</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {/* No-Permit Waiver */}
+                            {(sp.item as any).permitWaiver?.acknowledged && (
+                              <div className="rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100">No-Permit Waiver</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/20">
+                                    <span className="text-sm text-amber-900 dark:text-amber-100">Acknowledged</span>
+                                    <span className="text-sm font-bold text-amber-800 dark:text-amber-200">Yes</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/20">
+                                    <span className="text-sm text-amber-900 dark:text-amber-100">Signed by</span>
+                                    <span className="text-sm font-bold text-amber-800 dark:text-amber-200">{(sp.item as any).permitWaiver.signedName}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/20">
+                                    <span className="text-sm text-amber-900 dark:text-amber-100">Signed at</span>
+                                    <span className="text-sm font-bold text-amber-800 dark:text-amber-200">{new Date((sp.item as any).permitWaiver.signedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Roof Addons — linear ft */}
+                            {sp.item.roofAddonLinearFt && Object.keys(sp.item.roofAddonLinearFt).length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Roof Add-ons</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {Object.entries(sp.item.roofAddonLinearFt).map(([key, ft]) => (
+                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                      <span className="text-sm font-bold text-primary">{ft} ft</span>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             )}
