@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle, RotateCcw, X as XIcon } from 'lucide-react'
+import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle, RotateCcw, X as XIcon, FileText } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/home/cart', icon: ShoppingCart, label: 'Projects' },
   { to: '/home/tutorials', icon: PlayCircle, label: 'Tutorials' },
   { to: '/home/messages', icon: MessageCircle, label: 'Messages' },
+  { to: '/home/documents', icon: FileText, label: 'Documents' },
   { to: '/home/profile', icon: User, label: 'Profile' },
 ]
 
