@@ -94,6 +94,8 @@ export function RoofingWizard({
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(
     (editItem?.roofPermit as 'yes' | 'no') ?? null
   )
+  const [waiverAcknowledged, setWaiverAcknowledged] = useState(false)
+  const [waiverName, setWaiverName] = useState('')
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(() => {
     const raw = editItem?.roofAddonLinearFt as Record<string, number> | undefined
     if (!raw) return {}
@@ -164,6 +166,9 @@ export function RoofingWizard({
       ...(metalRoofSelection.color && { metalRoofSelection }),
       ...(roofMeasurement && { roofMeasurement }),
       ...(roofPermit && { roofPermit }),
+      ...(roofPermit === 'no' && waiverAcknowledged && waiverName.trim().length >= 2 && {
+        permitWaiver: { acknowledged: true, signedName: waiverName.trim(), signedAt: new Date().toISOString() },
+      }),
       ...(Object.keys(roofAddonLinearFtParsed).length > 0 && { roofAddonLinearFt: roofAddonLinearFtParsed }),
       ...(itemAddress && { address: itemAddress }),
       ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),
@@ -253,6 +258,7 @@ export function RoofingWizard({
           (step === 3 && selectedMaterials.length === 0) ||
           (step === 4 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
           (step === 7 && roofPermit === null) ||
+          (step === 7 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
           (step === 9 && submitting)
         }
       >
@@ -521,37 +527,81 @@ export function RoofingWizard({
         {/* S7 — Permit */}
         {step === 7 && (
           <div className="flex flex-col gap-3">
-            {(['yes', 'no'] as const).map((val) => {
-              const isSelected = roofPermit === val
-              const label = val === 'yes' ? 'Yes — include permit' : 'No permit needed'
-              const sub = val === 'yes'
-                ? 'Required for full replacements in most FL counties. Adds ~2 weeks but ensures code compliance.'
-                : 'For repairs and inspections. Payment is cash, check, or wire transfer only.'
-              return (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setRoofPermit(val)}
-                  className={cn(
-                    'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
-                    isSelected
-                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                      : 'border-border hover:border-primary/40 hover:bg-muted'
-                  )}
-                >
-                  <div className={cn(
-                    'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                    isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                  )}>
-                    {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-                  </div>
-                </button>
-              )
-            })}
+            {/* Yes */}
+            <button
+              type="button"
+              onClick={() => setRoofPermit('yes')}
+              className={cn(
+                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+                roofPermit === 'yes'
+                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                  : 'border-border hover:border-primary/40 hover:bg-muted'
+              )}
+            >
+              <div className={cn(
+                'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+                roofPermit === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground'
+              )}>
+                {roofPermit === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Yes — include permit</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Required for full replacements in most FL counties. Adds ~2 weeks but ensures code compliance.</p>
+                <p className="text-xs text-green-700 dark:text-green-400 mt-1 font-medium">Financing options available with permit.</p>
+              </div>
+            </button>
+
+            {/* No */}
+            <button
+              type="button"
+              onClick={() => { setRoofPermit('no'); setWaiverAcknowledged(false); setWaiverName('') }}
+              className={cn(
+                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+                roofPermit === 'no'
+                  ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-200 dark:ring-amber-800'
+                  : 'border-border hover:border-primary/40 hover:bg-muted'
+              )}
+            >
+              <div className={cn(
+                'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+                roofPermit === 'no' ? 'border-amber-500 bg-amber-500' : 'border-muted-foreground'
+              )}>
+                {roofPermit === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No permit needed</p>
+                <p className="text-xs text-muted-foreground mt-0.5">For repairs and inspections. Payment is cash, check, or wire transfer only.</p>
+              </div>
+            </button>
+
+            {/* Waiver — shown when No is selected */}
+            {roofPermit === 'no' && (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-400">Acknowledgment Required</p>
+                <p className="text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
+                  I acknowledge that proceeding without a permit means I am personally responsible for any fines, penalties, or remediation costs imposed by the city or county if code-enforcement becomes involved. BuildConnect and the contractor are not liable for any penalties resulting from this decision.
+                </p>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={waiverAcknowledged}
+                    onChange={(e) => setWaiverAcknowledged(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600 shrink-0"
+                  />
+                  <span className="text-xs text-amber-900 dark:text-amber-300">I understand and accept full responsibility.</span>
+                </label>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-400">Print full name</label>
+                  <input
+                    type="text"
+                    value={waiverName}
+                    onChange={(e) => setWaiverName(e.target.value)}
+                    placeholder="Your full legal name"
+                    className="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

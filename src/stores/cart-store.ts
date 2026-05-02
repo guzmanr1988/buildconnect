@@ -42,6 +42,8 @@ export interface CartItem {
   // Permit choice captured from roof wizard. 'yes' = permit pulled; 'no' = cash-only (no financing).
   // Optional for widen-reads: absent on legacy items; treat as 'yes' on read (no surprise downgrade).
   roofPermit?: 'yes' | 'no'
+  // Liability waiver — populated when roofPermit = 'no'. Null when permit is yes or not yet set.
+  permitWaiver?: { acknowledged: boolean; signedName: string; signedAt: string } | null
   // Linear feet per roofing addon (gutters, soffit_wood, fascia_wood). Keyed by option id.
   roofAddonLinearFt?: Record<string, number>
   addonQuantities?: AddonQuantities
