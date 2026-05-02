@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useActivityLogStore } from './activity-log-store'
 import { supabase } from '@/lib/supabase'
 
@@ -440,17 +439,15 @@ export const useProjectsStore = create<ProjectsState>()(
 
       sendProject: (item, contractor, booking, homeowner, idDocument, homeownerId, computedLineItems) => {
         // Pre-compute next outside set() so the row is available for the Supabase upsert below.
-        // Ship #336 Phase A — snapshot priceLineItems from preset map at write-time per
+        // Ship #336 Phase A — snapshot priceLineItems from vendor-priced line items at write-time per
         // banked feedback_immutable_ledger_freeze_at_write.
-        const presetLineItems = PRICE_LINE_ITEM_PRESETS[item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-        let priceLineItemsSnapshot: PriceLineItem[] | undefined
-        if (computedLineItems && computedLineItems.length > 0) {
-          priceLineItemsSnapshot = computedLineItems.map((p) => ({ ...p }))
-        } else {
-          priceLineItemsSnapshot = presetLineItems
-            ? presetLineItems.map((p) => ({ ...p }))
+        // PRESETS fallback removed: vendor Products is the sole price source. If no vendor-computed
+        // line items exist (unconfigured vendor), priceLineItems stays undefined → breakdown hides
+        // via the null-gate on all display surfaces (PR#66).
+        const priceLineItemsSnapshot: PriceLineItem[] | undefined =
+          computedLineItems && computedLineItems.length > 0
+            ? computedLineItems.map((p) => ({ ...p }))
             : undefined
-        }
         const next: SentProject = {
           id: crypto.randomUUID(),
           item,

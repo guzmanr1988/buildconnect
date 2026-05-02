@@ -169,17 +169,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     // MOCK_LEADS fields so Customer Info + Project Selections sections
     // render on the lead-bridge path (apollo caught these missing on
     // tx-row-opened Dialogs where bridge resolves to a MOCK_LEAD).
-    // Synthesize priceLineItems so Pricing Breakdown total matches the tile value.
-    // Preset amounts often sum lower than the hardcoded mock lead value; add an
-    // Upsale line to close the gap (mirrors the auto_sold_adjustment injected by markSold).
-    const mockServiceId = l.service_category as keyof typeof PRICE_LINE_ITEM_PRESETS
-    const mockPresetLines = PRICE_LINE_ITEM_PRESETS[mockServiceId] ?? []
-    const mockPresetSum = mockPresetLines.reduce((s, line) => s + line.amount, 0)
-    const mockEffectiveValue = closedSale?.sale_amount ?? l.value
-    const mockDelta = mockEffectiveValue - mockPresetSum
-    const syntheticPriceLineItems = mockDelta > 0
-      ? [...mockPresetLines, { id: 'mock-upsale', label: 'Upsale', amount: mockDelta, originalAmount: 0, source: 'auto_sold_adjustment' as const }]
-      : mockPresetLines
+    // priceLineItems intentionally omitted: MOCK_LEADS have no real vendor-priced
+    // breakdown snapshot. Breakdown card hides via null-gate on consumer surfaces
+    // (hide > fabricated numbers per Upsale semantic lock + MATH IS GOD).
     const syntheticProjectData = {
       homeowner: {
         name: l.homeowner_name,
@@ -192,7 +184,6 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
         serviceId: l.service_category,
         selections: l.pack_items as Record<string, string[]>,
       },
-      priceLineItems: syntheticPriceLineItems,
     }
     return {
       id: l.id,
