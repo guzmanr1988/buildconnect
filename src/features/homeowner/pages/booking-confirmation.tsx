@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCartStore } from '@/stores/cart-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAuthStore } from '@/stores/auth-store'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
+import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap } from '@/lib/api/pricing'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
@@ -169,6 +171,7 @@ export function BookingConfirmationPage() {
   const sendProject = useProjectsStore((s) => s.sendProject)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const profile = useAuthStore((s) => s.profile)
+  const addDoc = useHomeownerDocsStore((s) => s.addDoc)
   const [details, setDetails] = useState<BookingDetails | null>(null)
   const [state, setState] = useState<ConfirmationState>('loading')
   const [cashOnlyProject, setCashOnlyProject] = useState<string | null>(null) // service name when permit=no
@@ -241,6 +244,33 @@ export function BookingConfirmationPage() {
             setCashOnlyProject(pendingItem.serviceName)
           }
           sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)
+
+          // Fire-and-forget PDF generation — never-block rule: errors are swallowed,
+          // flow always reaches setState('success') regardless of PDF outcome.
+          if (profile?.id) {
+            generateSubmissionPdf({
+              serviceName: pendingItem.serviceName,
+              vendorCompany: contractor.company,
+              vendorName: contractor.name,
+              bookingDate: booking.date,
+              bookingTime: booking.time,
+              homeownerAddress: homeowner?.address,
+              idDocDataUrl: idDoc,
+              permitWaiver: (pendingItem as any).permitWaiver ?? null,
+            }).then((dataUrl) => {
+              const dateSlug = new Date().toISOString().slice(0, 10)
+              const vendorSlug = contractor.company.replace(/\s+/g, '-').toLowerCase().slice(0, 20)
+              addDoc({
+                homeownerId: profile.id,
+                category: 'project-submission',
+                filename: `project-${vendorSlug}-${dateSlug}.pdf`,
+                dataUrl,
+                vendorCompany: contractor.company,
+                serviceName: pendingItem.serviceName,
+              })
+            }).catch(() => { /* silent — never block flow */ })
+          }
+
           removeItem(pendingItem.id)
 
           localStorage.removeItem('buildconnect-pending-item')
