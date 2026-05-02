@@ -31,6 +31,7 @@ jobs:
           VITE_DEMO_HOMEOWNER_PW: ${{ secrets.VITE_DEMO_HOMEOWNER_PW }}
           VITE_DEMO_VENDOR_PW: ${{ secrets.VITE_DEMO_VENDOR_PW }}
           VITE_DEMO_ADMIN_PW: ${{ secrets.VITE_DEMO_ADMIN_PW }}
+          VITE_DEMO_ACCOUNT_REP_PW: ${{ secrets.VITE_DEMO_ACCOUNT_REP_PW }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
         run: npm run build
 
