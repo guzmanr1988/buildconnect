@@ -137,26 +137,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
-        id: 'scope',
-        label: 'Preferences',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'permit', label: 'Permit' },
-          { id: 'no_permit', label: 'No Permit' },
-        ],
-      },
-      {
-        id: 'payment',
-        label: 'Payment Method',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'financed', label: 'Financed' },
-          { id: 'cash', label: 'Cash' },
-        ],
-      },
-      {
         id: 'installation',
         label: 'Installation',
         required: true,
@@ -175,6 +155,26 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         options: [
           { id: 'install_windows', label: 'Install Windows' },
           { id: 'install_doors', label: 'Install Doors' },
+        ],
+      },
+      {
+        id: 'scope',
+        label: 'Preferences',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'permit', label: 'Permit' },
+          { id: 'no_permit', label: 'No Permit' },
+        ],
+      },
+      {
+        id: 'payment',
+        label: 'Payment Method',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'financed', label: 'Financed' },
+          { id: 'cash', label: 'Cash' },
         ],
       },
     ],
