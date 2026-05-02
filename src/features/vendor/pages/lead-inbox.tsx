@@ -540,7 +540,7 @@ export default function LeadInbox() {
                               const catalogUnit = garageDoorCatalogUnitPrice(gd as any, getVendorPrice, sp.item.serviceId)
                               const hasCatalog = catalogUnit > 0
                               const displayPrice = hasCatalog ? catalogUnit : (garageLine?.amount ?? null)
-                              if (displayPrice === null) return null
+                              if (!displayPrice) return null
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Garage Doors</h4>
@@ -655,7 +655,7 @@ export default function LeadInbox() {
                               const catalogPrice = getVendorPrice(sp.item.serviceId, 'permit')
                               const hasCatalog = catalogPrice > 0
                               const displayPrice = hasCatalog ? catalogPrice : (permitLine?.amount ?? null)
-                              if (displayPrice === null) return null
+                              if (!displayPrice) return null
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Permit</h4>
