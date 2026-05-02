@@ -464,6 +464,7 @@ export const useProjectsStore = create<ProjectsState>()(
             : {}),
         }
         set((state) => {
+          if (state.sentProjects.some((p) => p.item.id === item.id)) return state
           const nextSentProjects = [...state.sentProjects, next]
           // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
           if ((import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false') {
