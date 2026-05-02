@@ -335,6 +335,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
   }, [open, defaultAddress])
 
+  useEffect(() => {
+    if (!includeFlat) setFlatSelected(false)
+  }, [includeFlat])
+
   const anyMaterialSelected = material !== null || flatSelected
   const stepThreeComplete = anyMaterialSelected && permit !== null
 
@@ -709,33 +713,46 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 </div>
               )}
               {/* Flat Roof — checkbox behavior: independent toggle */}
-              <button
-                onClick={() => setFlatSelected((v) => !v)}
-                className={cn(
-                  'w-full rounded-xl border p-3 text-left transition-all',
-                  flatSelected
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                    : 'border-border bg-card hover:bg-muted/40',
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
-                    flatSelected ? 'border-primary bg-primary' : 'border-border bg-background',
-                  )}>
-                    {flatSelected && <div className="h-2 w-2 rounded-sm bg-white" />}
-                  </div>
-                  <div>
-                    <p className={cn('text-sm font-semibold', flatSelected ? 'text-primary' : 'text-foreground')}>
-                      {FLAT_ROOF_OPTION.label}
+              {(() => {
+                const isFlatGated = !includeFlat
+                return (
+                  <>
+                    <button
+                      disabled={isFlatGated}
+                      title={isFlatGated ? 'Toggle the Flat section ON in Step 1 to enable' : undefined}
+                      onClick={() => !isFlatGated && setFlatSelected((v) => !v)}
+                      className={cn(
+                        'w-full rounded-xl border p-3 text-left transition-all',
+                        isFlatGated
+                          ? 'border-border opacity-40 cursor-not-allowed'
+                          : flatSelected
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                            : 'border-border bg-card hover:bg-muted/40',
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          'h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
+                          isFlatGated ? 'border-border bg-background' : flatSelected ? 'border-primary bg-primary' : 'border-border bg-background',
+                        )}>
+                          {flatSelected && !isFlatGated && <div className="h-2 w-2 rounded-sm bg-white" />}
+                        </div>
+                        <div>
+                          <p className={cn('text-sm font-semibold', !isFlatGated && flatSelected ? 'text-primary' : 'text-foreground')}>
+                            {FLAT_ROOF_OPTION.label}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground leading-tight">{FLAT_ROOF_OPTION.sub}</p>
+                        </div>
+                      </div>
+                    </button>
+                    <p className="text-[11px] text-muted-foreground -mt-2 px-1">
+                      {isFlatGated
+                        ? 'Toggle the Flat section ON in Step 1 to enable this option.'
+                        : 'Add Flat Roof if part of the home has a flat section like a porch or garage. The measurement will split into pitched and flat areas automatically.'}
                     </p>
-                    <p className="text-[11px] text-muted-foreground leading-tight">{FLAT_ROOF_OPTION.sub}</p>
-                  </div>
-                </div>
-              </button>
-              <p className="text-[11px] text-muted-foreground -mt-2 px-1">
-                Add Flat Roof if part of the home has a flat section like a porch or garage. The measurement will split into pitched and flat areas automatically.
-              </p>
+                  </>
+                )
+              })()}
 
               {/* ── Permit selection ── */}
               <div className="border-t pt-4 space-y-2">
