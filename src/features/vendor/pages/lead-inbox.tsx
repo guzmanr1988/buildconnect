@@ -768,7 +768,7 @@ export default function LeadInbox() {
                                     {resolvedLineItems.map((l: any) => (
                                       <div key={l.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                         <span className="text-sm text-foreground">{l.label}</span>
-                                        <span className="text-sm font-bold text-primary">{fmt(l.amount ?? 0)}</span>
+                                        <span className="text-sm font-bold text-primary">{(l.amount ?? 0) === 0 ? '—' : fmt(l.amount ?? 0)}</span>
                                       </div>
                                     ))}
                                     <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/10 mt-1">
