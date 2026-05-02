@@ -645,7 +645,15 @@ export default function VendorLeadWorkflow() {
     onToggle: () => void
     children?: React.ReactNode
   }) {
+    // Ship #346 — attention animation on New Leads + Sold Active tiles when
+    // count > 0 and tile is closed. Card does a slow scale-breathe; badge
+    // does an independent scale-bounce at offset phase so they don't sync.
+    const shouldAnimate = pulse && count > 0 && !open
     return (
+      <motion.div
+        animate={shouldAnimate ? { scale: [1, 1.008, 1] } : { scale: 1 }}
+        transition={shouldAnimate ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+      >
       <Card
         className={cn(
           'overflow-hidden transition-all',
@@ -679,7 +687,13 @@ export default function VendorLeadWorkflow() {
                 </p>
               )}
             </div>
-            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">{count}</Badge>
+            <motion.span
+              className="shrink-0"
+              animate={shouldAnimate ? { scale: [1, 1.22, 1] } : {}}
+              transition={shouldAnimate ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: 0.6 } : {}}
+            >
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{count}</Badge>
+            </motion.span>
           </div>
           {open ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -707,6 +721,7 @@ export default function VendorLeadWorkflow() {
           )}
         </AnimatePresence>
       </Card>
+      </motion.div>
     )
   }
 
