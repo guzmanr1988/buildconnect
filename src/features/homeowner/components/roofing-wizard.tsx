@@ -217,7 +217,7 @@ export function RoofingWizard({
     9: 'Review and add to project',
   }
   const stepSubtitles: Record<number, string> = {
-    1: "We'll use satellite data to pre-fill your config. Skip this if you already know your measurements.",
+    1: "We'll use satellite data to pre-fill your roof config.",
     3: 'Select all that apply — many homes have both a flat section and sloped sections.',
     5: 'Select any extras you\'d like included.',
     6: "We'll use these measurements to give you the most accurate quote.",
@@ -241,18 +241,15 @@ export function RoofingWizard({
         direction={direction}
         onBack={goBack}
         onNext={step === 9 ? handleAddToProject : goNext}
-        onSkip={
-          step === 1 ? () => { setDirection(1); setStep(2) }
-          : step === 5 ? () => { setDirection(1); setStep(7) }
-          : undefined
-        }
-        skipLabel={step === 1 ? 'Skip measurement' : 'Skip add-ons'}
+        onSkip={step === 5 ? () => { setDirection(1); setStep(7) } : undefined}
+        skipLabel="Skip add-ons"
         nextLabel={
           step === 9
             ? (editingItemId ? 'Save Changes' : 'Add to Project')
             : 'Continue'
         }
         nextDisabled={
+          (step === 1 && !roofMeasurement) ||
           (step === 2 && !selectedServiceType) ||
           (step === 3 && selectedMaterials.length === 0) ||
           (step === 4 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
