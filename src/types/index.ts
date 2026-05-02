@@ -97,6 +97,17 @@ export interface Profile {
     ip?: string
     ua?: string
   }
+  // Contractor license records — array so vendors with multiple license types
+  // (e.g. CGC + roofing sub-license) can upload each independently.
+  // LS-only for demo; Supabase column lands with Tranche-2 vendor-profile wiring.
+  contractor_licenses?: ContractorLicense[]
+}
+
+export interface ContractorLicense {
+  id: string
+  licenseNumber: string
+  imageDataUrl?: string
+  addedAt: string
 }
 
 export interface Lead {

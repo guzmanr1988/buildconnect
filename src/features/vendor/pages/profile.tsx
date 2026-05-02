@@ -1,15 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
   User, Phone, Mail, MapPin,
   BadgeCheck, CreditCard, LogOut, MessageCircle,
+  Plus, Trash2, Upload, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
@@ -17,6 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
+import type { ContractorLicense } from '@/types'
 
 const VENDOR_ID = 'v-1'
 
@@ -40,6 +43,44 @@ export default function VendorProfile() {
 
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
   const [requestText, setRequestText] = useState('')
+
+  // Contractor licenses — local draft seeded from profile, saved on explicit Save
+  const [draftLicenses, setDraftLicenses] = useState<ContractorLicense[]>(
+    () => profile?.contractor_licenses ?? [],
+  )
+  const [licensesSaving, setLicensesSaving] = useState(false)
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const addLicenseRow = () => {
+    setDraftLicenses((prev) => [
+      ...prev,
+      { id: `lic-${Date.now()}`, licenseNumber: '', addedAt: new Date().toISOString() },
+    ])
+  }
+
+  const removeLicenseRow = (id: string) => {
+    setDraftLicenses((prev) => prev.filter((l) => l.id !== id))
+  }
+
+  const updateLicenseNumber = (id: string, value: string) => {
+    setDraftLicenses((prev) => prev.map((l) => l.id === id ? { ...l, licenseNumber: value } : l))
+  }
+
+  const handleLicenseImage = (id: string, file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string
+      setDraftLicenses((prev) => prev.map((l) => l.id === id ? { ...l, imageDataUrl: dataUrl } : l))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const saveLicenses = () => {
+    setLicensesSaving(true)
+    updateProfile({ contractor_licenses: draftLicenses })
+    setLicensesSaving(false)
+    toast.success('Contractor licenses saved.')
+  }
 
   // Vendor Request Info Change flow (ship Phase C per kratos msg
   // 1776719583850). Vendors cannot self-edit — they submit a request with
@@ -192,6 +233,91 @@ export default function VendorProfile() {
           #294 (Service Categories + Performance Stats relocated to
           dashboard) — profile keeps editable identity fields; dashboard
           owns at-a-glance metrics. */}
+
+      {/* Contractor Licenses */}
+      <motion.div variants={item}>
+        <Card className="rounded-xl shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold">Contractor Licenses</CardTitle>
+              <Button size="sm" variant="outline" onClick={addLicenseRow}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add License
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {draftLicenses.length === 0 && (
+              <p className="text-sm text-muted-foreground">No licenses added. Click "Add License" to upload your contractor license.</p>
+            )}
+            {draftLicenses.map((lic) => (
+              <div key={lic.id} className="flex flex-col sm:flex-row gap-3 items-start p-3 rounded-lg border bg-muted/30">
+                {/* Image upload */}
+                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                  <div
+                    className="h-20 w-28 rounded-md border bg-background flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary transition"
+                    onClick={() => fileInputRefs.current[lic.id]?.click()}
+                  >
+                    {lic.imageDataUrl ? (
+                      <img src={lic.imageDataUrl} alt="License" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                        <FileText className="h-6 w-6" />
+                        <span className="text-[10px]">Upload</span>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    ref={(el) => { fileInputRefs.current[lic.id] = el }}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleLicenseImage(lic.id, file)
+                    }}
+                  />
+                  <button
+                    className="text-[10px] text-primary flex items-center gap-0.5 hover:underline"
+                    onClick={() => fileInputRefs.current[lic.id]?.click()}
+                  >
+                    <Upload className="h-3 w-3" />
+                    {lic.imageDataUrl ? 'Replace' : 'Upload'}
+                  </button>
+                </div>
+
+                {/* License number + remove */}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">License Number</label>
+                  <Input
+                    value={lic.licenseNumber}
+                    onChange={(e) => updateLicenseNumber(lic.id, e.target.value)}
+                    placeholder="e.g. CGC1234567"
+                    className="text-sm"
+                  />
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 mt-1"
+                  onClick={() => removeLicenseRow(lic.id)}
+                  aria-label="Remove license"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+
+            {draftLicenses.length > 0 && (
+              <div className="flex justify-end pt-1">
+                <Button size="sm" onClick={saveLicenses} disabled={licensesSaving}>
+                  Save Licenses
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Account Actions */}
       <motion.div variants={item}>
