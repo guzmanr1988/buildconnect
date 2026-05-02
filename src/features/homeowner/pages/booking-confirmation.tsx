@@ -247,7 +247,13 @@ export function BookingConfirmationPage() {
 
           // Fire-and-forget PDF generation — never-block rule: errors are swallowed,
           // flow always reaches setState('success') regardless of PDF outcome.
-          if (profile?.id) {
+          // Read profile at call-time via getState() — NOT the closure-captured
+          // `profile` from render. AuthBootstrap calls setSession before getProfile
+          // (Ship #275 defensive ordering), so RequireAuth can render this page while
+          // profile is still null. The closure would freeze null; getState() reads
+          // whatever has loaded by the time the async IIFE reaches this line.
+          const liveProfile = useAuthStore.getState().profile
+          if (liveProfile?.id) {
             generateSubmissionPdf({
               serviceName: pendingItem.serviceName,
               vendorCompany: contractor.company,
@@ -261,7 +267,7 @@ export function BookingConfirmationPage() {
               const dateSlug = new Date().toISOString().slice(0, 10)
               const vendorSlug = contractor.company.replace(/\s+/g, '-').toLowerCase().slice(0, 20)
               addDoc({
-                homeownerId: profile.id,
+                homeownerId: liveProfile.id,
                 category: 'project-submission',
                 filename: `project-${vendorSlug}-${dateSlug}.pdf`,
                 dataUrl,
