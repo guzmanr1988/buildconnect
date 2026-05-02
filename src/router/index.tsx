@@ -22,6 +22,7 @@ import { AppointmentStatusPage } from '@/features/homeowner/pages/appointment-st
 import { HomeownerMessagesPage } from '@/features/homeowner/pages/messages'
 import { HomeownerProfilePage } from '@/features/homeowner/pages/profile'
 import { HomeownerTutorialsPage } from '@/features/homeowner/pages/tutorials'
+import { HomeownerDocumentsPage } from '@/features/homeowner/pages/documents'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
 import { CartPage } from '@/features/homeowner/pages/cart'
 
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
           { path: 'appointments/:id', element: <AppointmentStatusPage />, handle: { title: 'Appointment' } },
           { path: 'tutorials', element: <HomeownerTutorialsPage />, handle: { title: 'Tutorials' } },
           { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
+          { path: 'documents', element: <HomeownerDocumentsPage />, handle: { title: 'Documents' } },
           { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
         ],
       },
