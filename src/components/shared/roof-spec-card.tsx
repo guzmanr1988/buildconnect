@@ -43,7 +43,7 @@ export function RoofSpecCard({
   const addonEntries = linFt ? Object.entries(linFt).filter(([, v]) => v > 0) : []
   if (!rm && !mrs && !permit && addonEntries.length === 0) return null
 
-  const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0
+  const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0 && rm.includeFlat !== false
   const metalColorLabel = mrs?.color
     ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : undefined
