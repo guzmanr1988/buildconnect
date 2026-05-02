@@ -29,7 +29,7 @@ import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { computeWindowsDoorsCatalogTotal, windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
+import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { cn } from '@/lib/utils'
@@ -1299,130 +1299,23 @@ export default function VendorLeadWorkflow() {
                 )
               })()}
 
-              {/* Pricing Breakdown — MATH-reconciled, windows-aware. Consolidates
-                  Ship #337 full-width block into right column (regression fix #64). */}
+              {/* Pricing Breakdown — strict render: only when sp.priceLineItems is
+                  populated at sendProject time. No PRESETS fallback, no reconciliation,
+                  no Upsale injection. Hide > wrong number per MATH IS GOD. */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                const snapshot = sp?.priceLineItems
-                const serviceId = selected.service_category as string
-                const fallback = PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-                const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
-                if (!priceLineItems || priceLineItems.length === 0) return null
-
-                const isSold = sp?.status === 'sold'
+                if (!sp?.priceLineItems || sp.priceLineItems.length === 0) return null
                 type LineItem = { id: string; label: string; amount: number }
-                let displayLineItems: LineItem[] = priceLineItems as LineItem[]
-                let displayTotal = (priceLineItems as LineItem[]).reduce((s, l) => s + (l.amount || 0), 0)
-
-                if (!sp) {
-                  const effectiveValue = saleAmountByLeadId[selected.id] ?? selected.value
-                  const delta = effectiveValue - displayTotal
-                  if (delta > 0) {
-                    displayLineItems = [...displayLineItems, { id: 'mock-upsale', label: 'Upsale', amount: delta }]
-                    displayTotal = effectiveValue
-                  }
-                }
-
-                if (serviceId === 'windows_doors' && sp) {
-                  const item = sp.item as any
-                  const totalWQty = item.windowSelections?.reduce((s: number, w: any) => s + w.quantity, 0) ?? 0
-                  const totalDQty = item.doorSelections?.reduce((s: number, d: any) => s + d.quantity, 0) ?? 0
-                  const totalUnits = totalWQty + totalDQty
-                  const wdProductLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-product')
-
-                  let windowsAmt = 0
-                  for (const w of item.windowSelections ?? []) {
-                    const unit = windowCatalogUnitPrice(w, getVendorPrice, serviceId)
-                    if (unit > 0) windowsAmt += unit * w.quantity
-                    else if (wdProductLine && totalUnits > 0) windowsAmt += Math.round(wdProductLine.amount / totalUnits * w.quantity)
-                  }
-                  let doorsAmt = 0
-                  for (const d of item.doorSelections ?? []) {
-                    const unit = doorCatalogUnitPrice(d, getVendorPrice, serviceId)
-                    if (unit > 0) doorsAmt += unit * d.quantity
-                    else if (wdProductLine && totalUnits > 0) doorsAmt += Math.round(wdProductLine.amount / totalUnits * d.quantity)
-                  }
-                  let garageAmt = 0
-                  const gd = item.garageDoorSelection
-                  if (gd?.type) {
-                    const gdUnit = garageDoorCatalogUnitPrice(gd, getVendorPrice, serviceId)
-                    const gdLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-garage-door')
-                    garageAmt = gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
-                  }
-                  let installWAmt = 0
-                  if (totalWQty > 0) {
-                    const catalogInstallW = getVendorPrice(serviceId, 'install_windows')
-                    const wInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-windows')
-                    installWAmt = catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
-                  }
-                  let installDAmt = 0
-                  if (totalDQty > 0) {
-                    const catalogInstallD = getVendorPrice(serviceId, 'install_doors')
-                    const dInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-doors')
-                    installDAmt = catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
-                  }
-                  let permitAmt = 0
-                  const hasPermit = item.selections && Object.values(item.selections as Record<string, string[]>).flat().includes('permit')
-                  if (hasPermit) {
-                    const catalogPermit = getVendorPrice(serviceId, 'permit')
-                    const permitLine = (priceLineItems as LineItem[]).find((l) => l.label?.toLowerCase().includes('permit'))
-                    permitAmt = catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
-                  }
-
-                  const catalogLines: LineItem[] = [
-                    { id: 'wd-product', label: 'Windows & Doors (Product)', amount: windowsAmt + doorsAmt },
-                    { id: 'wd-install-windows', label: 'Window Installation', amount: installWAmt },
-                    { id: 'wd-install-doors', label: 'Door Installation', amount: installDAmt },
-                    { id: 'wd-garage-door', label: 'Garage Door', amount: garageAmt },
-                    { id: 'wd-permit', label: 'Permit Fee', amount: permitAmt },
-                  ].filter((l) => l.amount > 0)
-                  const catalogSum = catalogLines.reduce((s, l) => s + l.amount, 0)
-                  if (catalogSum > 0) {
-                    const spSaleAmt = sp.saleAmount ?? 0
-                    const upsale = isSold && spSaleAmt > catalogSum ? spSaleAmt - catalogSum : 0
-                    const finalLines: LineItem[] = upsale > 0
-                      ? [...catalogLines, { id: 'upsale-adj', label: 'Upsale', amount: upsale }]
-                      : catalogLines
-                    displayLineItems = finalLines
-                    displayTotal = finalLines.reduce((s, l) => s + l.amount, 0)
-                  }
-                }
-
-                if (sp) {
-                  const headline = saleAmountByLeadId[selected.id] ?? sp.saleAmount ?? selected.value
-                  if (headline > 0 && Math.abs(displayTotal - headline) > 0.01) {
-                    if (displayTotal > headline) {
-                      const materialLines = displayLineItems.filter((l) => l.id.startsWith('roofing-material'))
-                      const nonMaterialLines = displayLineItems.filter((l) => !l.id.startsWith('roofing-material'))
-                      const nonMaterialSum = nonMaterialLines.reduce((s, l) => s + l.amount, 0)
-                      const rebalancedMat = headline - nonMaterialSum
-                      if (rebalancedMat >= 0 && materialLines.length > 0) {
-                        const totalMat = materialLines.reduce((s, l) => s + l.amount, 0)
-                        displayLineItems = [
-                          ...materialLines.map((l) => ({
-                            ...l,
-                            amount: totalMat > 0 ? Math.round(rebalancedMat * (l.amount / totalMat)) : rebalancedMat,
-                          })),
-                          ...nonMaterialLines,
-                        ]
-                      } else {
-                        displayLineItems = [{ id: 'roofing-total', label: 'Material (all-in)', amount: headline }]
-                      }
-                      displayTotal = headline
-                    } else {
-                      displayLineItems = [...displayLineItems, { id: 'upsale-adj', label: 'Upsale', amount: headline - displayTotal }]
-                      displayTotal = headline
-                    }
-                  }
-                }
-
+                const lineItems = sp.priceLineItems as LineItem[]
+                const total = lineItems.reduce((s, l) => s + (l.amount ?? 0), 0)
+                if (total === 0) return null
                 return (
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Pricing Breakdown
                     </p>
                     <div className="space-y-1.5 text-xs sm:text-sm">
-                      {displayLineItems.map((line) => (
+                      {lineItems.map((line) => (
                         <div key={line.id} className="flex justify-between">
                           <span className="text-muted-foreground">{line.label}</span>
                           <span className="font-medium">{fmt(line.amount)}</span>
@@ -1430,7 +1323,7 @@ export default function VendorLeadWorkflow() {
                       ))}
                       <div className="border-t border-border/60 pt-1.5 flex justify-between">
                         <span className="font-semibold">Total</span>
-                        <span className="font-bold">{fmt(displayTotal)}</span>
+                        <span className="font-bold">{fmt(total)}</span>
                       </div>
                     </div>
                   </div>
