@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
+import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -181,6 +182,7 @@ export function AdminLayout() {
   // localStorage flag inside maybeBackfillLegacyApprovals().
   useEffect(() => {
     maybeBackfillLegacyApprovals()
+    maybeSeedSampleReview()
   }, [])
 
   // Admin notifications = open bugs + cross-role activity (god-view).
