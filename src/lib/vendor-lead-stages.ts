@@ -147,7 +147,7 @@ export function useVendorLeadStages(): {
       permit_choice: (p.item as any)?.roofPermit ? (p.item as any).roofPermit === 'yes' : Object.values(p.item?.selections ?? {}).flat().includes('permit'),
       financing: Object.values(p.item?.selections ?? {}).flat().includes('financed'),
       pack_items: p.item?.selections ?? {},
-      slot: p.sentAt,
+      slot: p.booking?.date ? `${p.booking.date}T${p.booking.time ?? '09:00'}` : p.sentAt,
       received_at: p.sentAt,
       soldAt: p.soldAt,
       completedAt: p.completedAt,

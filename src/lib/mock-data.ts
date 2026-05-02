@@ -114,10 +114,22 @@ export const MOCK_BUGS: Bug[] = [
 ]
 
 // ─── Available time slots (for calendar) ───
-export const MOCK_AVAILABLE_SLOTS = [
-  { date: '2026-04-14', times: ['09:00', '10:00', '11:00', '14:00', '15:00'] },
-  { date: '2026-04-15', times: ['09:00', '10:00', '13:00', '14:00'] },
-  { date: '2026-04-16', times: ['10:00', '11:00', '14:00', '15:00', '16:00'] },
-  { date: '2026-04-17', times: ['09:00', '11:00', '14:00'] },
-  { date: '2026-04-18', times: ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00'] },
-]
+// Dynamically generated relative to today so slots are always in the future.
+// Generates days 3-14 from today with staggered time windows.
+function generateAvailableSlots(): { date: string; times: string[] }[] {
+  const now = new Date()
+  const allTimes = [
+    ['09:00', '10:00', '11:00', '14:00', '15:00'],
+    ['09:00', '10:00', '13:00', '14:00'],
+    ['10:00', '11:00', '14:00', '15:00', '16:00'],
+    ['09:00', '11:00', '14:00'],
+    ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00'],
+  ]
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now)
+    d.setDate(now.getDate() + 3 + i)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return { date: dateStr, times: allTimes[i % allTimes.length] }
+  })
+}
+export const MOCK_AVAILABLE_SLOTS = generateAvailableSlots()
