@@ -224,7 +224,6 @@ export function ServiceDetailPage() {
       setMetalRoofConfigOpen(true)
     }
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat })
-    setRoofPermit(result.permit)
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
   }

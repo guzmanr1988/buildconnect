@@ -106,9 +106,6 @@ export interface RoofWizardResult {
   // Available for gutter/fascia/soffit downstream consumption when those
   // config questions gain a linear-feet input field.
   perimeterFt: number
-  // Permit choice — mandatory, set by Step 3 radio selection.
-  // 'no' makes this project cash-only (financing unavailable).
-  permit: 'yes' | 'no'
   // When true, flat area is included in cart (pitched 2% + flat 1% waste).
   // When false, areaSqft = pitched only, flatAreaSqft = 0.
   includeFlat?: boolean
@@ -313,7 +310,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [includeFlat, setIncludeFlat] = useState(false)
   const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
   const [flatSelected, setFlatSelected] = useState(false)
-  const [permit, setPermit] = useState<'yes' | 'no' | null>(null)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -331,7 +327,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setIncludeFlat(false)
       setMaterial(null)
       setFlatSelected(false)
-      setPermit(null)
     }
   }, [open, defaultAddress])
 
@@ -340,7 +335,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   }, [includeFlat])
 
   const anyMaterialSelected = material !== null || flatSelected
-  const stepThreeComplete = anyMaterialSelected && permit !== null
+  const stepThreeComplete = anyMaterialSelected
 
   const startMeasuring = async () => {
     if (!address.trim()) return
@@ -395,7 +390,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const derivedPitchedAreaSqft = finalArea
 
   const handleComplete = () => {
-    if (!stepThreeComplete || !permit) return
+    if (!stepThreeComplete) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatSection = material !== null && flatSelected
     onComplete({
@@ -410,7 +405,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       pitchedAreaSqft: measurement ? Math.round(derivedPitchedAreaSqft) : undefined,
       flatAreaSqft: measurement ? (includeFlat ? Math.round(finalFlatAreaSqft) : 0) : undefined,
       includeFlat,
-      permit,
     })
   }
 
@@ -754,36 +748,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 )
               })()}
 
-              {/* ── Permit selection ── */}
-              <div className="border-t pt-4 space-y-2">
-                <p className="text-sm font-semibold text-foreground">Permit</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { value: 'yes' as const, label: 'Yes, pull a permit', sub: 'Required by county. Unlocks financing.' },
-                    { value: 'no' as const, label: 'No permit needed', sub: 'Cash, check, or wire only.' },
-                  ] as const).map(({ value, label, sub }) => (
-                    <button
-                      key={value}
-                      onClick={() => setPermit(value)}
-                      className={cn(
-                        'rounded-xl border p-3 text-left transition-all',
-                        permit === value
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                          : 'border-border bg-card hover:bg-muted/40',
-                      )}
-                    >
-                      <p className={cn('text-sm font-semibold', permit === value ? 'text-primary' : 'text-foreground')}>{label}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
-                    </button>
-                  ))}
-                </div>
-                {permit === 'no' && (
-                  <p className="text-xs text-muted-foreground italic px-0.5">
-                    If you choose No Permit, financing won't be available for this project — payment must be made by cash, check, or wire transfer.
-                  </p>
-                )}
-              </div>
-
               <div className="flex justify-between gap-2 pt-1">
                 <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
                 <Button size="sm" disabled={!stepThreeComplete} onClick={() => setStep(4)}>
@@ -823,7 +787,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 const finalPerimeterFt = Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0)
                 if (finalPerimeterFt) rows.push({ label: 'Perimeter', value: `~${finalPerimeterFt.toLocaleString()} lin ft` })
                 rows.push({ label: 'Material', value: materialLabel })
-                rows.push({ label: 'Permit', value: permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit (cash-only)' })
                 return (
                   <div className="rounded-xl border bg-muted/20 divide-y divide-border">
                     {rows.map(({ label, value }) => (
