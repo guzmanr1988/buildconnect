@@ -396,7 +396,7 @@ export default function LeadInbox() {
                         if (!sp) return null
                         const resolvedLineItems = sp.priceLineItems && sp.priceLineItems.length > 0
                           ? sp.priceLineItems
-                          : PRICE_LINE_ITEM_PRESETS[sp.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
+                          : null
                         return (
                           <>
                             {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
@@ -757,8 +757,7 @@ export default function LeadInbox() {
                             )}
                             {/* Pricing Breakdown — generic card for all non-windows_doors services.
                                 Windows/Doors already has per-unit price cards above; skip for that service.
-                                resolvedLineItems is the SoT (sp.priceLineItems snapshotted at sendProject,
-                                fallback to PRICE_LINE_ITEM_PRESETS). */}
+                                Strict: only renders when sp.priceLineItems is populated (no PRESETS fallback). */}
                             {sp.item.serviceId !== 'windows_doors' && resolvedLineItems && resolvedLineItems.length > 0 && (() => {
                               const total = resolvedLineItems.reduce((s: number, l: any) => s + (l.amount ?? 0), 0)
                               if (total === 0) return null
