@@ -130,7 +130,6 @@ export function RoofingWizard({
       perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft,
       flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat,
     })
-    setRoofPermit(result.permit)
     setWizardOpen(false)
     toast.success('Roof measured — config pre-filled!')
   }
