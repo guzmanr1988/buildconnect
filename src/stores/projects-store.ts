@@ -897,10 +897,12 @@ export const useProjectsStore = create<ProjectsState>()(
         const persistedProjects = ps.sentProjects ?? []
         const currentProjects = currentState.sentProjects ?? []
         const seenIds = new Set<string>()
+        const seenItemIds = new Set<string>()
         const mergedProjects: SentProject[] = []
         for (const p of [...persistedProjects, ...currentProjects]) {
-          if (!seenIds.has(p.id)) {
+          if (!seenIds.has(p.id) && !seenItemIds.has(p.item.id)) {
             seenIds.add(p.id)
+            seenItemIds.add(p.item.id)
             mergedProjects.push(p)
           }
         }
