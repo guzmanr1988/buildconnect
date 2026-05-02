@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Star, Clock, ShieldCheck, Banknote, Award, TrendingUp } from 'lucide-react'
+import { Star, Clock, ShieldCheck, Banknote, Award, TrendingUp, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,6 +21,7 @@ import {
   type VendorTotalResult,
 } from '@/lib/api/pricing'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 export function VendorComparePage() {
   const navigate = useNavigate()
@@ -290,26 +291,47 @@ export function VendorComparePage() {
                     )}
                   </div>
 
-                  <Button
-                    size="lg"
-                    className="mt-auto w-full h-11 text-sm font-medium"
-                    data-book-vendor={vendor.id}
-                    onClick={() => {
-                      localStorage.setItem('buildconnect-selected-contractor', JSON.stringify({
-                        vendor_id: vendor.id,
-                        name: vendor.name,
-                        company: vendor.company,
-                        rating: vendor.rating,
-                        // Ship #355 — freeze the price the homeowner sees at
-                        // booking time. Only set when vendor has a full quote
-                        // (totalCents > 0); absent when "Contact for quote".
-                        ...(result?.totalCents > 0 ? { quotedPriceCents: result.totalCents } : {}),
-                      }))
-                      navigate('/home/booking')
-                    }}
-                  >
-                    Book Site Visit
-                  </Button>
+                  {(() => {
+                    // Stage B booking-block: vendor must have pricing configured for
+                    // every service in the cart before homeowner can book.
+                    const unconfigured = result != null && result.hasSelections && !result.coversAllServices
+                    const btn = (
+                      <Button
+                        size="lg"
+                        className="mt-auto w-full h-11 text-sm font-medium"
+                        disabled={unconfigured}
+                        data-book-vendor={vendor.id}
+                        onClick={unconfigured ? undefined : () => {
+                          localStorage.setItem('buildconnect-selected-contractor', JSON.stringify({
+                            vendor_id: vendor.id,
+                            name: vendor.name,
+                            company: vendor.company,
+                            rating: vendor.rating,
+                            // Ship #355 — freeze the price the homeowner sees at
+                            // booking time. Only set when vendor has a full quote
+                            // (totalCents > 0); absent when "Contact for quote".
+                            ...(result?.totalCents > 0 ? { quotedPriceCents: result.totalCents } : {}),
+                          }))
+                          navigate('/home/booking')
+                        }}
+                      >
+                        {unconfigured
+                          ? <><AlertCircle className="h-4 w-4 mr-1.5 shrink-0" />Not Available</>
+                          : 'Book Site Visit'}
+                      </Button>
+                    )
+                    if (!unconfigured) return btn
+                    return (
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="mt-auto w-full block" />}>
+                          {btn}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          This vendor has not set up pricing for your selected services. Contact them directly or choose another vendor.
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  })()}
                 </CardContent>
               </Card>
             </motion.div>

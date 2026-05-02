@@ -12,7 +12,6 @@ import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap } from '@/lib/api/pricing'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import type { PriceLineItem } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
 
@@ -53,7 +52,6 @@ const RECENT_SEND_WINDOW_MS = 5 * 60 * 1000
 // Build computed roofing price-line-items from a vendor's Supabase catalog.
 // Each selected material gets its own line ($X/square × squares, waste-included). Selected
 // addons (gutters/soffit/fascia) get their own line ($X/lin ft × linFt).
-// Other roofing lines (permit/tearoff/install) fall through to preset.
 // Flat-roof option id for split detection
 const FLAT_ROOF_OPTION_ID = 'flat_roof'
 
@@ -84,7 +82,6 @@ async function buildRoofingLineItems(
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
     && (item.roofMeasurement?.includeFlat !== false)
 
-  const presets = PRICE_LINE_ITEM_PRESETS['roofing']
   const lines: PriceLineItem[] = []
   let anyComputed = false
 
@@ -156,10 +153,22 @@ async function buildRoofingLineItems(
 
   if (!anyComputed) return null
 
-  // Append non-material preset lines (permit, tearoff, install) unchanged
-  for (const preset of presets) {
-    if (preset.id === 'roofing-material') continue
-    lines.push({ ...preset })
+  // Permit: only when customer chose yes AND vendor has the permit option priced.
+  // Tearoff + Install removed — no customer wizard touchpoint for either (vendor-internal
+  // cost items, not customer config). Show only what customer chose per platform rule.
+  if (item.roofPermit === 'yes') {
+    const permitCents = priceMap.get(`roofing|service_type|permit`)
+      ?? priceMap.get(`roofing|permit|permit`)
+      ?? priceMap.get(`roofing|addons|permit`)
+    if (permitCents && permitCents > 0) {
+      lines.push({
+        id: 'roofing-permit',
+        label: 'Permit',
+        amount: Math.round(permitCents) / 100,
+        originalAmount: Math.round(permitCents) / 100,
+        source: 'preset_calculated' as const,
+      })
+    }
   }
 
   return lines
