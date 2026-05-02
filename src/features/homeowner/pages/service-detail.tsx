@@ -1,7 +1,7 @@
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
@@ -783,18 +783,6 @@ export function ServiceDetailPage() {
                       />
                     )}
                   </AnimatePresence>
-                )}
-                {group.id === 'products' && serviceId === 'windows_doors' && (
-                  <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed">
-                    Need help measuring your windows and doors?{' '}
-                    <Link
-                      to="/home/tutorials?service=windows_doors"
-                      className="font-medium text-primary hover:underline"
-                    >
-                      Watch the step-by-step tutorial
-                    </Link>
-                    .
-                  </p>
                 )}
                 {/* Payment method note */}
                 {group.id === 'payment' && (
