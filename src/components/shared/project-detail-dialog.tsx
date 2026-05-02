@@ -850,7 +850,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                                     </span>
                                   )}
                                 </div>
-                                <span className="font-medium shrink-0">${line.amount.toLocaleString()}</span>
+                                <span className="font-medium shrink-0">
+                                  {line.amount === 0 ? '—' : `$${line.amount.toLocaleString()}`}
+                                </span>
                               </div>
                             )
                           })}

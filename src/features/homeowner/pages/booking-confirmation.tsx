@@ -86,6 +86,9 @@ async function buildRoofingLineItems(
   let anyComputed = false
 
   for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
+    // service_type (replace/repair/inspection) is vendor-internal — not shown on
+    // customer-facing breakdown per Rodolfo: "There is no replace cost just material"
+    if (groupId === 'service_type') continue
     for (const optionId of optionIds) {
       const key = `roofing|${groupId}|${optionId}`
       const priceCents = priceMap.get(key)
@@ -153,9 +156,11 @@ async function buildRoofingLineItems(
 
   if (!anyComputed) return null
 
-  // Permit: only when customer chose yes AND vendor has the permit option priced.
-  // Tearoff + Install removed — no customer wizard touchpoint for either (vendor-internal
-  // cost items, not customer config). Show only what customer chose per platform rule.
+  // Permit: always render a row so homeowner/vendor always sees the permit status.
+  // Label + amount vary by customer config + vendor pricing state per Rodolfo's rule:
+  //   customer YES + vendor priced  → "Permit" with dollar amount
+  //   customer YES + vendor unpriced → "Permit — no price" with amount 0
+  //   customer NO                   → "Permit — no permit, no price" with amount 0
   if (item.roofPermit === 'yes') {
     const permitCents = priceMap.get(`roofing|service_type|permit`)
       ?? priceMap.get(`roofing|permit|permit`)
@@ -168,7 +173,23 @@ async function buildRoofingLineItems(
         originalAmount: Math.round(permitCents) / 100,
         source: 'preset_calculated' as const,
       })
+    } else {
+      lines.push({
+        id: 'roofing-permit',
+        label: 'Permit — no price',
+        amount: 0,
+        originalAmount: 0,
+        source: 'preset_calculated' as const,
+      })
     }
+  } else {
+    lines.push({
+      id: 'roofing-permit',
+      label: 'Permit — no permit, no price',
+      amount: 0,
+      originalAmount: 0,
+      source: 'preset_calculated' as const,
+    })
   }
 
   return lines

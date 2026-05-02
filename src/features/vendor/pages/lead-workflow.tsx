@@ -1318,7 +1318,7 @@ export default function VendorLeadWorkflow() {
                       {lineItems.map((line) => (
                         <div key={line.id} className="flex justify-between">
                           <span className="text-muted-foreground">{line.label}</span>
-                          <span className="font-medium">{fmt(line.amount)}</span>
+                          <span className="font-medium">{line.amount === 0 ? '—' : fmt(line.amount)}</span>
                         </div>
                       ))}
                       <div className="border-t border-border/60 pt-1.5 flex justify-between">
