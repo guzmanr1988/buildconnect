@@ -354,7 +354,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       const result = await measureRoofFromAddress(address.trim())
       if (result.canonicalAddress) setAddress(result.canonicalAddress)
       setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
-      setAdjArea(String(result.areaSqft))
+      setAdjArea(String(Math.max(0, result.areaSqft - (result.flatAreaSqft || 0))))
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
       setAdjPerimeterFt(String(result.perimeterFt))
@@ -379,13 +379,16 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
   }
 
-  const finalArea = adjArea ? Math.max(100, Number(adjArea) || 0) : (measurement?.areaSqft ?? 0)
+  // adjArea = pitched-only footprint (not total). flat is additive on top.
+  const finalArea = adjArea
+    ? Math.max(100, Number(adjArea) || 0)
+    : measurement
+      ? Math.max(0, (measurement.areaSqft || 0) - (measurement.flatAreaSqft || 0))
+      : 0
+  const finalFlatAreaSqft = measurement ? Math.max(0, Number(adjFlatArea) || 0) : 0
   const finalWaste = Math.round(finalArea * ROOF_WASTE_FACTOR)
   const finalPitch = adjPitch || (measurement?.pitch ?? '')
-  const finalFlatAreaSqft = measurement
-    ? Math.min(Math.max(0, Number(adjFlatArea) || 0), finalArea)
-    : 0
-  const derivedPitchedAreaSqft = Math.max(0, finalArea - finalFlatAreaSqft)
+  const derivedPitchedAreaSqft = finalArea
 
   const handleComplete = () => {
     if (!stepThreeComplete || !permit) return
@@ -393,7 +396,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     const hasFlatSection = material !== null && flatSelected
     onComplete({
       address: address.trim(),
-      areaSqft: includeFlat ? finalArea : Math.round(derivedPitchedAreaSqft),
+      areaSqft: includeFlat ? Math.round(finalArea + finalFlatAreaSqft) : Math.round(finalArea),
       pitch: finalPitch,
       material: dominantMaterial,
       hasFlatSection,
@@ -505,23 +508,20 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </span>
                         </div>
                         {(() => {
-                          const { totalSqft, totalSquares, pitchedWaste, flatWaste } = computeRoofTotal({
+                          const { pitchedWaste } = computeRoofTotal({
                             pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
                             flatAreaSqft: Math.round(finalFlatAreaSqft),
                             includeFlat,
                           })
-                          const showFlat = includeFlat && flatWaste > 0
+                          const pitchedSquares = Math.ceil(pitchedWaste / 100)
                           return (
                             <>
                               <p className="text-xl font-bold text-foreground">
-                                {totalSqft.toLocaleString()}{' '}
-                                <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
+                                {pitchedWaste.toLocaleString()}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">sqft ({pitchedSquares} squares)</span>
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                {showFlat
-                                  ? <>Pitched {pitchedWaste.toLocaleString()} sqft + Flat {flatWaste.toLocaleString()} sqft w/waste</>
-                                  : <>Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)</>
-                                }
+                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste
                               </p>
                             </>
                           )
@@ -582,9 +582,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                             Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
                           </p>
                         </div>
-                        {/* Pitched (auto) — unchanged */}
                         <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Pitched (auto)</p>
+                          <p className="text-xs text-muted-foreground mb-0.5">Pitched</p>
                           <p className="text-sm font-semibold text-foreground">
                             {derivedPitchedAreaSqft.toLocaleString()} sqft
                           </p>
@@ -635,7 +634,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="mb-1 block text-xs">Area (sq ft)</Label>
+                          <Label className="mb-1 block text-xs">Pitched area (sq ft)</Label>
                           <Input value={adjArea} onChange={(e) => setAdjArea(e.target.value)} placeholder="e.g. 1800" className="h-8 text-sm" />
                         </div>
                         <div>
