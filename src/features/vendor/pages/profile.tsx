@@ -234,8 +234,8 @@ export default function VendorProfile() {
           dashboard) — profile keeps editable identity fields; dashboard
           owns at-a-glance metrics. */}
 
-      {/* Contractor Licenses */}
-      <motion.div variants={item}>
+      {/* Contractor Licenses — vendor-identity attribute, hidden for account_rep */}
+      {profile?.role !== 'account_rep' && <motion.div variants={item}>
         <Card className="rounded-xl shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -317,7 +317,7 @@ export default function VendorProfile() {
             )}
           </CardContent>
         </Card>
-      </motion.div>
+      </motion.div>}
 
       {/* Account Actions */}
       <motion.div variants={item}>
