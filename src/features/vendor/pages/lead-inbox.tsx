@@ -755,6 +755,31 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
+                            {/* Pricing Breakdown — generic card for all non-windows_doors services.
+                                Windows/Doors already has per-unit price cards above; skip for that service.
+                                resolvedLineItems is the SoT (sp.priceLineItems snapshotted at sendProject,
+                                fallback to PRICE_LINE_ITEM_PRESETS). */}
+                            {sp.item.serviceId !== 'windows_doors' && resolvedLineItems && resolvedLineItems.length > 0 && (() => {
+                              const total = resolvedLineItems.reduce((s: number, l: any) => s + (l.amount ?? 0), 0)
+                              if (total === 0) return null
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Pricing Breakdown</h4>
+                                  <div className="flex flex-col gap-1">
+                                    {resolvedLineItems.map((l: any) => (
+                                      <div key={l.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                        <span className="text-sm text-foreground">{l.label}</span>
+                                        <span className="text-sm font-bold text-primary">{fmt(l.amount ?? 0)}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/10 mt-1">
+                                      <span className="text-sm font-semibold text-foreground">Total</span>
+                                      <span className="text-sm font-bold text-primary">{fmt(total)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
                             {/* Pool Add-on Quantities */}
                             {sp.item.addonQuantities && (
                               <div className="rounded-xl border bg-background p-4 space-y-3">

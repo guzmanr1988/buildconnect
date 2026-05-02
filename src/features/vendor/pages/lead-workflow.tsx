@@ -1299,6 +1299,37 @@ export default function VendorLeadWorkflow() {
                 )
               })()}
 
+              {/* Pricing Breakdown — mirrors windows-style price cards for all services.
+                  windows_doors already has per-unit cards in lead-inbox; here we render
+                  the resolved line items for ALL services so the sheet is self-contained. */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp) return null
+                const resolvedLineItems = sp.priceLineItems && sp.priceLineItems.length > 0
+                  ? sp.priceLineItems
+                  : (PRICE_LINE_ITEM_PRESETS[sp.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+                if (!resolvedLineItems || resolvedLineItems.length === 0) return null
+                const total = resolvedLineItems.reduce((s: number, l: any) => s + (l.amount ?? 0), 0)
+                if (total === 0) return null
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pricing Breakdown</p>
+                    <div className="space-y-1 text-sm">
+                      {resolvedLineItems.map((l: any) => (
+                        <div key={l.id} className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{l.label}</span>
+                          <span className="font-medium">{fmt(l.amount ?? 0)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                        <span className="font-semibold text-foreground">Total</span>
+                        <span className="font-bold text-foreground">{fmt(total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Price — Ship #342: reuse #338 saleAmountByLeadId Map
                   fallback at this Lead Detail Modal Price chip render-site
                   (consumer-render-layer; vendor-lead-stages.ts UNTOUCHED
