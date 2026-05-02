@@ -121,6 +121,7 @@ interface MeasurementData {
   perimeterFt: number
   pitchedAreaSqft: number
   flatAreaSqft: number
+  isMock?: boolean
 }
 
 // ─── Measurement helper ───────────────────────────────────────────────────────
@@ -179,6 +180,7 @@ function mockMeasurement(address: string): MeasurementData & { canonicalAddress?
     perimeterFt: 180,
     pitchedAreaSqft: 2000,
     flatAreaSqft: 0,
+    isMock: true,
     canonicalAddress: address,
   }
 }
@@ -488,6 +490,11 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
 
               {measurement && !measuring && (
                 <div className="space-y-3">
+                  {measurement.isMock && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5 text-[12px] text-amber-800 dark:text-amber-300">
+                      Satellite data wasn't available for this address — measurements below are estimates. Tap <span className="font-semibold">Adjust manually</span> to correct them before continuing.
+                    </div>
+                  )}
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
