@@ -381,15 +381,19 @@ export function RoofingWizard({
         {/* S3 — Material */}
         {step === 3 && (
           <div className="flex flex-col gap-3">
-            {materialGroup.options.filter((opt) =>
-              !(opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false)
-            ).map((opt) => {
+            {materialGroup.options.map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
+              // Ship #346 — gate Flat Roof card when includeFlat is OFF.
+              // Keep in DOM (layout) but disable + grey + show inline hint.
+              const isFlatGated = opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false
               return (
                 <button
                   key={opt.id}
                   type="button"
+                  disabled={isFlatGated}
+                  title={isFlatGated ? 'Toggle Flat section ON in Step 1 to enable' : undefined}
                   onClick={() => {
+                    if (isFlatGated) return
                     toggleMulti('material', opt.id)
                     if (opt.id === 'metal' && isSelected) {
                       setMetalRoofSelection({ color: '', roofSize: '' })
@@ -397,9 +401,11 @@ export function RoofingWizard({
                   }}
                   className={cn(
                     'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
-                    isSelected
-                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                      : 'border-border hover:border-primary/40 hover:bg-muted'
+                    isFlatGated
+                      ? 'border-border opacity-40 cursor-not-allowed'
+                      : isSelected
+                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                        : 'border-border hover:border-primary/40 hover:bg-muted'
                   )}
                 >
                   <div className={cn(
@@ -413,9 +419,14 @@ export function RoofingWizard({
                     {opt.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                     )}
-                    {opt.id === 'flat_roof' && (
+                    {opt.id === 'flat_roof' && !isFlatGated && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Add Flat Roof if part of your home has a flat section like a porch or garage. We estimate the flat area from satellite — you can adjust it in the measurement step if it looks off.
+                      </p>
+                    )}
+                    {isFlatGated && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Toggle the Flat section ON in Step 1 to enable this option.
                       </p>
                     )}
                   </div>
