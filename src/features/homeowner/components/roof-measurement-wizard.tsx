@@ -505,11 +505,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </span>
                         </div>
                         {(() => {
-                          const { totalSqft, totalSquares, pitchedWaste } = computeRoofTotal({
+                          const { totalSqft, totalSquares, pitchedWaste, flatWaste } = computeRoofTotal({
                             pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
                             flatAreaSqft: Math.round(finalFlatAreaSqft),
                             includeFlat,
                           })
+                          const showFlat = includeFlat && flatWaste > 0
                           return (
                             <>
                               <p className="text-xl font-bold text-foreground">
@@ -517,7 +518,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                                 <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)
+                                {showFlat
+                                  ? <>Pitched {pitchedWaste.toLocaleString()} sqft + Flat {flatWaste.toLocaleString()} sqft w/waste</>
+                                  : <>Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste ({pitchedWaste.toLocaleString()} sqft)</>
+                                }
                               </p>
                             </>
                           )
@@ -588,6 +592,23 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
                       </div>
                     )}
+                    {(() => {
+                      const { totalSqft, totalSquares } = computeRoofTotal({
+                        pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
+                        flatAreaSqft: Math.round(finalFlatAreaSqft),
+                        includeFlat,
+                      })
+                      return (
+                        <div className="border-t pt-3">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
+                          <p className="text-xl font-bold text-foreground mt-0.5">
+                            {totalSqft.toLocaleString()}{' '}
+                            <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Used for pricing</p>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   <button
