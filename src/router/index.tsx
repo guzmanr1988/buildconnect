@@ -124,6 +124,8 @@ export const router = createBrowserRouter([
           { path: 'homeowners/:homeownerId', element: <VendorHomeownerDetail />, handle: { title: 'Vendor · Homeowner' } },
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
+          // BUG-001: /vendor/products was used in older deep-links; redirect to canonical /vendor/catalog
+          { path: 'products', element: <Navigate to="/vendor/catalog" replace /> },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
           { path: 'account-reps', element: <VendorAccountRepsPage />, handle: { title: 'Vendor · Account Reps' } },
           { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
