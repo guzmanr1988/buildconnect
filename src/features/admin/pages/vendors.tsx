@@ -269,6 +269,13 @@ export default function VendorsPage() {
               {MOCK_VENDORS.filter((v) => v.status === 'pending').length} Pending
             </span>
           </div>
+          {MOCK_VENDORS.filter((v) => v.status === 'suspended').length > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-3 py-1.5 text-sm">
+              <span className="font-medium text-red-800 dark:text-red-400">
+                {MOCK_VENDORS.filter((v) => v.status === 'suspended').length} Suspended
+              </span>
+            </div>
+          )}
         </div>
       </PageHeader>
 

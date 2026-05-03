@@ -10,7 +10,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { ServiceCard } from '../components/service-card'
-import { OnboardingTour, hasSeenOnboarding } from '../components/onboarding-tour'
+import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
@@ -185,6 +185,8 @@ export function HomeownerHome() {
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   useEffect(() => {
     if (!hasSeenOnboarding()) {
+      // Mark seen immediately so navigating away before dismissal doesn't reset it
+      markOnboardingSeen()
       const t = setTimeout(() => setOnboardingOpen(true), 300)
       return () => clearTimeout(t)
     }
