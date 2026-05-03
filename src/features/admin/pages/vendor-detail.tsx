@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, ChevronDown, Briefcase, Phone, MapPin, Users, CreditCard, Download, Mail, User } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, FileText, Percent, AlertTriangle, ChevronRight, ChevronDown, Briefcase, Phone, MapPin, Users, CreditCard, Download, Mail, User, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,10 +18,26 @@ import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS, type VendorEmployee } from '@/stores/vendor-employees-store'
 import { useVendorBillingStore, PAYMENT_METHOD_LABELS } from '@/stores/vendor-billing-store'
 import { useVendorHomeownerDocsStore, VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS } from '@/stores/vendor-homeowner-documents-store'
-import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { MOCK_VENDORS, MOCK_CATALOG } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
-import type { LeadStatus } from '@/types'
+import type { LeadStatus, ServiceCategory } from '@/types'
+
+const CATEGORY_LABELS: Record<ServiceCategory, string> = {
+  roofing: 'Roofing',
+  windows_doors: 'Windows & Doors',
+  pool: 'Pool',
+  driveways: 'Driveways',
+  pergolas: 'Pergolas',
+  air_conditioning: 'Air Conditioning',
+  kitchen: 'Kitchen',
+  bathroom: 'Bathroom',
+  wall_paneling: 'Wall Paneling',
+  garage: 'Garage',
+  house_painting: 'House Painting',
+  blinds: 'Blinds',
+}
 
 // Ship #284 — admin per-vendor detail page (Rodolfo-direct, mock-data
 // only per banked rule). Section-split: card-side keeps vendor info +
@@ -68,6 +84,12 @@ export default function AdminVendorDetail() {
   const paymentMethodsByVendor = useVendorBillingStore((s) => s.paymentMethodsByVendor)
   const paymentMethods = useMemo(() => paymentMethodsByVendor[vendorId] ?? [], [paymentMethodsByVendor, vendorId])
   const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
+  const vendorCatalogServices = useVendorCatalogStore((s) => s.services)
+
+  const vendorCatalogItems = useMemo(
+    () => MOCK_CATALOG.filter((ci) => ci.vendor_id === vendorId && ci.active),
+    [vendorId],
+  )
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [agreementViewOpen, setAgreementViewOpen] = useState(false)
@@ -303,6 +325,55 @@ export default function AdminVendorDetail() {
             </Button>
           </CardContent>
         </Card>
+      </section>
+
+      {/* Section: Products — PRODUCT-IS-GOD Phase A visibility (PR 1).
+          Lists active CatalogItems for this vendor. Active-service count =
+          priced options in vendor-catalog-store for the matching serviceId.
+          Click-action is TBD in PR 6; circle is a status indicator only. */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          <h2 className="font-heading text-lg font-semibold">Products</h2>
+          <span className="text-sm text-muted-foreground">({vendorCatalogItems.length})</span>
+        </div>
+        {vendorCatalogItems.length === 0 ? (
+          <Card className="rounded-xl">
+            <CardContent className="p-5 text-sm text-muted-foreground">No products configured yet.</CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {vendorCatalogItems.map((ci) => {
+              const svc = vendorCatalogServices.find((s) => s.serviceId === ci.category)
+              const activeCount = svc?.enabled
+                ? Object.values(svc.pricing).filter((cents) => cents > 0).length
+                : 0
+              return (
+                <Card key={ci.id} className="rounded-xl" data-admin-vendor-product={ci.id}>
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <p className="font-medium text-foreground">{ci.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {CATEGORY_LABELS[ci.category] ?? ci.category}
+                      </p>
+                    </div>
+                    <div
+                      className={cn(
+                        'flex items-center justify-center rounded-full h-9 px-3 text-xs font-semibold shrink-0',
+                        activeCount > 0
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                      data-admin-vendor-product-active-count={ci.id}
+                    >
+                      {activeCount} active
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       {/* Section: All Detailed Projects */}
