@@ -899,7 +899,7 @@ export const useProjectsStore = create<ProjectsState>()(
         const seenIds = new Set<string>()
         const seenItemIds = new Set<string>()
         const mergedProjects: SentProject[] = []
-        for (const p of [...persistedProjects, ...currentProjects]) {
+        for (const p of [...currentProjects, ...persistedProjects]) {
           if (!seenIds.has(p.id) && !seenItemIds.has(p.item.id)) {
             seenIds.add(p.id)
             seenItemIds.add(p.item.id)
