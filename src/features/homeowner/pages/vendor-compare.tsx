@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDORS, MOCK_CATALOG } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { useCartStore } from '@/stores/cart-store'
 import { useAuthStore } from '@/stores/auth-store'
@@ -63,6 +63,14 @@ export function VendorComparePage() {
       if (cartCategories.size > 0) {
         const covers = v.service_categories.some((c) => cartCategories.has(c))
         if (!covers) return false
+      }
+      // PRODUCT-IS-GOD Phase B (PR 3): vendor must have a priced active CatalogItem
+      // for EVERY service category in cart. Partial coverage = not eligible.
+      if (cartCategories.size > 0) {
+        const allPriced = [...cartCategories].every((cat) =>
+          MOCK_CATALOG.some((ci) => ci.vendor_id === v.id && ci.category === cat && ci.active && ci.price > 0)
+        )
+        if (!allPriced) return false
       }
       // Distance filter — only applies when GMP+realGeocoding are ON and
       // homeowner has coords. Vendors missing lat/lng fall through permissive

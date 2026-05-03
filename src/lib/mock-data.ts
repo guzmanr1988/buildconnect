@@ -38,6 +38,10 @@ export const MOCK_VENDORS: Vendor[] = [
   // fixture: PR 2 walk-only — suspended vendor covering roofing; used to verify
   // status gate excludes suspended from homeowner shopping. Reused for PR 3 walk.
   { id: 'v-fix-suspended', email: 'fixture-suspended@vendor.com', name: 'Fixture Suspended', role: 'vendor', phone: '(000) 000-0000', address: '0 Test St, Miami, FL 33100', latitude: 25.7600, longitude: -80.2000, company: 'Fixture Suspended Roofing Co', avatar_color: '#64748b', initials: 'FS', status: 'suspended', created_at: '2026-01-01T00:00:00Z', service_categories: ['roofing'], rating: 4.0, response_time: '~2 hours', verified: false, financing_available: false, total_reviews: 0, commission_pct: 10, reps: [] },
+  // fixture: PR 3 walk-only — active vendor with roofing in service_categories but
+  // NO CatalogItem entries, so it passes the status gate but fails the per-service
+  // pricing gate for any roofing cart (walk-2) and any multi-service cart (walk-3).
+  { id: 'v-fix-no-pricing', email: 'fixture-no-pricing@vendor.com', name: 'Fixture No Pricing', role: 'vendor', phone: '(000) 000-0001', address: '1 Test St, Miami, FL 33100', latitude: 25.7601, longitude: -80.2001, company: 'Fixture No Pricing Roofing Co', avatar_color: '#a1a1aa', initials: 'FN', status: 'active', created_at: '2026-01-01T00:00:00Z', service_categories: ['roofing', 'air_conditioning'], rating: 4.0, response_time: '~2 hours', verified: false, financing_available: false, total_reviews: 0, commission_pct: 10, reps: [] },
 ]
 
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
@@ -72,6 +76,12 @@ export const MOCK_CATALOG: CatalogItem[] = [
   { id: 'ci-8', vendor_id: 'v-4', category: 'driveways', name: 'Interlocking Pavers', description: 'Belgard Catalina', unit: 'per_sq_ft', price: 15.00, active: true, multiplier: 1.0 },
   { id: 'ci-9', vendor_id: 'v-5', category: 'air_conditioning', name: 'Central AC 3 Ton', description: 'Carrier Infinity 24ANB', unit: 'flat_rate', price: 6500, active: true, multiplier: 1.0 },
   { id: 'ci-10', vendor_id: 'v-1', category: 'roofing', name: 'Gutter Installation', description: '5" seamless aluminum', unit: 'per_linear_ft', price: 12.00, active: true, multiplier: 1.0 },
+  // ci-11: v-1 HVAC item — enables Apex to pass the per-service pricing gate on
+  // roofing+AC carts (Walk 3 of PR 3). v-1 has air_conditioning in service_categories.
+  { id: 'ci-11', vendor_id: 'v-1', category: 'air_conditioning', name: 'Mini-Split AC System', description: 'Mitsubishi 2-zone ductless', unit: 'flat_rate', price: 3200, active: true, multiplier: 1.0 },
+  // fixture: PR 3 walk-only — active vendor with roofing in service_categories but
+  // no CatalogItem, so it fails the per-service pricing gate for any cart. Reused
+  // for PR 3 walk-2 (per-service gate fires) and walk-3 (cross-category check).
 ]
 
 // ─── Messages ───
