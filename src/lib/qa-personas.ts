@@ -138,13 +138,13 @@ const PERSONA_2_CART: QAPersona = {
     items: [{
       id: 'qa2-cart-item-1',
       serviceId: 'pool',
-      serviceName: 'Swimming Pool',
+      serviceName: 'Pool & Oasis',
       selections: {
-        pool_size: ['medium_25x15'],
-        pool_shape: ['rectangular'],
-        pool_finish: ['pebble_tec'],
+        project_type: ['new_pool'],
+        pool_size: ['12x24'],
+        pool_floor: ['travertine'],
+        addons: ['led', 'bubbler'],
       },
-      addonQuantities: { ledCount: 4, laminarJets: 2 },
       address: {
         label: 'Primary',
         full: '3400 Las Olas Blvd, Fort Lauderdale, FL 33301',
@@ -369,7 +369,7 @@ export function applyQAPersona(persona: QAPersona) {
     version: 0,
   }))
 
-  localStorage.setItem('buildconnect-projects', JSON.stringify({
+  localStorage.setItem('buildconnect-projects-v2', JSON.stringify({
     state: {
       sentProjects: persona.projects.sentProjects,
       assignedRepByLead: persona.projects.assignedRepByLead,
@@ -427,6 +427,7 @@ export async function clearQAPersona(): Promise<void> {
   localStorage.removeItem('buildconnect-auth')
   localStorage.removeItem('buildconnect-cart')
   localStorage.removeItem('buildconnect-projects')
+  localStorage.removeItem('buildconnect-projects-v2')
   localStorage.removeItem('buildconnect-qa-persona-active')
   localStorage.removeItem('buildconnect-pending-item')
   localStorage.removeItem('buildconnect-selected-contractor')
