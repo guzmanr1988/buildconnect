@@ -35,6 +35,9 @@ export const MOCK_VENDORS: Vendor[] = [
     { id: 'v-5-rep-1', name: 'Brian Walsh', role: 'HVAC Technician', phone: '(305) 555-2011' },
     { id: 'v-5-rep-2', name: 'Jessica Tran', role: 'Installation Coordinator', phone: '(305) 555-2012' },
   ] },
+  // fixture: PR 2 walk-only — suspended vendor covering roofing; used to verify
+  // status gate excludes suspended from homeowner shopping. Reused for PR 3 walk.
+  { id: 'v-fix-suspended', email: 'fixture-suspended@vendor.com', name: 'Fixture Suspended', role: 'vendor', phone: '(000) 000-0000', address: '0 Test St, Miami, FL 33100', latitude: 25.7600, longitude: -80.2000, company: 'Fixture Suspended Roofing Co', avatar_color: '#64748b', initials: 'FS', status: 'suspended', created_at: '2026-01-01T00:00:00Z', service_categories: ['roofing'], rating: 4.0, response_time: '~2 hours', verified: false, financing_available: false, total_reviews: 0, commission_pct: 10, reps: [] },
 ]
 
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }

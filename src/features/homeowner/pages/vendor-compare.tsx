@@ -55,6 +55,9 @@ export function VendorComparePage() {
 
   const featuredVendors = useMemo(() => {
     const base = MOCK_VENDORS.filter((v) => {
+      // PRODUCT-IS-GOD Phase B (PR 2): only active vendors appear in shopping.
+      // Pending + suspended are invisible to homeowners.
+      if (v.status !== 'active') return false
       // If cart is non-empty, only include vendors covering at least one
       // cart category. Empty cart → skip category filter (let them browse).
       if (cartCategories.size > 0) {
