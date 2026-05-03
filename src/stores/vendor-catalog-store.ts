@@ -34,6 +34,10 @@ interface VendorCatalogState {
   isOptionEnabled: (serviceId: string, groupId: string, optionId: string) => boolean
   getPrice: (serviceId: string, optionId: string) => number
   getPricePercent: (serviceId: string, optionId: string) => number
+  // PRODUCT-IS-GOD Phase C (PR 4): single SoT for "is this vendor product-ready."
+  // True if ≥1 service is enabled AND has ≥1 priced option (pricing cents > 0).
+  // Pure computed — no mutation. Consumer: PR 5 admin-moderation-store auto-flip.
+  hasActiveProducts: () => boolean
   // Supabase hydration — call on vendor login. Loads prices from DB,
   // builds option UUID cache, and migrates any localStorage-only prices
   // to Supabase on first run.
@@ -155,6 +159,12 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       getPricePercent: (serviceId, optionId) => {
         const service = get().services.find((s) => s.serviceId === serviceId)
         return service?.pricingPercent?.[optionId] || 0
+      },
+
+      hasActiveProducts: () => {
+        return get().services.some(
+          (s) => s.enabled && Object.values(s.pricing).some((cents) => cents > 0),
+        )
       },
 
       hydrateFromSupabase: async (vendorUuid: string) => {
