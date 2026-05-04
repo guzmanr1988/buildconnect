@@ -79,6 +79,13 @@ export function SatelliteMeasure({
       {measured && (
         <MeasurementSummary result={measured} />
       )}
+      {measured?.isMock && (
+        <ManualEntryForm
+          serviceCategory={serviceCategory}
+          onMeasure={onMeasure}
+          initialSqft={measured.areaSqft}
+        />
+      )}
     </div>
   )
 }
@@ -112,16 +119,18 @@ function MeasurementSummary({ result }: { result: MeasurementResult }) {
   )
 }
 
-// Manual entry fallback — shown when GMP is disabled or address can't resolve.
+// Manual entry fallback — shown when GMP is disabled or API returned a mock estimate.
 // Never blocks the user; always has a path forward (Rule #5).
 function ManualEntryForm({
   serviceCategory,
   onMeasure,
+  initialSqft,
 }: {
   serviceCategory: SatelliteMeasureProps['serviceCategory']
   onMeasure: (r: MeasurementResult) => void
+  initialSqft?: number
 }) {
-  const defaultArea = SERVICE_DEFAULT_AREAS[serviceCategory] ?? 500
+  const defaultArea = initialSqft ?? SERVICE_DEFAULT_AREAS[serviceCategory] ?? 500
   const [sqft, setSqft] = useState(String(defaultArea))
 
   function handleApply() {
