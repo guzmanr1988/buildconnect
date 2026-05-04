@@ -99,6 +99,7 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
     sentProjects
       .filter((sp) => {
         if (sp.contractor?.vendor_id) { if (sp.contractor.vendor_id !== vendor.id) return false }
+        else if (sp.vendor_id) { if (sp.vendor_id !== vendor.id) return false }
         else if (sp.contractor?.company !== vendor.company) return false
         if (isRep && profile?.id) {
           const leadId = `L-${sp.id.slice(0, 4).toUpperCase()}`

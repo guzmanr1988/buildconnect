@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, MessageSquare, Mail, FileText, CheckCircle2, AlertTriangle, ChevronRight, Ban, RotateCcw, Briefcase, Download, ShieldCheck } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { deriveInitials } from '@/lib/initials'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -79,7 +81,7 @@ export default function AdminHomeownerDetail() {
   // Resolve homeowner from either inline HOMEOWNERS or MOCK_HOMEOWNERS
   // by email (URL key). Falls back to lookup-by-id if email not found
   // (legacy URL safety).
-  const homeownerFixture = useMemo(
+  const fixtureHomeowner = useMemo(
     () =>
       HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
       MOCK_HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
@@ -87,12 +89,46 @@ export default function AdminHomeownerDetail() {
     [homeownerEmail],
   )
 
+  // Supabase fallback: when email not in fixtures, query profiles by email.
+  // Enables admin to view detail pages for real-auth homeowners (walk-seed
+  // and future signups) that aren't in the static HOMEOWNERS array.
+  const [supabaseHomeowner, setSupabaseHomeowner] = useState<AdminHomeowner | null>(null)
+  const [supabaseLoading, setSupabaseLoading] = useState(false)
+  useEffect(() => {
+    if (fixtureHomeowner || !homeownerEmail) return
+    setSupabaseLoading(true)
+    supabase
+      .from('profiles')
+      .select('id, name, email, phone, address, avatar_color, status, created_at')
+      .eq('email', homeownerEmail)
+      .eq('role', 'homeowner')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setSupabaseHomeowner({
+            id: data.id as string,
+            name: (data.name as string) || homeownerEmail,
+            email: data.email as string,
+            phone: (data.phone as string) || '',
+            address: (data.address as string) || '',
+            avatar_color: (data.avatar_color as string) || '#3b82f6',
+            initials: deriveInitials((data.name as string) || homeownerEmail),
+            status: ((data.status as string) || 'active') as AdminHomeowner['status'],
+            created_at: (data.created_at as string) || new Date().toISOString(),
+          })
+        }
+        setSupabaseLoading(false)
+      })
+  }, [homeownerEmail, fixtureHomeowner])
+
+  const resolvedHomeowner = fixtureHomeowner ?? supabaseHomeowner
+
   // Status overrides + actions
   const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
   const suspendHomeowner = useAdminModerationStore((s) => s.suspendHomeowner)
   const reactivateHomeowner = useAdminModerationStore((s) => s.reactivateHomeowner)
-  const status = homeownerFixture
-    ? homeownerStatusOverrides[homeownerFixture.id] ?? homeownerFixture.status
+  const status = resolvedHomeowner
+    ? homeownerStatusOverrides[resolvedHomeowner.id] ?? resolvedHomeowner.status
     : 'active'
 
   // Cross-vendor data sources
@@ -119,7 +155,7 @@ export default function AdminHomeownerDetail() {
 
   // ALL Projects derivation (cross-vendor, sorted most-recent-first).
   const allProjects = useMemo(() => {
-    if (!homeownerFixture) return []
+    if (!resolvedHomeowner) return []
     const rows: { id: string; date: string; project: string; vendor?: string; status: string; amount?: number; clickId: string | null }[] = []
 
     // sentProjects (cart-created) for THIS homeowner across all vendors.
@@ -179,7 +215,7 @@ export default function AdminHomeownerDetail() {
     })
 
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [homeownerFixture, homeownerEmail, sentProjects, mockLeads, mockClosedSales])
+  }, [resolvedHomeowner, homeownerEmail, sentProjects, mockLeads, mockClosedSales])
 
   // Group docs by vendor for cross-vendor display.
   const docsByVendor = useMemo(() => {
@@ -204,33 +240,37 @@ export default function AdminHomeownerDetail() {
     return sp?.idDocument ?? null
   }, [sentProjects, homeownerEmail])
 
-  if (!homeownerFixture) {
+  if (!resolvedHomeowner) {
     return (
       <div className="space-y-6">
         <Link to="/admin/homeowners" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to homeowners
         </Link>
-        <EmptyState
-          icon={AlertTriangle}
-          title="Homeowner not found"
-          description={`No homeowner with email ${homeownerEmail} in the registry.`}
-        />
+        {supabaseLoading ? (
+          <p className="text-sm text-muted-foreground">Loading homeowner…</p>
+        ) : (
+          <EmptyState
+            icon={AlertTriangle}
+            title="Homeowner not found"
+            description={`No homeowner with email ${homeownerEmail} in the registry.`}
+          />
+        )}
       </div>
     )
   }
 
   const handleSuspendConfirm = () => {
-    if (!homeownerFixture) return
-    suspendHomeowner(homeownerFixture.id)
-    toast.success(`${homeownerFixture.name} suspended.`)
+    if (!resolvedHomeowner) return
+    suspendHomeowner(resolvedHomeowner.id)
+    toast.success(`${resolvedHomeowner.name} suspended.`)
     setConfirmSuspend(false)
   }
 
   const handleReactivate = () => {
-    if (!homeownerFixture) return
-    reactivateHomeowner(homeownerFixture.id)
-    toast.success(`${homeownerFixture.name} reactivated.`)
+    if (!resolvedHomeowner) return
+    reactivateHomeowner(resolvedHomeowner.id)
+    toast.success(`${resolvedHomeowner.name} reactivated.`)
   }
 
   return (
@@ -241,25 +281,25 @@ export default function AdminHomeownerDetail() {
       </Link>
 
       <PageHeader
-        title={homeownerFixture.name}
-        description={`${homeownerFixture.email} · status: ${status}`}
+        title={resolvedHomeowner.name}
+        description={`${resolvedHomeowner.email} · status: ${status}`}
       />
 
       <HomeownerDetailHeader
-        name={homeownerFixture.name}
-        email={homeownerFixture.email}
-        phone={homeownerFixture.phone}
-        address={homeownerFixture.address}
-        avatar_color={homeownerFixture.avatar_color}
-        initials={homeownerFixture.initials}
+        name={resolvedHomeowner.name}
+        email={resolvedHomeowner.email}
+        phone={resolvedHomeowner.phone}
+        address={resolvedHomeowner.address}
+        avatar_color={resolvedHomeowner.avatar_color}
+        initials={resolvedHomeowner.initials}
         projectsLabel={`${allProjects.length} ${allProjects.length === 1 ? 'project' : 'projects'} across all vendors`}
         actions={
           <>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/admin/messages', { state: { homeownerId: homeownerFixture.id, homeownerName: homeownerFixture.name } })}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/admin/messages', { state: { homeownerId: resolvedHomeowner.id, homeownerName: resolvedHomeowner.name } })}>
               <MessageSquare className="h-3.5 w-3.5" />
               Message
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { window.location.href = `mailto:${homeownerFixture.email}` }}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { window.location.href = `mailto:${resolvedHomeowner.email}` }}>
               <Mail className="h-3.5 w-3.5" />
               Email
             </Button>
@@ -286,7 +326,7 @@ export default function AdminHomeownerDetail() {
           <span className="text-sm text-muted-foreground">({allProjects.length})</span>
         </div>
         {allProjects.length === 0 ? (
-          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No projects yet for {homeownerFixture.name}.</CardContent></Card>
+          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No projects yet for {resolvedHomeowner.name}.</CardContent></Card>
         ) : (
           <div className="space-y-2">
             {allProjects.map((p) => (
@@ -338,7 +378,7 @@ export default function AdminHomeownerDetail() {
               </div>
               <a
                 href={homeownerIdDocument}
-                download={`${homeownerFixture.name.replace(/\s/g, '-')}-id`}
+                download={`${resolvedHomeowner.name.replace(/\s/g, '-')}-id`}
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -350,7 +390,7 @@ export default function AdminHomeownerDetail() {
 
         {/* Subsection b: Vendor-uploaded docs grouped by vendor */}
         {docsByVendor.length === 0 && !homeownerIdDocument ? (
-          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents on file for {homeownerFixture.name} yet.</CardContent></Card>
+          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents on file for {resolvedHomeowner.name} yet.</CardContent></Card>
         ) : null}
 
         {docsByVendor.map((group) => (
@@ -399,9 +439,9 @@ export default function AdminHomeownerDetail() {
       <Dialog open={confirmSuspend} onOpenChange={setConfirmSuspend}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading">Suspend {homeownerFixture.name}?</DialogTitle>
+            <DialogTitle className="font-heading">Suspend {resolvedHomeowner.name}?</DialogTitle>
             <DialogDescription>
-              {homeownerFixture.name} will lose access to the platform until you reactivate. Their existing projects + documents stay on file for audit.
+              {resolvedHomeowner.name} will lose access to the platform until you reactivate. Their existing projects + documents stay on file for audit.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col sm:flex-row gap-2">

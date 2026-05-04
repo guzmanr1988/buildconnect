@@ -65,6 +65,9 @@ export interface SentProject {
   // with persisted entries that pre-date the FK; new sendProject calls
   // populate it from auth profile.id.
   homeowner_id?: string
+  // Flat vendor_id FK from DB row — complements contractor.vendor_id (nested
+  // JSON) for rows where contractor JSON was seeded without vendor_id inside.
+  vendor_id?: string
   sentAt: string
   soldAt?: string
   // Ship #295 — vendor-marked manual completion. Presence overrides the
@@ -323,13 +326,14 @@ export const useProjectsStore = create<ProjectsState>()(
           status:          row.status as SentProject['status'],
           contractor:      row.contractor as ContractorInfo,
           booking:         { date: row.booking_date, time: row.booking_time },
-          homeowner:       row.homeowner_name ? {
-            name:    row.homeowner_name,
+          homeowner:       (row.homeowner_name || row.homeowner_email) ? {
+            name:    row.homeowner_name ?? '',
             phone:   row.homeowner_phone ?? '',
             email:   row.homeowner_email ?? '',
             address: row.homeowner_address ?? '',
           } : undefined,
           homeowner_id:    row.homeowner_id ?? undefined,
+          vendor_id:       row.vendor_id ?? undefined,
           sentAt:          row.sent_at,
           soldAt:          row.sold_at ?? undefined,
           completedAt:     row.completed_at ?? undefined,
