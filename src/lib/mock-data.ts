@@ -42,6 +42,11 @@ export const MOCK_VENDORS: Vendor[] = [
   // NO CatalogItem entries, so it passes the status gate but fails the per-service
   // pricing gate for any roofing cart (walk-2) and any multi-service cart (walk-3).
   { id: 'v-fix-no-pricing', email: 'fixture-no-pricing@vendor.com', name: 'Fixture No Pricing', role: 'vendor', phone: '(000) 000-0001', address: '1 Test St, Miami, FL 33100', latitude: 25.7601, longitude: -80.2001, company: 'Fixture No Pricing Roofing Co', avatar_color: '#a1a1aa', initials: 'FN', status: 'active', created_at: '2026-01-01T00:00:00Z', service_categories: ['roofing', 'air_conditioning'], rating: 4.0, response_time: '~2 hours', verified: false, financing_available: false, total_reviews: 0, commission_pct: 10, reps: [] },
+  // fixture: satellite-draw Layer 4 — 3 vendors with per-sqft catalog items for
+  // SatelliteMeasure calculation-path validation (roofing / air_conditioning / windows_doors).
+  { id: 'v-sat-1', email: 'precision@vendor.com', name: 'Derek Fontaine', role: 'vendor', phone: '(305) 555-7001', address: '710 NW 22nd Ave, Miami, FL 33125', latitude: 25.7742, longitude: -80.2280, company: 'Precision Roofing Co', avatar_color: '#d97706', initials: 'PR', status: 'active', created_at: '2026-01-10T08:00:00Z', service_categories: ['roofing'], rating: 4.7, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 58, commission_pct: 10, reps: [] },
+  { id: 'v-sat-2', email: 'arcticair@vendor.com', name: 'Sandra Vela', role: 'vendor', phone: '(305) 555-7002', address: '820 SW 57th Ave, Miami, FL 33144', latitude: 25.7432, longitude: -80.2980, company: 'Arctic Air Systems', avatar_color: '#0284c7', initials: 'AA', status: 'active', created_at: '2026-02-01T09:00:00Z', service_categories: ['air_conditioning'], rating: 4.6, response_time: '~3 hours', verified: true, financing_available: false, total_reviews: 34, commission_pct: 10, reps: [] },
+  { id: 'v-sat-3', email: 'clearview@vendor.com', name: 'Paul Estrada', role: 'vendor', phone: '(305) 555-7003', address: '940 NW 36th St, Miami, FL 33127', latitude: 25.8014, longitude: -80.2197, company: 'ClearView Impact Glass', avatar_color: '#0891b2', initials: 'CV', status: 'active', created_at: '2026-02-15T10:00:00Z', service_categories: ['windows_doors'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 47, commission_pct: 10, reps: [] },
 ]
 
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
@@ -82,6 +87,16 @@ export const MOCK_CATALOG: CatalogItem[] = [
   // fixture: PR 3 walk-only — active vendor with roofing in service_categories but
   // no CatalogItem, so it fails the per-service pricing gate for any cart. Reused
   // for PR 3 walk-2 (per-service gate fires) and walk-3 (cross-category check).
+  // fixture: satellite-draw Layer 4 — per-sqft items for SatelliteMeasure calculation
+  // paths. Three price tiers on roofing validate low/mid/high sqft quote paths.
+  // air_conditioning and windows_doors cover multi-service satellite measurements.
+  { id: 'ci-sat-r1', vendor_id: 'v-sat-1', category: 'roofing', name: 'Architectural Shingle HD', description: 'GAF Timberline HDZ — 30-year', unit: 'per_sq_ft', price: 3.85, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-r2', vendor_id: 'v-sat-1', category: 'roofing', name: 'Barrel Tile Premium', description: 'Monier Eagle Capistrano', unit: 'per_sq_ft', price: 7.20, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-r3', vendor_id: 'v-sat-1', category: 'roofing', name: 'Standing Seam Metal', description: '24-gauge galvalume, hidden fastener', unit: 'per_sq_ft', price: 11.50, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-a1', vendor_id: 'v-sat-2', category: 'air_conditioning', name: 'Whole-Home AC Coverage', description: 'Carrier Comfort series, conditioned sq ft', unit: 'per_sq_ft', price: 6.00, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-a2', vendor_id: 'v-sat-2', category: 'air_conditioning', name: 'Premium Zoned HVAC', description: 'Trane XV series, multi-zone, conditioned sq ft', unit: 'per_sq_ft', price: 9.50, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-w1', vendor_id: 'v-sat-3', category: 'windows_doors', name: 'Impact-Rated Glass Area', description: 'PGT WinGuard, glass sq ft installed', unit: 'per_sq_ft', price: 16.00, active: true, multiplier: 1.0 },
+  { id: 'ci-sat-w2', vendor_id: 'v-sat-3', category: 'windows_doors', name: 'Hurricane Laminated Glass', description: 'CGI Sentinel, laminated safety glass sq ft', unit: 'per_sq_ft', price: 22.00, active: true, multiplier: 1.0 },
 ]
 
 // ─── Messages ───
