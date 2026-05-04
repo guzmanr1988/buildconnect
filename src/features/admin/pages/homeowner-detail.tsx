@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, MessageSquare, Mail, FileText, CheckCircle2, AlertTriangle, ChevronRight, Ban, RotateCcw, Briefcase, Download, ShieldCheck } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -100,6 +100,10 @@ export default function AdminHomeownerDetail() {
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
   const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
+  const hydrateAdminForHomeowner = useVendorHomeownerDocsStore((s) => s.hydrateAdminForHomeowner)
+  useEffect(() => {
+    if (homeownerEmail) hydrateAdminForHomeowner(homeownerEmail)
+  }, [homeownerEmail, hydrateAdminForHomeowner])
   const allDocs = useMemo(() => {
     const all: ReturnType<typeof useVendorHomeownerDocsStore.getState>['getAllDocsForHomeowner'] extends (e: string) => infer R ? R : never = []
     Object.values(docsByVendorByHomeowner).forEach((vendorMap) => {
