@@ -311,7 +311,11 @@ export function GenericServiceWizard({
   }
 
   return (
-    <div data-generic-service-wizard={service.id}>
+    <div
+      data-generic-service-wizard={service.id}
+      {...(initialAreaSqft != null && { 'data-initial-sqft': initialAreaSqft })}
+      {...(initialPerimeterFt != null && { 'data-initial-perimeter': initialPerimeterFt })}
+    >
       <CardSlideWizard
         step={step}
         totalSteps={TOTAL_STEPS}
