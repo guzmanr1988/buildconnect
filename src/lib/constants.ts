@@ -310,6 +310,51 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     ],
   },
   {
+    id: 'fencing',
+    name: 'Fencing',
+    tagline: 'Define your property with style',
+    description: 'Professional fence installation for privacy, security, and curb appeal.',
+    features: ['Custom Materials', 'Privacy Options', 'Gates & Hardware'],
+    stat: { label: 'Fences Installed', value: '612' },
+    optionGroups: [
+      {
+        id: 'material',
+        label: 'Fence Material',
+        required: true,
+        type: 'single',
+        options: [
+          { id: 'wood', label: 'Wood' },
+          { id: 'vinyl', label: 'Vinyl' },
+          { id: 'aluminum', label: 'Aluminum' },
+          { id: 'chain_link', label: 'Chain Link' },
+          { id: 'wrought_iron', label: 'Wrought Iron' },
+        ],
+      },
+      {
+        id: 'height',
+        label: 'Fence Height',
+        required: true,
+        type: 'single',
+        options: [
+          { id: '4ft', label: '4 ft' },
+          { id: '6ft', label: '6 ft' },
+          { id: '8ft', label: '8 ft' },
+        ],
+      },
+      {
+        id: 'addons',
+        label: 'Add-Ons',
+        required: false,
+        type: 'multi',
+        options: [
+          { id: 'gates', label: 'Gates' },
+          { id: 'post_caps', label: 'Post Caps' },
+          { id: 'privacy_slats', label: 'Privacy Slats' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'pergolas',
     name: 'Pergolas & Terraces',
     badge: 'Trending',

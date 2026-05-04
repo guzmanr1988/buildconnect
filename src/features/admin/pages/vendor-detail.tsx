@@ -29,6 +29,7 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   windows_doors: 'Windows & Doors',
   pool: 'Pool',
   driveways: 'Driveways',
+  fencing: 'Fencing',
   pergolas: 'Pergolas',
   air_conditioning: 'Air Conditioning',
   kitchen: 'Kitchen',

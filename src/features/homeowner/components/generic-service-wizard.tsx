@@ -31,6 +31,7 @@ interface GenericServiceWizardProps {
   onCancel: () => void
   onDone: () => void
   initialAreaSqft?: number
+  initialPerimeterFt?: number
 }
 
 // Chip button used on every content step.
@@ -72,6 +73,7 @@ export function GenericServiceWizard({
   onCancel,
   onDone,
   initialAreaSqft,
+  initialPerimeterFt,
 }: GenericServiceWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
@@ -148,6 +150,7 @@ export function GenericServiceWizard({
       selections,
       ...(itemAddress && { address: itemAddress }),
       ...(initialAreaSqft != null && { areaSqft: initialAreaSqft }),
+      ...(initialPerimeterFt != null && { perimeterFt: initialPerimeterFt }),
     }
 
     if (editingItemId) {
@@ -225,6 +228,14 @@ export function GenericServiceWizard({
               Measured Area
             </p>
             <p className="text-sm text-foreground">{initialAreaSqft.toLocaleString()} sqft</p>
+          </div>
+        )}
+        {initialPerimeterFt != null && (
+          <div className="rounded-xl bg-muted/50 p-3" data-measured-perimeter={initialPerimeterFt}>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+              Measured Length
+            </p>
+            <p className="text-sm text-foreground">{initialPerimeterFt.toLocaleString()} linear ft</p>
           </div>
         )}
         {filled.map((s) => {
@@ -323,6 +334,12 @@ export function GenericServiceWizard({
 }
 
 // ── Per-service step configs (pre-built, import directly) ─────────────────
+
+export const FENCING_STEPS: GenericWizardStep[] = [
+  { groupId: 'material', title: 'Fence material', subtitle: 'What material would you like for your fence?' },
+  { groupId: 'height', title: 'Fence height', subtitle: 'How tall should the fence be?' },
+  { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional extras for your fence.', skipLabel: 'Skip' },
+]
 
 export const DRIVEWAYS_STEPS: GenericWizardStep[] = [
   { groupId: 'scope', title: 'What type of work?', subtitle: 'Tell us the scope of your driveway project.' },

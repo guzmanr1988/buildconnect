@@ -37,11 +37,17 @@ export interface DrivewayMeasurements {
   lengthFt?: number
 }
 
+export interface FencingMeasurements {
+  type: 'fencing'
+  perimeterFt: number
+}
+
 export type ServiceMeasurements =
   | RoofingMeasurements
   | AreaOnlyMeasurements
   | PoolMeasurements
   | DrivewayMeasurements
+  | FencingMeasurements
 
 export interface MeasurementResult {
   address: string
@@ -59,11 +65,12 @@ export interface SatelliteMeasureProps {
   onFallback?: (reason: FallbackReason, address: string) => void
 }
 
-// Default fallback areas per service (sqft). User can adjust downstream.
+// Default fallback areas per service (sqft). For fencing the value is linear ft (perimeter).
 export const SERVICE_DEFAULT_AREAS: Record<ServiceCategory, number> = {
   roofing: 2000,
   pergolas: 200,
   driveways: 500,
+  fencing: 150,
   pool: 400,
   air_conditioning: 120,
   kitchen: 200,

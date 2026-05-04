@@ -57,6 +57,11 @@ export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> =
     lineItem('drv-permit', 'Permit Price', 250),
     lineItem('drv-install', 'Install Labor', 3100),
   ],
+  fencing: [
+    lineItem('fnc-material', 'Material Price', 2800),
+    lineItem('fnc-permit', 'Permit Price', 150),
+    lineItem('fnc-install', 'Install Labor', 1900),
+  ],
   pergolas: [
     lineItem('pgl-material', 'Material Price', 2900),
     lineItem('pgl-permit', 'Permit Price', 200),

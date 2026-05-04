@@ -18,7 +18,7 @@ export type { MeasurementResult, FallbackReason }
 
 // Services where area is measured by drawing a polygon on a satellite map
 // rather than calling the Solar API.
-const POLYGON_DRAW_SERVICES: SatelliteMeasureProps['serviceCategory'][] = ['driveways', 'pergolas']
+const POLYGON_DRAW_SERVICES: SatelliteMeasureProps['serviceCategory'][] = ['driveways', 'fencing', 'pergolas']
 
 export function SatelliteMeasure({
   serviceCategory,
@@ -160,19 +160,25 @@ function ManualEntryForm({
   onMeasure: (r: MeasurementResult) => void
   initialSqft?: number
 }) {
+  const isFencing = serviceCategory === 'fencing'
   const defaultArea = initialSqft ?? SERVICE_DEFAULT_AREAS[serviceCategory] ?? 500
   const [sqft, setSqft] = useState(String(defaultArea))
 
   function handleApply() {
     const area = Math.max(1, Number(sqft) || defaultArea)
     const result = buildMockResult(serviceCategory, '')
-    onMeasure({ ...result, areaSqft: area, measurements: { ...result.measurements, areaSqft: area } })
+    if (isFencing) {
+      onMeasure({ ...result, areaSqft: 0, measurements: { type: 'fencing', perimeterFt: area } })
+    } else {
+      const m = result.measurements as Exclude<typeof result.measurements, { type: 'fencing' }>
+      onMeasure({ ...result, areaSqft: area, measurements: { ...m, areaSqft: area } })
+    }
   }
 
   return (
     <div className="space-y-3" data-satellite-measure={serviceCategory} data-measure-mode="manual">
       <div className="space-y-1.5">
-        <Label htmlFor="manual-sqft">Estimated area (sqft)</Label>
+        <Label htmlFor="manual-sqft">{isFencing ? 'Estimated length (ft)' : 'Estimated area (sqft)'}</Label>
         <div className="flex gap-2">
           <Input
             id="manual-sqft"
@@ -187,7 +193,7 @@ function ManualEntryForm({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Enter the approximate area. You can adjust this later.
+        {isFencing ? 'Enter the approximate fence length. You can adjust this later.' : 'Enter the approximate area. You can adjust this later.'}
       </p>
     </div>
   )

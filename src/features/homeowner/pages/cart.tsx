@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Download } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Download, Fence } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -19,6 +19,7 @@ const SERVICE_ICONS: Record<string, React.ElementType> = {
   windows_doors: Wind,
   pool: Droplets,
   driveways: Car,
+  fencing: Fence,
   pergolas: Tent,
   air_conditioning: Thermometer,
   kitchen: UtensilsCrossed,
@@ -34,6 +35,7 @@ const ICON_GRADIENTS: Record<string, string> = {
   windows_doors: 'from-sky-400 to-blue-500',
   pool: 'from-cyan-400 to-blue-500',
   driveways: 'from-stone-400 to-stone-600',
+  fencing: 'from-amber-500 to-orange-600',
   pergolas: 'from-emerald-400 to-green-600',
   air_conditioning: 'from-indigo-400 to-violet-500',
   kitchen: 'from-amber-400 to-orange-500',
@@ -860,6 +862,15 @@ export function CartPage() {
                         Measured Area
                       </p>
                       <p className="text-sm font-semibold text-foreground">{viewItem.areaSqft.toLocaleString()} sqft</p>
+                    </div>
+                  )}
+                  {/* Measured length — fencing items with satellite measurement */}
+                  {viewItem.perimeterFt != null && (
+                    <div className="rounded-xl border bg-muted/30 p-4" data-cart-item-perimeter={viewItem.perimeterFt}>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                        Measured Length
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">{viewItem.perimeterFt.toLocaleString()} linear ft</p>
                     </div>
                   )}
 

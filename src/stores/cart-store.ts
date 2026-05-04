@@ -59,6 +59,8 @@ export interface CartItem {
   projectLng?: number
   // Satellite-measured area for area-based services (driveways, pergolas).
   areaSqft?: number
+  // Satellite-measured perimeter for linear services (fencing). Primary value for fencing items.
+  perimeterFt?: number
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string

@@ -287,11 +287,14 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
   function handleConfirm() {
     if (!result || !geoRef.current) return
+    const isFencing = serviceCategory === 'fencing'
     onMeasure({
       address: geoRef.current.addr,
-      areaSqft: result.areaSqft,
+      areaSqft: isFencing ? 0 : result.areaSqft,
       measurements: serviceCategory === 'driveways'
         ? { type: 'driveway', areaSqft: result.areaSqft, lengthFt: result.perimeterFt }
+        : isFencing
+        ? { type: 'fencing', perimeterFt: result.perimeterFt }
         : { type: 'area_only', areaSqft: result.areaSqft, perimeterFt: result.perimeterFt },
       isMock: false,
     })
@@ -372,10 +375,13 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
           <div
             className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-3"
             data-measurement-result="live"
-            data-measurement-sqft={result.areaSqft}
+            data-measurement-sqft={serviceCategory === 'fencing' ? 0 : result.areaSqft}
+            data-measurement-perimeter={result.perimeterFt}
           >
             <p className="text-sm font-medium text-foreground">
-              {result.areaSqft.toLocaleString()} sqft · {result.perimeterFt.toLocaleString()} ft perimeter
+              {serviceCategory === 'fencing'
+                ? `${result.perimeterFt.toLocaleString()} linear ft`
+                : `${result.areaSqft.toLocaleString()} sqft · ${result.perimeterFt.toLocaleString()} ft perimeter`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">Drag vertices to adjust.</p>
           </div>
@@ -386,7 +392,9 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               onClick={handleConfirm}
             >
               <Check className="h-3.5 w-3.5 mr-1.5" />
-              Use {result.areaSqft.toLocaleString()} sqft
+              {serviceCategory === 'fencing'
+                ? `Use ${result.perimeterFt.toLocaleString()} linear ft`
+                : `Use ${result.areaSqft.toLocaleString()} sqft`}
             </Button>
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
