@@ -853,6 +853,15 @@ export function CartPage() {
                       className="bg-muted/30"
                     />
                   )}
+                  {/* Measured area — driveways + pergolas items with satellite measurement */}
+                  {viewItem.areaSqft != null && (
+                    <div className="rounded-xl border bg-muted/30 p-4" data-cart-item-sqft={viewItem.areaSqft}>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                        Measured Area
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">{viewItem.areaSqft.toLocaleString()} sqft</p>
+                    </div>
+                  )}
 
                   <h3 className="text-sm font-semibold text-foreground">Project Summary</h3>
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
