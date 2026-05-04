@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, MessageSquare, Mail, FileText, Plus, Download, Trash2, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
@@ -70,12 +70,17 @@ export default function VendorHomeownerDetail() {
   const mockClosedSales = useEffectiveMockClosedSales()
 
   const docsStore = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
+  const hydrateForHomeowner = useVendorHomeownerDocsStore((s) => s.hydrateForHomeowner)
   const addDoc = useVendorHomeownerDocsStore((s) => s.addDoc)
   const removeDoc = useVendorHomeownerDocsStore((s) => s.removeDoc)
   const docs = useMemo(
     () => (vendor ? docsStore[vendor.id]?.[homeownerEmail] ?? [] : []),
     [docsStore, vendor, homeownerEmail],
   )
+
+  useEffect(() => {
+    if (vendor) hydrateForHomeowner(vendor.id, homeownerEmail)
+  }, [vendor, homeownerEmail, hydrateForHomeowner])
 
   // Upload UI state.
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -160,31 +165,39 @@ export default function VendorHomeownerDetail() {
     e.target.value = ''
   }
 
-  const handleSubmitUpload = () => {
+  const handleSubmitUpload = async () => {
     if (!vendor || !pendingDataUrl || !pendingFilename) return
     if (uploadCategory === 'other' && !customLabel.trim()) {
       toast.error('Add a label for "Other" documents.')
       return
     }
-    addDoc({
-      vendor_id: vendor.id,
-      homeowner_email: homeownerEmail,
-      category: uploadCategory,
-      customLabel: uploadCategory === 'other' ? customLabel.trim() : undefined,
-      filename: pendingFilename,
-      dataUrl: pendingDataUrl,
-    })
-    toast.success(`${VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[uploadCategory]} uploaded for ${homeowner.name}.`)
-    setPendingDataUrl(null)
-    setPendingFilename(null)
-    setCustomLabel('')
-    setUploadCategory('permit')
+    try {
+      await addDoc({
+        vendor_id: vendor.id,
+        homeowner_email: homeownerEmail,
+        category: uploadCategory,
+        customLabel: uploadCategory === 'other' ? customLabel.trim() : undefined,
+        filename: pendingFilename,
+        dataUrl: pendingDataUrl,
+      })
+      toast.success(`${VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[uploadCategory]} uploaded for ${homeowner.name}.`)
+      setPendingDataUrl(null)
+      setPendingFilename(null)
+      setCustomLabel('')
+      setUploadCategory('permit')
+    } catch {
+      toast.error('Upload failed. Please try again.')
+    }
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!confirmDelete || !vendor) return
-    removeDoc(vendor.id, homeownerEmail, confirmDelete.id)
-    toast.success(`${confirmDelete.filename} removed.`)
+    try {
+      await removeDoc(vendor.id, homeownerEmail, confirmDelete.id)
+      toast.success(`${confirmDelete.filename} removed.`)
+    } catch {
+      toast.error('Failed to delete document. Please try again.')
+    }
     setConfirmDelete(null)
   }
 
