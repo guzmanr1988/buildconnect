@@ -49,7 +49,7 @@ export function SatelliteMeasure({
   }
 
   return (
-    <div className="space-y-4" data-satellite-measure={serviceCategory}>
+    <div className="space-y-4" data-satellite-measure={serviceCategory} data-measure-state={measured ? 'measured' : 'idle'}>
       <div className="space-y-1.5">
         <Label htmlFor="satellite-address">Project address</Label>
         <div className="flex gap-2">
@@ -57,6 +57,7 @@ export function SatelliteMeasure({
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="satellite-address"
+              data-satellite-input="address"
               className="pl-9"
               placeholder="123 Main St, Miami, FL"
               value={address}
@@ -65,6 +66,7 @@ export function SatelliteMeasure({
             />
           </div>
           <Button
+            data-measure-action="measure"
             onClick={handleMeasure}
             disabled={loading || !address.trim()}
             className="shrink-0"
@@ -135,13 +137,14 @@ function ManualEntryForm({
         <div className="flex gap-2">
           <Input
             id="manual-sqft"
+            data-satellite-input="sqft"
             type="number"
             min={1}
             value={sqft}
             onChange={(e) => setSqft(e.target.value)}
             className="max-w-[140px]"
           />
-          <Button variant="outline" onClick={handleApply}>Apply</Button>
+          <Button variant="outline" data-measure-action="apply-manual" onClick={handleApply}>Apply</Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">

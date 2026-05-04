@@ -57,6 +57,8 @@ export interface CartItem {
   // widen-reads-narrow-writes on legacy items.
   projectLat?: number
   projectLng?: number
+  // Satellite-measured area for area-based services (driveways, pergolas).
+  areaSqft?: number
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string

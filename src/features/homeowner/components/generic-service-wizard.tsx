@@ -219,6 +219,14 @@ export function GenericServiceWizard({
     const filled = steps.filter((s) => (selections[s.groupId]?.length ?? 0) > 0)
     return (
       <div className="space-y-3" data-generic-wizard-review="true">
+        {initialAreaSqft != null && (
+          <div className="rounded-xl bg-muted/50 p-3" data-measured-sqft={initialAreaSqft}>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+              Measured Area
+            </p>
+            <p className="text-sm text-foreground">{initialAreaSqft.toLocaleString()} sqft</p>
+          </div>
+        )}
         {filled.map((s) => {
           const group = service.optionGroups.find((g) => g.id === s.groupId)
           if (!group) return null
