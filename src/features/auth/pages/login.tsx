@@ -139,6 +139,12 @@ export function LoginPage() {
     setIsLoading(true)
     try {
       await clearQaBeforeAuth()
+      // Real-credential login always clears the demo mock-vendor alias.
+      // demoLogin() sets this key for vendor/account_rep demo sessions;
+      // without this clear a prior Vendor Demo session leaves v-1 in LS
+      // and the real vendor account inherits its mock scope — leaking
+      // seed leads (L-0001 Maria, L-0005 James) into the real profile.
+      localStorage.removeItem('buildconnect-demo-mock-vendor-id')
       await signIn(data.email, data.password)
       // AuthBootstrap's onAuthStateChange listener hydrates the store;
       // the useEffect above then navigates based on role.
