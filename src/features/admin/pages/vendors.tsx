@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
@@ -19,6 +19,7 @@ import {
   Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
@@ -59,13 +60,14 @@ export default function VendorsPage() {
   const changeRequests = useVendorChangeRequestsStore((s) => s.requests)
   const approveRequest = useVendorChangeRequestsStore((s) => s.approveRequest)
   const denyRequest = useVendorChangeRequestsStore((s) => s.denyRequest)
+  const hydrateAdmin = useVendorChangeRequestsStore((s) => s.hydrateAdmin)
   const pendingChangeRequests = changeRequests.filter((r) => r.status === 'pending')
 
-  // Cross-tab rehydrate: vendor-side change-requests + project status changes
-  // persist to localStorage but don't cross-tab-sync. Rehydrate on tab-back
-  // so admin sees the freshest state. Phase 2b admin-SoT per kratos msg
-  // 1776725252468.
-  const rehydrateRequests = useCallback(() => useVendorChangeRequestsStore.persist.rehydrate(), [])
+  useEffect(() => { hydrateAdmin() }, [hydrateAdmin])
+
+  // Cross-tab rehydrate: project status changes persist to localStorage.
+  // Change-requests now Supabase-backed — no localStorage rehydrate needed.
+  const rehydrateRequests = useCallback(() => {}, [])
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateRequests)
   useRefetchOnFocus(rehydrateProjects)
@@ -120,32 +122,40 @@ export default function VendorsPage() {
     }
     setResolveDialogOpen(true)
   }
-  const submitResolve = () => {
+  const submitResolve = async () => {
     if (!resolveRequestId) return
     const note = resolveNote.trim() || undefined
-    if (resolveAction === 'approve') {
-      // Ship #172 — atomic commit: apply field edits before marking
-      // the request resolved so any downstream consumer that reads the
-      // request + vendor-profile together sees the matching state on
-      // the very next render. Store's applyVendorProfileEdit filters
-      // empty / whitespace-only fields so unchanged inputs are no-ops.
-      const req = changeRequests.find((r) => r.id === resolveRequestId)
-      if (req) {
-        applyVendorProfileEdit(req.vendorId, {
-          name: editName,
-          company: editCompany,
-          phone: editPhone,
-          address: editAddress,
-          email: editEmail,
-        })
+    try {
+      if (resolveAction === 'approve') {
+        const req = changeRequests.find((r) => r.id === resolveRequestId)
+        if (req) {
+          // Build sparse patch — only non-empty trimmed fields
+          const patch: Record<string, string> = {}
+          if (editName.trim()) patch.name = editName.trim()
+          if (editCompany.trim()) patch.company = editCompany.trim()
+          if (editPhone.trim()) patch.phone = editPhone.trim()
+          if (editAddress.trim()) patch.address = editAddress.trim()
+          if (editEmail.trim()) patch.email = editEmail.trim()
+          if (Object.keys(patch).length > 0) {
+            const { error: profileErr } = await supabase
+              .from('profiles')
+              .update(patch)
+              .eq('id', req.vendorId)
+            if (profileErr) throw profileErr
+          }
+          // Keep admin-moderation-store in sync for mock-backed surfaces
+          applyVendorProfileEdit(req.vendorId, { name: editName, company: editCompany, phone: editPhone, address: editAddress, email: editEmail })
+        }
+        await approveRequest(resolveRequestId, note)
+        toast.success('Request approved + profile updated')
+      } else {
+        await denyRequest(resolveRequestId, note)
+        toast.success('Request denied')
       }
-      approveRequest(resolveRequestId, note)
-      toast.success('Request approved + profile updated')
-    } else {
-      denyRequest(resolveRequestId, note)
-      toast.success('Request denied')
+      setResolveDialogOpen(false)
+    } catch {
+      toast.error('Action failed. Please try again.')
     }
-    setResolveDialogOpen(false)
   }
 
   const navigate = useNavigate()

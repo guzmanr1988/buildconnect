@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
   User, Phone, Mail, MapPin,
@@ -30,6 +30,7 @@ export default function VendorProfile() {
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
   const createRequest = useVendorChangeRequestsStore((s) => s.createRequest)
+  const hydrateVendor = useVendorChangeRequestsStore((s) => s.hydrateVendor)
   // Zustand-selector-returns-new-array-every-render = React error #185
   // infinite loop (ship #111 regression caught by apollo 1776720418731).
   // Select the stable array reference, useMemo the filter by-vendorId.
@@ -40,6 +41,10 @@ export default function VendorProfile() {
     [allRequests, vendorIdKey],
   )
   const pendingRequest = myRequests.find((r) => r.status === 'pending')
+
+  useEffect(() => {
+    hydrateVendor(vendorIdKey)
+  }, [vendorIdKey, hydrateVendor])
 
   const [requestDialogOpen, setRequestDialogOpen] = useState(false)
   const [requestText, setRequestText] = useState('')
@@ -86,21 +91,25 @@ export default function VendorProfile() {
   // 1776719583850). Vendors cannot self-edit — they submit a request with
   // free-text description; admin mediates approval + applies actual edits.
   // Mock-side for v1; Tranche-2 moves to Supabase-backed with RLS + audit.
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     const text = requestText.trim()
     if (!text) {
       toast.error('Describe what needs to change')
       return
     }
-    createRequest(
-      profile?.id ?? VENDOR_ID,
-      vendor.company,
-      profile?.name ?? vendor.name,
-      text,
-    )
-    setRequestText('')
-    setRequestDialogOpen(false)
-    toast.success('Request submitted. Admin will review shortly.')
+    try {
+      await createRequest(
+        profile?.id ?? VENDOR_ID,
+        vendor.company,
+        profile?.name ?? vendor.name,
+        text,
+      )
+      setRequestText('')
+      setRequestDialogOpen(false)
+      toast.success('Request submitted. Admin will review shortly.')
+    } catch {
+      toast.error('Failed to submit request. Please try again.')
+    }
   }
 
   const container = {
