@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
   Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar, DollarSign,
@@ -114,12 +114,17 @@ export default function VendorEmployeesPage() {
   const bankEnabledMap = useVendorEmployeesStore((s) => s.bankEnabledByVendor)
   const employees = employeesMap[vendorId] ?? []
   const bankEnabled = bankEnabledMap[vendorId] ?? false
+  const hydrateVendor = useVendorEmployeesStore((s) => s.hydrateVendor)
   const addEmployee = useVendorEmployeesStore((s) => s.addEmployee)
   const updateEmployee = useVendorEmployeesStore((s) => s.updateEmployee)
   const deactivateEmployee = useVendorEmployeesStore((s) => s.deactivateEmployee)
   const reactivateEmployee = useVendorEmployeesStore((s) => s.reactivateEmployee)
   const removeEmployee = useVendorEmployeesStore((s) => s.removeEmployee)
   const setBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
+
+  useEffect(() => {
+    hydrateVendor(vendorId)
+  }, [vendorId, hydrateVendor])
 
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -168,20 +173,24 @@ export default function VendorEmployeesPage() {
     setFormOpen(true)
   }
 
-  function submitForm() {
+  async function submitForm() {
     if (!form.firstName.trim() || !form.lastName.trim()) {
       toast.error('First and last name are required.')
       return
     }
-    if (editingId) {
-      updateEmployee(vendorId, editingId, form)
-      toast.success('Account rep updated.')
-    } else {
-      addEmployee(vendorId, form)
-      toast.success('Account rep added.')
+    try {
+      if (editingId) {
+        await updateEmployee(vendorId, editingId, form)
+        toast.success('Account rep updated.')
+      } else {
+        await addEmployee(vendorId, form)
+        toast.success('Account rep added.')
+      }
+      setFormOpen(false)
+      setEditingId(null)
+    } catch {
+      toast.error('Failed to save. Please try again.')
     }
-    setFormOpen(false)
-    setEditingId(null)
   }
 
   return (
@@ -491,9 +500,13 @@ export default function VendorEmployeesPage() {
                     <Button
                       variant="outline"
                       className="gap-1.5 border-emerald-400/60 text-emerald-700 hover:bg-emerald-50"
-                      onClick={() => {
-                        reactivateEmployee(vendorId, selected.id)
-                        toast.success(`${selected.firstName} reactivated.`)
+                      onClick={async () => {
+                        try {
+                          await reactivateEmployee(vendorId, selected.id)
+                          toast.success(`${selected.firstName} reactivated.`)
+                        } catch {
+                          toast.error('Failed to reactivate. Please try again.')
+                        }
                       }}
                     >
                       <UserCheck className="h-3.5 w-3.5" />
@@ -692,10 +705,14 @@ export default function VendorEmployeesPage() {
             <Button variant="outline" onClick={() => setDeactivateTarget(null)} className="w-full sm:w-auto">Cancel</Button>
             <Button
               variant="destructive"
-              onClick={() => {
+              onClick={async () => {
                 if (deactivateTarget) {
-                  deactivateEmployee(vendorId, deactivateTarget.id)
-                  toast.success(`${deactivateTarget.firstName} deactivated.`)
+                  try {
+                    await deactivateEmployee(vendorId, deactivateTarget.id)
+                    toast.success(`${deactivateTarget.firstName} deactivated.`)
+                  } catch {
+                    toast.error('Failed to deactivate. Please try again.')
+                  }
                 }
                 setDeactivateTarget(null)
               }}
@@ -855,11 +872,15 @@ export default function VendorEmployeesPage() {
             <Button variant="outline" onClick={() => setDeleteTarget(null)} className="w-full sm:w-auto">Keep record</Button>
             <Button
               variant="destructive"
-              onClick={() => {
+              onClick={async () => {
                 if (deleteTarget) {
-                  removeEmployee(vendorId, deleteTarget.id)
-                  setSelectedId(null)
-                  toast.success(`${deleteTarget.firstName} ${deleteTarget.lastName} deleted.`)
+                  try {
+                    await removeEmployee(vendorId, deleteTarget.id)
+                    setSelectedId(null)
+                    toast.success(`${deleteTarget.firstName} ${deleteTarget.lastName} deleted.`)
+                  } catch {
+                    toast.error('Failed to delete. Please try again.')
+                  }
                 }
                 setDeleteTarget(null)
               }}

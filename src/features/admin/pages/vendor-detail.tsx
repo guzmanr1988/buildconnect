@@ -82,6 +82,10 @@ export default function AdminVendorDetail() {
   const mockLeads = useEffectiveMockLeads()
 
   const employeesByVendor = useVendorEmployeesStore((s) => s.employeesByVendor)
+  const hydrateAdminEmployees = useVendorEmployeesStore((s) => s.hydrateAdmin)
+  useEffect(() => {
+    if (vendorId) hydrateAdminEmployees(vendorId)
+  }, [vendorId, hydrateAdminEmployees])
   const paymentMethodsByVendor = useVendorBillingStore((s) => s.paymentMethodsByVendor)
   const paymentMethods = useMemo(() => paymentMethodsByVendor[vendorId] ?? [], [paymentMethodsByVendor, vendorId])
   const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
