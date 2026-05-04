@@ -350,18 +350,36 @@ export function ServiceDetailPage() {
       return match?.key ?? 'primary'
     })()
     const isHousePainting = serviceId === 'house_painting'
+    const isMeasureable = serviceId === 'driveways' || serviceId === 'pergolas'
     return (
-      <GenericServiceWizard
-        service={service}
-        steps={getStepsForService(serviceId ?? '')}
-        {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
-        addressOptions={addressOptions}
-        defaultAddressKey={defaultAddrKey}
-        editItem={editItemForService}
-        editingItemId={editId}
-        onCancel={() => navigate('/home')}
-        onDone={() => navigate('/home/cart')}
-      />
+      <>
+        {isMeasureable && (
+          <div className="px-4 pt-4 pb-0" data-satellite-measure-cta={serviceId}>
+            <p className="text-sm font-semibold text-foreground mb-2">
+              {serviceId === 'driveways' ? 'Measure your driveway area' : 'Measure your outdoor space'}
+            </p>
+            <SatelliteMeasure
+              key={areaMeasureKey}
+              serviceCategory={serviceId as ServiceCategory}
+              gmpEnabled={getFlag('googleMapsPlatform')}
+              initialAddress={selectedAddress?.full ?? ''}
+              onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, address: result.address })}
+            />
+          </div>
+        )}
+        <GenericServiceWizard
+          service={service}
+          steps={getStepsForService(serviceId ?? '')}
+          {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
+          addressOptions={addressOptions}
+          defaultAddressKey={defaultAddrKey}
+          editItem={editItemForService}
+          editingItemId={editId}
+          onCancel={() => navigate('/home')}
+          onDone={() => navigate('/home/cart')}
+          {...(isMeasureable && areaMeasurement && { initialAreaSqft: areaMeasurement.areaSqft })}
+        />
+      </>
     )
   }
 
