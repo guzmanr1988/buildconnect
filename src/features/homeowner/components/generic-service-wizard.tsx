@@ -30,6 +30,7 @@ interface GenericServiceWizardProps {
   editingItemId?: string | null
   onCancel: () => void
   onDone: () => void
+  initialAreaSqft?: number
 }
 
 // Chip button used on every content step.
@@ -70,6 +71,7 @@ export function GenericServiceWizard({
   editingItemId: initEditId,
   onCancel,
   onDone,
+  initialAreaSqft,
 }: GenericServiceWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
@@ -145,6 +147,7 @@ export function GenericServiceWizard({
       serviceName: service.name,
       selections,
       ...(itemAddress && { address: itemAddress }),
+      ...(initialAreaSqft != null && { areaSqft: initialAreaSqft }),
     }
 
     if (editingItemId) {
