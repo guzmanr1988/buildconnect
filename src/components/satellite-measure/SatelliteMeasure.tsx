@@ -12,8 +12,13 @@ import {
   type MeasurementResult,
   type FallbackReason,
 } from '@/lib/satellite-measure'
+import { PolygonDraw } from './polygon-draw'
 
 export type { MeasurementResult, FallbackReason }
+
+// Services where area is measured by drawing a polygon on a satellite map
+// rather than calling the Solar API.
+const POLYGON_DRAW_SERVICES: SatelliteMeasureProps['serviceCategory'][] = ['driveways', 'pergolas']
 
 export function SatelliteMeasure({
   serviceCategory,
@@ -25,9 +30,34 @@ export function SatelliteMeasure({
   const [address, setAddress] = useState(initialAddress)
   const [loading, setLoading] = useState(false)
   const [measured, setMeasured] = useState<MeasurementResult | null>(null)
+  const [polygonFailed, setPolygonFailed] = useState(false)
 
   // When GMP is disabled, render manual-entry form — no API calls, flow unblocked.
   if (!gmpEnabled) {
+    return (
+      <ManualEntryForm
+        serviceCategory={serviceCategory}
+        onMeasure={onMeasure}
+      />
+    )
+  }
+
+  // Ground-area services: polygon draw mode (replaces stub measurement).
+  // Falls back to ManualEntryForm if Maps JS fails to load.
+  if (POLYGON_DRAW_SERVICES.includes(serviceCategory) && !polygonFailed) {
+    return (
+      <PolygonDraw
+        serviceCategory={serviceCategory}
+        initialAddress={initialAddress}
+        onMeasure={onMeasure}
+        onFallback={onFallback}
+        onFail={() => setPolygonFailed(true)}
+      />
+    )
+  }
+
+  // Polygon draw unavailable (Maps JS load failed) — fall through to manual entry.
+  if (POLYGON_DRAW_SERVICES.includes(serviceCategory) && polygonFailed) {
     return (
       <ManualEntryForm
         serviceCategory={serviceCategory}
