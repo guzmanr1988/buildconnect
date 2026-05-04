@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, Blinds } from 'lucide-react'
+import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, Blinds, Fence } from 'lucide-react'
 import type { ServiceConfig, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -7,6 +7,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   windows_doors: Wind,
   pool: Droplets,
   driveways: Car,
+  fencing: Fence,
   pergolas: Tent,
   air_conditioning: Thermometer,
   kitchen: UtensilsCrossed,
@@ -22,6 +23,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   windows_doors: 'from-sky-400 to-blue-500',
   pool: 'from-cyan-400 to-blue-500',
   driveways: 'from-stone-400 to-stone-600',
+  fencing: 'from-amber-500 to-orange-600',
   pergolas: 'from-emerald-400 to-green-600',
   air_conditioning: 'from-indigo-400 to-violet-500',
   kitchen: 'from-amber-400 to-orange-500',

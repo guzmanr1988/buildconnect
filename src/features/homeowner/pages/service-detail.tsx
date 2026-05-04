@@ -3,11 +3,12 @@ import { computeRoofTotal } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
 import { PoolWizard } from '../components/pool-wizard'
 import {
   GenericServiceWizard,
+  FENCING_STEPS,
   DRIVEWAYS_STEPS,
   PERGOLAS_STEPS,
   AIR_CONDITIONING_STEPS,
@@ -22,6 +23,7 @@ import {
 
 function getStepsForService(id: string): GenericWizardStep[] {
   switch (id) {
+    case 'fencing':          return FENCING_STEPS
     case 'driveways':        return DRIVEWAYS_STEPS
     case 'pergolas':         return PERGOLAS_STEPS
     case 'air_conditioning': return AIR_CONDITIONING_STEPS
@@ -75,6 +77,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   windows_doors: Wind,
   pool: Droplets,
   driveways: Car,
+  fencing: Fence,
   pergolas: Tent,
   air_conditioning: Thermometer,
   kitchen: UtensilsCrossed,
@@ -90,6 +93,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   windows_doors: 'from-sky-400 to-blue-500',
   pool: 'from-cyan-400 to-blue-500',
   driveways: 'from-stone-400 to-stone-600',
+  fencing: 'from-amber-500 to-orange-600',
   pergolas: 'from-emerald-400 to-green-600',
   air_conditioning: 'from-indigo-400 to-violet-500',
   kitchen: 'from-amber-400 to-orange-500',
@@ -169,7 +173,7 @@ export function ServiceDetailPage() {
   )
   const [wizardOpen, setWizardOpen] = useState(false)
   const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean } | null>(null)
-  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; address: string } | null>(null)
+  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; perimeterFt?: number; address: string } | null>(null)
   const [areaMeasureKey, setAreaMeasureKey] = useState(0)
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
@@ -340,7 +344,7 @@ export function ServiceDetailPage() {
 
   // Card-slide wizard delegates — propagated from roofing pilot (PR #30).
   // All chip-select services route through GenericServiceWizard + dispatch table.
-  const GENERIC_WIZARD_SERVICES = ['driveways', 'pergolas', 'air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
+  const GENERIC_WIZARD_SERVICES = ['driveways', 'fencing', 'pergolas', 'air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
@@ -350,20 +354,24 @@ export function ServiceDetailPage() {
       return match?.key ?? 'primary'
     })()
     const isHousePainting = serviceId === 'house_painting'
-    const isMeasureable = serviceId === 'driveways' || serviceId === 'pergolas'
+    const isMeasureable = serviceId === 'driveways' || serviceId === 'fencing' || serviceId === 'pergolas'
+    const isFencing = serviceId === 'fencing'
+    const measureCtaLabel = serviceId === 'driveways'
+      ? 'Measure your driveway area'
+      : isFencing
+      ? 'Measure your fence line'
+      : 'Measure your outdoor space'
     return (
       <>
         {isMeasureable && (
           <div className="px-4 pt-4 pb-0" data-satellite-measure-cta={serviceId}>
-            <p className="text-sm font-semibold text-foreground mb-2">
-              {serviceId === 'driveways' ? 'Measure your driveway area' : 'Measure your outdoor space'}
-            </p>
+            <p className="text-sm font-semibold text-foreground mb-2">{measureCtaLabel}</p>
             <SatelliteMeasure
               key={areaMeasureKey}
               serviceCategory={serviceId as ServiceCategory}
               gmpEnabled={getFlag('googleMapsPlatform')}
               initialAddress={selectedAddress?.full ?? ''}
-              onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, address: result.address })}
+              onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined, address: result.address })}
             />
           </div>
         )}
@@ -377,7 +385,8 @@ export function ServiceDetailPage() {
           editingItemId={editId}
           onCancel={() => navigate('/home')}
           onDone={() => navigate('/home/cart')}
-          {...(isMeasureable && areaMeasurement && { initialAreaSqft: areaMeasurement.areaSqft })}
+          {...(isMeasureable && areaMeasurement && !isFencing && { initialAreaSqft: areaMeasurement.areaSqft })}
+          {...(isFencing && areaMeasurement?.perimeterFt != null && { initialPerimeterFt: areaMeasurement.perimeterFt })}
         />
       </>
     )
@@ -609,7 +618,7 @@ export function ServiceDetailPage() {
                       serviceCategory={serviceId as ServiceCategory}
                       gmpEnabled={getFlag('googleMapsPlatform')}
                       initialAddress={selectedAddress?.full ?? ''}
-                      onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, address: result.address })}
+                      onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined, address: result.address })}
                     />
                   </>
                 )}

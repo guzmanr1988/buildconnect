@@ -21,17 +21,20 @@ const measurementByService: Partial<Record<ServiceCategory, MeasureFn>> = {
 }
 
 function buildMockMeasurement(serviceCategory: ServiceCategory): ServiceMeasurements {
-  const areaSqft = SERVICE_DEFAULT_AREAS[serviceCategory] ?? 500
+  const defaultVal = SERVICE_DEFAULT_AREAS[serviceCategory] ?? 500
   if (serviceCategory === 'roofing') {
-    return { type: 'roofing', areaSqft, pitch: '4/12', pitchedAreaSqft: areaSqft, flatAreaSqft: 0, perimeterFt: 180 }
+    return { type: 'roofing', areaSqft: defaultVal, pitch: '4/12', pitchedAreaSqft: defaultVal, flatAreaSqft: 0, perimeterFt: 180 }
   }
   if (serviceCategory === 'pool') {
-    return { type: 'pool', areaSqft, depthEstimate: 'standard' }
+    return { type: 'pool', areaSqft: defaultVal, depthEstimate: 'standard' }
   }
   if (serviceCategory === 'driveways') {
-    return { type: 'driveway', areaSqft, lengthFt: Math.round(Math.sqrt(areaSqft)) }
+    return { type: 'driveway', areaSqft: defaultVal, lengthFt: Math.round(Math.sqrt(defaultVal)) }
   }
-  return { type: 'area_only', areaSqft }
+  if (serviceCategory === 'fencing') {
+    return { type: 'fencing', perimeterFt: defaultVal }
+  }
+  return { type: 'area_only', areaSqft: defaultVal }
 }
 
 export function buildMockResult(
@@ -39,9 +42,10 @@ export function buildMockResult(
   address: string,
 ): MeasurementResult {
   const measurements = buildMockMeasurement(serviceCategory)
+  const areaSqft = measurements.type === 'fencing' ? 0 : measurements.areaSqft
   return {
     address,
-    areaSqft: measurements.areaSqft,
+    areaSqft,
     measurements,
     confidenceScore: 'low',
     isMock: true,
@@ -81,7 +85,7 @@ export async function measureFromAddress(
 
   return {
     address: geo.canonicalAddress,
-    areaSqft: measurements.areaSqft,
+    areaSqft: measurements.type === 'fencing' ? 0 : measurements.areaSqft,
     measurements,
     isMock: false,
   }

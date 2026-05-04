@@ -22,6 +22,7 @@ export type ServiceCategory =
   | 'windows_doors'
   | 'pool'
   | 'driveways'
+  | 'fencing'
   | 'pergolas'
   | 'air_conditioning'
   | 'kitchen'
