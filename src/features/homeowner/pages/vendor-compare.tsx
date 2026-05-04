@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS, MOCK_CATALOG } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { useRealVendors } from '@/lib/hooks/use-real-vendors'
 import { useCartStore } from '@/stores/cart-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
@@ -52,37 +53,47 @@ export function VendorComparePage() {
   }, [cartItems, profile, gmpEnabled, realGeoEnabled])
 
   const hasHomeownerCoord = projectCoords !== null
+  const realVendors = useRealVendors()
 
   const featuredVendors = useMemo(() => {
-    const base = MOCK_VENDORS.filter((v) => {
-      // PRODUCT-IS-GOD Phase B (PR 2): only active vendors appear in shopping.
-      // Pending + suspended are invisible to homeowners.
+    // Mock vendors: full PRODUCT-IS-GOD checks (catalog pricing required).
+    const mockFiltered = MOCK_VENDORS.filter((v) => {
       if (v.status !== 'active') return false
-      // If cart is non-empty, only include vendors covering at least one
-      // cart category. Empty cart → skip category filter (let them browse).
       if (cartCategories.size > 0) {
         const covers = v.service_categories.some((c) => cartCategories.has(c))
         if (!covers) return false
       }
       // PRODUCT-IS-GOD Phase B (PR 3): vendor must have a priced active CatalogItem
-      // for EVERY service category in cart. Partial coverage = not eligible.
+      // for EVERY service category in cart.
       if (cartCategories.size > 0) {
         const allPriced = [...cartCategories].every((cat) =>
           MOCK_CATALOG.some((ci) => ci.vendor_id === v.id && ci.category === cat && ci.active && ci.price > 0)
         )
         if (!allPriced) return false
       }
-      // Distance filter — only applies when GMP+realGeocoding are ON and
-      // homeowner has coords. Vendors missing lat/lng fall through permissive
-      // (widen-reads-narrow-writes — don't silently drop legacy records).
       if (projectCoords && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
         const miles = haversineMiles(projectCoords.lat, projectCoords.lng, v.latitude, v.longitude)
         if (miles > matchRadiusMiles) return false
       }
       return true
     })
-    return base
-  }, [cartCategories, projectCoords, matchRadiusMiles])
+
+    // Real-auth vendors: category + distance filter only (no MOCK_CATALOG check).
+    // Pricing is fetched from Supabase catalog per-UUID; defaults to empty map.
+    const realFiltered = realVendors.filter((v) => {
+      if (cartCategories.size > 0) {
+        const covers = v.service_categories.some((c) => cartCategories.has(c))
+        if (!covers) return false
+      }
+      if (projectCoords && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
+        const miles = haversineMiles(projectCoords.lat, projectCoords.lng, v.latitude, v.longitude)
+        if (miles > matchRadiusMiles) return false
+      }
+      return true
+    })
+
+    return [...mockFiltered, ...realFiltered]
+  }, [cartCategories, projectCoords, matchRadiusMiles, realVendors])
 
   const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
   const [loading, setLoading] = useState(true)
@@ -96,8 +107,9 @@ export function VendorComparePage() {
       try {
         const entries = await Promise.all(
           featuredVendors.map(async (v) => {
-            const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id]
-            if (!uuid) return [v.id, new Map()] as const
+            // Demo vendors: look up UUID from mock-id map.
+            // Real vendors: their id IS already the UUID.
+            const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
             const map = await getVendorPriceMap(uuid)
             return [v.id, map] as const
           })
