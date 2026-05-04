@@ -3,7 +3,7 @@ import { computeRoofTotal } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler } from 'lucide-react'
 import { RoofingWizard } from '../components/roofing-wizard'
 import { PoolWizard } from '../components/pool-wizard'
 import {
@@ -55,6 +55,7 @@ import { DoorConfigurator, type DoorSelection } from '../components/door-configu
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof-measurement-wizard'
+import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
@@ -168,6 +169,8 @@ export function ServiceDetailPage() {
   )
   const [wizardOpen, setWizardOpen] = useState(false)
   const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean } | null>(null)
+  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; address: string } | null>(null)
+  const [areaMeasureKey, setAreaMeasureKey] = useState(0)
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
     editItemForService?.roofAddonLinearFt
@@ -549,6 +552,52 @@ export function ServiceDetailPage() {
             defaultAddress={selectedAddress?.full ?? ''}
             onComplete={handleWizardComplete}
           />
+        </motion.div>
+      )}
+
+      {/* Area measurement CTA — driveways + pergolas, additive (CHAIN IS GOD) */}
+      {(serviceId === 'driveways' || serviceId === 'pergolas') && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.12 }}
+        >
+          <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                <Ruler className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {areaMeasurement ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">Area measured</p>
+                    <p className="text-[13px] text-muted-foreground mt-0.5">
+                      {areaMeasurement.areaSqft.toLocaleString()} sq ft · {areaMeasurement.address}
+                    </p>
+                    <button
+                      className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                      onClick={() => { setAreaMeasurement(null); setAreaMeasureKey((k) => k + 1) }}
+                    >
+                      Re-measure
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-foreground mb-1">
+                      {serviceId === 'driveways' ? 'Measure your driveway area' : 'Measure your outdoor space'}
+                    </p>
+                    <SatelliteMeasure
+                      key={areaMeasureKey}
+                      serviceCategory={serviceId as ServiceCategory}
+                      gmpEnabled={getFlag('googleMapsPlatform')}
+                      initialAddress={selectedAddress?.full ?? ''}
+                      onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, address: result.address })}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </motion.div>
       )}
 
@@ -1037,6 +1086,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
                 ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
+                ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(addonQuantities && { addonQuantities }),
@@ -1150,6 +1200,25 @@ export function ServiceDetailPage() {
               <h3 className="text-base font-bold text-foreground">{service.name}</h3>
               <p className="text-xs text-muted-foreground mt-1">{service.description}</p>
             </div>
+
+            {/* ── Driveways / Pergolas: Area measurement card ── */}
+            {(['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && (
+              <div className="border-b border-border/50 pb-4">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Area Measurement
+                </h4>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border w-full truncate">
+                      {areaMeasurement.address}
+                    </span>
+                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                      {areaMeasurement.areaSqft.toLocaleString()} sq ft
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Roofing: Measurement card ── */}
             {serviceId === 'roofing' && roofMeasurement && (
