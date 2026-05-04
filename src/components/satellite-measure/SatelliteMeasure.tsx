@@ -62,15 +62,12 @@ export function SatelliteMeasure({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleMeasure() }}
-              data-satellite-input="address"
             />
           </div>
           <Button
             onClick={handleMeasure}
             disabled={loading || !address.trim()}
             className="shrink-0"
-            data-measure-action="measure"
-            data-measure-state={loading ? 'loading' : 'idle'}
           >
             {loading ? 'Measuring…' : 'Measure'}
           </Button>
@@ -143,9 +140,8 @@ function ManualEntryForm({
             value={sqft}
             onChange={(e) => setSqft(e.target.value)}
             className="max-w-[140px]"
-            data-satellite-input="sqft"
           />
-          <Button variant="outline" onClick={handleApply} data-measure-action="apply-manual">Apply</Button>
+          <Button variant="outline" onClick={handleApply}>Apply</Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
