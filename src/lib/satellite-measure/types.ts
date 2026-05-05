@@ -35,6 +35,7 @@ export interface DrivewayMeasurements {
   type: 'driveway'
   areaSqft: number
   lengthFt?: number
+  entranceSqft?: number
 }
 
 export interface FencingMeasurements {

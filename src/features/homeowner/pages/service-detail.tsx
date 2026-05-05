@@ -375,19 +375,27 @@ export function ServiceDetailPage() {
             />
           </div>
         )}
-        <GenericServiceWizard
-          service={service}
-          steps={getStepsForService(serviceId ?? '')}
-          {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
-          addressOptions={addressOptions}
-          defaultAddressKey={defaultAddrKey}
-          editItem={editItemForService}
-          editingItemId={editId}
-          onCancel={() => navigate('/home')}
-          onDone={() => navigate('/home/cart')}
-          {...(isMeasureable && areaMeasurement && !isFencing && { initialAreaSqft: areaMeasurement.areaSqft })}
-          {...(isFencing && areaMeasurement?.perimeterFt != null && { initialPerimeterFt: areaMeasurement.perimeterFt })}
-        />
+        {/* Mandatory measurement gate for driveways — wizard hidden until area is measured.
+            CHAIN-TOUCH: this is a behavior change; requires apollo walk + Rodolfo confirm before merge. */}
+        {serviceId === 'driveways' && !areaMeasurement ? (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground" data-measure-gate="required">
+            Measure your driveway above to continue.
+          </div>
+        ) : (
+          <GenericServiceWizard
+            service={service}
+            steps={getStepsForService(serviceId ?? '')}
+            {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
+            addressOptions={addressOptions}
+            defaultAddressKey={defaultAddrKey}
+            editItem={editItemForService}
+            editingItemId={editId}
+            onCancel={() => navigate('/home')}
+            onDone={() => navigate('/home/cart')}
+            {...(isMeasureable && areaMeasurement && !isFencing && { initialAreaSqft: areaMeasurement.areaSqft })}
+            {...(isFencing && areaMeasurement?.perimeterFt != null && { initialPerimeterFt: areaMeasurement.perimeterFt })}
+          />
+        )}
       </>
     )
   }
