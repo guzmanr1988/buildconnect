@@ -49,7 +49,7 @@ function OptionChip({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-150',
+        'w-full sm:w-auto inline-flex min-h-[44px] sm:min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-150',
         selected
           ? 'border-primary bg-primary text-primary-foreground shadow-sm'
           : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
