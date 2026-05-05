@@ -455,7 +455,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               ? `Tap to place points (${vertexCount} placed, need ≥3)`
               : 'Tap the first point (white circle) to close the area.'}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={handleUndo} disabled={vertexCount === 0}>
               <Undo2 className="h-3.5 w-3.5 mr-1.5" />
               Undo
