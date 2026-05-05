@@ -12,6 +12,9 @@ const SQM_TO_SQFT = 10.7639
 const M_TO_FT = 3.28084
 // Zoom 20 — highest reliably crisp satellite tier in South Florida
 const MAP_ZOOM = 20
+// Don't let users zoom out past property scale — keeps the address as the focus.
+// 17 = neighborhood-block view; below this the address is a dot in a sea of streets.
+const MIN_ZOOM = 17
 // Colors for extra polygons (cycled as user adds more areas)
 const EXTRA_COLORS = ['#d97706', '#16a34a', '#9333ea', '#dc2626', '#0891b2']
 
@@ -106,6 +109,12 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       return
     }
     setLoading(false)
+    // Re-entering 'drawing' with an existing map (user changed address): recenter
+    // and re-zoom to property scale instead of leaving the map wherever they panned.
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat: geo.lat, lng: geo.lng })
+      mapRef.current.setZoom(MAP_ZOOM)
+    }
     setPhase('drawing')
   }
 
@@ -117,6 +126,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     const map = new google.maps.Map(mapDivRef.current, {
       center: { lat, lng },
       zoom: MAP_ZOOM,
+      minZoom: MIN_ZOOM,
       mapTypeId: 'satellite',
       tilt: 0,
       disableDefaultUI: true,
