@@ -79,10 +79,11 @@ export function VendorComparePage() {
     })
 
     // Real-auth vendors: category + distance filter only (no MOCK_CATALOG check).
-    // Pricing is fetched from Supabase catalog per-UUID; defaults to empty map.
+    // Pricing is fetched from Supabase catalog per-UUID; PRODUCT-IS-GOD applied post-load via displayVendors.
     const realFiltered = realVendors.filter((v) => {
       if (cartCategories.size > 0) {
-        const covers = v.service_categories.some((c) => cartCategories.has(c))
+        const cats = v.service_categories ?? []
+        const covers = cats.some((c) => cartCategories.has(c))
         if (!covers) return false
       }
       if (projectCoords && typeof v.latitude === 'number' && typeof v.longitude === 'number') {
@@ -105,11 +106,14 @@ export function VendorComparePage() {
       setLoading(true)
       setFetchError(null)
       try {
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
         const entries = await Promise.all(
           featuredVendors.map(async (v) => {
             // Demo vendors: look up UUID from mock-id map.
             // Real vendors: their id IS already the UUID.
             const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
+            // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
+            if (!UUID_RE.test(uuid)) return [v.id, {} as VendorPriceMap] as const
             const map = await getVendorPriceMap(uuid)
             return [v.id, map] as const
           })
@@ -137,20 +141,36 @@ export function VendorComparePage() {
     return out
   }, [priceMaps, cartItems])
 
+  // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
+  // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.
+  // While loading, show all to avoid flash; filter once priceMaps are in.
+  const UUID_RE_DISPLAY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const displayVendors = useMemo(() => {
+    if (loading || cartCategories.size === 0) return featuredVendors
+    return featuredVendors.filter((v) => {
+      // Mock vendors (non-UUID id or in DEMO map) already passed PRODUCT-IS-GOD.
+      const isMock = !UUID_RE_DISPLAY.test(v.id) || v.id in DEMO_VENDOR_UUID_BY_MOCK_ID
+      if (isMock) return true
+      // Real vendor: must have pricing covering all cart services.
+      const result = totalsByVendor[v.id]
+      return !!(result && result.coversAllServices && result.totalCents > 0)
+    })
+  }, [featuredVendors, loading, totalsByVendor, cartCategories])
+
   const highlights = useMemo(() => {
     // Best price: lowest non-zero total among vendors that cover all services and have no missing options.
-    const eligible = featuredVendors.filter((v) => {
+    const eligible = displayVendors.filter((v) => {
       const r = totalsByVendor[v.id]
       return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.totalCents > 0
     })
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
       : null
-    const highestRated = featuredVendors.length > 0
-      ? featuredVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+    const highestRated = displayVendors.length > 0
+      ? displayVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
       : null
     return { bestPrice, highestRated }
-  }, [totalsByVendor, featuredVendors])
+  }, [totalsByVendor, displayVendors])
 
   return (
     <div className="flex flex-col gap-6">
@@ -173,7 +193,7 @@ export function VendorComparePage() {
           Differentiates the "no coverage in your area" case from a generic
           "no vendors" state so the homeowner knows to adjust radius (via
           admin) or pick a different project category. */}
-      {featuredVendors.length === 0 && (
+      {displayVendors.length === 0 && (
         <div className="rounded-xl border border-dashed p-8 text-center space-y-2">
           <p className="text-base font-semibold text-foreground">No contractors in your area</p>
           {hasHomeownerCoord ? (
@@ -190,7 +210,7 @@ export function VendorComparePage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {featuredVendors.map((vendor, i) => {
+        {displayVendors.map((vendor, i) => {
           const result = totalsByVendor[vendor.id]
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
