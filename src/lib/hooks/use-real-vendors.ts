@@ -13,7 +13,7 @@ export function useRealVendors(): Vendor[] {
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id, name, email, phone, address, company, avatar_color, initials, status, latitude, longitude, service_categories, created_at')
+      .select('id, name, email, phone, address, company, avatar_color, initials, status, service_categories, created_at')
       .eq('role', 'vendor')
       .eq('status', 'active')
       .then(({ data }) => {

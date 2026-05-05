@@ -112,7 +112,7 @@ export default function LeadInbox() {
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
       homeowner_name: p.homeowner?.name || 'New Customer',
-      project: p.item.serviceName + ' — ' + Object.values(p.item.selections).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+      project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
       // Ship #338 — bridge sp.saleAmount → lead.value.
       // Ship #349 — pre-sale projects compute headline from catalog-first
@@ -132,8 +132,8 @@ export default function LeadInbox() {
       email: p.homeowner?.email || '—',
       sq_ft: p.item.roofMeasurement?.areaSqft ?? 0,
       service_category: p.item.serviceId as any,
-      permit_choice: Object.values(p.item.selections).flat().includes('permit'),
-      financing: Object.values(p.item.selections).flat().includes('financed'),
+      permit_choice: Object.values(p.item.selections ?? {}).flat().includes('permit'),
+      financing: Object.values(p.item.selections ?? {}).flat().includes('financed'),
       pack_items: p.item.selections,
       slot: p.sentAt,
       received_at: p.sentAt,
