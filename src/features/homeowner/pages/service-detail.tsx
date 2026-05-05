@@ -364,8 +364,8 @@ export function ServiceDetailPage() {
     return (
       <>
         {isMeasureable && (
-          <div className="px-4 pt-4 pb-0 flex flex-col items-center" data-satellite-measure-cta={serviceId}>
-            <p className="text-sm font-semibold text-foreground mb-2 max-w-[580px] w-full text-center">{measureCtaLabel}</p>
+          <div className="px-4 pt-4 pb-0" data-satellite-measure-cta={serviceId}>
+            <p className="text-sm font-semibold text-foreground mb-2 max-w-[580px] mx-auto text-center">{measureCtaLabel}</p>
             <SatelliteMeasure
               key={areaMeasureKey}
               serviceCategory={serviceId as ServiceCategory}
