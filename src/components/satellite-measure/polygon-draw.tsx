@@ -441,7 +441,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       <div
         ref={mapDivRef}
         className={cn(
-          'w-full rounded-xl overflow-hidden border aspect-square max-h-[580px] max-w-[580px]',
+          'w-full rounded-xl overflow-hidden border aspect-square max-h-[580px] max-w-[580px] mx-auto',
           !showMap && 'hidden',
         )}
         data-polygon-map={serviceCategory}
@@ -449,8 +449,8 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Main drawing instructions */}
       {phase === 'drawing' && !addingExtra && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
+        <div className="space-y-2 max-w-[580px] mx-auto">
+          <p className="text-xs text-muted-foreground text-center">
             {vertexCount < 3
               ? `Tap to place points (${vertexCount} placed, need ≥3)`
               : 'Tap the first point (white circle) to close the area.'}
@@ -469,7 +469,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Extra area drawing instructions */}
       {addingExtra && (
-        <div className="space-y-2">
+        <div className="space-y-2 max-w-[580px] mx-auto">
           <p className="text-xs font-medium" style={{ color: EXTRA_COLORS[extraPolygons.length % EXTRA_COLORS.length] }}>
             Drawing area {extraPolygons.length + 2} — {extraVertexCount < 3
               ? `tap to place points (${extraVertexCount} placed, need ≥3)`
@@ -484,7 +484,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Post-draw result + controls */}
       {phase === 'done' && result && !addingExtra && (
-        <div className="space-y-2">
+        <div className="space-y-2 max-w-[580px] mx-auto">
           <div
             className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-3 space-y-2"
             data-measurement-result="live"
