@@ -12,8 +12,9 @@ const SQM_TO_SQFT = 10.7639
 const M_TO_FT = 3.28084
 // Tap within this many metres of first vertex to auto-close (mobile-friendly)
 const CLOSE_TOLERANCE_M = 10
-// Default zoom — 19; bump to 20 pending Rodolfo go (tighter precision available)
-const MAP_ZOOM = 19
+// Zoom 20 — highest reliably crisp satellite tier in South Florida.
+// Zoom 21 tiles are inconsistent (suburban properties upscale from 20 → blurry).
+const MAP_ZOOM = 20
 
 // Singleton load — avoids duplicate script tags on remount
 let mapsPromise: Promise<void> | null = null
