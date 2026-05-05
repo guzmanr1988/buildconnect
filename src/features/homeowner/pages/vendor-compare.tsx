@@ -113,7 +113,7 @@ export function VendorComparePage() {
             // Real vendors: their id IS already the UUID.
             const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
             // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
-            if (!UUID_RE.test(uuid)) return [v.id, {} as VendorPriceMap] as const
+            if (!UUID_RE.test(uuid)) return [v.id, new Map() as VendorPriceMap] as const
             const map = await getVendorPriceMap(uuid)
             return [v.id, map] as const
           })
