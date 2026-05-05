@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { geocodeAddress } from '@/lib/satellite-measure/geocode'
+import { getParcelByLatLng, geometryToGoogleMapsPaths } from '@/lib/parcel'
 import type { MeasurementResult, FallbackReason, SatelliteMeasureProps } from '@/lib/satellite-measure/types'
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
@@ -64,6 +65,14 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   const [addingExtra, setAddingExtra] = useState(false)
   const [extraVertexCount, setExtraVertexCount] = useState(0)
 
+  // Cancel in-flight parcel fetch + drop overlay on unmount.
+  useEffect(() => {
+    return () => {
+      parcelAbortRef.current?.abort()
+      parcelPolygonRef.current?.setMap(null)
+    }
+  }, [])
+
   // Sync editedSqft with polygon recomputes (vertex drag)
   useEffect(() => {
     if (result) setEditedSqft(String(result.areaSqft))
@@ -88,6 +97,10 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   const extraPreviewPolyRef = useRef<google.maps.Polyline | null>(null)
   const extraFirstMarkerRef = useRef<google.maps.Marker | null>(null)
   const extraClickListenerRef = useRef<google.maps.MapsEventListener | null>(null)
+  // Parcel outline overlay (red ring around the property's lot boundary).
+  // Silent fallback: any failure leaves parcelPolygonRef null and no ring renders.
+  const parcelPolygonRef = useRef<google.maps.Polygon | null>(null)
+  const parcelAbortRef = useRef<AbortController | null>(null)
 
   async function handleShowMap() {
     if (!address.trim()) return
@@ -114,6 +127,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     if (mapRef.current) {
       mapRef.current.panTo({ lat: geo.lat, lng: geo.lng })
       mapRef.current.setZoom(MAP_ZOOM)
+      fetchAndDrawParcel(geo.lat, geo.lng)
     }
     setPhase('drawing')
   }
@@ -132,6 +146,12 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       disableDefaultUI: true,
       zoomControl: true,
       rotateControl: true,
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        mapTypeIds: ['satellite', 'roadmap'],
+        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+        position: google.maps.ControlPosition.TOP_LEFT,
+      },
       gestureHandling: 'greedy',
     })
     mapRef.current = map
@@ -139,7 +159,46 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     attachCursorMarker(map, '#2563eb')
     attachMainClickListener(map)
     attachMainPreviewLines(map)
+    fetchAndDrawParcel(lat, lng)
   }, [phase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch the parcel polygon for the address and render a red overlay.
+  // Non-blocking: map renders first; ring fades in if/when fetch resolves.
+  // Silent fallback on any failure (no toast, no error UI).
+  async function fetchAndDrawParcel(lat: number, lng: number) {
+    parcelAbortRef.current?.abort()
+    parcelPolygonRef.current?.setMap(null)
+    parcelPolygonRef.current = null
+
+    const controller = new AbortController()
+    parcelAbortRef.current = controller
+
+    const geom = await getParcelByLatLng(lat, lng, controller.signal)
+    if (controller.signal.aborted || !geom || !mapRef.current) return
+
+    const paths = geometryToGoogleMapsPaths(geom)
+    if (!paths.length) return
+
+    // Last-ditch guard: any malformed paths or mid-mount maps internals
+    // must never propagate to the user. Silent fallback covers all failure modes.
+    try {
+      parcelPolygonRef.current = new google.maps.Polygon({
+        map: mapRef.current,
+        paths,
+        strokeColor: '#dc2626',
+        strokeWeight: 2,
+        strokeOpacity: 0.95,
+        fillColor: '#dc2626',
+        fillOpacity: 0.03,
+        clickable: false,
+        draggable: false,
+        editable: false,
+        zIndex: 0,
+      })
+    } catch {
+      parcelPolygonRef.current = null
+    }
+  }
 
   function attachCursorMarker(map: google.maps.Map, color: string) {
     if (mouseMoveListenerRef.current) {
