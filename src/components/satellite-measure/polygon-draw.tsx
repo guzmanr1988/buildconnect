@@ -441,7 +441,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       <div
         ref={mapDivRef}
         className={cn(
-          'w-full rounded-xl overflow-hidden border aspect-square max-h-[580px]',
+          'w-full rounded-xl overflow-hidden border aspect-square max-h-[580px] max-w-[580px]',
           !showMap && 'hidden',
         )}
         data-polygon-map={serviceCategory}
