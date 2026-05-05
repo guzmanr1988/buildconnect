@@ -375,11 +375,10 @@ export function ServiceDetailPage() {
             />
           </div>
         )}
-        {/* Mandatory measurement gate for driveways — wizard hidden until area is measured.
-            CHAIN-TOUCH: this is a behavior change; requires apollo walk + Rodolfo confirm before merge. */}
-        {serviceId === 'driveways' && !areaMeasurement ? (
+        {/* Mandatory measurement gate for driveways + pergolas — wizard hidden until area is measured. */}
+        {(serviceId === 'driveways' || serviceId === 'pergolas') && !areaMeasurement ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground" data-measure-gate="required">
-            Measure your driveway above to continue.
+            {serviceId === 'driveways' ? 'Measure your driveway above to continue.' : 'Measure your outdoor space above to continue.'}
           </div>
         ) : (
           <GenericServiceWizard
