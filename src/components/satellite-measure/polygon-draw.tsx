@@ -10,7 +10,6 @@ import type { MeasurementResult, FallbackReason, SatelliteMeasureProps } from '@
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 const SQM_TO_SQFT = 10.7639
 const M_TO_FT = 3.28084
-const CLOSE_TOLERANCE_M = 10
 // Zoom 20 — highest reliably crisp satellite tier in South Florida
 const MAP_ZOOM = 20
 // Colors for extra polygons (cycled as user adds more areas)
@@ -169,10 +168,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     clickListenerRef.current = map.addListener('click', (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return
       const path = pathRef.current
-      if (path.length >= 3) {
-        const dist = google.maps.geometry.spherical.computeDistanceBetween(e.latLng, path[0])
-        if (dist <= CLOSE_TOLERANCE_M) { closePolygon(); return }
-      }
       path.push(e.latLng)
       setVertexCount(path.length)
       updatePreview()
@@ -260,10 +255,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     extraClickListenerRef.current = mapRef.current.addListener('click', (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return
       const path = extraPathRef.current
-      if (path.length >= 3) {
-        const dist = google.maps.geometry.spherical.computeDistanceBetween(e.latLng, path[0])
-        if (dist <= CLOSE_TOLERANCE_M) { closeExtra(color); return }
-      }
       path.push(e.latLng)
       setExtraVertexCount(path.length)
       updateExtraPreview()
