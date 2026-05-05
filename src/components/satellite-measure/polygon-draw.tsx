@@ -31,7 +31,13 @@ function loadMapsJs(): Promise<void> {
   return mapsPromise
 }
 
-interface PolygonResult { areaSqft: number; perimeterFt: number }
+interface PolygonResult {
+  areaSqft: number
+  perimeterFt: number
+  // Length × width for 4-vertex polygons (typical rectangular pergola/driveway).
+  // null for triangles or 5+-vertex polygons where a single L×W would mislead.
+  dims: { lengthFt: number; widthFt: number } | null
+}
 interface ExtraPolygon { id: number; areaSqft: number }
 
 interface Props {
@@ -175,7 +181,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       if (path.length === 1 && !firstMarkerRef.current) {
         firstMarkerRef.current = new google.maps.Marker({
           map, position: path[0],
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2.5 },
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 },
           title: 'Tap to close', clickable: true, zIndex: 10,
         })
         firstMarkerRef.current.addListener('click', closePolygon)
@@ -232,9 +238,37 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   function recompute() {
     const poly = polygonRef.current
     if (!poly) return
-    const areaSqm = google.maps.geometry.spherical.computeArea(poly.getPath())
-    const perimeterM = google.maps.geometry.spherical.computeLength(poly.getPath())
-    setResult({ areaSqft: Math.round(areaSqm * SQM_TO_SQFT), perimeterFt: Math.round(perimeterM * M_TO_FT) })
+    const path = poly.getPath()
+    const areaSqm = google.maps.geometry.spherical.computeArea(path)
+    const perimeterM = google.maps.geometry.spherical.computeLength(path)
+    setResult({
+      areaSqft: Math.round(areaSqm * SQM_TO_SQFT),
+      perimeterFt: Math.round(perimeterM * M_TO_FT),
+      dims: computeRectDims(path),
+    })
+  }
+
+  // For a 4-vertex polygon, return paired-edge length × width in feet.
+  // Pairs opposite edges (0+2, 1+3) and averages — matches a rectangle drawn
+  // with slightly imperfect corners. Returns null for non-quadrilaterals so we
+  // don't show a misleading single L×W from a bounding box of an irregular polygon.
+  function computeRectDims(
+    path: google.maps.MVCArray<google.maps.LatLng>,
+  ): { lengthFt: number; widthFt: number } | null {
+    if (path.getLength() !== 4) return null
+    const v = [path.getAt(0), path.getAt(1), path.getAt(2), path.getAt(3)]
+    const e = [
+      google.maps.geometry.spherical.computeDistanceBetween(v[0], v[1]),
+      google.maps.geometry.spherical.computeDistanceBetween(v[1], v[2]),
+      google.maps.geometry.spherical.computeDistanceBetween(v[2], v[3]),
+      google.maps.geometry.spherical.computeDistanceBetween(v[3], v[0]),
+    ]
+    const pairA = (e[0] + e[2]) / 2
+    const pairB = (e[1] + e[3]) / 2
+    return {
+      lengthFt: Math.round(Math.max(pairA, pairB) * M_TO_FT),
+      widthFt: Math.round(Math.min(pairA, pairB) * M_TO_FT),
+    }
   }
 
   // ---- Extra polygon (multi-area) support ----
@@ -261,7 +295,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       if (path.length === 1 && !extraFirstMarkerRef.current) {
         extraFirstMarkerRef.current = new google.maps.Marker({
           map: mapRef.current!, position: path[0],
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: color, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2.5 },
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: color, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 },
           title: 'Tap to close', clickable: true, zIndex: 10,
         })
         extraFirstMarkerRef.current.addListener('click', () => closeExtra(color))
@@ -466,7 +500,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               <p className="text-sm font-medium text-foreground">{result.perimeterFt.toLocaleString()} linear ft</p>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Label htmlFor="edited-sqft" className="text-xs text-muted-foreground whitespace-nowrap">
                     Area 1 (sqft)
                   </Label>
@@ -479,6 +513,14 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
                     onChange={(e) => setEditedSqft(e.target.value)}
                     className="h-7 w-28 text-sm font-medium"
                   />
+                  {result.dims && (
+                    <span
+                      className="text-xs text-muted-foreground whitespace-nowrap"
+                      data-measurement-dims={`${result.dims.lengthFt}x${result.dims.widthFt}`}
+                    >
+                      ({result.dims.lengthFt} × {result.dims.widthFt} ft)
+                    </span>
+                  )}
                 </div>
                 {extraPolygons.map((ep, idx) => (
                   <div key={ep.id} className="flex items-center gap-2">
@@ -499,7 +541,9 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
                     Total: {grandTotal.toLocaleString()} sqft
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">{result.perimeterFt.toLocaleString()} ft perimeter · Drag vertices to adjust.</p>
+                <p className="text-xs text-muted-foreground">
+                  {result.perimeterFt.toLocaleString()} ft perimeter · Drag vertices to refine — edges are easier than corners.
+                </p>
               </div>
             )}
           </div>
