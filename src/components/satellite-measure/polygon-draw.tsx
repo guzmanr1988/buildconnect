@@ -403,12 +403,12 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         </div>
       )}
 
-      {/* Satellite map — aspect-square so full property fits; taller on desktop.
-          Always in DOM once shown so mapRef stays stable. */}
+      {/* Satellite map — mobile: 62vh so the map dominates the viewport for drawing;
+          sm+: aspect-square capped at 580×580. Always in DOM once shown so mapRef stays stable. */}
       <div
         ref={mapDivRef}
         className={cn(
-          'w-full rounded-xl overflow-hidden border aspect-square max-h-[580px] max-w-[580px] mx-auto',
+          'w-full rounded-xl overflow-hidden border h-[62vh] max-h-[580px] sm:h-auto sm:aspect-square max-w-[580px] mx-auto',
           !showMap && 'hidden',
         )}
         data-polygon-map={serviceCategory}
