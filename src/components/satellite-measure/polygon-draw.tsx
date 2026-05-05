@@ -67,7 +67,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   const mapRef = useRef<google.maps.Map | null>(null)
   const pathRef = useRef<google.maps.LatLng[]>([])
   const previewPolyRef = useRef<google.maps.Polyline | null>(null)
-  const closingLineRef = useRef<google.maps.Polyline | null>(null)
   const firstMarkerRef = useRef<google.maps.Marker | null>(null)
   const polygonRef = useRef<google.maps.Polygon | null>(null)
   const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null)
@@ -79,7 +78,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   const extraPolygonRefsRef = useRef<Map<number, google.maps.Polygon>>(new Map())
   const extraPathRef = useRef<google.maps.LatLng[]>([])
   const extraPreviewPolyRef = useRef<google.maps.Polyline | null>(null)
-  const extraClosingLineRef = useRef<google.maps.Polyline | null>(null)
   const extraFirstMarkerRef = useRef<google.maps.Marker | null>(null)
   const extraClickListenerRef = useRef<google.maps.MapsEventListener | null>(null)
 
@@ -165,10 +163,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     previewPolyRef.current = new google.maps.Polyline({
       map, path: [], strokeColor: '#2563eb', strokeWeight: 2, strokeOpacity: 1,
     })
-    closingLineRef.current = new google.maps.Polyline({
-      map, path: [], strokeColor: '#2563eb', strokeWeight: 1.5, strokeOpacity: 0.5,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '8px' }],
-    })
   }
 
   function attachMainClickListener(map: google.maps.Map) {
@@ -182,11 +176,12 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       path.push(e.latLng)
       setVertexCount(path.length)
       updatePreview()
-      if (path.length === 3 && !firstMarkerRef.current) {
+      // Show the close-target marker on the first point immediately
+      if (path.length === 1 && !firstMarkerRef.current) {
         firstMarkerRef.current = new google.maps.Marker({
           map, position: path[0],
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#ffffff', fillOpacity: 1, strokeColor: '#2563eb', strokeWeight: 2 },
-          title: 'Tap to close', clickable: true,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2.5 },
+          title: 'Tap to close', clickable: true, zIndex: 10,
         })
         firstMarkerRef.current.addListener('click', closePolygon)
       }
@@ -194,13 +189,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   }
 
   function updatePreview() {
-    const path = pathRef.current
-    previewPolyRef.current?.setPath(path)
-    if (path.length >= 2) {
-      closingLineRef.current?.setPath([path[path.length - 1], path[0]])
-    } else {
-      closingLineRef.current?.setPath([])
-    }
+    previewPolyRef.current?.setPath(pathRef.current)
   }
 
   function handleUndo() {
@@ -209,7 +198,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         pathRef.current.pop()
         setVertexCount(pathRef.current.length)
         updatePreview()
-        if (pathRef.current.length < 3 && firstMarkerRef.current) {
+        if (pathRef.current.length === 0 && firstMarkerRef.current) {
           firstMarkerRef.current.setMap(null)
           firstMarkerRef.current = null
         }
@@ -228,7 +217,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     if (path.length < 3) return
     if (clickListenerRef.current) { google.maps.event.removeListener(clickListenerRef.current); clickListenerRef.current = null }
     previewPolyRef.current?.setMap(null)
-    closingLineRef.current?.setMap(null)
     firstMarkerRef.current?.setMap(null)
     hideCursorMarker()
 
@@ -268,10 +256,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     extraPreviewPolyRef.current = new google.maps.Polyline({
       map: mapRef.current, path: [], strokeColor: color, strokeWeight: 2, strokeOpacity: 1,
     })
-    extraClosingLineRef.current = new google.maps.Polyline({
-      map: mapRef.current, path: [], strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.5,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '8px' }],
-    })
 
     extraClickListenerRef.current = mapRef.current.addListener('click', (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return
@@ -283,11 +267,11 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       path.push(e.latLng)
       setExtraVertexCount(path.length)
       updateExtraPreview()
-      if (path.length === 3 && !extraFirstMarkerRef.current) {
+      if (path.length === 1 && !extraFirstMarkerRef.current) {
         extraFirstMarkerRef.current = new google.maps.Marker({
           map: mapRef.current!, position: path[0],
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#ffffff', fillOpacity: 1, strokeColor: color, strokeWeight: 2 },
-          title: 'Tap to close', clickable: true,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: color, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2.5 },
+          title: 'Tap to close', clickable: true, zIndex: 10,
         })
         extraFirstMarkerRef.current.addListener('click', () => closeExtra(color))
       }
@@ -295,13 +279,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   }
 
   function updateExtraPreview() {
-    const path = extraPathRef.current
-    extraPreviewPolyRef.current?.setPath(path)
-    if (path.length >= 2) {
-      extraClosingLineRef.current?.setPath([path[path.length - 1], path[0]])
-    } else {
-      extraClosingLineRef.current?.setPath([])
-    }
+    extraPreviewPolyRef.current?.setPath(extraPathRef.current)
   }
 
   function closeExtra(color: string) {
@@ -309,7 +287,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     if (path.length < 3) return
     if (extraClickListenerRef.current) { google.maps.event.removeListener(extraClickListenerRef.current); extraClickListenerRef.current = null }
     extraPreviewPolyRef.current?.setMap(null)
-    extraClosingLineRef.current?.setMap(null)
     extraFirstMarkerRef.current?.setMap(null)
     hideCursorMarker()
 
@@ -347,7 +324,6 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   function cancelAddingExtra() {
     if (extraClickListenerRef.current) { google.maps.event.removeListener(extraClickListenerRef.current); extraClickListenerRef.current = null }
     extraPreviewPolyRef.current?.setMap(null)
-    extraClosingLineRef.current?.setMap(null)
     extraFirstMarkerRef.current?.setMap(null)
     hideCursorMarker()
     extraPathRef.current = []
@@ -451,9 +427,11 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       {phase === 'drawing' && !addingExtra && (
         <div className="space-y-2 max-w-[580px] mx-auto">
           <p className="text-xs text-muted-foreground text-center">
-            {vertexCount < 3
-              ? `Tap to place points (${vertexCount} placed, need ≥3)`
-              : 'Tap the first point (white circle) to close the area.'}
+            {vertexCount === 0
+              ? 'Tap the map to place your first point'
+              : vertexCount < 3
+              ? `Tap to add points (${vertexCount} placed, need ≥3) · tap the green dot to close`
+              : 'Tap to add more points · tap the green dot to close the area'}
           </p>
           <div className="flex gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={handleUndo} disabled={vertexCount === 0}>
@@ -471,9 +449,11 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       {addingExtra && (
         <div className="space-y-2 max-w-[580px] mx-auto">
           <p className="text-xs font-medium" style={{ color: EXTRA_COLORS[extraPolygons.length % EXTRA_COLORS.length] }}>
-            Drawing area {extraPolygons.length + 2} — {extraVertexCount < 3
-              ? `tap to place points (${extraVertexCount} placed, need ≥3)`
-              : 'tap the colored circle to close.'}
+            Drawing area {extraPolygons.length + 2} — {extraVertexCount === 0
+              ? 'tap the map to place your first point'
+              : extraVertexCount < 3
+              ? `tap to add points (${extraVertexCount} placed, need ≥3) · tap the colored dot to close`
+              : 'tap the colored dot to close the area'}
           </p>
           <Button variant="outline" size="sm" onClick={cancelAddingExtra}>
             <X className="h-3.5 w-3.5 mr-1.5" />
