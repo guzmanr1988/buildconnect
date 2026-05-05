@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Home } from 'lucide-react'
+import { Check, Home, Wrench } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,10 @@ const ADDON_LINEAR_FT_CONFIG = [
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
 
+const ADDONS_PATH_B_HIDE: string[] = ['extra_plywood', 'solar_prep', 'insulation']
+
+type FlowPath = 'full_replacement' | 'addons_only'
+
 function metalRoofDisplaySquares(roofSize: string): number {
   const n = Number(roofSize)
   return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n
@@ -43,26 +47,66 @@ interface RoofingWizardProps {
   onDone: () => void
 }
 
-const TOTAL_STEPS = 9
-
-function getNextStep(step: number, selections: Selections): number {
-  const next = step + 1
-  if (next === 4 && !(selections['material'] ?? []).includes('metal')) return 5
-  if (next === 6) {
+function computeVisibleSteps(flowPath: FlowPath | null, selections: Selections): number[] {
+  if (flowPath === 'addons_only') {
     const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
-    if (!hasLinearFt) return 7
+    return hasLinearFt ? [1, 2, 6, 7, 9, 10] : [1, 2, 6, 9, 10]
+  }
+  const hasMetal = (selections['material'] ?? []).includes('metal')
+  const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
+  const steps = [1, 2, 3, 4]
+  if (hasMetal) steps.push(5)
+  steps.push(6)
+  if (hasLinearFt) steps.push(7)
+  steps.push(8, 9, 10)
+  return steps
+}
+
+function getNextStep(step: number, selections: Selections, path: FlowPath | null): number {
+  if (step === 1) return 2
+  if (path === 'addons_only') {
+    if (step === 2) return 6
+    if (step === 6) {
+      const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
+      return hasLinearFt ? 7 : 9
+    }
+    if (step === 7) return 9
+  }
+  const next = step + 1
+  if (next === 5 && !(selections['material'] ?? []).includes('metal')) return 6
+  if (next === 7) {
+    const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
+    if (!hasLinearFt) return 8
   }
   return next
 }
 
-function getPrevStep(step: number, selections: Selections): number {
-  const prev = step - 1
-  if (prev === 6) {
-    const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
-    if (!hasLinearFt) return 5
+function getPrevStep(step: number, selections: Selections, path: FlowPath | null): number {
+  if (path === 'addons_only') {
+    if (step === 9) {
+      const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
+      return hasLinearFt ? 7 : 6
+    }
+    if (step === 7) return 6
+    if (step === 6) return 2
   }
-  if (prev === 4 && !(selections['material'] ?? []).includes('metal')) return 3
+  const prev = step - 1
+  if (prev === 7) {
+    const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
+    if (!hasLinearFt) return 6
+  }
+  if (prev === 5 && !(selections['material'] ?? []).includes('metal')) return 4
   return prev
+}
+
+function inferFlowPath(editItem: Record<string, unknown> | null | undefined): FlowPath | null {
+  if (!editItem) return null
+  const persisted = editItem.flowPath as FlowPath | undefined
+  if (persisted === 'full_replacement' || persisted === 'addons_only') return persisted
+  const sel = (editItem.selections as Selections) ?? {}
+  if ((sel.material ?? []).length > 0) return 'full_replacement'
+  if ((sel.addons ?? []).length > 0) return 'addons_only'
+  return 'full_replacement'
 }
 
 export function RoofingWizard({
@@ -78,7 +122,8 @@ export function RoofingWizard({
   const removeItem = useCartStore((s) => s.removeItem)
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
-  const [step, setStep] = useState(1)
+  const [flowPath, setFlowPathState] = useState<FlowPath | null>(() => inferFlowPath(editItem))
+  const [step, setStep] = useState(() => (editItem ? 2 : 1))
   const [direction, setDirection] = useState<1 | -1>(1)
 
   const [selections, setSelections] = useState<Selections>(
@@ -108,24 +153,42 @@ export function RoofingWizard({
 
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
+  function setFlowPath(next: FlowPath) {
+    setFlowPathState(next)
+    if (next === 'addons_only') {
+      setSelections((prev) => {
+        const cleaned = { ...prev }
+        delete cleaned.material
+        delete cleaned.service_type
+        return cleaned
+      })
+      setMetalRoofSelection({ color: '', roofSize: '' })
+      setRoofPermit(null)
+      setWaiverAcknowledged(false)
+      setWaiverName('')
+    }
+  }
+
   function goNext() {
-    const next = getNextStep(step, selections)
+    const next = getNextStep(step, selections, flowPath)
     setDirection(1)
     setStep(next)
   }
   function goBack() {
-    if (step === 1) { onCancel(); return }
+    if (step === 1 || (editItem && step === 2)) { onCancel(); return }
     setDirection(-1)
-    setStep(getPrevStep(step, selections))
+    setStep(getPrevStep(step, selections, flowPath))
   }
 
   function handleWizardComplete(result: RoofWizardResult) {
-    const materials = [result.material]
-    if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
-    setSelections((prev) => ({ ...prev, material: materials }))
-    if (result.material === 'metal') {
-      const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
-      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
+    if (flowPath !== 'addons_only') {
+      const materials = [result.material]
+      if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
+      setSelections((prev) => ({ ...prev, material: materials }))
+      if (result.material === 'metal') {
+        const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
+        setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
+      }
     }
     setRoofMeasurement({
       areaSqft: result.areaSqft, pitch: result.pitch, address: result.address,
@@ -163,6 +226,7 @@ export function RoofingWizard({
       serviceId: service.id,
       serviceName: service.name,
       selections,
+      ...(flowPath && { flowPath }),
       ...(metalRoofSelection.color && { metalRoofSelection }),
       ...(roofMeasurement && { roofMeasurement }),
       ...(roofPermit && { roofPermit }),
@@ -209,27 +273,47 @@ export function RoofingWizard({
   const metalSelected = selectedMaterials.includes('metal')
   const linearFtAddonIds = ADDON_LINEAR_FT_IDS.filter((id) => selectedAddons.includes(id))
 
+  const visibleAddonOptions = addonsGroup.options.filter((opt) =>
+    flowPath === 'addons_only' ? !ADDONS_PATH_B_HIDE.includes(opt.id) : true
+  )
+  function addonOptionLabel(opt: { id: string; label: string }): string {
+    if (flowPath === 'addons_only' && opt.id === 'gutters') {
+      return 'Gutter Installation (includes downspouts)'
+    }
+    return opt.label
+  }
+
+  const visibleSteps = computeVisibleSteps(flowPath, selections)
+  const displayStep = Math.max(1, visibleSteps.indexOf(step) + 1)
+  const totalDisplaySteps = visibleSteps.length
+
   const stepTitles: Record<number, string> = {
-    1: 'Measure your roof',
-    2: 'What type of service?',
-    3: 'Pick your roofing material',
-    4: 'Configure metal roof',
-    5: 'Any add-ons?',
-    6: 'Add-on measurements',
-    7: 'Do you need a permit?',
-    8: 'Which property?',
-    9: 'Review and add to project',
+    1: 'What are you doing today?',
+    2: 'Measure your roof',
+    3: 'What type of service?',
+    4: 'Pick your roofing material',
+    5: 'Configure metal roof',
+    6: 'Any add-ons?',
+    7: 'Add-on measurements',
+    8: 'Do you need a permit?',
+    9: 'Which property?',
+    10: 'Review and add to project',
   }
   const stepSubtitles: Record<number, string> = {
-    1: "We'll use satellite data to pre-fill your roof config.",
-    3: 'Select all that apply — many homes have both a flat section and sloped sections.',
-    5: 'Select any extras you\'d like included.',
-    6: "We'll use these measurements to give you the most accurate quote.",
-    7: 'Permits are required for full replacements in most Florida counties.',
+    1: 'Pick the option that matches your project.',
+    2: "We'll use satellite data to pre-fill your roof config.",
+    4: 'Select all that apply — many homes have both a flat section and sloped sections.',
+    6: "Select any extras you'd like included.",
+    7: "We'll use these measurements to give you the most accurate quote.",
+    8: 'Permits are required for full replacements in most Florida counties.',
   }
 
   return (
-    <div className="pb-10" data-roofing-wizard-step={step}>
+    <div
+      className="pb-10"
+      data-roofing-wizard-step={step}
+      data-roofing-flow-path={flowPath ?? ''}
+    >
       <RoofMeasurementWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
@@ -238,32 +322,84 @@ export function RoofingWizard({
       />
 
       <CardSlideWizard
-        step={step}
-        totalSteps={TOTAL_STEPS}
+        step={displayStep}
+        totalSteps={totalDisplaySteps}
         title={stepTitles[step] ?? ''}
         subtitle={stepSubtitles[step]}
         direction={direction}
         onBack={goBack}
-        onNext={step === 9 ? handleAddToProject : goNext}
-        onSkip={step === 5 ? () => { setDirection(1); setStep(7) } : undefined}
+        onNext={step === 10 ? handleAddToProject : goNext}
+        onSkip={step === 6 ? () => {
+          setDirection(1)
+          setStep(flowPath === 'addons_only' ? 9 : 8)
+        } : undefined}
         skipLabel="Skip add-ons"
         nextLabel={
-          step === 9
+          step === 10
             ? (editingItemId ? 'Save Changes' : 'Add to Project')
             : 'Continue'
         }
         nextDisabled={
-          (step === 1 && !roofMeasurement) ||
-          (step === 2 && !selectedServiceType) ||
-          (step === 3 && selectedMaterials.length === 0) ||
-          (step === 4 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
-          (step === 7 && roofPermit === null) ||
-          (step === 7 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
-          (step === 9 && submitting)
+          (step === 1 && !flowPath) ||
+          (step === 2 && !roofMeasurement) ||
+          (step === 3 && !selectedServiceType) ||
+          (step === 4 && selectedMaterials.length === 0) ||
+          (step === 5 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
+          (step === 8 && roofPermit === null) ||
+          (step === 8 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
+          (step === 10 && submitting)
         }
       >
-        {/* S1 — Measure Roof */}
+        {/* S1 — Gate (Full replacement vs Addons-only) */}
         {step === 1 && (
+          <div className="flex flex-col gap-3" data-roofing-gate="true">
+            <button
+              type="button"
+              onClick={() => setFlowPath('full_replacement')}
+              data-roofing-gate-option="full_replacement"
+              className={cn(
+                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+                flowPath === 'full_replacement'
+                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                  : 'border-border hover:border-primary/40 hover:bg-muted'
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                <Home className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Full roof replacement</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Replace your entire roof with new materials and a permit.
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFlowPath('addons_only')}
+              data-roofing-gate-option="addons_only"
+              className={cn(
+                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+                flowPath === 'addons_only'
+                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                  : 'border-border hover:border-primary/40 hover:bg-muted'
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                <Wrench className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Gutters, fascia, soffit, or downspouts only</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Quick install or replace of these. No roof replacement.
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* S2 — Measure Roof */}
+        {step === 2 && (
           <div className="space-y-4">
             <MeasurementTutorialCTA serviceId={service.id} />
             <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
@@ -280,7 +416,6 @@ export function RoofingWizard({
                           <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
                         )}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                          {/* Main roof — pitched portion (or total when no split) */}
                           <span className="text-[12px] text-muted-foreground">Main roof</span>
                           <span className="text-[12px] font-medium text-foreground">
                             {(() => {
@@ -289,14 +424,12 @@ export function RoofingWizard({
                               return `${sqft.toLocaleString()} sqft (${sq} sq)`
                             })()}
                           </span>
-                          {/* Perimeter / linear ft */}
                           {roofMeasurement.perimeterFt ? (
                             <>
                               <span className="text-[12px] text-muted-foreground">Linear ft</span>
                               <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
                             </>
                           ) : null}
-                          {/* Flat — conditional on split data + includeFlat */}
                           {roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Flat</span>
@@ -311,7 +444,6 @@ export function RoofingWizard({
                               <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
                             </>
                           )}
-                          {/* Total — only when split data available; uses computeRoofTotal SoT */}
                           {roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
                             <>
                               <span className="text-[12px] text-muted-foreground font-semibold">Total</span>
@@ -353,8 +485,8 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S2 — Service Type */}
-        {step === 2 && (
+        {/* S3 — Service Type */}
+        {step === 3 && (
           <div className="flex flex-col gap-3">
             {serviceTypeGroup.options.map((opt) => {
               const isSelected = selectedServiceType === opt.id
@@ -383,13 +515,11 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S3 — Material */}
-        {step === 3 && (
+        {/* S4 — Material */}
+        {step === 4 && (
           <div className="flex flex-col gap-3">
             {materialGroup.options.map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
-              // Ship #346 — gate Flat Roof card when includeFlat is OFF.
-              // Keep in DOM (layout) but disable + grey + show inline hint.
               const isFlatGated = opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false
               return (
                 <button
@@ -441,8 +571,8 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S4 — Metal Config */}
-        {step === 4 && metalSelected && (
+        {/* S5 — Metal Config */}
+        {step === 5 && metalSelected && (
           <AnimatePresence>
             <MetalRoofConfigurator
               selection={metalRoofSelection}
@@ -461,11 +591,12 @@ export function RoofingWizard({
           </AnimatePresence>
         )}
 
-        {/* S5 — Add-Ons */}
-        {step === 5 && (
+        {/* S6 — Add-Ons */}
+        {step === 6 && (
           <div className="flex flex-col gap-3">
-            {addonsGroup.options.map((opt) => {
+            {visibleAddonOptions.map((opt) => {
               const isSelected = selectedAddons.includes(opt.id)
+              const label = addonOptionLabel(opt)
               return (
                 <button
                   key={opt.id}
@@ -495,15 +626,15 @@ export function RoofingWizard({
                   )}>
                     {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
                   </div>
-                  <span className="text-sm font-medium text-foreground">{opt.label}</span>
+                  <span className="text-sm font-medium text-foreground">{label}</span>
                 </button>
               )
             })}
           </div>
         )}
 
-        {/* S6 — Add-On Details (linear ft) */}
-        {step === 6 && (
+        {/* S7 — Add-On Details (linear ft) */}
+        {step === 7 && (
           <div className="space-y-5">
             {linearFtAddonIds.map((id) => {
               const config = ADDON_LINEAR_FT_CONFIG.find((c) => c.id === id)!
@@ -524,10 +655,9 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S7 — Permit */}
-        {step === 7 && (
+        {/* S8 — Permit */}
+        {step === 8 && (
           <div className="flex flex-col gap-3">
-            {/* Yes */}
             <button
               type="button"
               onClick={() => setRoofPermit('yes')}
@@ -551,7 +681,6 @@ export function RoofingWizard({
               </div>
             </button>
 
-            {/* No */}
             <button
               type="button"
               onClick={() => { setRoofPermit('no'); setWaiverAcknowledged(false); setWaiverName('') }}
@@ -574,7 +703,6 @@ export function RoofingWizard({
               </div>
             </button>
 
-            {/* Waiver — shown when No is selected */}
             {roofPermit === 'no' && (
               <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-400">Acknowledgment Required</p>
@@ -605,8 +733,8 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S8 — Property */}
-        {step === 8 && (
+        {/* S9 — Property */}
+        {step === 9 && (
           <div className="space-y-3">
             <Select value={addressKey} onValueChange={(v) => setAddressKey(v ?? '')}>
               <SelectTrigger className="h-12 text-sm">
@@ -632,11 +760,13 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S9 — Review */}
-        {step === 9 && (() => {
+        {/* S10 — Review */}
+        {step === 10 && (() => {
           const matOpts = materialGroup.options
           const addonOpts = addonsGroup.options
-          const serviceTypeLabel = serviceTypeGroup.options.find(o => o.id === selectedServiceType)?.label
+          const serviceTypeLabel = flowPath === 'addons_only'
+            ? 'Add-ons only (no roof replacement)'
+            : serviceTypeGroup.options.find(o => o.id === selectedServiceType)?.label
           return (
             <div className="space-y-3" data-roofing-review="true">
               {serviceTypeLabel && (
@@ -685,7 +815,8 @@ export function RoofingWizard({
                 <div className="rounded-xl border bg-muted/40 p-4 space-y-1">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Add-Ons</p>
                   {selectedAddons.map((id) => {
-                    const label = addonOpts.find(o => o.id === id)?.label ?? id
+                    const opt = addonOpts.find(o => o.id === id)
+                    const label = opt ? addonOptionLabel(opt) : id
                     const linFt = ADDON_LINEAR_FT_IDS.includes(id) ? addonLinearFt[id] : undefined
                     return (
                       <p key={id} className="text-sm text-foreground">
