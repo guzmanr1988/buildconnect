@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import type { CartItem } from '@/stores/cart-store'
 
 /*
@@ -117,11 +118,9 @@ export function computeVendorTotal(
           totalCents += basePrice * areaSqft
         } else if (meta.priceUnit === 'linear_ft') {
           const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
-          let effectiveLinFt = linFt
-          if (optionId === 'gutters' && item.gutterDropsConfig) {
-            const perFloor = item.gutterDropsConfig.floors === 1 ? 8 : 19
-            effectiveLinFt = linFt + item.gutterDropsConfig.drops * perFloor
-          }
+          const effectiveLinFt = optionId === 'gutters'
+            ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
+            : linFt
           totalCents += basePrice * effectiveLinFt
         } else {
           totalCents += basePrice

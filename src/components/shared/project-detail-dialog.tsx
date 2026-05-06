@@ -461,6 +461,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         roofMeasurement={item.roofMeasurement}
                         metalRoofSelection={item.metalRoofSelection}
                         roofAddonLinearFt={item.roofAddonLinearFt}
+                        gutterDropsConfig={item.gutterDropsConfig}
                         roofPermit={item.roofPermit}
                         flowPath={item.flowPath}
                       />

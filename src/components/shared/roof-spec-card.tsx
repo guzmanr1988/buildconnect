@@ -1,6 +1,11 @@
 import { Badge } from '@/components/ui/badge'
 import { sqftToSquares } from '@/lib/option-metadata'
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import {
+  ROOF_WASTE_FACTOR,
+  GUTTER_DROP_FT_BY_FLOORS,
+  computeGutterTotalLinFt,
+  type GutterDropsConfig,
+} from '@/lib/roof-pricing'
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +28,7 @@ interface RoofSpecCardProps {
   roofMeasurement?: RoofMeasurement
   metalRoofSelection?: MetalRoofSelection
   roofAddonLinearFt?: Record<string, number>
+  gutterDropsConfig?: GutterDropsConfig
   roofPermit?: 'yes' | 'no'
   flowPath?: 'full_replacement' | 'addons_only' | null
   className?: string
@@ -40,6 +46,7 @@ export function RoofSpecCard({
   roofMeasurement: rm,
   metalRoofSelection: mrs,
   roofAddonLinearFt: linFt,
+  gutterDropsConfig,
   roofPermit: permit,
   flowPath,
   className,
@@ -126,12 +133,27 @@ export function RoofSpecCard({
             <span className="font-medium">{metalSquares} squares</span>
           </div>
         )}
-        {addonEntries.map(([id, ft]) => (
-          <div key={id} className="flex items-center gap-2">
-            <span className="text-muted-foreground min-w-[72px]">{ADDON_LABELS[id] ?? id}</span>
-            <span className="font-medium">{ft.toLocaleString()} lin ft</span>
-          </div>
-        ))}
+        {addonEntries.map(([id, ft]) => {
+          const isGutters = id === 'gutters'
+          const totalFt = isGutters ? computeGutterTotalLinFt(ft, gutterDropsConfig) : ft
+          const showBreakdown = isGutters && !!gutterDropsConfig
+          const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[gutterDropsConfig!.floors] : 0
+          const drops = gutterDropsConfig?.drops ?? 0
+          const floorsLabel = gutterDropsConfig?.floors === 1 ? '1-story' : '2-story'
+          return (
+            <div key={id} className="flex items-start gap-2">
+              <span className="text-muted-foreground min-w-[72px]">{ADDON_LABELS[id] ?? id}</span>
+              <div className="flex flex-col">
+                <span className="font-medium">{totalFt.toLocaleString()} lin ft</span>
+                {showBreakdown && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
         {permit && (
           <div className="flex items-start gap-2 pt-0.5">
             <span className="text-muted-foreground min-w-[72px]">Permit</span>

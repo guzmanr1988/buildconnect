@@ -851,6 +851,7 @@ export function CartPage() {
                       roofMeasurement={viewItem.roofMeasurement}
                       metalRoofSelection={viewItem.metalRoofSelection}
                       roofAddonLinearFt={(viewItem as any).roofAddonLinearFt}
+                      gutterDropsConfig={(viewItem as any).gutterDropsConfig}
                       roofPermit={viewItem.roofPermit}
                       flowPath={(viewItem as any).flowPath}
                       className="bg-muted/30"

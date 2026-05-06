@@ -14,7 +14,7 @@ import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { sqftToSquares } from '@/lib/option-metadata'
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
@@ -244,7 +244,7 @@ export function RoofingWizard({
         permitWaiver: { acknowledged: true, signedName: waiverName.trim(), signedAt: new Date().toISOString() },
       }),
       ...(Object.keys(roofAddonLinearFtParsed).length > 0 && { roofAddonLinearFt: roofAddonLinearFtParsed }),
-      ...(flowPath === 'addons_only' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
+      ...((selections['addons'] ?? []).includes('gutters') && gutterFloors && {
         gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
       }),
       ...(itemAddress && { address: itemAddress }),
@@ -359,7 +359,7 @@ export function RoofingWizard({
           (step === 3 && !selectedServiceType) ||
           (step === 4 && selectedMaterials.length === 0) ||
           (step === 5 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
-          (step === 7 && flowPath === 'addons_only' && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
+          (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
           (step === 8 && roofPermit === null) ||
           (step === 8 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
           (step === 10 && submitting)
@@ -654,11 +654,13 @@ export function RoofingWizard({
 
         {/* S7 — Add-On Details (linear ft) */}
         {step === 7 && (() => {
-          const showGutterDrops = flowPath === 'addons_only' && linearFtAddonIds.includes('gutters')
+          const showGutterDrops = linearFtAddonIds.includes('gutters')
           const gutterPerimeter = Number(addonLinearFt['gutters'] ?? 0) || 0
-          const perFloor = gutterFloors === 1 ? 8 : 19
-          const dropsExtension = gutterFloors ? gutterDrops * perFloor : 0
-          const gutterTotal = gutterPerimeter + dropsExtension
+          const perFloor = gutterFloors ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors] : 0
+          const gutterTotal = computeGutterTotalLinFt(
+            gutterPerimeter,
+            gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
+          )
           const floorsLabel = gutterFloors === 1 ? '1-story' : '2-story'
           return (
             <div className="space-y-5">
@@ -917,10 +919,13 @@ export function RoofingWizard({
                     const opt = addonOpts.find(o => o.id === id)
                     const label = opt ? addonOptionLabel(opt) : id
                     const linFt = ADDON_LINEAR_FT_IDS.includes(id) ? addonLinearFt[id] : undefined
-                    const showGutterBreakdown = id === 'gutters' && flowPath === 'addons_only' && gutterFloors !== null && linFt
+                    const showGutterBreakdown = id === 'gutters' && gutterFloors !== null && !!linFt
                     const perimeter = Number(linFt ?? 0) || 0
-                    const perFloorReview = gutterFloors === 1 ? 8 : 19
-                    const totalLinFt = perimeter + (gutterFloors ? gutterDrops * perFloorReview : 0)
+                    const perFloorReview = gutterFloors ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors] : 0
+                    const totalLinFt = computeGutterTotalLinFt(
+                      perimeter,
+                      gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
+                    )
                     return (
                       <div key={id}>
                         <p className="text-sm text-foreground">
