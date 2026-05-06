@@ -527,7 +527,7 @@ export function RoofingWizard({
                   )}>
                     {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                   </div>
-                  <span className="text-sm font-medium text-foreground">{opt.label}</span>
+                  <span className="text-base font-medium text-foreground">{opt.label}</span>
                 </button>
               )
             })}
@@ -569,7 +569,7 @@ export function RoofingWizard({
                     {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{opt.label}</p>
+                    <p className="text-base font-medium text-foreground">{opt.label}</p>
                     {opt.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                     )}
