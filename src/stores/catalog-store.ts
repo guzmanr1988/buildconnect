@@ -762,9 +762,16 @@ export const useCatalogStore = create<CatalogState>()(
       // bump forces one more migration so existing stale-state users get
       // reset alongside the new union logic.
       //
+      // Ship — version bump 11→12 paired-edit: PR #111 added pool_fence to
+      // pool addons (7th option) and square_concrete to pool floors AND
+      // driveways surface in SERVICE_CATALOG. Existing persisted v11 catalogs
+      // still serve the pre-#111 6-option pool-addons + driveways-surface
+      // arrays, so the new chips never render despite the bundle carrying
+      // them. Version bump forces one-time migrate() reset to bundled.
+      //
       // Future same-class fixes: when changing SERVICE_CATALOG defaults,
       // bump this version to force persisted-state eviction.
-      version: 11,
+      version: 12,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
