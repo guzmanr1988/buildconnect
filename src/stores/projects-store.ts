@@ -204,7 +204,7 @@ interface ProjectsState {
   // Written whenever assignRepByLead fires; consumed by homeowner
   // timeline on "Representative assigned" entry.
   repAssignedAtByLead: Record<string, string>
-  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string, homeownerId?: string, computedLineItems?: PriceLineItem[]) => void
+  sendProject: (item: CartItem, contractor: ContractorInfo, booking: BookingInfo, homeowner?: HomeownerInfo, idDocument?: string, homeownerId?: string, computedLineItems?: PriceLineItem[]) => string
   updateStatus: (id: string, status: SentProject['status']) => void
   updateBooking: (id: string, booking: BookingInfo) => void
   markSold: (id: string, saleAmount: number) => void
@@ -506,6 +506,7 @@ export const useProjectsStore = create<ProjectsState>()(
             quoted_price_cents: next.quotedPriceCents ?? null,
           })
         }
+        return next.id
       },
 
       updateStatus: (id, status) => {
