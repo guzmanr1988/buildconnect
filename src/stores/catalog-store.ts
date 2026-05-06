@@ -838,7 +838,14 @@ export const useCatalogStore = create<CatalogState>()(
       // still serve the pre-#117 pool option_groups, so the new vendor
       // priceable products never render. Version bump forces migrate()
       // reset to bundled.
-      version: 13,
+      //
+      // Ship — version bump 13→14 paired-edit: PR #118 fix-forward on
+      // permit shape (per-option → per-service). Vendor-catalog-store
+      // schema changed (permitPricing record dropped, permitCents flat
+      // added); bump catalog-store version too so any in-flight
+      // persisted catalog state from the brief #117 window evicts
+      // cleanly alongside the vendor-store reshape.
+      version: 14,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
