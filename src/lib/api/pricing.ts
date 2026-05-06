@@ -51,57 +51,39 @@ export async function getVendorPriceMap(vendorUuid: string): Promise<VendorPrice
   return map
 }
 
-// PR #117 — sibling map for per-product permit prices. sendProject sums
-// permits across all selected option_ids instead of using the per-category
-// PRICE_LINE_ITEM_PRESETS permit-line. Keyed identically to priceMap.
+// PR #118 — fix-forward: ONE permit per service (not per option).
+// Rodolfo clarification: "permit is only 1 line item to add the price not
+// in every single item". Per-vendor-per-service flat permit fee, snapshot
+// onto the homeowner breakdown's Permit Price line at sendProject. Keyed
+// by serviceId (a Map<string, number>, NOT the priceKey shape).
+export type VendorPermitMap = Map<string, number> // key = serviceId
+
 type DbPermitRow = {
+  service_id: string
   permit_price_cents: number
   active: boolean
-  options: {
-    option_id: string
-    option_groups: {
-      group_id: string
-      service_id: string
-    }
-  }
 }
 
-export async function getVendorPermitMap(vendorUuid: string): Promise<VendorPriceMap> {
+export async function getVendorPermitMap(vendorUuid: string): Promise<VendorPermitMap> {
   const { data, error } = await supabase
-    .from('vendor_option_prices')
-    .select('permit_price_cents,active,options(option_id,option_groups(group_id,service_id))')
+    .from('vendor_service_permits')
+    .select('service_id,permit_price_cents,active')
     .eq('vendor_id', vendorUuid)
     .eq('active', true)
   if (error) throw new Error(`getVendorPermitMap: ${error.message}`)
-  const map: VendorPriceMap = new Map()
-  for (const r of (data ?? []) as unknown as DbPermitRow[]) {
-    if (!r.options || !r.options.option_groups) continue
+  const map: VendorPermitMap = new Map()
+  for (const r of (data ?? []) as DbPermitRow[]) {
+    if (!r.service_id) continue
     if (!r.permit_price_cents || r.permit_price_cents <= 0) continue
-    const k = priceKey(
-      r.options.option_groups.service_id,
-      r.options.option_groups.group_id,
-      r.options.option_id
-    )
-    map.set(k, r.permit_price_cents)
+    map.set(r.service_id, r.permit_price_cents)
   }
   return map
 }
 
-// Sum permit-cents across all selected option_ids in a cart item.
-// Mirrors computeVendorTotal's iteration shape but flat-sums permits
-// (no quantity/sqft multipliers — permit is a per-product flat fee).
-// service_type group excluded same as price total.
-export function sumPermitForItem(item: CartItem, permitMap: VendorPriceMap): number {
-  let total = 0
-  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
-    if (!optionIds || optionIds.length === 0) continue
-    if (item.serviceId === 'roofing' && groupId === 'service_type') continue
-    for (const optionId of optionIds) {
-      const cents = permitMap.get(priceKey(item.serviceId, groupId, optionId))
-      if (cents) total += cents
-    }
-  }
-  return total
+// Look up a vendor's flat permit fee for a cart item's service. PR #118:
+// permit is one flat fee per service (not summed across selected options).
+export function getPermitForItem(item: CartItem, permitMap: VendorPermitMap): number {
+  return permitMap.get(item.serviceId) ?? 0
 }
 
 export type VendorTotalResult = {

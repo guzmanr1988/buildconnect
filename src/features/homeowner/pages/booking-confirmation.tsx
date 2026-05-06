@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
-import { getVendorPriceMap, getVendorPermitMap, sumPermitForItem } from '@/lib/api/pricing'
+import { getVendorPriceMap, getVendorPermitMap, getPermitForItem } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
@@ -166,14 +166,14 @@ async function buildRoofingLineItems(
   if (!anyComputed) return null
 
   // Permit: always render a row so homeowner/vendor always sees the permit status.
-  // PR #117: amount is now SUM of vendor's per-product permit_price_cents on
-  // selected option_ids (each product carries its own permit-fee). Label
-  // varies by customer config + vendor permit state:
-  //   customer YES + ≥1 product permit-priced  → "Permit" with dollar amount
-  //   customer YES + zero permits priced       → "Permit — no price" with amount 0
-  //   customer NO                              → "Permit — no permit, no price" with amount 0
+  // PR #118 fix-forward: amount is now the vendor's ONE flat per-service
+  // permit fee (not summed across selected options). Label varies by
+  // customer config + vendor permit state:
+  //   customer YES + vendor has service permit set → "Permit" with dollar amount
+  //   customer YES + vendor has no permit set      → "Permit — no price" with amount 0
+  //   customer NO                                  → "Permit — no permit, no price" with amount 0
   if (item.roofPermit === 'yes') {
-    const permitCents = sumPermitForItem(item, permitMap)
+    const permitCents = getPermitForItem(item, permitMap)
     if (permitCents > 0) {
       lines.push({
         id: 'roofing-permit',
@@ -274,16 +274,17 @@ export function BookingConfirmationPage() {
             const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id)
             if (built) computedLineItems = built
           } else if (contractor.vendor_id) {
-            // PR #117 — for non-roofing services, snapshot a permit-line
-            // summed from vendor's per-product permit_price_cents (instead
-            // of PRICE_LINE_ITEM_PRESETS' static category-permit). Other
-            // line categories (Material, Install, etc.) keep using PRESETS
-            // shape until per-vendor pricing for those exists too.
+            // PR #118 fix-forward — for non-roofing services, snapshot a
+            // permit-line from vendor's flat per-service permit fee
+            // (vendor_service_permits) instead of PRICE_LINE_ITEM_PRESETS'
+            // static category-permit. Other line categories (Material,
+            // Install, etc.) keep using PRESETS shape until per-vendor
+            // pricing for those exists too.
             const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id]
             if (vendorUuid) {
               try {
                 const permitMap = await getVendorPermitMap(vendorUuid)
-                const permitCents = sumPermitForItem(pendingItem, permitMap)
+                const permitCents = getPermitForItem(pendingItem, permitMap)
                 const presets = PRICE_LINE_ITEM_PRESETS[pendingItem.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? []
                 if (presets.length > 0) {
                   const nonPermit = presets.filter((p) => !/permit/i.test(p.id))

@@ -21,12 +21,12 @@ export default function VendorCatalog() {
     toggleOption,
     setPrice,
     setPricePercent,
-    setPermitPrice,
+    setServicePermit,
     isServiceEnabled,
     isOptionEnabled,
     getPrice,
     getPricePercent,
-    getPermitPrice,
+    getServicePermit,
   } = useVendorCatalogStore()
 
   // Expand state is per-service, session-scoped (no persist — if vendor
@@ -219,6 +219,28 @@ export default function VendorCatalog() {
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
+                    {/* Service-level permit price — ONE flat fee per service per
+                        vendor (not per option). Snapshotted onto the homeowner
+                        breakdown's Permit Price line at sendProject. PR #118
+                        fix-forward on PR #117's per-option permit shape. */}
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300/40 bg-amber-50/40 dark:bg-amber-900/10 p-2.5">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-sm font-medium text-foreground">Permit Price</span>
+                        <span className="text-xs text-muted-foreground">flat fee for this service</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <Input
+                          aria-label={`Permit price for ${service.name}`}
+                          type="number"
+                          value={getServicePermit(service.id) || ''}
+                          onChange={(e) => setServicePermit(service.id, Number(e.target.value))}
+                          placeholder="0"
+                          className="h-10 w-24 text-base text-right"
+                        />
+                      </div>
+                    </div>
+
                     {service.optionGroups.map((group) => (
                       <div key={group.id} className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -306,18 +328,6 @@ export default function VendorCatalog() {
                                         </>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap">Permit</span>
-                                      <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <Input
-                                        aria-label={`Permit price for ${option.label}`}
-                                        type="number"
-                                        value={getPermitPrice(service.id, option.id) || ''}
-                                        onChange={(e) => setPermitPrice(service.id, option.id, Number(e.target.value))}
-                                        placeholder="0"
-                                        className="h-9 w-24 text-base text-right"
-                                      />
-                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -401,17 +411,6 @@ export default function VendorCatalog() {
                                               />
                                             </>
                                           )}
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-xs text-muted-foreground whitespace-nowrap">Permit $</span>
-                                          <Input
-                                            aria-label={`Permit price for ${subOpt.label}`}
-                                            type="number"
-                                            value={getPermitPrice(service.id, subOpt.id) || ''}
-                                            onChange={(e) => setPermitPrice(service.id, subOpt.id, Number(e.target.value))}
-                                            placeholder="0"
-                                            className="h-9 w-20 text-sm text-right"
-                                          />
                                         </div>
                                       </div>
                                     )}
