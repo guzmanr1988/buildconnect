@@ -17,6 +17,10 @@ export interface HomeownerDoc {
   // Optional metadata for display
   vendorCompany?: string
   serviceName?: string
+  // Optional FK to projects-store SentProject.id; legacy docs without this
+  // route to the "Other documents" bucket. Widen-reads-narrow-writes —
+  // existing persisted docs without project_id remain valid.
+  project_id?: string
 }
 
 interface HomeownerDocsState {

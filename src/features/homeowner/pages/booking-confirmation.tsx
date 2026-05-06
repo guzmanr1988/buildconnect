@@ -277,7 +277,7 @@ export function BookingConfirmationPage() {
           if ((pendingItem as any).roofPermit === 'no') {
             setCashOnlyProject(pendingItem.serviceName)
           }
-          sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)
+          const sentProjectId = sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)
 
           // Fire-and-forget PDF generation — never-block rule: errors are swallowed,
           // flow always reaches setState('success') regardless of PDF outcome.
@@ -307,6 +307,7 @@ export function BookingConfirmationPage() {
                 dataUrl,
                 vendorCompany: contractor.company,
                 serviceName: pendingItem.serviceName,
+                project_id: sentProjectId,
               })
             }).catch(() => { /* silent — never block flow */ })
           }
