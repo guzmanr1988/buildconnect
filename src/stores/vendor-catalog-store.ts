@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth-store'
 
 // Tracks which services and options a vendor has enabled, with their pricing
 export interface VendorServiceConfig {
@@ -60,6 +61,38 @@ function cacheKey(serviceId: string, optionId: string) {
   return `${serviceId}|${optionId}`
 }
 
+// Resolve current vendor UUID with fallback to auth-store. hydrateFromSupabase
+// sets _vendorUuid, but writes can race ahead of hydration on a fresh page
+// load (cart-store/setPrice fired before AuthBootstrap.hydrate completes its
+// chain). Falling back to auth-store.profile?.id (when role==='vendor')
+// closes the silent-drop window. See Bug 1 root cause.
+function resolveVendorUuid(stateUuid: string | null): string | null {
+  if (stateUuid) return stateUuid
+  const profile = useAuthStore.getState().profile
+  if (profile?.role === 'vendor' && profile.id) return profile.id
+  return null
+}
+
+// Fire-and-forget upsert of profiles.service_categories from the current
+// services[] enabled set. Called after every toggleService so the homeowner
+// vendor-match query (which filters on service_categories intersection)
+// stays in sync with the vendor's catalog state. Without this write, a
+// vendor could enable Roofing in their catalog but never show up in the
+// homeowner Compare Vendors list because service_categories stayed empty.
+function syncServiceCategories(
+  vendorUuid: string,
+  services: VendorServiceConfig[],
+) {
+  const enabledIds = services.filter((s) => s.enabled).map((s) => s.serviceId)
+  supabase
+    .from('profiles')
+    .update({ service_categories: enabledIds })
+    .eq('id', vendorUuid)
+    .then(({ error }) => {
+      if (error) console.error('[catalog] service_categories update failed:', error.message)
+    })
+}
+
 export const useVendorCatalogStore = create<VendorCatalogState>()(
   persist(
     (set, get) => ({
@@ -83,6 +116,8 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
             s.serviceId === serviceId ? { ...s, enabled: !s.enabled } : s
           ),
         }))
+        const vendorUuid = resolveVendorUuid(get()._vendorUuid)
+        if (vendorUuid) syncServiceCategories(vendorUuid, get().services)
       },
 
       toggleOption: (serviceId, groupId, optionId) => {
@@ -113,22 +148,30 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               : s
           ),
         }))
-        // Fire-and-forget Supabase upsert. Supabase is canonical; local state is cache.
-        const { _vendorUuid, _optionDbIdCache } = get()
-        if (_vendorUuid) {
-          const optionDbId = _optionDbIdCache[cacheKey(serviceId, optionId)]
-          if (optionDbId) {
-            supabase
-              .from('vendor_option_prices')
-              .upsert(
-                { vendor_id: _vendorUuid, option_id: optionDbId, price_cents: price, currency: 'USD', active: true },
-                { onConflict: 'vendor_id,option_id' }
-              )
-              .then(({ error }) => {
-                if (error) console.error('[catalog] upsert price failed:', error.message)
-              })
-          }
+        // Bug 1 fix: explicit error logs instead of silent drops. Pre-fix
+        // the upsert was conditionally skipped on null _vendorUuid OR cache
+        // miss with no surface — pricing rows just never persisted. Now
+        // both branches log + surface root-cause; auth-store fallback
+        // closes the pre-hydration race.
+        const vendorUuid = resolveVendorUuid(get()._vendorUuid)
+        if (!vendorUuid) {
+          console.error('[catalog] setPrice: no vendor UUID available — write dropped', { serviceId, optionId })
+          return
         }
+        const optionDbId = get()._optionDbIdCache[cacheKey(serviceId, optionId)]
+        if (!optionDbId) {
+          console.error('[catalog] setPrice: option not in DB cache — write dropped', { serviceId, optionId })
+          return
+        }
+        supabase
+          .from('vendor_option_prices')
+          .upsert(
+            { vendor_id: vendorUuid, option_id: optionDbId, price_cents: price, currency: 'USD', active: true },
+            { onConflict: 'vendor_id,option_id' }
+          )
+          .then(({ error }) => {
+            if (error) console.error('[catalog] upsert price failed:', error.message)
+          })
       },
 
       setPricePercent: (serviceId, optionId, percent) => {

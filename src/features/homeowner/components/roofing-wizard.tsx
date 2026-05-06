@@ -21,8 +21,10 @@ import type { ServiceConfig } from '@/types'
 
 const ADDON_LINEAR_FT_CONFIG = [
   { id: 'gutters', label: 'Gutter linear feet' },
-  { id: 'soffit_wood', label: 'Soffit linear feet' },
-  { id: 'fascia_wood', label: 'Fascia linear feet' },
+  { id: 'soffit_wood', label: 'Soffit Wood linear feet' },
+  { id: 'fascia_wood', label: 'Fascia Wood linear feet' },
+  { id: 'soffit_metal', label: 'Soffit Metal linear feet' },
+  { id: 'fascia_metal', label: 'Fascia Metal linear feet' },
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
 
@@ -146,6 +148,14 @@ export function RoofingWizard({
     if (!raw) return {}
     return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]))
   })
+  const [gutterFloors, setGutterFloors] = useState<1 | 2 | null>(() => {
+    const persisted = (editItem?.gutterDropsConfig as { floors?: 1 | 2 } | undefined)?.floors
+    return persisted === 1 || persisted === 2 ? persisted : null
+  })
+  const [gutterDrops, setGutterDrops] = useState<number>(() => {
+    const persisted = (editItem?.gutterDropsConfig as { drops?: number } | undefined)?.drops
+    return persisted && persisted >= 1 && persisted <= 5 ? persisted : 3
+  })
   const [addressKey, setAddressKey] = useState(defaultAddressKey)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingItemId] = useState<string | null>(initEditId ?? null)
@@ -234,6 +244,9 @@ export function RoofingWizard({
         permitWaiver: { acknowledged: true, signedName: waiverName.trim(), signedAt: new Date().toISOString() },
       }),
       ...(Object.keys(roofAddonLinearFtParsed).length > 0 && { roofAddonLinearFt: roofAddonLinearFtParsed }),
+      ...(flowPath === 'addons_only' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
+        gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
+      }),
       ...(itemAddress && { address: itemAddress }),
       ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),
     }
@@ -319,6 +332,7 @@ export function RoofingWizard({
         onClose={() => setWizardOpen(false)}
         defaultAddress={selectedAddress?.full ?? ''}
         onComplete={handleWizardComplete}
+        flowPath={flowPath}
       />
 
       <CardSlideWizard
@@ -345,6 +359,7 @@ export function RoofingWizard({
           (step === 3 && !selectedServiceType) ||
           (step === 4 && selectedMaterials.length === 0) ||
           (step === 5 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
+          (step === 7 && flowPath === 'addons_only' && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
           (step === 8 && roofPermit === null) ||
           (step === 8 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
           (step === 10 && submitting)
@@ -416,21 +431,25 @@ export function RoofingWizard({
                           <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
                         )}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                          <span className="text-[12px] text-muted-foreground">Main roof</span>
-                          <span className="text-[12px] font-medium text-foreground">
-                            {(() => {
-                              const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
-                              const sq = Math.ceil((sqft * 1.02) / 100)
-                              return `${sqft.toLocaleString()} sqft (${sq} sq)`
-                            })()}
-                          </span>
+                          {flowPath !== 'addons_only' && (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Main roof</span>
+                              <span className="text-[12px] font-medium text-foreground">
+                                {(() => {
+                                  const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
+                                  const sq = Math.ceil((sqft * 1.02) / 100)
+                                  return `${sqft.toLocaleString()} sqft (${sq} sq)`
+                                })()}
+                              </span>
+                            </>
+                          )}
                           {roofMeasurement.perimeterFt ? (
                             <>
                               <span className="text-[12px] text-muted-foreground">Linear ft</span>
                               <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
                             </>
                           ) : null}
-                          {roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
+                          {flowPath !== 'addons_only' && roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Flat</span>
                               <span className="text-[12px] font-medium text-foreground">
@@ -438,13 +457,13 @@ export function RoofingWizard({
                               </span>
                             </>
                           )}
-                          {roofMeasurement.pitch && (
+                          {flowPath !== 'addons_only' && roofMeasurement.pitch && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Pitch</span>
                               <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
                             </>
                           )}
-                          {roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
+                          {flowPath !== 'addons_only' && roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
                             <>
                               <span className="text-[12px] text-muted-foreground font-semibold">Total</span>
                               <span className="text-[12px] font-semibold text-foreground">
@@ -634,26 +653,96 @@ export function RoofingWizard({
         )}
 
         {/* S7 — Add-On Details (linear ft) */}
-        {step === 7 && (
-          <div className="space-y-5">
-            {linearFtAddonIds.map((id) => {
-              const config = ADDON_LINEAR_FT_CONFIG.find((c) => c.id === id)!
-              return (
-                <div key={id} className="space-y-2">
-                  <Label className="text-sm font-medium">{config.label}</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="e.g. 120"
-                    value={addonLinearFt[id] ?? ''}
-                    onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [id]: e.target.value }))}
-                    className="h-12 text-base"
-                  />
+        {step === 7 && (() => {
+          const showGutterDrops = flowPath === 'addons_only' && linearFtAddonIds.includes('gutters')
+          const gutterPerimeter = Number(addonLinearFt['gutters'] ?? 0) || 0
+          const perFloor = gutterFloors === 1 ? 8 : 19
+          const dropsExtension = gutterFloors ? gutterDrops * perFloor : 0
+          const gutterTotal = gutterPerimeter + dropsExtension
+          const floorsLabel = gutterFloors === 1 ? '1-story' : '2-story'
+          return (
+            <div className="space-y-5">
+              {showGutterDrops && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">How many floors does the home have?</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([1, 2] as const).map((n) => {
+                        const isSelected = gutterFloors === n
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setGutterFloors(n)}
+                            className={cn(
+                              'rounded-xl border p-3 text-center transition-all duration-150',
+                              isSelected
+                                ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                                : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
+                            )}
+                          >
+                            <span className="text-sm">{n === 1 ? 'One story' : 'Two stories'}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">How many downspouts (drops)?</Label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map((n) => {
+                        const isSelected = gutterDrops === n
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setGutterDrops(n)}
+                            className={cn(
+                              'rounded-xl border p-3 text-center transition-all duration-150',
+                              isSelected
+                                ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                                : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
+                            )}
+                          >
+                            <span className="text-sm">{n}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Most homes have 2 or 3 drops.</p>
+                  </div>
+                </>
+              )}
+              {linearFtAddonIds.map((id) => {
+                const config = ADDON_LINEAR_FT_CONFIG.find((c) => c.id === id)!
+                return (
+                  <div key={id} className="space-y-2">
+                    <Label className="text-sm font-medium">{config.label}</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="e.g. 120"
+                      value={addonLinearFt[id] ?? ''}
+                      onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [id]: e.target.value }))}
+                      className="h-12 text-base"
+                    />
+                  </div>
+                )
+              })}
+              {showGutterDrops && gutterFloors && gutterPerimeter > 0 && (
+                <div className="rounded-xl border bg-muted/40 p-3 space-y-1" data-roofing-gutter-breakdown="true">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total gutter lin ft</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {gutterTotal.toLocaleString()} lin ft
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {gutterPerimeter.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
+                  </p>
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
+            </div>
+          )
+        })()}
 
         {/* S8 — Permit */}
         {step === 8 && (
@@ -778,18 +867,28 @@ export function RoofingWizard({
               {roofMeasurement && (
                 <div className="rounded-xl border bg-muted/40 p-4">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Measurement</p>
-                  <p className="text-sm text-foreground">
-                    {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
-                      const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
-                      if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                        return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
-                      }
-                      return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
-                    })()} squares w/waste
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
-                  </p>
+                  {flowPath === 'addons_only' ? (
+                    roofMeasurement.perimeterFt ? (
+                      <p className="text-sm text-foreground">
+                        ~{roofMeasurement.perimeterFt.toLocaleString()} lin ft perimeter
+                      </p>
+                    ) : null
+                  ) : (
+                    <>
+                      <p className="text-sm text-foreground">
+                        {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
+                          const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
+                          if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                            return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                          }
+                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                        })()} squares w/waste
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               {selectedMaterials.length > 0 && (
@@ -818,10 +917,21 @@ export function RoofingWizard({
                     const opt = addonOpts.find(o => o.id === id)
                     const label = opt ? addonOptionLabel(opt) : id
                     const linFt = ADDON_LINEAR_FT_IDS.includes(id) ? addonLinearFt[id] : undefined
+                    const showGutterBreakdown = id === 'gutters' && flowPath === 'addons_only' && gutterFloors !== null && linFt
+                    const perimeter = Number(linFt ?? 0) || 0
+                    const perFloorReview = gutterFloors === 1 ? 8 : 19
+                    const totalLinFt = perimeter + (gutterFloors ? gutterDrops * perFloorReview : 0)
                     return (
-                      <p key={id} className="text-sm text-foreground">
-                        {label}{linFt ? ` — ${linFt} lin ft` : ''}
-                      </p>
+                      <div key={id}>
+                        <p className="text-sm text-foreground">
+                          {label}{linFt ? ` — ${showGutterBreakdown ? totalLinFt.toLocaleString() : linFt} lin ft` : ''}
+                        </p>
+                        {showGutterBreakdown && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {perimeter.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloorReview} ft for {gutterFloors === 1 ? '1-story' : '2-story'}
+                          </p>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

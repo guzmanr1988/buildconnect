@@ -117,7 +117,12 @@ export function computeVendorTotal(
           totalCents += basePrice * areaSqft
         } else if (meta.priceUnit === 'linear_ft') {
           const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
-          totalCents += basePrice * linFt
+          let effectiveLinFt = linFt
+          if (optionId === 'gutters' && item.gutterDropsConfig) {
+            const perFloor = item.gutterDropsConfig.floors === 1 ? 8 : 19
+            effectiveLinFt = linFt + item.gutterDropsConfig.drops * perFloor
+          }
+          totalCents += basePrice * effectiveLinFt
         } else {
           totalCents += basePrice
         }

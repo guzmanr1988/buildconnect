@@ -24,6 +24,13 @@ import {
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
+// Apex-only mode — Rodolfo 2026-05-06: solo Apex on prod marketplace
+// while we test the chain end-to-end before opening to other vendors.
+// Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
+// other code changes (the guards below collapse to no-ops).
+const APEX_ONLY_MODE = true
+const APEX_REAL_UUID = 'fc0d8ff3-cc1c-4101-a4b3-068594753bbf'
+
 export function VendorComparePage() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
@@ -53,11 +60,17 @@ export function VendorComparePage() {
   }, [cartItems, profile, gmpEnabled, realGeoEnabled])
 
   const hasHomeownerCoord = projectCoords !== null
-  const realVendors = useRealVendors()
+  // Apex-only mode: bypass useRealVendors's DEMO_UUIDS dedupe for APEX_REAL_UUID
+  // so real Apex (full 11-category coverage + $100 placeholder pricing) renders
+  // on every cart, and skip ALL mocks below so we never double-render Apex.
+  const realVendors = useRealVendors(
+    APEX_ONLY_MODE ? new Set([APEX_REAL_UUID]) : undefined,
+  )
 
   const featuredVendors = useMemo(() => {
     // Mock vendors: full PRODUCT-IS-GOD checks (catalog pricing required).
     const mockFiltered = MOCK_VENDORS.filter((v) => {
+      if (APEX_ONLY_MODE) return false
       if (v.status !== 'active') return false
       if (cartCategories.size > 0) {
         const covers = v.service_categories.some((c) => cartCategories.has(c))
@@ -81,6 +94,7 @@ export function VendorComparePage() {
     // Real-auth vendors: category + distance filter only (no MOCK_CATALOG check).
     // Pricing is fetched from Supabase catalog per-UUID; PRODUCT-IS-GOD applied post-load via displayVendors.
     const realFiltered = realVendors.filter((v) => {
+      if (APEX_ONLY_MODE && v.id !== APEX_REAL_UUID) return false
       if (cartCategories.size > 0) {
         const cats = v.service_categories ?? []
         const covers = cats.some((c) => cartCategories.has(c))
@@ -129,7 +143,11 @@ export function VendorComparePage() {
     }
     load()
     return () => { mounted = false }
-  }, [])
+    // Bug 3 fix: depend on stable vendor-id key. featuredVendors changes async
+    // when useRealVendors() returns; without this, priceMaps freezes to the
+    // mount-time mocks-only set and real vendors silently fall out of
+    // Compare Vendors via undefined totalsByVendor[id].
+  }, [featuredVendors.map((v) => v.id).join('|')])
 
   const totalsByVendor = useMemo(() => {
     const out: Record<string, VendorTotalResult> = {}

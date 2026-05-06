@@ -51,6 +51,8 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'solar_prep', label: 'Solar Panel Prep' },
           { id: 'soffit_wood', label: 'Soffit Wood' },
           { id: 'fascia_wood', label: 'Fascia Wood' },
+          { id: 'soffit_metal', label: 'Soffit Metal' },
+          { id: 'fascia_metal', label: 'Fascia Metal' },
           { id: 'extra_plywood', label: 'Extra Sheet Plywood' },
         ],
       },

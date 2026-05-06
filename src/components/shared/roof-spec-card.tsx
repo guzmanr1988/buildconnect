@@ -24,13 +24,16 @@ interface RoofSpecCardProps {
   metalRoofSelection?: MetalRoofSelection
   roofAddonLinearFt?: Record<string, number>
   roofPermit?: 'yes' | 'no'
+  flowPath?: 'full_replacement' | 'addons_only' | null
   className?: string
 }
 
 const ADDON_LABELS: Record<string, string> = {
   gutters: 'Gutters',
-  soffit_wood: 'Soffit',
-  fascia_wood: 'Fascia',
+  soffit_wood: 'Soffit Wood',
+  fascia_wood: 'Fascia Wood',
+  soffit_metal: 'Soffit Metal',
+  fascia_metal: 'Fascia Metal',
 }
 
 export function RoofSpecCard({
@@ -38,11 +41,13 @@ export function RoofSpecCard({
   metalRoofSelection: mrs,
   roofAddonLinearFt: linFt,
   roofPermit: permit,
+  flowPath,
   className,
 }: RoofSpecCardProps) {
   const addonEntries = linFt ? Object.entries(linFt).filter(([, v]) => v > 0) : []
   if (!rm && !mrs && !permit && addonEntries.length === 0) return null
 
+  const isAddonsOnly = flowPath === 'addons_only'
   const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0 && rm.includeFlat !== false
   const metalColorLabel = mrs?.color
     ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -65,19 +70,21 @@ export function RoofSpecCard({
                 <span className="font-medium text-xs leading-snug">{rm.address}</span>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground min-w-[72px]">Area</span>
-              <span className="font-medium">
-                {rm.areaSqft.toLocaleString()} sqft · {(() => {
-                  const { pitchedAreaSqft, flatAreaSqft, includeFlat } = rm
-                  if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                    return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
-                  }
-                  return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
-                })()} squares w/waste
-              </span>
-            </div>
-            {rm.pitch && (
+            {!isAddonsOnly && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground min-w-[72px]">Area</span>
+                <span className="font-medium">
+                  {rm.areaSqft.toLocaleString()} sqft · {(() => {
+                    const { pitchedAreaSqft, flatAreaSqft, includeFlat } = rm
+                    if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                      return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                    }
+                    return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
+                  })()} squares w/waste
+                </span>
+              </div>
+            )}
+            {!isAddonsOnly && rm.pitch && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground min-w-[72px]">Pitch</span>
                 <span className="font-medium">{rm.pitch}</span>
@@ -89,7 +96,7 @@ export function RoofSpecCard({
                 <span className="font-medium">~{rm.perimeterFt.toLocaleString()} lin ft</span>
               </div>
             )}
-            {hasSplit && (
+            {!isAddonsOnly && hasSplit && (
               <>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Pitched</span>
