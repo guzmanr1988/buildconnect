@@ -180,13 +180,22 @@ export function RegisterPage() {
 
   async function onSubmit(data: RegisterFormData) {
     if (!selectedRole) return
-    // Ship #272 — Company Name is mandatory for vendors only. Schema
-    // keeps it optional so homeowner signup (where the field isn't
-    // rendered) doesn't reject; the role-conditional gate fires here
-    // at submit time. setError surfaces the message inline under the
-    // Input via the existing aria-invalid + error-paragraph pattern.
-    if (selectedRole === 'vendor' && !data.company?.trim()) {
-      setError('company', { type: 'required', message: 'Company name is required' })
+    // Bug 4 — Company Name is mandatory for vendors. Schema keeps it
+    // optional so homeowner signup (where the field isn't rendered)
+    // doesn't reject; the role-conditional gate fires here at submit
+    // time AND the Input has HTML `required` + `minLength={2}` so the
+    // browser blocks submission first. setError surfaces inline if
+    // submission gets through (e.g., autofill bypass). Min 2 chars
+    // matches use-real-vendors.ts:23 visibility gate semantics
+    // (company-not-blank-or-trivial).
+    const trimmedCompany = data.company?.trim() ?? ''
+    if (selectedRole === 'vendor' && trimmedCompany.length < 2) {
+      setError('company', {
+        type: 'required',
+        message: trimmedCompany.length === 0
+          ? 'Company name is required'
+          : 'Company name must be at least 2 characters',
+      })
       return
     }
     // Clear any prior form error at retry — fresh attempt, fresh state.
@@ -217,12 +226,16 @@ export function RegisterPage() {
     // per banked widen-reads-narrow-writes.
     const composedName = `${data.firstName.trim()} ${data.lastName.trim()}`
     try {
+      // Bug 4 — vendors are guaranteed company-non-empty by the
+      // submit-time gate above, so always send the trimmed value.
+      // Homeowners pass undefined (field unrendered).
+      const finalCompany = selectedRole === 'vendor' ? trimmedCompany : undefined
       const result = await signUp(data.email, data.password, {
         name: composedName,
         role: selectedRole,
         phone: data.phone,
         address: composedAddress,
-        company: data.company,
+        company: finalCompany,
       })
 
       // handle_new_user trigger inserts id/email/name/role/initials on auth.users INSERT.
@@ -233,7 +246,7 @@ export function RegisterPage() {
           await updateVendor(userId, {
             phone: data.phone,
             address: composedAddress,
-            ...(data.company ? { company: data.company } : {}),
+            ...(finalCompany ? { company: finalCompany } : {}),
           })
         } catch (err) {
           // Ship #322 Phase B Part 2 — defensive+corrective mask-fix per
@@ -449,6 +462,8 @@ export function RegisterPage() {
                     id="company"
                     placeholder="Your Company LLC"
                     className="h-11"
+                    required
+                    minLength={2}
                     {...register('company')}
                     aria-invalid={!!errors.company}
                   />
