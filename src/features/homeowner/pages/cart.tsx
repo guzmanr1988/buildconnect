@@ -852,6 +852,7 @@ export function CartPage() {
                       metalRoofSelection={viewItem.metalRoofSelection}
                       roofAddonLinearFt={(viewItem as any).roofAddonLinearFt}
                       roofPermit={viewItem.roofPermit}
+                      flowPath={(viewItem as any).flowPath}
                       className="bg-muted/30"
                     />
                   )}

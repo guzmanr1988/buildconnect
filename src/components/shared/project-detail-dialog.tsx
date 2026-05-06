@@ -462,6 +462,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         metalRoofSelection={item.metalRoofSelection}
                         roofAddonLinearFt={item.roofAddonLinearFt}
                         roofPermit={item.roofPermit}
+                        flowPath={item.flowPath}
                       />
                     )
                   })()}

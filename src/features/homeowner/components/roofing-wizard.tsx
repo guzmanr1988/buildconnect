@@ -429,21 +429,25 @@ export function RoofingWizard({
                           <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
                         )}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                          <span className="text-[12px] text-muted-foreground">Main roof</span>
-                          <span className="text-[12px] font-medium text-foreground">
-                            {(() => {
-                              const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
-                              const sq = Math.ceil((sqft * 1.02) / 100)
-                              return `${sqft.toLocaleString()} sqft (${sq} sq)`
-                            })()}
-                          </span>
+                          {flowPath !== 'addons_only' && (
+                            <>
+                              <span className="text-[12px] text-muted-foreground">Main roof</span>
+                              <span className="text-[12px] font-medium text-foreground">
+                                {(() => {
+                                  const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
+                                  const sq = Math.ceil((sqft * 1.02) / 100)
+                                  return `${sqft.toLocaleString()} sqft (${sq} sq)`
+                                })()}
+                              </span>
+                            </>
+                          )}
                           {roofMeasurement.perimeterFt ? (
                             <>
                               <span className="text-[12px] text-muted-foreground">Linear ft</span>
                               <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
                             </>
                           ) : null}
-                          {roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
+                          {flowPath !== 'addons_only' && roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Flat</span>
                               <span className="text-[12px] font-medium text-foreground">
@@ -451,13 +455,13 @@ export function RoofingWizard({
                               </span>
                             </>
                           )}
-                          {roofMeasurement.pitch && (
+                          {flowPath !== 'addons_only' && roofMeasurement.pitch && (
                             <>
                               <span className="text-[12px] text-muted-foreground">Pitch</span>
                               <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
                             </>
                           )}
-                          {roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
+                          {flowPath !== 'addons_only' && roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
                             <>
                               <span className="text-[12px] text-muted-foreground font-semibold">Total</span>
                               <span className="text-[12px] font-semibold text-foreground">
@@ -861,18 +865,28 @@ export function RoofingWizard({
               {roofMeasurement && (
                 <div className="rounded-xl border bg-muted/40 p-4">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Measurement</p>
-                  <p className="text-sm text-foreground">
-                    {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
-                      const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
-                      if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                        return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
-                      }
-                      return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
-                    })()} squares w/waste
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
-                  </p>
+                  {flowPath === 'addons_only' ? (
+                    roofMeasurement.perimeterFt ? (
+                      <p className="text-sm text-foreground">
+                        ~{roofMeasurement.perimeterFt.toLocaleString()} lin ft perimeter
+                      </p>
+                    ) : null
+                  ) : (
+                    <>
+                      <p className="text-sm text-foreground">
+                        {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
+                          const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
+                          if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                            return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                          }
+                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                        })()} squares w/waste
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               {selectedMaterials.length > 0 && (
