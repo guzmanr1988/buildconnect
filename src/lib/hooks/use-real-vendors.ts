@@ -13,7 +13,7 @@ export function useRealVendors(includeUuids?: Set<string>): Vendor[] {
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id, name, email, phone, address, company, avatar_color, initials, status, service_categories, created_at')
+      .select('id, name, email, phone, address, company, avatar_color, initials, status, service_categories, latitude, longitude, created_at')
       .eq('role', 'vendor')
       .eq('status', 'active')
       .then(({ data }) => {
@@ -34,6 +34,8 @@ export function useRealVendors(includeUuids?: Set<string>): Vendor[] {
             status: (row.status as Vendor['status']) || 'active',
             created_at: row.created_at as string,
             service_categories: ((row.service_categories as string[]) || []) as ServiceCategory[],
+            latitude: typeof row.latitude === 'number' ? (row.latitude as number) : undefined,
+            longitude: typeof row.longitude === 'number' ? (row.longitude as number) : undefined,
             rating: 0,
             response_time: '—',
             total_reviews: 0,
