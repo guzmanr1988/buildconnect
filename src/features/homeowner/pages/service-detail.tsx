@@ -1074,7 +1074,7 @@ export function ServiceDetailPage() {
               const prunedQuantities: Record<string, number> = {}
               for (const [gid, optIds] of Object.entries(selections)) {
                 for (const oid of optIds) {
-                  if (!getOptionMetadata(oid).requiresQuantity) continue
+                  if (!getOptionMetadata(oid, serviceId).requiresQuantity) continue
                   if (serviceId === 'windows_doors' && oid === 'install_windows') {
                     prunedQuantities[oid] = windowTotal
                   } else if (serviceId === 'windows_doors' && oid === 'install_doors') {

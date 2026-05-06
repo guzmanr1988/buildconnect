@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
@@ -1232,10 +1233,52 @@ export default function VendorLeadWorkflow() {
                       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Add-ons</p>
                         <div className="space-y-1 text-sm">
-                          {Object.entries(addons).map(([key, ft]) => (
+                          {Object.entries(addons).map(([key, ft]) => {
+                            const isGutters = key === 'gutters'
+                            const cfg = sp.item?.gutterDropsConfig
+                            const totalFt = isGutters ? computeGutterTotalLinFt(ft, cfg) : ft
+                            const showBreakdown = isGutters && !!cfg
+                            const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[cfg!.floors] : 0
+                            const drops = cfg?.drops ?? 0
+                            const floorsLabel = cfg?.floors === 1 ? '1-story' : '2-story'
+                            return (
+                              <div key={key} className="flex flex-col">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                  <span className="font-medium">{totalFt.toLocaleString()} ft</span>
+                                </div>
+                                {showBreakdown && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {sp.item?.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Custom-size measurements</p>
+                        <div className="space-y-1 text-sm">
+                          {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
                             <div key={key} className="flex items-center justify-between">
                               <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="font-medium">{ft} ft</span>
+                              <span className="font-medium">{sqft.toLocaleString()} sqft</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {sp.item?.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Linear-ft add-ons</p>
+                        <div className="space-y-1 text-sm">
+                          {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
+                            <div key={key} className="flex items-center justify-between">
+                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                              <span className="font-medium">{ft.toLocaleString()} ft</span>
                             </div>
                           ))}
                         </div>

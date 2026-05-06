@@ -1,4 +1,4 @@
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
@@ -741,15 +741,63 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
-                            {/* Roof Addons — linear ft */}
+                            {/* Roof Addons — linear ft. Gutters total = perimeter + drops × per-floor
+                                via computeGutterTotalLinFt (single source of truth in roof-pricing.ts)
+                                so vendor sees the same number priced + the same number homeowner sees. */}
                             {sp.item.roofAddonLinearFt && Object.keys(sp.item.roofAddonLinearFt).length > 0 && (
                               <div className="rounded-xl border bg-background p-4 space-y-3">
                                 <h4 className="text-sm font-semibold text-foreground">Roof Add-ons</h4>
                                 <div className="flex flex-col gap-1.5">
-                                  {Object.entries(sp.item.roofAddonLinearFt).map(([key, ft]) => (
+                                  {Object.entries(sp.item.roofAddonLinearFt).map(([key, ft]) => {
+                                    const isGutters = key === 'gutters'
+                                    const cfg = sp.item.gutterDropsConfig
+                                    const totalFt = isGutters ? computeGutterTotalLinFt(ft, cfg) : ft
+                                    const showBreakdown = isGutters && !!cfg
+                                    const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[cfg!.floors] : 0
+                                    const drops = cfg?.drops ?? 0
+                                    const floorsLabel = cfg?.floors === 1 ? '1-story' : '2-story'
+                                    return (
+                                      <div key={key} className="flex flex-col px-3 py-2 rounded-lg bg-primary/5">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                          <span className="text-sm font-bold text-primary">{totalFt.toLocaleString()} ft</span>
+                                        </div>
+                                        {showBreakdown && (
+                                          <span className="text-[11px] text-muted-foreground mt-0.5">
+                                            {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {/* Sqft / linear-ft addons — pool size custom, pool floor surfaces,
+                                pool_fence. Vendor sees the same numbers used to compute pricing
+                                (sqft from customSizeSqft, lin ft from addonLinearFt) so MATH-IS-GOD
+                                holds across surfaces. */}
+                            {sp.item.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Custom-size measurements</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
                                     <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                      <span className="text-sm font-bold text-primary">{ft} ft</span>
+                                      <span className="text-sm font-bold text-primary">{sqft.toLocaleString()} sqft</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {sp.item.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Linear-ft add-ons</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
+                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                      <span className="text-sm font-bold text-primary">{ft.toLocaleString()} ft</span>
                                     </div>
                                   ))}
                                 </div>

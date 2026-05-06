@@ -48,6 +48,15 @@ export interface CartItem {
   // fascia_metal). Keyed by option id. For gutters this stores the perimeter base;
   // pricing layer adds drops × per-floor extension via gutterDropsConfig below.
   roofAddonLinearFt?: Record<string, number>
+  // Linear feet for non-roofing addons priced per linear ft (e.g. pool_fence).
+  // Keyed by option id. Pricing layer reads this OR roofAddonLinearFt for any
+  // option flagged priceUnit:'linear_ft' in OPTION_METADATA.
+  addonLinearFt?: Record<string, number>
+  // Per-option-id sqft for custom-sized products that bill per sqft (e.g. pool
+  // size 'custom', pool floor surfaces, square_concrete). Sibling to areaSqft
+  // for cases where a single cart item carries MULTIPLE independent sqft
+  // measurements (pool size vs pool floor — different prices, different areas).
+  customSizeSqft?: Record<string, number>
   // Gutter math: total lin ft = perimeter + drops × per-floor (see GUTTER_DROP_FT_BY_FLOORS
   // in lib/roof-pricing.ts). Populated on BOTH flow paths when gutters selected.
   gutterDropsConfig?: { floors: 1 | 2; drops: number }

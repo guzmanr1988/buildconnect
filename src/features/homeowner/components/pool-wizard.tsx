@@ -23,7 +23,18 @@ interface PoolWizardProps {
 
 const TOTAL_STEPS = 7
 // S1=project_type S2=pool_size S3=pool_floor S4=addons S5=addon_config S6=address S7=review
-const CONFIGURABLE_ADDON_IDS = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
+const CONFIGURABLE_ADDON_IDS = ['spa', 'beach', 'waterfall', 'led', 'bubbler', 'pool_fence']
+
+// Named pool sizes auto-derive sqft (W × L). Custom uses homeowner-entered value.
+// Drives priceUnit:'sqft' billing for pool_size 'custom' option (vendor enters
+// $/sqft, total = $/sqft × sqft). Named sizes are still flat-priced today, but
+// the sqft is also stored so future flips don't need a homeowner-side input.
+const POOL_SIZE_SQFT: Record<string, number> = {
+  '10x20': 200,
+  '12x24': 288,
+  '15x30': 450,
+  '20x40': 800,
+}
 
 function hasConfigurableAddon(sel: Selections) {
   return CONFIGURABLE_ADDON_IDS.some((id) => (sel['addons'] ?? []).includes(id))
@@ -107,11 +118,27 @@ export function PoolWizard({
   const editAddons = editItem?.addonQuantities as
     | { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number }
     | undefined
+  const editCustomSizeSqft = editItem?.customSizeSqft as Record<string, number> | undefined
+  const editAddonLinearFt = editItem?.addonLinearFt as Record<string, number> | undefined
 
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState<1 | -1>(1)
   const [selections, setSelections] = useState<Selections>((editItem?.selections as Selections) ?? {})
-  const [customPoolSize, setCustomPoolSize] = useState((editItem?.customPoolSize as string) ?? '')
+  // Pool size sqft. For named sizes (10x20 etc.) auto-derived from POOL_SIZE_SQFT.
+  // For 'custom', homeowner-entered. Stored at customSizeSqft.<sizeId> in cart.
+  const [customPoolSqft, setCustomPoolSqft] = useState<number>(editCustomSizeSqft?.['custom'] ?? 0)
+  // Pool floor sqft — SEPARATE from pool size (per Rodolfo Q2: floor priced
+  // independently against its own area). Single value for whichever floor
+  // surface the homeowner picks; written to customSizeSqft.<floorId> at submit.
+  const [poolFloorSqft, setPoolFloorSqft] = useState<number>(() => {
+    if (!editCustomSizeSqft) return 0
+    for (const k of ['travertine', 'pavers', 'stamped_concrete', 'cement_floor', 'artificial_turf', 'square_concrete']) {
+      if (editCustomSizeSqft[k]) return editCustomSizeSqft[k]
+    }
+    return 0
+  })
+  // Pool fence linear ft — perimeter of fence, vendor prices $/lin ft.
+  const [poolFenceLinFt, setPoolFenceLinFt] = useState<number>(editAddonLinearFt?.['pool_fence'] ?? 0)
   const [laminarJets, setLaminarJets] = useState(editAddons?.laminarJets ?? 0)
   const [waterfalls, setWaterfalls] = useState(editAddons?.waterfalls ?? 0)
   const [ledCount, setLedCount] = useState(editAddons?.ledCount ?? 0)
@@ -155,6 +182,7 @@ export function PoolWizard({
     if (optionId === 'waterfall') { setLaminarJets(0); setWaterfalls(0) }
     if (optionId === 'led') setLedCount(0)
     if (optionId === 'bubbler') setBubblerCount(0)
+    if (optionId === 'pool_fence') setPoolFenceLinFt(0)
   }
 
   // ── Step content ──────────────────────────────────────────────────────────
@@ -186,23 +214,59 @@ export function PoolWizard({
 
   function renderStep2() {
     const poolSizeSel = selections['pool_size'] ?? []
+    const namedSqft = poolSizeSel[0] ? POOL_SIZE_SQFT[poolSizeSel[0]] : undefined
     return (
       <div className="flex flex-col gap-3">
         {renderChips('pool_size', 'single')}
         {poolSizeSel.includes('custom') && (
-          <Input
-            placeholder="Enter desired size (e.g. 18×35)"
-            value={customPoolSize}
-            onChange={(e) => setCustomPoolSize(e.target.value)}
-            className="h-10 mt-1"
-          />
+          <div className="flex items-center gap-2 mt-1">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="e.g. 20×40 = 800"
+              value={customPoolSqft || ''}
+              onChange={(e) => setCustomPoolSqft(Number(e.target.value) || 0)}
+              className="h-10 flex-1"
+              data-pool-custom-sqft="true"
+            />
+            <span className="text-sm text-muted-foreground whitespace-nowrap">sqft</span>
+          </div>
+        )}
+        {namedSqft !== undefined && (
+          <p className="text-xs text-muted-foreground">≈ {namedSqft.toLocaleString()} sqft</p>
         )}
       </div>
     )
   }
 
   function renderStep3() {
-    return renderChips('pool_floor', 'single')
+    const floorSel = selections['pool_floor']?.[0]
+    const showSqftInput = !!floorSel && floorSel !== 'na'
+    return (
+      <div className="flex flex-col gap-3">
+        {renderChips('pool_floor', 'single')}
+        {showSqftInput && (
+          <div className="flex flex-col gap-1.5 mt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pool floor area</p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="e.g. 350"
+                value={poolFloorSqft || ''}
+                onChange={(e) => setPoolFloorSqft(Number(e.target.value) || 0)}
+                className="h-10 flex-1"
+                data-pool-floor-sqft="true"
+              />
+              <span className="text-sm text-muted-foreground whitespace-nowrap">sqft</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Deck/surround area around the pool — separate from the pool size itself.</p>
+          </div>
+        )}
+      </div>
+    )
   }
 
   function renderStep4() {
@@ -216,6 +280,7 @@ export function PoolWizard({
     const hasWaterfall = addons.includes('waterfall')
     const hasLed = addons.includes('led')
     const hasBubbler = addons.includes('bubbler')
+    const hasPoolFence = addons.includes('pool_fence')
     const spaSizeGroup = service.optionGroups.find((g) => g.id === 'spa_size')
     const beachSizeGroup = service.optionGroups.find((g) => g.id === 'beach_size')
 
@@ -276,6 +341,25 @@ export function PoolWizard({
             </div>
           </div>
         )}
+        {hasPoolFence && (
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-1">Pool Fence</p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="e.g. 80"
+                value={poolFenceLinFt || ''}
+                onChange={(e) => setPoolFenceLinFt(Number(e.target.value) || 0)}
+                className="h-10 flex-1"
+                data-pool-fence-linft="true"
+              />
+              <span className="text-sm text-muted-foreground whitespace-nowrap">linear ft</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">Fence perimeter around the pool — vendor prices per linear foot.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -319,12 +403,21 @@ export function PoolWizard({
             <div key={gid} className="rounded-xl bg-muted/50 p-3">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{g.label}</p>
               <div className="flex flex-wrap gap-1.5">
-                {sel.map((id) => (
-                  <span key={id} className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1 text-sm font-medium">
-                    {g.options.find((o) => o.id === id)?.label ?? id}
-                    {id === 'custom' && customPoolSize && ` — ${customPoolSize}`}
-                  </span>
-                ))}
+                {sel.map((id) => {
+                  const label = g.options.find((o) => o.id === id)?.label ?? id
+                  let suffix = ''
+                  if (gid === 'pool_size') {
+                    if (id === 'custom' && customPoolSqft > 0) suffix = ` — ${customPoolSqft.toLocaleString()} sqft`
+                    else if (POOL_SIZE_SQFT[id]) suffix = ` — ${POOL_SIZE_SQFT[id].toLocaleString()} sqft`
+                  } else if (gid === 'pool_floor' && id !== 'na' && poolFloorSqft > 0) {
+                    suffix = ` — ${poolFloorSqft.toLocaleString()} sqft`
+                  }
+                  return (
+                    <span key={id} className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1 text-sm font-medium">
+                      {label}{suffix}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           )
@@ -345,6 +438,7 @@ export function PoolWizard({
                   ?? (id === 'waterfall' && (laminarJets > 0 || waterfalls > 0)
                     ? [laminarJets > 0 && `${laminarJets} Jets`, waterfalls > 0 && `${waterfalls} Falls`].filter(Boolean).join(' · ')
                     : undefined)
+                  ?? (id === 'pool_fence' && poolFenceLinFt > 0 ? `${poolFenceLinFt} lin ft` : undefined)
                 return (
                   <span key={id} className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1 text-sm font-medium gap-1">
                     {label}
@@ -374,12 +468,26 @@ export function PoolWizard({
     const addonQuantities = (laminarJets || waterfalls || ledCount || bubblerCount)
       ? { laminarJets, waterfalls, ledCount, bubblerCount }
       : undefined
+    // Build customSizeSqft map keyed by option_id. Pool size 'custom' uses
+    // homeowner-entered sqft; named sizes auto-derive from POOL_SIZE_SQFT so
+    // the area is captured even though those options price flat today.
+    const sizeId = selections['pool_size']?.[0]
+    const floorId = selections['pool_floor']?.[0]
+    const customSizeSqft: Record<string, number> = {}
+    if (sizeId === 'custom' && customPoolSqft > 0) customSizeSqft.custom = customPoolSqft
+    else if (sizeId && POOL_SIZE_SQFT[sizeId]) customSizeSqft[sizeId] = POOL_SIZE_SQFT[sizeId]
+    if (floorId && floorId !== 'na' && poolFloorSqft > 0) customSizeSqft[floorId] = poolFloorSqft
+    // pool_fence is the only sqft/lin_ft addon with a numeric input today.
+    const addonLinearFt: Record<string, number> = {}
+    const hasPoolFence = (selections['addons'] ?? []).includes('pool_fence')
+    if (hasPoolFence && poolFenceLinFt > 0) addonLinearFt.pool_fence = poolFenceLinFt
     const itemData = {
       serviceId: service.id,
       serviceName: service.name,
       selections,
       ...(addonQuantities && { addonQuantities }),
-      ...(customPoolSize && { customPoolSize }),
+      ...(Object.keys(customSizeSqft).length > 0 && { customSizeSqft }),
+      ...(Object.keys(addonLinearFt).length > 0 && { addonLinearFt }),
       ...(itemAddress && { address: itemAddress }),
     }
     if (editingItemId) {
@@ -412,8 +520,20 @@ export function PoolWizard({
   const isRequired = (s: number) => [1, 2, 3].includes(s)
   const isDone = (s: number) => {
     if (s === 1) return (selections['project_type']?.length ?? 0) > 0
-    if (s === 2) return (selections['pool_size']?.length ?? 0) > 0
-    if (s === 3) return (selections['pool_floor']?.length ?? 0) > 0
+    if (s === 2) {
+      const sel = selections['pool_size'] ?? []
+      if (sel.length === 0) return false
+      // Custom pool requires sqft entry; named sizes auto-derive.
+      if (sel.includes('custom') && customPoolSqft <= 0) return false
+      return true
+    }
+    if (s === 3) {
+      const sel = selections['pool_floor'] ?? []
+      if (sel.length === 0) return false
+      // Non-na floor requires the separate floor-area sqft.
+      if (sel[0] !== 'na' && poolFloorSqft <= 0) return false
+      return true
+    }
     return true
   }
   const nextDisabled = (isRequired(step) && !isDone(step)) || added

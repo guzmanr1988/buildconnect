@@ -273,23 +273,23 @@ export default function VendorCatalog() {
                                       placeholder="0"
                                       className="h-10 w-24 text-base text-right"
                                     />
-                                    {getOptionMetadata(option.id).priceUnit === 'square' && (
+                                    {getOptionMetadata(option.id, service.id).priceUnit === 'square' && (
                                       <div className="flex flex-col">
                                         <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
                                         <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
                                       </div>
                                     )}
-                                    {getOptionMetadata(option.id).priceUnit === 'sqft' && (
+                                    {getOptionMetadata(option.id, service.id).priceUnit === 'sqft' && (
                                       <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
                                     )}
-                                    {getOptionMetadata(option.id).priceUnit === 'linear_ft' && (
+                                    {getOptionMetadata(option.id, service.id).priceUnit === 'linear_ft' && (
                                       <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
                                     )}
                                     {/* Top-level options can also opt into dual-pricing via
                                         OPTION_METADATA.supportsPercentMarkup. Currently only
                                         sub-options carry the flag (low_e + casement), but if a
                                         future top-level option is flagged, the UX is ready. */}
-                                    {getOptionMetadata(option.id).supportsPercentMarkup && (
+                                    {getOptionMetadata(option.id, service.id).supportsPercentMarkup && (
                                       <>
                                         <span className="text-sm text-muted-foreground ml-1">%</span>
                                         <Input
@@ -371,7 +371,7 @@ export default function VendorCatalog() {
                                             Currently low_e + casement; add more by flag-flip,
                                             not code branch. Rod directives kratos msgs
                                             1776659189645 + 1776659949844. */}
-                                        {getOptionMetadata(subOpt.id).supportsPercentMarkup && (
+                                        {getOptionMetadata(subOpt.id, service.id).supportsPercentMarkup && (
                                           <>
                                             <span className="text-sm text-muted-foreground ml-1">%</span>
                                             <Input
