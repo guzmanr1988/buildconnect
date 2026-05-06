@@ -129,7 +129,11 @@ export function VendorComparePage() {
     }
     load()
     return () => { mounted = false }
-  }, [])
+    // Bug 3 fix: depend on stable vendor-id key. featuredVendors changes async
+    // when useRealVendors() returns; without this, priceMaps freezes to the
+    // mount-time mocks-only set and real vendors silently fall out of
+    // Compare Vendors via undefined totalsByVendor[id].
+  }, [featuredVendors.map((v) => v.id).join('|')])
 
   const totalsByVendor = useMemo(() => {
     const out: Record<string, VendorTotalResult> = {}
