@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
+import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { getOptionMetadata } from '@/lib/option-metadata'
@@ -47,6 +48,21 @@ export default function VendorCatalog() {
       initFromAdmin(adminServices)
     }
   }, [adminServices.length])
+
+  // Bug 1 defensive: ensure vendor catalog store is hydrated from Supabase
+  // before the user can interact. AuthBootstrap fires hydrateFromSupabase
+  // on SIGNED_IN, but a fresh page-load directly to /vendor/catalog can
+  // race the user's first toggleService/setPrice ahead of AuthBootstrap's
+  // listener firing (which only re-runs on auth state changes, not on
+  // every mount). Idempotent — _migrationDone gate inside ensures the
+  // localStorage migration only runs once.
+  const profileId = useAuthStore((s) => s.profile?.id)
+  const profileRole = useAuthStore((s) => s.profile?.role)
+  useEffect(() => {
+    if (profileRole === 'vendor' && profileId) {
+      useVendorCatalogStore.getState().hydrateFromSupabase(profileId)
+    }
+  }, [profileId, profileRole])
 
   // When a service is deactivated, remove it from the expanded set so
   // re-activating later starts cleanly collapsed (per Rod directive: active
