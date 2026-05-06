@@ -21,8 +21,10 @@ import type { ServiceConfig } from '@/types'
 
 const ADDON_LINEAR_FT_CONFIG = [
   { id: 'gutters', label: 'Gutter linear feet' },
-  { id: 'soffit_wood', label: 'Soffit linear feet' },
-  { id: 'fascia_wood', label: 'Fascia linear feet' },
+  { id: 'soffit_wood', label: 'Soffit Wood linear feet' },
+  { id: 'fascia_wood', label: 'Fascia Wood linear feet' },
+  { id: 'soffit_metal', label: 'Soffit Metal linear feet' },
+  { id: 'fascia_metal', label: 'Fascia Metal linear feet' },
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
 

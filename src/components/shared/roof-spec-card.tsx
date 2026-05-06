@@ -30,8 +30,10 @@ interface RoofSpecCardProps {
 
 const ADDON_LABELS: Record<string, string> = {
   gutters: 'Gutters',
-  soffit_wood: 'Soffit',
-  fascia_wood: 'Fascia',
+  soffit_wood: 'Soffit Wood',
+  fascia_wood: 'Fascia Wood',
+  soffit_metal: 'Soffit Metal',
+  fascia_metal: 'Fascia Metal',
 }
 
 export function RoofSpecCard({

@@ -57,6 +57,8 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   gutters: { priceUnit: 'linear_ft' },
   soffit_wood: { priceUnit: 'linear_ft' },
   fascia_wood: { priceUnit: 'linear_ft' },
+  soffit_metal: { priceUnit: 'linear_ft' },
+  fascia_metal: { priceUnit: 'linear_ft' },
 }
 
 export function getOptionMetadata(optionId: string): OptionMetadata {
