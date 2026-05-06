@@ -12,6 +12,7 @@ import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap } from '@/lib/api/pricing'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import type { PriceLineItem } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
 
@@ -136,8 +137,11 @@ async function buildRoofingLineItems(
         anyComputed = true
       } else if (meta.priceUnit === 'linear_ft') {
         const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
-        if (linFt > 0) {
-          const amount = Math.round(unitRateDollars * linFt * 100) / 100
+        const effectiveLinFt = optionId === 'gutters'
+          ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
+          : linFt
+        if (effectiveLinFt > 0) {
+          const amount = Math.round(unitRateDollars * effectiveLinFt * 100) / 100
           lines.push({
             id: `roofing-addon-${optionId}`,
             label: `${optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
@@ -146,7 +150,7 @@ async function buildRoofingLineItems(
             source: 'preset_calculated',
             priceUnit: 'linear_ft',
             unitRate: unitRateDollars,
-            unitQuantity: linFt,
+            unitQuantity: effectiveLinFt,
           })
           anyComputed = true
         }

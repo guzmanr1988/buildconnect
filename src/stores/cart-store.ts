@@ -44,12 +44,12 @@ export interface CartItem {
   roofPermit?: 'yes' | 'no'
   // Liability waiver — populated when roofPermit = 'no'. Null when permit is yes or not yet set.
   permitWaiver?: { acknowledged: boolean; signedName: string; signedAt: string } | null
-  // Linear feet per roofing addon (gutters, soffit_wood, fascia_wood). Keyed by option id.
-  // For gutters on path-b, this stores the perimeter base; pricing layer adds
-  // drops × per-floor extension via gutterDropsConfig below.
+  // Linear feet per roofing addon (gutters, soffit_wood, fascia_wood, soffit_metal,
+  // fascia_metal). Keyed by option id. For gutters this stores the perimeter base;
+  // pricing layer adds drops × per-floor extension via gutterDropsConfig below.
   roofAddonLinearFt?: Record<string, number>
-  // Path-b gutter math: total lin ft = perimeter + drops × (floors===1 ? 8 : 19).
-  // Only populated on flowPath==='addons_only' when gutters selected.
+  // Gutter math: total lin ft = perimeter + drops × per-floor (see GUTTER_DROP_FT_BY_FLOORS
+  // in lib/roof-pricing.ts). Populated on BOTH flow paths when gutters selected.
   gutterDropsConfig?: { floors: 1 | 2; drops: number }
   addonQuantities?: AddonQuantities
   // Which property this line item applies to. Phase B2: primary OR one of
