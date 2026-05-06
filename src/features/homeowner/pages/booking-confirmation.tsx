@@ -10,7 +10,8 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
-import { getVendorPriceMap } from '@/lib/api/pricing'
+import { getVendorPriceMap, getVendorPermitMap, sumPermitForItem } from '@/lib/api/pricing'
+import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import type { PriceLineItem } from '@/types'
@@ -64,8 +65,12 @@ async function buildRoofingLineItems(
   if (!uuid) return null
 
   let priceMap: ReturnType<typeof getVendorPriceMap> extends Promise<infer T> ? T : never
+  let permitMap: ReturnType<typeof getVendorPermitMap> extends Promise<infer T> ? T : never
   try {
-    priceMap = await getVendorPriceMap(uuid)
+    ;[priceMap, permitMap] = await Promise.all([
+      getVendorPriceMap(uuid),
+      getVendorPermitMap(uuid),
+    ])
   } catch {
     return null
   }
@@ -161,15 +166,15 @@ async function buildRoofingLineItems(
   if (!anyComputed) return null
 
   // Permit: always render a row so homeowner/vendor always sees the permit status.
-  // Label + amount vary by customer config + vendor pricing state per Rodolfo's rule:
-  //   customer YES + vendor priced  → "Permit" with dollar amount
-  //   customer YES + vendor unpriced → "Permit — no price" with amount 0
-  //   customer NO                   → "Permit — no permit, no price" with amount 0
+  // PR #117: amount is now SUM of vendor's per-product permit_price_cents on
+  // selected option_ids (each product carries its own permit-fee). Label
+  // varies by customer config + vendor permit state:
+  //   customer YES + ≥1 product permit-priced  → "Permit" with dollar amount
+  //   customer YES + zero permits priced       → "Permit — no price" with amount 0
+  //   customer NO                              → "Permit — no permit, no price" with amount 0
   if (item.roofPermit === 'yes') {
-    const permitCents = priceMap.get(`roofing|service_type|permit`)
-      ?? priceMap.get(`roofing|permit|permit`)
-      ?? priceMap.get(`roofing|addons|permit`)
-    if (permitCents && permitCents > 0) {
+    const permitCents = sumPermitForItem(item, permitMap)
+    if (permitCents > 0) {
       lines.push({
         id: 'roofing-permit',
         label: 'Permit',
@@ -268,6 +273,33 @@ export function BookingConfirmationPage() {
           if (pendingItem.serviceId === 'roofing' && contractor.vendor_id) {
             const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id)
             if (built) computedLineItems = built
+          } else if (contractor.vendor_id) {
+            // PR #117 — for non-roofing services, snapshot a permit-line
+            // summed from vendor's per-product permit_price_cents (instead
+            // of PRICE_LINE_ITEM_PRESETS' static category-permit). Other
+            // line categories (Material, Install, etc.) keep using PRESETS
+            // shape until per-vendor pricing for those exists too.
+            const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id]
+            if (vendorUuid) {
+              try {
+                const permitMap = await getVendorPermitMap(vendorUuid)
+                const permitCents = sumPermitForItem(pendingItem, permitMap)
+                const presets = PRICE_LINE_ITEM_PRESETS[pendingItem.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? []
+                if (presets.length > 0) {
+                  const nonPermit = presets.filter((p) => !/permit/i.test(p.id))
+                  const permitLine: PriceLineItem = {
+                    id: `${pendingItem.serviceId}-permit`,
+                    label: 'Permit Price',
+                    amount: Math.round(permitCents) / 100,
+                    originalAmount: Math.round(permitCents) / 100,
+                    source: 'preset',
+                  }
+                  computedLineItems = [...nonPermit.map((p) => ({ ...p })), permitLine]
+                }
+              } catch {
+                // fall through — undefined keeps PRESETS fallback on display surfaces
+              }
+            }
           }
 
           // Ship #269 — pass profile.id as homeowner_id snapshot for admin

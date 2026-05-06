@@ -14,6 +14,9 @@ export interface VendorServiceConfig {
   // either as $ OR as % markup over another baseline. Extensible to other
   // options that need dual $ / % pricing.
   pricingPercent?: Record<string, number> // optionId -> percent
+  // PR #117 — per-product permit price. sendProject() sums these instead
+  // of pulling a per-category permit-line from PRICE_LINE_ITEM_PRESETS.
+  permitPricing?: Record<string, number> // optionId -> permit price in cents
 }
 
 interface VendorCatalogState {
@@ -31,10 +34,12 @@ interface VendorCatalogState {
   toggleOption: (serviceId: string, groupId: string, optionId: string) => void
   setPrice: (serviceId: string, optionId: string, price: number) => void
   setPricePercent: (serviceId: string, optionId: string, percent: number) => void
+  setPermitPrice: (serviceId: string, optionId: string, price: number) => void
   isServiceEnabled: (serviceId: string) => boolean
   isOptionEnabled: (serviceId: string, groupId: string, optionId: string) => boolean
   getPrice: (serviceId: string, optionId: string) => number
   getPricePercent: (serviceId: string, optionId: string) => number
+  getPermitPrice: (serviceId: string, optionId: string) => number
   // PRODUCT-IS-GOD Phase C (PR 4): single SoT for "is this vendor product-ready."
   // True if ≥1 service is enabled AND has ≥1 priced option (pricing cents > 0).
   // Pure computed — no mutation. Consumer: PR 5 admin-moderation-store auto-flip.
@@ -47,6 +52,7 @@ interface VendorCatalogState {
 
 type DbPriceRow = {
   price_cents: number
+  permit_price_cents: number
   active: boolean
   options: { id: string; option_id: string; option_groups: { group_id: string; service_id: string } }
 }
@@ -163,10 +169,14 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           console.error('[catalog] setPrice: option not in DB cache — write dropped', { serviceId, optionId })
           return
         }
+        // Carry permit cents in the same upsert so onConflict-replace doesn't
+        // wipe the sibling permit_price_cents column. Local state is SoT for
+        // the cross-field merge.
+        const permitCents = get().services.find((s) => s.serviceId === serviceId)?.permitPricing?.[optionId] ?? 0
         supabase
           .from('vendor_option_prices')
           .upsert(
-            { vendor_id: vendorUuid, option_id: optionDbId, price_cents: price, currency: 'USD', active: true },
+            { vendor_id: vendorUuid, option_id: optionDbId, price_cents: price, permit_price_cents: permitCents, currency: 'USD', active: true },
             { onConflict: 'vendor_id,option_id' }
           )
           .then(({ error }) => {
@@ -182,6 +192,36 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               : s
           ),
         }))
+      },
+
+      setPermitPrice: (serviceId, optionId, price) => {
+        set((state) => ({
+          services: state.services.map((s) =>
+            s.serviceId === serviceId
+              ? { ...s, permitPricing: { ...(s.permitPricing ?? {}), [optionId]: price } }
+              : s
+          ),
+        }))
+        const vendorUuid = resolveVendorUuid(get()._vendorUuid)
+        if (!vendorUuid) {
+          console.error('[catalog] setPermitPrice: no vendor UUID available — write dropped', { serviceId, optionId })
+          return
+        }
+        const optionDbId = get()._optionDbIdCache[cacheKey(serviceId, optionId)]
+        if (!optionDbId) {
+          console.error('[catalog] setPermitPrice: option not in DB cache — write dropped', { serviceId, optionId })
+          return
+        }
+        const baseCents = get().services.find((s) => s.serviceId === serviceId)?.pricing?.[optionId] ?? 0
+        supabase
+          .from('vendor_option_prices')
+          .upsert(
+            { vendor_id: vendorUuid, option_id: optionDbId, price_cents: baseCents, permit_price_cents: price, currency: 'USD', active: true },
+            { onConflict: 'vendor_id,option_id' }
+          )
+          .then(({ error }) => {
+            if (error) console.error('[catalog] upsert permit price failed:', error.message)
+          })
       },
 
       isServiceEnabled: (serviceId) => {
@@ -204,6 +244,11 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         return service?.pricingPercent?.[optionId] || 0
       },
 
+      getPermitPrice: (serviceId, optionId) => {
+        const service = get().services.find((s) => s.serviceId === serviceId)
+        return service?.permitPricing?.[optionId] || 0
+      },
+
       hasActiveProducts: () => {
         return get().services.some(
           (s) => s.enabled && Object.values(s.pricing).some((cents) => cents > 0),
@@ -216,7 +261,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // 1. Load this vendor's existing prices from Supabase.
         const { data: priceRows, error: priceErr } = await supabase
           .from('vendor_option_prices')
-          .select('price_cents,active,options(id,option_id,option_groups(group_id,service_id))')
+          .select('price_cents,permit_price_cents,active,options(id,option_id,option_groups(group_id,service_id))')
           .eq('vendor_id', vendorUuid)
           .eq('active', true)
 
@@ -242,14 +287,17 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           optionDbIdCache[cacheKey(og.service_id, opt.option_id)] = opt.id
         }
 
-        // 4. Build pricing map from Supabase rows (Supabase is canonical).
+        // 4. Build pricing maps from Supabase rows (Supabase is canonical).
         const priceBySvcOption: Record<string, Record<string, number>> = {}
+        const permitBySvcOption: Record<string, Record<string, number>> = {}
         for (const row of (priceRows ?? []) as unknown as DbPriceRow[]) {
           const opt = row.options
           if (!opt?.option_groups) continue
           const svcId = opt.option_groups.service_id
           if (!priceBySvcOption[svcId]) priceBySvcOption[svcId] = {}
           priceBySvcOption[svcId][opt.option_id] = row.price_cents
+          if (!permitBySvcOption[svcId]) permitBySvcOption[svcId] = {}
+          permitBySvcOption[svcId][opt.option_id] = row.permit_price_cents ?? 0
           // Fill cache gaps (prefer allOptions, but backfill from priceRows too)
           const ck = cacheKey(svcId, opt.option_id)
           if (!optionDbIdCache[ck]) optionDbIdCache[ck] = opt.id
@@ -260,8 +308,13 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           _optionDbIdCache: optionDbIdCache,
           services: state.services.map((s) => {
             const sbPricing = priceBySvcOption[s.serviceId]
-            if (!sbPricing) return s
-            return { ...s, pricing: { ...s.pricing, ...sbPricing } }
+            const sbPermit = permitBySvcOption[s.serviceId]
+            if (!sbPricing && !sbPermit) return s
+            return {
+              ...s,
+              pricing: sbPricing ? { ...s.pricing, ...sbPricing } : s.pricing,
+              permitPricing: sbPermit ? { ...(s.permitPricing ?? {}), ...sbPermit } : s.permitPricing,
+            }
           }),
         }))
 

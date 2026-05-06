@@ -267,6 +267,16 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'beach_custom', label: 'Custom Size' },
         ],
       },
+      {
+        id: 'water_feature_units',
+        label: 'Water Feature Units',
+        required: false,
+        type: 'multi',
+        options: [
+          { id: 'laminar_jet', label: 'Laminar Jet' },
+          { id: 'waterfall_unit', label: 'Waterfall' },
+        ],
+      },
     ],
   },
   {
