@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
+import { geocodeVendorAddress } from '@/lib/api/geocode'
 import type { Profile, UserRole } from '@/types'
 
 interface AuthState {
@@ -61,6 +62,18 @@ export const useAuthStore = create<AuthState>()(
         )
         if (Object.keys(dbPatch).length === 0) return
         await supabase.from('profiles').update(dbPatch).eq('id', profileId)
+        // Phase 2 real geocoding: fire-and-forget when a vendor's address
+        // changed. Homeowner address writes go through the same path but
+        // the FE-side satellite-measure geocode handles their project-coords
+        // independently — no Edge Fn call needed for homeowner role.
+        const profileAfter = useAuthStore.getState().profile
+        if (
+          typeof patch.address === 'string'
+          && patch.address.trim()
+          && profileAfter?.role === 'vendor'
+        ) {
+          void geocodeVendorAddress(profileId, patch.address)
+        }
       },
       clearLocalSession: () =>
         set({ session: null, profile: null, isAuthenticated: false, role: null }),
