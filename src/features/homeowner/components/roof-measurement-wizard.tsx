@@ -780,18 +780,22 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 const rows: { label: string; value: string }[] = [
                   { label: 'Address', value: address },
                 ]
-                if (hasFlatSection && measurement?.pitchedAreaSqft !== undefined) {
-                  const pitchedWaste = Math.round(measurement.pitchedAreaSqft * ROOF_WASTE_FACTOR)
-                  const flatWaste = Math.round(measurement.flatAreaSqft * ROOF_WASTE_FACTOR)
-                  rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft → ${pitchedWaste.toLocaleString()} sqft w/waste (${sqftToSquares(pitchedWaste)} squares)` })
-                  rows.push({ label: 'Flat section', value: `${measurement.flatAreaSqft.toLocaleString()} sqft → ${flatWaste.toLocaleString()} sqft w/waste (${sqftToSquares(flatWaste)} squares)` })
-                } else {
-                  rows.push({ label: 'Material Order', value: `${finalWaste.toLocaleString()} sqft (${sqftToSquares(finalWaste)} squares)` })
+                if (flowPath !== 'addons_only') {
+                  if (hasFlatSection && measurement?.pitchedAreaSqft !== undefined) {
+                    const pitchedWaste = Math.round(measurement.pitchedAreaSqft * ROOF_WASTE_FACTOR)
+                    const flatWaste = Math.round(measurement.flatAreaSqft * ROOF_WASTE_FACTOR)
+                    rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft → ${pitchedWaste.toLocaleString()} sqft w/waste (${sqftToSquares(pitchedWaste)} squares)` })
+                    rows.push({ label: 'Flat section', value: `${measurement.flatAreaSqft.toLocaleString()} sqft → ${flatWaste.toLocaleString()} sqft w/waste (${sqftToSquares(flatWaste)} squares)` })
+                  } else {
+                    rows.push({ label: 'Material Order', value: `${finalWaste.toLocaleString()} sqft (${sqftToSquares(finalWaste)} squares)` })
+                  }
+                  rows.push({ label: 'Roof Pitch', value: finalPitch })
                 }
-                rows.push({ label: 'Roof Pitch', value: finalPitch })
                 const finalPerimeterFt = Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0)
                 if (finalPerimeterFt) rows.push({ label: 'Perimeter', value: `~${finalPerimeterFt.toLocaleString()} lin ft` })
-                rows.push({ label: 'Material', value: materialLabel })
+                if (flowPath !== 'addons_only') {
+                  rows.push({ label: 'Material', value: materialLabel })
+                }
                 return (
                   <div className="rounded-xl border bg-muted/20 divide-y divide-border">
                     {rows.map(({ label, value }) => (
