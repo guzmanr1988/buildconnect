@@ -59,8 +59,41 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   fascia_wood: { priceUnit: 'linear_ft' },
   soffit_metal: { priceUnit: 'linear_ft' },
   fascia_metal: { priceUnit: 'linear_ft' },
+  // Pool fence addon — perimeter linear ft, vendor enters $/lin ft. Unique to
+  // pool service, no collision so safe in the global map.
+  pool_fence: { priceUnit: 'linear_ft' },
 }
 
-export function getOptionMetadata(optionId: string): OptionMetadata {
+// Per-service overrides — for option_ids that collide across services with
+// different pricing semantics (e.g. 'pavers' is sqft in pool_floor but flat in
+// driveways surface; 'custom' is sqft for pool_size but flat for pergola size).
+// When set for (serviceId, optionId), this WINS over the global OPTION_METADATA.
+export const OPTION_METADATA_BY_SERVICE: Record<string, Record<string, OptionMetadata>> = {
+  pool: {
+    // Pool size 'custom' — homeowner enters numeric sqft (placeholder e.g. 20x40).
+    custom: { priceUnit: 'sqft' },
+    // Pool floor surfaces — SEPARATE sqft measurement from pool itself (per
+    // Rodolfo Q2: floor priced independently against its own area).
+    travertine: { priceUnit: 'sqft' },
+    pavers: { priceUnit: 'sqft' },
+    stamped_concrete: { priceUnit: 'sqft' },
+    cement_floor: { priceUnit: 'sqft' },
+    artificial_turf: { priceUnit: 'sqft' },
+    square_concrete: { priceUnit: 'sqft' },
+  },
+  driveways: {
+    // square_concrete added to driveways as $/sqft against cart.areaSqft (from
+    // SatelliteMeasure). Existing driveway surfaces (pavers/stamped/asphalt/
+    // stone) intentionally stay flat — flipping them mid-PR would break every
+    // vendor who already priced flat. Follow-up PR for legacy migration.
+    square_concrete: { priceUnit: 'sqft' },
+  },
+}
+
+export function getOptionMetadata(optionId: string, serviceId?: string): OptionMetadata {
+  if (serviceId) {
+    const scoped = OPTION_METADATA_BY_SERVICE[serviceId]?.[optionId]
+    if (scoped) return scoped
+  }
   return OPTION_METADATA[optionId] ?? {}
 }

@@ -92,7 +92,7 @@ export function computeVendorTotal(
           continue
         }
         coveredServices.add(item.serviceId)
-        const meta = getOptionMetadata(optionId)
+        const meta = getOptionMetadata(optionId, item.serviceId)
         if (meta.requiresQuantity) {
           const qty = item.selectionQuantities?.[optionId] ?? meta.quantityRange?.min ?? 1
           totalCents += basePrice * qty
@@ -103,7 +103,7 @@ export function computeVendorTotal(
           const hasSplitData = item.roofMeasurement?.pitchedAreaSqft !== undefined
             && item.roofMeasurement?.flatAreaSqft !== undefined
           const hasFlatSelected = allMatIds.includes('flat_roof')
-          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id).priceUnit === 'square')
+          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id, item.serviceId).priceUnit === 'square')
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
             && (item.roofMeasurement?.includeFlat !== false)
           const rawSqft = useSplit
@@ -113,11 +113,25 @@ export function computeVendorTotal(
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)
         } else if (meta.priceUnit === 'sqft') {
-          // Legacy: vendor entered $/sqft (old persisted line items). Bill flat against areaSqft.
-          const areaSqft = item.roofMeasurement?.areaSqft ?? 0
-          totalCents += basePrice * areaSqft
+          // Resolve sqft source per cart-item shape:
+          // 1. customSizeSqft[optionId] — per-option-id sqft (pool size custom,
+          //    pool floor surfaces; sibling sqft values on the same cart item).
+          // 2. item.areaSqft — single satellite-measured area (driveways +
+          //    pergolas; one area per cart item, used for whichever option is
+          //    flagged sqft, e.g. square_concrete in driveways).
+          // 3. legacy roofMeasurement.areaSqft — old persisted roof items that
+          //    used per-sqft pricing before the per-square switch.
+          const sqft = item.customSizeSqft?.[optionId]
+            ?? item.areaSqft
+            ?? item.roofMeasurement?.areaSqft
+            ?? 0
+          totalCents += basePrice * sqft
         } else if (meta.priceUnit === 'linear_ft') {
-          const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
+          // Resolve linear ft source: roofAddonLinearFt (existing roofing
+          // addons, with gutter drops math) OR addonLinearFt (generic
+          // non-roofing addons like pool_fence).
+          const roofLinFt = item.roofAddonLinearFt?.[optionId]
+          const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
           const effectiveLinFt = optionId === 'gutters'
             ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
             : linFt

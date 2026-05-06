@@ -773,6 +773,36 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
+                            {/* Sqft / linear-ft addons — pool size custom, pool floor surfaces,
+                                pool_fence. Vendor sees the same numbers used to compute pricing
+                                (sqft from customSizeSqft, lin ft from addonLinearFt) so MATH-IS-GOD
+                                holds across surfaces. */}
+                            {sp.item.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Custom-size measurements</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
+                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                      <span className="text-sm font-bold text-primary">{sqft.toLocaleString()} sqft</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {sp.item.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
+                              <div className="rounded-xl border bg-background p-4 space-y-3">
+                                <h4 className="text-sm font-semibold text-foreground">Linear-ft add-ons</h4>
+                                <div className="flex flex-col gap-1.5">
+                                  {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
+                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                                      <span className="text-sm font-bold text-primary">{ft.toLocaleString()} ft</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {/* Pricing Breakdown — generic card for all non-windows_doors services.
                                 Windows/Doors already has per-unit price cards above; skip for that service.
                                 Strict: only renders when sp.priceLineItems is populated (no PRESETS fallback). */}

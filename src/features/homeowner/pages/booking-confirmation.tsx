@@ -79,7 +79,7 @@ async function buildRoofingLineItems(
   // When hasFlatSection, each material gets its own area slice.
   const allMaterialIds = Object.values(item.selections ?? {}).flat()
   const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID)
-  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && (getOptionMetadata(id).priceUnit === 'square' || getOptionMetadata(id).priceUnit === 'sqft'))
+  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && (getOptionMetadata(id, 'roofing').priceUnit === 'square' || getOptionMetadata(id, 'roofing').priceUnit === 'sqft'))
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
     && (item.roofMeasurement?.includeFlat !== false)
 
@@ -95,7 +95,7 @@ async function buildRoofingLineItems(
       const priceCents = priceMap.get(key)
       if (priceCents === undefined) continue
 
-      const meta = getOptionMetadata(optionId)
+      const meta = getOptionMetadata(optionId, 'roofing')
       const unitRateDollars = priceCents / 100
 
       if (meta.priceUnit === 'square' || meta.priceUnit === 'sqft') {

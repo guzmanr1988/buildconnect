@@ -222,6 +222,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'pavers', label: 'Pavers' },
           { id: 'stamped_concrete', label: 'Stamped Concrete' },
           { id: 'cement_floor', label: 'Cement Floor' },
+          { id: 'square_concrete', label: 'Square Concrete' },
           { id: 'artificial_turf', label: 'Artificial Turf' },
           { id: 'na', label: 'N/A' },
         ],
@@ -238,6 +239,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'led', label: 'LED Lighting' },
           { id: 'bubbler', label: 'Bubbler' },
           { id: 'heater', label: 'Pool Heater' },
+          { id: 'pool_fence', label: 'Pool Fence' },
         ],
       },
       {
@@ -296,6 +298,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'stamped', label: 'Stamped Concrete' },
           { id: 'asphalt', label: 'Asphalt' },
           { id: 'stone', label: 'Natural Stone' },
+          { id: 'square_concrete', label: 'Square Concrete' },
         ],
       },
       {
