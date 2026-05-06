@@ -493,13 +493,73 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
 // overlapping ids (admin edits, overrides). Bundled entries fill gaps for
 // newly-added code services that haven''t been propagated to Supabase yet.
 //
+// PR #114 — extended to recurse into optionGroups, options, subGroups, and
+// subOptions. Root cause for A4+A5 walk failures on PR #111: server-side
+// catalog is system-of-record once auth'd, and hydrateFromServer REPLACES the
+// bundled services with the server result. Service-level union-fill caught
+// new bundled services but not new bundled options/groups inside an existing
+// service. So pool_fence (added to existing pool service's addons group) and
+// square_concrete (added to existing pool/pool_floor + driveways/surface)
+// never surfaced for users hydrating from a pre-#111 server snapshot.
+//
 // This is the paired mechanism to persist-version-bump: version-bump forces
-// a one-time migrate, union-fill-gaps ensures the bundled-only services stay
-// present even after subsequent server fetches or persist-rehydrates.
+// a one-time migrate, union-fill-gaps ensures the bundled-only entries stay
+// present at every nesting level after subsequent server fetches or persist-
+// rehydrates. Same intent applied at every layer of the tree.
+function unionOptions(
+  serverOptions: ServiceOption[],
+  bundledOptions: ServiceOption[]
+): ServiceOption[] {
+  const seenIds = new Set(serverOptions.map((o) => o.id))
+  const merged = serverOptions.map((o) => {
+    const bundled = bundledOptions.find((b) => b.id === o.id)
+    if (!bundled) return o
+    const serverSubGroups = o.subGroups ?? []
+    const bundledSubGroups = bundled.subGroups ?? []
+    if (serverSubGroups.length === 0 && bundledSubGroups.length === 0) return o
+    return { ...o, subGroups: unionSubGroups(serverSubGroups, bundledSubGroups) }
+  })
+  const missing = bundledOptions.filter((b) => !seenIds.has(b.id))
+  return missing.length > 0 ? [...merged, ...missing] : merged
+}
+
+function unionSubGroups(
+  serverSubGroups: OptionGroup[],
+  bundledSubGroups: OptionGroup[]
+): OptionGroup[] {
+  const seenIds = new Set(serverSubGroups.map((sg) => sg.id))
+  const merged = serverSubGroups.map((sg) => {
+    const bundled = bundledSubGroups.find((b) => b.id === sg.id)
+    if (!bundled) return sg
+    return { ...sg, options: unionOptions(sg.options, bundled.options) }
+  })
+  const missing = bundledSubGroups.filter((b) => !seenIds.has(b.id))
+  return missing.length > 0 ? [...merged, ...missing] : merged
+}
+
+function unionOptionGroups(
+  serverGroups: OptionGroup[],
+  bundledGroups: OptionGroup[]
+): OptionGroup[] {
+  const seenIds = new Set(serverGroups.map((g) => g.id))
+  const merged = serverGroups.map((g) => {
+    const bundled = bundledGroups.find((b) => b.id === g.id)
+    if (!bundled) return g
+    return { ...g, options: unionOptions(g.options, bundled.options) }
+  })
+  const missing = bundledGroups.filter((b) => !seenIds.has(b.id))
+  return missing.length > 0 ? [...merged, ...missing] : merged
+}
+
 function unionBundledFillingGaps(services: ServiceConfig[]): ServiceConfig[] {
   const seenIds = new Set(services.map((s) => s.id))
+  const merged = services.map((s) => {
+    const bundled = SERVICE_CATALOG.find((b) => b.id === s.id)
+    if (!bundled) return s
+    return { ...s, optionGroups: unionOptionGroups(s.optionGroups, bundled.optionGroups) }
+  })
   const missing = SERVICE_CATALOG.filter((s) => !seenIds.has(s.id))
-  return missing.length > 0 ? [...services, ...missing] : services
+  return missing.length > 0 ? [...merged, ...missing] : merged
 }
 
 /* ---------------------------------------------------------------- */
