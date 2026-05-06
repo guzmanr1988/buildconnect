@@ -251,7 +251,7 @@ export default function VendorCatalog() {
                                     {optEnabled && <Check className="h-3 w-3" />}
                                   </button>
                                   <span className={cn(
-                                    'text-base truncate',
+                                    'text-lg truncate',
                                     optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
                                   )}>
                                     {option.label}
@@ -344,7 +344,7 @@ export default function VendorCatalog() {
                                         {subEnabled && <Check className="h-2.5 w-2.5" />}
                                       </button>
                                       <span className={cn(
-                                        'text-sm truncate',
+                                        'text-base truncate',
                                         subEnabled ? 'font-medium' : 'text-muted-foreground'
                                       )}>
                                         {subOpt.label}

@@ -754,7 +754,7 @@ export function ServiceDetailPage() {
                           }
                         }}
                         className={cn(
-                          'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-150',
+                          'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-base font-medium transition-all duration-150',
                           isSelected
                             ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                             : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted'
