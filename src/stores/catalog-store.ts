@@ -831,7 +831,14 @@ export const useCatalogStore = create<CatalogState>()(
       //
       // Future same-class fixes: when changing SERVICE_CATALOG defaults,
       // bump this version to force persisted-state eviction.
-      version: 12,
+      //
+      // Ship — version bump 12→13 paired-edit: PR #117 added
+      // water_feature_units optionGroup to pool service in SERVICE_CATALOG
+      // (laminar_jet + waterfall_unit). Existing persisted v12 catalogs
+      // still serve the pre-#117 pool option_groups, so the new vendor
+      // priceable products never render. Version bump forces migrate()
+      // reset to bundled.
+      version: 13,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({

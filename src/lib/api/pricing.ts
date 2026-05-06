@@ -51,6 +51,59 @@ export async function getVendorPriceMap(vendorUuid: string): Promise<VendorPrice
   return map
 }
 
+// PR #117 — sibling map for per-product permit prices. sendProject sums
+// permits across all selected option_ids instead of using the per-category
+// PRICE_LINE_ITEM_PRESETS permit-line. Keyed identically to priceMap.
+type DbPermitRow = {
+  permit_price_cents: number
+  active: boolean
+  options: {
+    option_id: string
+    option_groups: {
+      group_id: string
+      service_id: string
+    }
+  }
+}
+
+export async function getVendorPermitMap(vendorUuid: string): Promise<VendorPriceMap> {
+  const { data, error } = await supabase
+    .from('vendor_option_prices')
+    .select('permit_price_cents,active,options(option_id,option_groups(group_id,service_id))')
+    .eq('vendor_id', vendorUuid)
+    .eq('active', true)
+  if (error) throw new Error(`getVendorPermitMap: ${error.message}`)
+  const map: VendorPriceMap = new Map()
+  for (const r of (data ?? []) as unknown as DbPermitRow[]) {
+    if (!r.options || !r.options.option_groups) continue
+    if (!r.permit_price_cents || r.permit_price_cents <= 0) continue
+    const k = priceKey(
+      r.options.option_groups.service_id,
+      r.options.option_groups.group_id,
+      r.options.option_id
+    )
+    map.set(k, r.permit_price_cents)
+  }
+  return map
+}
+
+// Sum permit-cents across all selected option_ids in a cart item.
+// Mirrors computeVendorTotal's iteration shape but flat-sums permits
+// (no quantity/sqft multipliers — permit is a per-product flat fee).
+// service_type group excluded same as price total.
+export function sumPermitForItem(item: CartItem, permitMap: VendorPriceMap): number {
+  let total = 0
+  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
+    if (!optionIds || optionIds.length === 0) continue
+    if (item.serviceId === 'roofing' && groupId === 'service_type') continue
+    for (const optionId of optionIds) {
+      const cents = permitMap.get(priceKey(item.serviceId, groupId, optionId))
+      if (cents) total += cents
+    }
+  }
+  return total
+}
+
 export type VendorTotalResult = {
   hasSelections: boolean
   totalCents: number

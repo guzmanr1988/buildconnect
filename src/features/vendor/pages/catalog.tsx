@@ -21,10 +21,12 @@ export default function VendorCatalog() {
     toggleOption,
     setPrice,
     setPricePercent,
+    setPermitPrice,
     isServiceEnabled,
     isOptionEnabled,
     getPrice,
     getPricePercent,
+    getPermitPrice,
   } = useVendorCatalogStore()
 
   // Expand state is per-service, session-scoped (no persist — if vendor
@@ -259,49 +261,63 @@ export default function VendorCatalog() {
                                 </div>
                                 {optEnabled && (
                                   <div
-                                    className="flex items-center gap-1.5 shrink-0"
+                                    className="flex flex-col items-end gap-1 shrink-0"
                                     onClick={(e) => e.stopPropagation()}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onPointerDown={(e) => e.stopPropagation()}
                                   >
-                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                      aria-label={`Price for ${option.label}`}
-                                      type="number"
-                                      value={price || ''}
-                                      onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
-                                      placeholder="0"
-                                      className="h-10 w-24 text-base text-right"
-                                    />
-                                    {getOptionMetadata(option.id, service.id).priceUnit === 'square' && (
-                                      <div className="flex flex-col">
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
-                                        <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
-                                      </div>
-                                    )}
-                                    {getOptionMetadata(option.id, service.id).priceUnit === 'sqft' && (
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
-                                    )}
-                                    {getOptionMetadata(option.id, service.id).priceUnit === 'linear_ft' && (
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
-                                    )}
-                                    {/* Top-level options can also opt into dual-pricing via
-                                        OPTION_METADATA.supportsPercentMarkup. Currently only
-                                        sub-options carry the flag (low_e + casement), but if a
-                                        future top-level option is flagged, the UX is ready. */}
-                                    {getOptionMetadata(option.id, service.id).supportsPercentMarkup && (
-                                      <>
-                                        <span className="text-sm text-muted-foreground ml-1">%</span>
-                                        <Input
-                                          aria-label={`Percent markup for ${option.label}`}
-                                          type="number"
-                                          value={getPricePercent(service.id, option.id) || ''}
-                                          onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
-                                          placeholder="0"
-                                          className="h-10 w-20 text-base text-right"
-                                        />
-                                      </>
-                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                      <Input
+                                        aria-label={`Price for ${option.label}`}
+                                        type="number"
+                                        value={price || ''}
+                                        onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
+                                        placeholder="0"
+                                        className="h-10 w-24 text-base text-right"
+                                      />
+                                      {getOptionMetadata(option.id, service.id).priceUnit === 'square' && (
+                                        <div className="flex flex-col">
+                                          <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
+                                          <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
+                                        </div>
+                                      )}
+                                      {getOptionMetadata(option.id, service.id).priceUnit === 'sqft' && (
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
+                                      )}
+                                      {getOptionMetadata(option.id, service.id).priceUnit === 'linear_ft' && (
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
+                                      )}
+                                      {/* Top-level options can also opt into dual-pricing via
+                                          OPTION_METADATA.supportsPercentMarkup. Currently only
+                                          sub-options carry the flag (low_e + casement), but if a
+                                          future top-level option is flagged, the UX is ready. */}
+                                      {getOptionMetadata(option.id, service.id).supportsPercentMarkup && (
+                                        <>
+                                          <span className="text-sm text-muted-foreground ml-1">%</span>
+                                          <Input
+                                            aria-label={`Percent markup for ${option.label}`}
+                                            type="number"
+                                            value={getPricePercent(service.id, option.id) || ''}
+                                            onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
+                                            placeholder="0"
+                                            className="h-10 w-20 text-base text-right"
+                                          />
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap">Permit</span>
+                                      <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <Input
+                                        aria-label={`Permit price for ${option.label}`}
+                                        type="number"
+                                        value={getPermitPrice(service.id, option.id) || ''}
+                                        onChange={(e) => setPermitPrice(service.id, option.id, Number(e.target.value))}
+                                        placeholder="0"
+                                        className="h-9 w-24 text-base text-right"
+                                      />
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -352,38 +368,51 @@ export default function VendorCatalog() {
                                     </div>
                                     {subEnabled && (
                                       <div
-                                        className="flex items-center gap-1.5 shrink-0"
+                                        className="flex flex-col items-end gap-1 shrink-0"
                                         onClick={(e) => e.stopPropagation()}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onPointerDown={(e) => e.stopPropagation()}
                                       >
-                                        <span className="text-sm text-muted-foreground">$</span>
-                                        <Input
-                                          aria-label={`Price for ${subOpt.label}`}
-                                          type="number"
-                                          value={subPrice || ''}
-                                          onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
-                                          placeholder="0"
-                                          className="h-9 w-20 text-sm text-right"
-                                        />
-                                        {/* Dual $ / % pricing on sub-options flagged
-                                            supportsPercentMarkup in OPTION_METADATA.
-                                            Currently low_e + casement; add more by flag-flip,
-                                            not code branch. Rod directives kratos msgs
-                                            1776659189645 + 1776659949844. */}
-                                        {getOptionMetadata(subOpt.id, service.id).supportsPercentMarkup && (
-                                          <>
-                                            <span className="text-sm text-muted-foreground ml-1">%</span>
-                                            <Input
-                                              aria-label={`Percent markup for ${subOpt.label}`}
-                                              type="number"
-                                              value={getPricePercent(service.id, subOpt.id) || ''}
-                                              onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
-                                              placeholder="0"
-                                              className="h-9 w-16 text-sm text-right"
-                                            />
-                                          </>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm text-muted-foreground">$</span>
+                                          <Input
+                                            aria-label={`Price for ${subOpt.label}`}
+                                            type="number"
+                                            value={subPrice || ''}
+                                            onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
+                                            placeholder="0"
+                                            className="h-9 w-20 text-sm text-right"
+                                          />
+                                          {/* Dual $ / % pricing on sub-options flagged
+                                              supportsPercentMarkup in OPTION_METADATA.
+                                              Currently low_e + casement; add more by flag-flip,
+                                              not code branch. Rod directives kratos msgs
+                                              1776659189645 + 1776659949844. */}
+                                          {getOptionMetadata(subOpt.id, service.id).supportsPercentMarkup && (
+                                            <>
+                                              <span className="text-sm text-muted-foreground ml-1">%</span>
+                                              <Input
+                                                aria-label={`Percent markup for ${subOpt.label}`}
+                                                type="number"
+                                                value={getPricePercent(service.id, subOpt.id) || ''}
+                                                onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
+                                                placeholder="0"
+                                                className="h-9 w-16 text-sm text-right"
+                                              />
+                                            </>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs text-muted-foreground whitespace-nowrap">Permit $</span>
+                                          <Input
+                                            aria-label={`Permit price for ${subOpt.label}`}
+                                            type="number"
+                                            value={getPermitPrice(service.id, subOpt.id) || ''}
+                                            onChange={(e) => setPermitPrice(service.id, subOpt.id, Number(e.target.value))}
+                                            placeholder="0"
+                                            className="h-9 w-20 text-sm text-right"
+                                          />
+                                        </div>
                                       </div>
                                     )}
                                   </div>
