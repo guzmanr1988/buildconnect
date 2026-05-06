@@ -24,6 +24,14 @@ import {
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
+// Apex-only mode — Rodolfo 2026-05-06: solo Apex on prod marketplace
+// while we test the chain end-to-end before opening to other vendors.
+// Flip APEX_ONLY_MODE to false (or delete the guard lines below) to
+// restore multi-vendor matching with no other code changes.
+const APEX_ONLY_MODE = true
+const APEX_MOCK_ID = 'v-1'
+const APEX_REAL_UUID = 'fc0d8ff3-cc1c-4101-a4b3-068594753bbf'
+
 export function VendorComparePage() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
@@ -58,6 +66,7 @@ export function VendorComparePage() {
   const featuredVendors = useMemo(() => {
     // Mock vendors: full PRODUCT-IS-GOD checks (catalog pricing required).
     const mockFiltered = MOCK_VENDORS.filter((v) => {
+      if (APEX_ONLY_MODE && v.id !== APEX_MOCK_ID) return false
       if (v.status !== 'active') return false
       if (cartCategories.size > 0) {
         const covers = v.service_categories.some((c) => cartCategories.has(c))
@@ -81,6 +90,7 @@ export function VendorComparePage() {
     // Real-auth vendors: category + distance filter only (no MOCK_CATALOG check).
     // Pricing is fetched from Supabase catalog per-UUID; PRODUCT-IS-GOD applied post-load via displayVendors.
     const realFiltered = realVendors.filter((v) => {
+      if (APEX_ONLY_MODE && v.id !== APEX_REAL_UUID) return false
       if (cartCategories.size > 0) {
         const cats = v.service_categories ?? []
         const covers = cats.some((c) => cartCategories.has(c))
