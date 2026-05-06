@@ -319,6 +319,7 @@ export function RoofingWizard({
         onClose={() => setWizardOpen(false)}
         defaultAddress={selectedAddress?.full ?? ''}
         onComplete={handleWizardComplete}
+        flowPath={flowPath}
       />
 
       <CardSlideWizard

@@ -292,9 +292,10 @@ interface Props {
   onClose: () => void
   defaultAddress: string
   onComplete: (result: RoofWizardResult) => void
+  flowPath?: 'full_replacement' | 'addons_only' | null
 }
 
-export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete }: Props) {
+export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState(defaultAddress)
@@ -497,47 +498,49 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     </div>
                   )}
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <Layers className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Material Order
-                          </span>
+                    {flowPath !== 'addons_only' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <Layers className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Material Order
+                            </span>
+                          </div>
+                          {(() => {
+                            const { pitchedWaste } = computeRoofTotal({
+                              pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
+                              flatAreaSqft: Math.round(finalFlatAreaSqft),
+                              includeFlat,
+                            })
+                            const pitchedSquares = Math.ceil(pitchedWaste / 100)
+                            return (
+                              <>
+                                <p className="text-xl font-bold text-foreground">
+                                  {pitchedWaste.toLocaleString()}{' '}
+                                  <span className="text-sm font-normal text-muted-foreground">sqft ({pitchedSquares} squares)</span>
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste
+                                </p>
+                              </>
+                            )
+                          })()}
                         </div>
-                        {(() => {
-                          const { pitchedWaste } = computeRoofTotal({
-                            pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
-                            flatAreaSqft: Math.round(finalFlatAreaSqft),
-                            includeFlat,
-                          })
-                          const pitchedSquares = Math.ceil(pitchedWaste / 100)
-                          return (
-                            <>
-                              <p className="text-xl font-bold text-foreground">
-                                {pitchedWaste.toLocaleString()}{' '}
-                                <span className="text-sm font-normal text-muted-foreground">sqft ({pitchedSquares} squares)</span>
-                              </p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste
-                              </p>
-                            </>
-                          )
-                        })()}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <Ruler className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Roof Pitch
-                          </span>
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <Ruler className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Roof Pitch
+                            </span>
+                          </div>
+                          <p className="text-xl font-bold text-foreground">
+                            {showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
+                          </p>
                         </div>
-                        <p className="text-xl font-bold text-foreground">
-                          {showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
-                        </p>
                       </div>
-                    </div>
-                    <div className="border-t pt-3">
+                    )}
+                    <div className={flowPath === 'addons_only' ? '' : 'border-t pt-3'}>
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <Ruler className="h-3.5 w-3.5 text-primary" />
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -552,7 +555,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         Used for gutter, fascia, and soffit estimates
                       </p>
                     </div>
-                    {measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
+                    {flowPath !== 'addons_only' && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
                       <div className="border-t pt-3 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -589,7 +592,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
                       </div>
                     )}
-                    {(() => {
+                    {flowPath !== 'addons_only' && (() => {
                       const { totalSqft, totalSquares } = computeRoofTotal({
                         pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
                         flatAreaSqft: Math.round(finalFlatAreaSqft),
@@ -672,7 +675,9 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
           {step === 3 && (
             <div className="space-y-4">
               <div>
-                <p className="text-sm font-semibold text-foreground mb-0.5">What type of roof are you replacing?</p>
+                <p className="text-sm font-semibold text-foreground mb-0.5">
+                  {flowPath === 'addons_only' ? 'What is your existing roof?' : 'What type of roof are you replacing?'}
+                </p>
                 <p className="text-[13px] text-muted-foreground mb-3">
                   Pick the main material. Add Flat Roof if you also have a flat section.
                 </p>
