@@ -7,7 +7,7 @@ import type { Vendor, ServiceCategory } from '@/types'
 // UUIDs already represented in MOCK_VENDORS — skip to avoid duplicates.
 const DEMO_UUIDS = new Set(Object.values(DEMO_VENDOR_UUID_BY_MOCK_ID))
 
-export function useRealVendors(): Vendor[] {
+export function useRealVendors(includeUuids?: Set<string>): Vendor[] {
   const [vendors, setVendors] = useState<Vendor[]>([])
 
   useEffect(() => {
@@ -19,7 +19,7 @@ export function useRealVendors(): Vendor[] {
       .then(({ data }) => {
         if (!data) return
         const mapped: Vendor[] = data
-          .filter((row) => !DEMO_UUIDS.has(row.id as string))
+          .filter((row) => !DEMO_UUIDS.has(row.id as string) || !!includeUuids?.has(row.id as string))
           .filter((row) => !!(row.company as string | null))
           .map((row) => ({
             id: row.id as string,
