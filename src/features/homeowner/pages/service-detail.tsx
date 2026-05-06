@@ -43,7 +43,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
@@ -1034,7 +1033,14 @@ export function ServiceDetailPage() {
           </label>
           <Select value={addressKey} onValueChange={(value) => setAddressKey(value ?? '')}>
             <SelectTrigger id="address-select" className="h-11 text-sm">
-              <SelectValue placeholder="Select a property" />
+              <span
+                className={cn(
+                  'flex-1 text-left truncate',
+                  !selectedAddress.full && !selectedAddress.label && 'text-muted-foreground'
+                )}
+              >
+                {selectedAddress.full || selectedAddress.label || 'Select a property'}
+              </span>
             </SelectTrigger>
             <SelectContent>
               {addressOptions.map((opt) => (
