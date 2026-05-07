@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CardSlideWizard } from './card-slide-wizard'
 import { MetalRoofConfigurator, type MetalRoofSelection } from './metal-roof-configurator'
+import { ShingleColorPicker } from './shingle-color-picker'
 import { RoofMeasurementWizard, type RoofWizardResult } from './roof-measurement-wizard'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
@@ -74,9 +75,10 @@ function computeVisibleSteps(flowPath: FlowPath | null, selections: Selections):
     return hasLinearFt ? [1, 2, 6, 7, 9, 10] : [1, 2, 6, 9, 10]
   }
   const hasMetal = (selections['material'] ?? []).includes('metal')
+  const hasShingle = (selections['material'] ?? []).includes('shingle')
   const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
   const steps = [1, 2, 3, 4]
-  if (hasMetal) steps.push(5)
+  if (hasMetal || hasShingle) steps.push(5)
   steps.push(6)
   if (hasLinearFt) steps.push(7)
   steps.push(8, 9, 10)
@@ -94,7 +96,10 @@ function getNextStep(step: number, selections: Selections, path: FlowPath | null
     if (step === 7) return 9
   }
   const next = step + 1
-  if (next === 5 && !(selections['material'] ?? []).includes('metal')) return 6
+  if (next === 5) {
+    const mats = selections['material'] ?? []
+    if (!mats.includes('metal') && !mats.includes('shingle')) return 6
+  }
   if (next === 7) {
     const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
     if (!hasLinearFt) return 8
@@ -116,7 +121,10 @@ function getPrevStep(step: number, selections: Selections, path: FlowPath | null
     const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
     if (!hasLinearFt) return 6
   }
-  if (prev === 5 && !(selections['material'] ?? []).includes('metal')) return 4
+  if (prev === 5) {
+    const mats = selections['material'] ?? []
+    if (!mats.includes('metal') && !mats.includes('shingle')) return 4
+  }
   return prev
 }
 
@@ -152,6 +160,9 @@ export function RoofingWizard({
   )
   const [metalRoofSelection, setMetalRoofSelection] = useState<MetalRoofSelection>(
     (editItem?.metalRoofSelection as MetalRoofSelection) || { color: '', roofSize: '' }
+  )
+  const [shingleColor, setShingleColor] = useState<string>(
+    (editItem?.shingleColor as string) || ''
   )
   const [roofMeasurement, setRoofMeasurement] = useState<{
     areaSqft: number; pitch: string; address: string
@@ -257,6 +268,7 @@ export function RoofingWizard({
       selections,
       ...(flowPath && { flowPath }),
       ...(metalRoofSelection.color && { metalRoofSelection }),
+      ...(shingleColor && { shingleColor }),
       ...(roofMeasurement && { roofMeasurement }),
       ...(roofPermit && { roofPermit }),
       ...(roofPermit === 'no' && waiverAcknowledged && waiverName.trim().length >= 2 && {
@@ -303,6 +315,7 @@ export function RoofingWizard({
   const selectedServiceType = (selections['service_type'] ?? [])[0] ?? null
   const selectedAddons = selections['addons'] ?? []
   const metalSelected = selectedMaterials.includes('metal')
+  const shingleSelected = selectedMaterials.includes('shingle')
   const linearFtAddonIds = ADDON_LINEAR_FT_IDS.filter((id) => selectedAddons.includes(id))
 
   const visibleAddonOptions = addonsGroup.options.filter((opt) =>
@@ -381,7 +394,8 @@ export function RoofingWizard({
           (step === 2 && !roofMeasurement) ||
           (step === 3 && !selectedServiceType) ||
           (step === 4 && selectedMaterials.length === 0) ||
-          (step === 5 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
+          (step === 5 && metalSelected && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
+          (step === 5 && shingleSelected && !shingleColor) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
           (step === 8 && roofPermit === null) ||
@@ -621,7 +635,7 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S5 — Metal Config */}
+        {/* S5 — Material Config (metal + shingle render side-by-side when both picked) */}
         {step === 5 && metalSelected && (
           <AnimatePresence>
             <MetalRoofConfigurator
@@ -637,6 +651,14 @@ export function RoofingWizard({
                   }
                 }
               }}
+            />
+          </AnimatePresence>
+        )}
+        {step === 5 && shingleSelected && (
+          <AnimatePresence>
+            <ShingleColorPicker
+              selectedColor={shingleColor}
+              onChange={(color) => setShingleColor(color)}
             />
           </AnimatePresence>
         )}

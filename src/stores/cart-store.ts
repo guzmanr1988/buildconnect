@@ -36,6 +36,11 @@ export interface CartItem {
   doorSelections?: ConfiguratorEntry[]
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
   metalRoofSelection?: { color: string; roofSize: string }
+  // Architectural Shingle color id from GAF Timberline HDZ palette. Optional;
+  // populated when the homeowner picks Shingle in the roof wizard. Sibling of
+  // metalRoofSelection (different shape — shingle has color only, area is
+  // measured by the wizard, not configurator-entered).
+  shingleColor?: string
   // Roof measurement wizard output — area + pitch captured before manual config.
   // Stored regardless of material so pitch is preserved for all material types.
   roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean }
