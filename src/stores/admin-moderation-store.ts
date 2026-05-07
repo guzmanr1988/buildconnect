@@ -48,6 +48,14 @@ interface AdminModerationState {
   // reload).
   demoDataHidden: boolean
   setDemoDataHidden: (hidden: boolean) => void
+  // ISO timestamp set when Clear Demo Data fires; null when never cleared
+  // or after Restore Demo. Read by useProjectsStore.hydrateFromSupabase
+  // (and any future hydrate path) to skip server-side row replay so the
+  // wipe stays wiped across page reload + role switch. Demo-mode-only
+  // gate; Tranche-2 will swap for service-role hard-delete or soft-delete
+  // column.
+  demoClearedAt: string | null
+  setDemoClearedAt: (iso: string | null) => void
   suspendHomeowner: (id: string) => void
   reactivateHomeowner: (id: string) => void
   getHomeownerStatus: (id: string, defaultStatus: HomeownerStatus) => HomeownerStatus
@@ -77,6 +85,9 @@ export const useAdminModerationStore = create<AdminModerationState>()(
 
       demoDataHidden: false,
       setDemoDataHidden: (hidden) => set({ demoDataHidden: hidden }),
+
+      demoClearedAt: null,
+      setDemoClearedAt: (iso) => set({ demoClearedAt: iso }),
 
       suspendHomeowner: (id) =>
         set((state) => ({

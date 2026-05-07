@@ -4,6 +4,7 @@ import type { CartItem } from './cart-store'
 import { useCartStore } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
 import { useActivityLogStore } from './activity-log-store'
+import { useAdminModerationStore } from './admin-moderation-store'
 import { supabase } from '@/lib/supabase'
 
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
@@ -316,6 +317,15 @@ export const useProjectsStore = create<ProjectsState>()(
 
       hydrateFromSupabase: async (userUuid, role) => {
         set({ _userUuid: userUuid })
+
+        // Clear Demo sentinel — when admin sets demoClearedAt, every role's
+        // hydrate path skips the server replay so the wipe stays wiped
+        // across reload + role switch. Demo-mode-only gate; production-
+        // launch swaps this for service-role hard-delete or soft-delete.
+        // Architecture-invariant-at-layer-boundary: same flag, every role.
+        if (useAdminModerationStore.getState().demoClearedAt) {
+          return
+        }
 
         // 1. Load rows from Supabase scoped to this user's role.
         let query = supabase.from('sent_projects').select('*')
