@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { formatProjectTitle } from '@/lib/format-project-title'
 import type { CartItem } from '@/stores/cart-store'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
 
@@ -481,7 +482,7 @@ export function CartPage() {
                   </div>
                   <div>
                     <h3 className="text-[15px] font-semibold text-foreground">
-                      {item.serviceName}
+                      {formatProjectTitle(item)}
                     </h3>
                     {item.address && (
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
