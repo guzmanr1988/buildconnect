@@ -17,3 +17,35 @@ export function computeGutterTotalLinFt(
   if (!config) return perimeterFt
   return perimeterFt + config.drops * GUTTER_DROP_FT_BY_FLOORS[config.floors]
 }
+
+// Per-material repair area resolver — single SoT for repair_<material> sqft
+// pricing. Used by vendor-compare totals (lib/api/pricing.ts) AND booking
+// confirmation line-items (homeowner/pages/booking-confirmation.tsx) so the
+// numbers shown on /cart and /booking-confirmation reconcile per Math-is-god.
+//
+// Per Rodolfo verdict 2026-05-07 (option iii): each repair_<material> line
+// bills the vendor's per-sqft rate against that material's existing area
+// measurement.
+export type RoofRepairItemShape = {
+  roofMeasurement?: { areaSqft?: number; pitchedAreaSqft?: number; flatAreaSqft?: number }
+  metalRoofSelection?: { roofSize?: string }
+}
+
+export function isRepairOption(optionId: string): boolean {
+  return optionId.startsWith('repair_')
+}
+
+export function resolveRepairAreaSqft(item: RoofRepairItemShape, optionId: string): number {
+  const rm = item.roofMeasurement
+  if (optionId === 'repair_flat_roof') {
+    return rm?.flatAreaSqft ?? rm?.areaSqft ?? 0
+  }
+  if (optionId === 'repair_metal' || optionId === 'repair_aluminum') {
+    const metalSqft = item.metalRoofSelection?.roofSize
+      ? Number(item.metalRoofSelection.roofSize) * 100
+      : 0
+    if (metalSqft > 0) return metalSqft
+    return rm?.pitchedAreaSqft ?? rm?.areaSqft ?? 0
+  }
+  return rm?.pitchedAreaSqft ?? rm?.areaSqft ?? 0
+}

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
-import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
+import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import type { CartItem } from '@/stores/cart-store'
 
 /*
@@ -148,41 +148,22 @@ export function computeVendorTotal(
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)
         } else if (meta.priceUnit === 'sqft') {
-          // Per-material repair rates (option iii): each repair_<material>
-          // line bills vendor's $/sqft rate × that material's existing area
-          // measurement. repair_flat_roof → flatAreaSqft. repair_metal /
-          // repair_aluminum → metalRoofSelection.roofSize×100 if captured,
-          // else pitched/areaSqft fallback. All others (shingle, barrel,
-          // terracotta) → pitchedAreaSqft, areaSqft fallback.
-          let sqft: number
-          if (optionId.startsWith('repair_')) {
-            const rm = item.roofMeasurement
-            if (optionId === 'repair_flat_roof') {
-              sqft = rm?.flatAreaSqft ?? rm?.areaSqft ?? 0
-            } else if (optionId === 'repair_metal' || optionId === 'repair_aluminum') {
-              const metalSqft = item.metalRoofSelection?.roofSize
-                ? Number(item.metalRoofSelection.roofSize) * 100
-                : 0
-              sqft = metalSqft > 0
-                ? metalSqft
-                : (rm?.pitchedAreaSqft ?? rm?.areaSqft ?? 0)
-            } else {
-              sqft = rm?.pitchedAreaSqft ?? rm?.areaSqft ?? 0
-            }
-          } else {
-            // Resolve sqft source per cart-item shape:
-            // 1. customSizeSqft[optionId] — per-option-id sqft (pool size custom,
-            //    pool floor surfaces; sibling sqft values on the same cart item).
-            // 2. item.areaSqft — single satellite-measured area (driveways +
-            //    pergolas; one area per cart item, used for whichever option is
-            //    flagged sqft, e.g. square_concrete in driveways).
-            // 3. legacy roofMeasurement.areaSqft — insulation + old persisted
-            //    roof items that used per-sqft pricing before the per-square switch.
-            sqft = item.customSizeSqft?.[optionId]
-              ?? item.areaSqft
-              ?? item.roofMeasurement?.areaSqft
-              ?? 0
-          }
+          // Per-material repair lines route through the shared resolver
+          // so /booking-confirmation reconciles with vendor-compare totals
+          // (Math-is-god + format-SoT-via-shared-helper).
+          //
+          // Non-repair sqft options use the cart-shape fallback chain:
+          // 1. customSizeSqft[optionId] — per-option-id sqft (pool size,
+          //    pool floor surfaces; sibling sqft values on the same item).
+          // 2. item.areaSqft — single satellite-measured area (driveways +
+          //    pergolas; whichever option is sqft-priced for that service).
+          // 3. roofMeasurement.areaSqft — insulation + legacy roof items.
+          const sqft = isRepairOption(optionId)
+            ? resolveRepairAreaSqft(item, optionId)
+            : (item.customSizeSqft?.[optionId]
+                ?? item.areaSqft
+                ?? item.roofMeasurement?.areaSqft
+                ?? 0)
           totalCents += basePrice * sqft
         } else if (meta.priceUnit === 'linear_ft') {
           // Resolve linear ft source: roofAddonLinearFt (existing roofing
