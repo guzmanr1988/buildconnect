@@ -11,9 +11,11 @@ import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { SERVICE_CATALOG } from '@/lib/constants'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { cn } from '@/lib/utils'
+import type { CartItem } from '@/stores/cart-store'
 import type { Lead, LeadStatus } from '@/types'
 
 const statusTimeline: Record<string, { label: string; time: string; status: LeadStatus }[]> = {
@@ -478,20 +480,26 @@ export function AppointmentStatusPage() {
                 />
               )}
 
-              {/* Pack items — scoped to the project, belongs here. */}
+              {/* Project Items — full itemized breakdown when sentProject
+                  is available (cart-created path). Falls back to the
+                  legacy pack_items badge list for MOCK_LEADS fixtures. */}
               <div className="mt-2 border-t border-border pt-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Project Pack
+                  Project Items
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(lead.pack_items).map(([, items]) =>
-                    items.map((item) => (
-                      <Badge key={item} variant="secondary" className="text-[10px]">
-                        {item.replace(/_/g, ' ')}
-                      </Badge>
-                    ))
-                  )}
-                </div>
+                {sentProject?.item ? (
+                  <ProjectItemsList item={sentProject.item} />
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(lead.pack_items).map(([, items]) =>
+                      items.map((item) => (
+                        <Badge key={item} variant="secondary" className="text-[10px]">
+                          {item.replace(/_/g, ' ')}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -628,5 +636,96 @@ function DetailRow({
         <span className="font-medium text-foreground">{value}</span>
       </div>
     </div>
+  )
+}
+
+type ProjectItemRow = { label: string; detail?: string }
+
+function buildProjectItemRows(item: CartItem): ProjectItemRow[] {
+  const rows: ProjectItemRow[] = []
+  const service = SERVICE_CATALOG.find((s) => s.id === item.serviceId)
+  const humanize = (id: string) =>
+    id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+
+  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
+    const group = service?.optionGroups.find((g) => g.id === groupId)
+    for (const optId of optionIds) {
+      const option = group?.options.find((o) => o.id === optId)
+      const label = option?.label ?? humanize(optId)
+
+      const linearFt =
+        item.roofAddonLinearFt?.[optId] ?? item.addonLinearFt?.[optId]
+      const customSqft = item.customSizeSqft?.[optId]
+      const qty = item.selectionQuantities?.[optId]
+
+      let detail: string | undefined
+      if (linearFt !== undefined && linearFt > 0) {
+        detail = `${linearFt.toLocaleString()} ft`
+        if (optId === 'gutters' && item.gutterDropsConfig) {
+          const dc = item.gutterDropsConfig
+          detail += ` (+ ${dc.drops} drop${dc.drops === 1 ? '' : 's'} over ${dc.floors}fl)`
+        }
+      } else if (customSqft !== undefined && customSqft > 0) {
+        detail = `${customSqft.toLocaleString()} sqft`
+      } else if (qty !== undefined && qty > 0) {
+        detail = `Qty: ${qty}`
+      }
+      rows.push({ label, detail })
+    }
+  }
+
+  if (item.roofMeasurement && item.roofMeasurement.areaSqft > 0) {
+    const m = item.roofMeasurement
+    rows.push({
+      label: 'Roof Area',
+      detail: `${m.areaSqft.toLocaleString()} sqft (Pitch ${m.pitch})`,
+    })
+  }
+
+  const addonQty = item.addonQuantities ?? {}
+  const namedAddons: Array<[keyof typeof addonQty, string]> = [
+    ['ledCount', 'LED Lights'],
+    ['bubblerCount', 'Bubblers'],
+    ['laminarJets', 'Laminar Jets'],
+    ['waterfalls', 'Waterfalls'],
+  ]
+  for (const [key, label] of namedAddons) {
+    const n = addonQty[key]
+    if (typeof n === 'number' && n > 0) {
+      rows.push({ label, detail: `Qty: ${n}` })
+    }
+  }
+
+  if (item.roofPermit) {
+    rows.push({
+      label: 'Permit Pulled',
+      detail: item.roofPermit === 'yes' ? 'Yes' : 'No',
+    })
+  }
+
+  if (item.itemNotes && item.itemNotes.trim().length > 0) {
+    const trimmed = item.itemNotes.trim()
+    const trunc =
+      trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed
+    rows.push({ label: 'Notes', detail: trunc })
+  }
+
+  return rows
+}
+
+function ProjectItemsList({ item }: { item: CartItem }) {
+  const rows = buildProjectItemRows(item)
+  if (rows.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {rows.map((r, i) => (
+        <li key={`${r.label}-${i}`} className="flex items-start justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">{r.label}</span>
+          {r.detail && (
+            <span className="text-right font-medium text-foreground">{r.detail}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
