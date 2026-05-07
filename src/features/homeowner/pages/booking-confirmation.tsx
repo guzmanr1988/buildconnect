@@ -92,7 +92,7 @@ async function buildRoofingLineItems(
   let anyComputed = false
 
   for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
-    // service_type (replace/repair/inspection) is vendor-internal — not shown on
+    // service_type (replace/repair) is vendor-internal — not shown on
     // customer-facing breakdown per Rodolfo: "There is no replace cost just material"
     if (groupId === 'service_type') continue
     for (const optionId of optionIds) {

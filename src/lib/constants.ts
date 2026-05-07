@@ -7,7 +7,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     badge: 'Popular',
     badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     tagline: 'Protect your home with premium roofing solutions',
-    description: 'Complete residential roofing services — from full replacement to repairs and inspections.',
+    description: 'Complete residential roofing services — from full replacement to repairs.',
     features: ['Hurricane-Rated', 'Energy Efficient', '25-Year Warranty'],
     stat: { label: 'Projects Completed', value: '2,847' },
     optionGroups: [
@@ -19,7 +19,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         options: [
           { id: 'replace', label: 'Full Replacement' },
           { id: 'repair', label: 'Repair' },
-          { id: 'inspection', label: 'Inspection Only' },
         ],
       },
       {

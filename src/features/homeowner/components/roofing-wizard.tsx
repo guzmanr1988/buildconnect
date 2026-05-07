@@ -790,7 +790,7 @@ export function RoofingWizard({
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">No permit needed</p>
-                <p className="text-xs text-muted-foreground mt-0.5">For repairs and inspections. Payment is cash, check, or wire transfer only.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">For repairs. Payment is cash, check, or wire transfer only.</p>
               </div>
             </button>
 
