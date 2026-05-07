@@ -90,7 +90,7 @@ function usePlacesAutocomplete(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type RoofMaterialKey = 'shingle' | 'barrel_tile' | 'metal' | 'flat_roof'
+export type RoofMaterialKey = 'shingle' | 'barrel_tile' | 'metal' | 'aluminum' | 'flat_roof'
 
 export interface RoofWizardResult {
   address: string
@@ -259,6 +259,7 @@ const MATERIAL_OPTIONS: MaterialOption[] = [
   { key: 'metal',      label: 'Metal',       sub: 'Standing seam, 50+ years' },
   { key: 'shingle',    label: 'Shingle',     sub: 'Architectural, 25–30 years' },
   { key: 'barrel_tile', label: 'Tile',       sub: 'Barrel tile, classic FL look' },
+  { key: 'aluminum',   label: 'Aluminum',    sub: 'Lightweight, corrosion-resistant' },
 ]
 
 // Flat Roof is a separate checkbox-style card — selectable alone OR alongside one pitched material

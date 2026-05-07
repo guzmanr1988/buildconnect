@@ -35,6 +35,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan' },
           { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan' },
           { id: 'metal', label: 'Standing Seam Metal', description: 'Maximum durability, 50+ years' },
+          { id: 'aluminum', label: 'Aluminum', description: 'Lightweight, corrosion-resistant' },
           { id: 'terracotta', label: 'Terracotta Clay', description: 'Premium Mediterranean style' },
           { id: 'flat_roof', label: 'Flat Roof', description: 'Commercial-style flat roofing system' },
         ],

@@ -52,6 +52,7 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   metal: { priceUnit: 'square' },
   shingle: { priceUnit: 'square' },
   barrel_tile: { priceUnit: 'square' },
+  aluminum: { priceUnit: 'square' },
   flat_roof: { priceUnit: 'square' },
   // Roofing addons — vendor enters $/lin ft; quantity = homeowner's addon linear ft
   gutters: { priceUnit: 'linear_ft' },
