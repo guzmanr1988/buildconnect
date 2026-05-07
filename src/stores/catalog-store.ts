@@ -845,7 +845,13 @@ export const useCatalogStore = create<CatalogState>()(
       // added); bump catalog-store version too so any in-flight
       // persisted catalog state from the brief #117 window evicts
       // cleanly alongside the vendor-store reshape.
-      version: 14,
+      //
+      // Ship — version bump 14→15 paired-edit: Rodolfo directive 2026-05-07
+      // — remove "Inspection Only" from roof wizard service_type group.
+      // Existing persisted v14 catalogs still serve the 3-option service
+      // type, so the wizard would render the dead option until the user
+      // re-hydrated. Version bump forces migrate() reset to bundled.
+      version: 15,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({

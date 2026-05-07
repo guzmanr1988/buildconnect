@@ -115,7 +115,7 @@ export function computeVendorTotal(
   for (const item of cartItems) {
     for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
       if (!optionIds || optionIds.length === 0) continue
-      // service_type (replace/repair/inspection) is vendor-internal cost context,
+      // service_type (replace/repair) is vendor-internal cost context,
       // not a customer-facing charge — excluded from homeowner-visible totals.
       if (item.serviceId === 'roofing' && groupId === 'service_type') continue
       hasSelections = true
