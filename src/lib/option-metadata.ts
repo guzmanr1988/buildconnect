@@ -60,6 +60,11 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   fascia_wood: { priceUnit: 'linear_ft' },
   soffit_metal: { priceUnit: 'linear_ft' },
   fascia_metal: { priceUnit: 'linear_ft' },
+  // Attic Insulation — vendor enters $/sqft. Area sourced from
+  // roofMeasurement.areaSqft (plain footprint from the roof wizard's
+  // satellite measurement). Per Rodolfo: same sqft as roof, not
+  // pitched-area or flat-area.
+  insulation: { priceUnit: 'sqft' },
   // Pool fence addon — perimeter linear ft, vendor enters $/lin ft. Unique to
   // pool service, no collision so safe in the global map.
   pool_fence: { priceUnit: 'linear_ft' },
