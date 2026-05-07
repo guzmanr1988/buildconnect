@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, DollarSign, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -462,11 +462,14 @@ export function AppointmentStatusPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <DetailRow icon={FileText} label="Project" value={lead.project} />
-              <DetailRow
-                icon={DollarSign}
-                label="Price"
-                value={`$${lead.value.toLocaleString()}`}
-              />
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Price
+                </p>
+                <p className="mt-1 text-3xl font-semibold text-foreground tabular-nums">
+                  ${lead.value.toLocaleString()}
+                </p>
+              </div>
               {vendor && (
                 <DetailRow
                   icon={FileText}
