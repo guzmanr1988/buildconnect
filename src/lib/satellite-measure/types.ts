@@ -12,7 +12,7 @@ export interface RoofingMeasurements {
   type: 'roofing'
   areaSqft: number
   pitch: string
-  material?: 'shingle' | 'barrel_tile' | 'metal' | 'flat_roof'
+  material?: 'shingle' | 'barrel_tile' | 'metal' | 'aluminum' | 'flat_roof'
   pitchedAreaSqft?: number
   flatAreaSqft?: number
   perimeterFt: number

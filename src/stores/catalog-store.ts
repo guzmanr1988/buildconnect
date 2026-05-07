@@ -846,12 +846,12 @@ export const useCatalogStore = create<CatalogState>()(
       // persisted catalog state from the brief #117 window evicts
       // cleanly alongside the vendor-store reshape.
       //
-      // Ship — version bump 14→15 paired-edit: Rodolfo directive 2026-05-07
-      // — remove "Inspection Only" from roof wizard service_type group.
-      // Existing persisted v14 catalogs still serve the 3-option service
-      // type, so the wizard would render the dead option until the user
-      // re-hydrated. Version bump forces migrate() reset to bundled.
-      version: 15,
+      // Ship — version bump 15→16 paired-edit: Rodolfo directive 2026-05-07
+      // — add "Aluminum" as 4th main-material option to Roof Measurement
+      // wizard + SERVICE_CATALOG.roofing.material. Existing persisted v15
+      // catalogs would render the 5-option roofing list (no aluminum) until
+      // re-hydration. Version bump forces migrate() reset to bundled.
+      version: 16,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
