@@ -339,7 +339,7 @@ export default function VendorCatalog() {
                         {group.options.filter(o => o.subGroups && o.subGroups.length > 0 && isOptionEnabled(service.id, group.id, o.id)).map((option) => (
                           option.subGroups?.map((subGroup) => (
                             <div key={subGroup.id} className="ml-4 mt-2 space-y-1.5">
-                              <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                              <p className="text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider">
                                 {subGroup.label}
                               </p>
                               {subGroup.options.map((subOpt) => {
@@ -370,7 +370,7 @@ export default function VendorCatalog() {
                                         {subEnabled && <Check className="h-2.5 w-2.5" />}
                                       </button>
                                       <span className={cn(
-                                        'text-base truncate',
+                                        'text-base md:text-xl truncate',
                                         subEnabled ? 'font-medium' : 'text-muted-foreground'
                                       )}>
                                         {subOpt.label}
