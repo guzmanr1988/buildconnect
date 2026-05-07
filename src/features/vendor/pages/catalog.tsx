@@ -229,14 +229,14 @@ export default function VendorCatalog() {
                         <span className="text-xs text-muted-foreground">flat fee for this service</span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
                         <Input
                           aria-label={`Permit price for ${service.name}`}
                           type="number"
                           value={getServicePermit(service.id) || ''}
                           onChange={(e) => setServicePermit(service.id, Number(e.target.value))}
                           placeholder="0"
-                          className="h-10 w-24 text-base text-right"
+                          className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
                         />
                       </div>
                     </div>
@@ -289,14 +289,14 @@ export default function VendorCatalog() {
                                     onPointerDown={(e) => e.stopPropagation()}
                                   >
                                     <div className="flex items-center gap-1.5">
-                                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                      <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
                                       <Input
                                         aria-label={`Price for ${option.label}`}
                                         type="number"
                                         value={price || ''}
                                         onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
                                         placeholder="0"
-                                        className="h-10 w-24 text-base text-right"
+                                        className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
                                       />
                                       {getOptionMetadata(option.id, service.id).priceUnit === 'square' && (
                                         <div className="flex flex-col">
@@ -316,14 +316,14 @@ export default function VendorCatalog() {
                                           future top-level option is flagged, the UX is ready. */}
                                       {getOptionMetadata(option.id, service.id).supportsPercentMarkup && (
                                         <>
-                                          <span className="text-sm text-muted-foreground ml-1">%</span>
+                                          <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
                                           <Input
                                             aria-label={`Percent markup for ${option.label}`}
                                             type="number"
                                             value={getPricePercent(service.id, option.id) || ''}
                                             onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
                                             placeholder="0"
-                                            className="h-10 w-20 text-base text-right"
+                                            className="h-10 w-20 text-base text-right md:h-12 md:w-28 md:text-lg md:px-4"
                                           />
                                         </>
                                       )}
@@ -384,14 +384,14 @@ export default function VendorCatalog() {
                                         onPointerDown={(e) => e.stopPropagation()}
                                       >
                                         <div className="flex items-center gap-1.5">
-                                          <span className="text-sm text-muted-foreground">$</span>
+                                          <span className="text-sm md:text-lg text-muted-foreground">$</span>
                                           <Input
                                             aria-label={`Price for ${subOpt.label}`}
                                             type="number"
                                             value={subPrice || ''}
                                             onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
                                             placeholder="0"
-                                            className="h-9 w-20 text-sm text-right"
+                                            className="h-9 w-20 text-sm text-right md:h-12 md:w-28 md:text-lg md:px-4"
                                           />
                                           {/* Dual $ / % pricing on sub-options flagged
                                               supportsPercentMarkup in OPTION_METADATA.
@@ -400,14 +400,14 @@ export default function VendorCatalog() {
                                               1776659189645 + 1776659949844. */}
                                           {getOptionMetadata(subOpt.id, service.id).supportsPercentMarkup && (
                                             <>
-                                              <span className="text-sm text-muted-foreground ml-1">%</span>
+                                              <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
                                               <Input
                                                 aria-label={`Percent markup for ${subOpt.label}`}
                                                 type="number"
                                                 value={getPricePercent(service.id, subOpt.id) || ''}
                                                 onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
                                                 placeholder="0"
-                                                className="h-9 w-16 text-sm text-right"
+                                                className="h-9 w-16 text-sm text-right md:h-12 md:w-24 md:text-lg md:px-4"
                                               />
                                             </>
                                           )}
