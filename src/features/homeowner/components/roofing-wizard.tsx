@@ -37,6 +37,25 @@ function metalRoofDisplaySquares(roofSize: string): number {
   return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n
 }
 
+function materialCardLabel(id: string, fallback: string): { primary: string; qualifier?: string } {
+  switch (id) {
+    case 'shingle':
+      return { primary: 'Shingle', qualifier: 'Architectural' }
+    case 'barrel_tile':
+      return { primary: 'Tile', qualifier: 'Barrel' }
+    case 'metal':
+      return { primary: 'Metal', qualifier: 'Standing Seam' }
+    case 'terracotta':
+      return { primary: 'Clay', qualifier: 'Terracotta' }
+    case 'aluminum':
+      return { primary: 'Aluminum' }
+    case 'flat_roof':
+      return { primary: 'Flat Roof' }
+    default:
+      return { primary: fallback }
+  }
+}
+
 type Selections = Record<string, string[]>
 
 interface RoofingWizardProps {
@@ -574,7 +593,14 @@ export function RoofingWizard({
                     {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
                   </div>
                   <div>
-                    <p className="text-base font-medium text-foreground">{opt.label}</p>
+                    <p className="text-foreground">
+                      <span className="text-xl font-semibold">{materialCardLabel(opt.id, opt.label).primary}</span>
+                      {materialCardLabel(opt.id, opt.label).qualifier && (
+                        <span className="ml-2 text-sm font-normal text-muted-foreground">
+                          {materialCardLabel(opt.id, opt.label).qualifier}
+                        </span>
+                      )}
+                    </p>
                     {opt.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                     )}
