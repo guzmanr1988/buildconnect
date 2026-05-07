@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import type { CartItem } from '@/stores/cart-store'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
+import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
 import { shouldAskProjectPermit } from '@/lib/permit-rules'
 import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
 
@@ -942,11 +943,12 @@ export function CartPage() {
                       metalRoofSelection={viewItem.metalRoofSelection}
                       roofAddonLinearFt={(viewItem as any).roofAddonLinearFt}
                       gutterDropsConfig={(viewItem as any).gutterDropsConfig}
-                      roofPermit={viewItem.roofPermit}
                       flowPath={(viewItem as any).flowPath}
                       className="bg-muted/30"
                     />
                   )}
+                  {/* Permit — project-level (cart-store), legacy per-item fallback. */}
+                  <PermitDisplayRow permit={projectPermit ?? viewItem.roofPermit} />
                   {/* Measured area — driveways + pergolas items with satellite measurement */}
                   {viewItem.areaSqft != null && (
                     <div className="rounded-xl border bg-muted/30 p-4" data-cart-item-sqft={viewItem.areaSqft}>

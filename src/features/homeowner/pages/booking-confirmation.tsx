@@ -60,6 +60,7 @@ const FLAT_ROOF_OPTION_ID = 'flat_roof'
 async function buildRoofingLineItems(
   item: CartItem,
   vendorMockId: string,
+  projectPermit?: 'yes' | 'no',
 ): Promise<PriceLineItem[] | null> {
   const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendorMockId]
   if (!uuid) return null
@@ -193,7 +194,12 @@ async function buildRoofingLineItems(
   //   customer YES + vendor has service permit set → "Permit" with dollar amount
   //   customer YES + vendor has no permit set      → "Permit — no price" with amount 0
   //   customer NO                                  → "Permit — no permit, no price" with amount 0
-  if (item.roofPermit === 'yes') {
+  // Project-level permit (PR #140 universalization) is the SoT; legacy
+  // per-item item.roofPermit is the fallback for cart entries persisted
+  // pre-PR-140. widen-reads-narrow-writes preserves Math-is-god across
+  // both shapes without dual-write at the wizard side.
+  const permitChoice: 'yes' | 'no' | undefined = projectPermit ?? (item.roofPermit as 'yes' | 'no' | undefined)
+  if (permitChoice === 'yes') {
     const permitCents = getPermitForItem(item, permitMap)
     if (permitCents > 0) {
       lines.push({
@@ -228,6 +234,7 @@ async function buildRoofingLineItems(
 export function BookingConfirmationPage() {
   const navigate = useNavigate()
   const removeItem = useCartStore((s) => s.removeItem)
+  const projectPermit = useCartStore((s) => s.projectPermit)
   const sendProject = useProjectsStore((s) => s.sendProject)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const profile = useAuthStore((s) => s.profile)
@@ -292,7 +299,7 @@ export function BookingConfirmationPage() {
           // Supabase catalog. Falls back to preset on error or missing data.
           let computedLineItems: PriceLineItem[] | undefined
           if (pendingItem.serviceId === 'roofing' && contractor.vendor_id) {
-            const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id)
+            const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined)
             if (built) computedLineItems = built
           } else if (contractor.vendor_id) {
             // PR #118 fix-forward — for non-roofing services, snapshot a
@@ -328,7 +335,10 @@ export function BookingConfirmationPage() {
           // auditing. Optional on the SentProject side, so undefined here
           // (e.g. unauthed-flow regression) just falls back to display-only
           // homeowner fields.
-          if ((pendingItem as any).roofPermit === 'no') {
+          // Cash-only flag: project-level projectPermit is SoT; legacy
+          // per-item roofPermit is the fallback for pre-PR-140 carts.
+          const permitChoice = projectPermit ?? (pendingItem as any).roofPermit
+          if (permitChoice === 'no') {
             setCashOnlyProject(pendingItem.serviceName)
           }
           const sentProjectId = sendProject(pendingItem, contractor, booking, homeowner, idDoc, profile?.id, computedLineItems)

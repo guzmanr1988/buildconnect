@@ -16,6 +16,7 @@ import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
+import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -457,18 +458,26 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   {/* Roof Spec — shown for roofing items only */}
                   {selectedItem.project_data.item.serviceId === 'roofing' && (() => {
                     const item = selectedItem.project_data.item as any
-                    const projectPermit = selectedItem.project_data.projectPermit
                     return (
                       <RoofSpecCard
                         roofMeasurement={item.roofMeasurement}
                         metalRoofSelection={item.metalRoofSelection}
                         roofAddonLinearFt={item.roofAddonLinearFt}
                         gutterDropsConfig={item.gutterDropsConfig}
-                        roofPermit={projectPermit ?? item.roofPermit}
                         flowPath={item.flowPath}
                       />
                     )
                   })()}
+
+                  {/* Permit — project-level, shown for any service when set.
+                      Reads sentProject snapshot first; falls back to legacy
+                      per-item roofPermit for entries persisted pre-PR-140. */}
+                  <PermitDisplayRow
+                    permit={
+                      selectedItem.project_data.projectPermit
+                        ?? (selectedItem.project_data.item as any).roofPermit
+                    }
+                  />
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
                     const pd = selectedItem.project_data

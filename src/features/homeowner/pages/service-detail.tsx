@@ -51,6 +51,7 @@ import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
+import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
@@ -188,6 +189,8 @@ export function ServiceDetailPage() {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
   const cartItems = useCartStore((s) => s.items)
+  const projectPermit = useCartStore((s) => s.projectPermit)
+  const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const cartCount = cartItems.length
   // Single-project-per-service-per-cart gate (kratos msg 1776669325145 Rod
   // pivot from state-reset approach). Before Add-to-Project fires, check if
@@ -1060,6 +1063,15 @@ export function ServiceDetailPage() {
           )}
         </div>
 
+        {/* Project-permit step — same shape + copy as roofing wizard step 8.
+            Inline configurator path (windows_doors / kitchen / bathroom);
+            wizards render PermitStepSection inside their step list. */}
+        <div className="mt-6 pt-6 border-t border-border/50">
+          <h3 className="text-base font-semibold text-foreground mb-1">{PERMIT_HEADING}</h3>
+          <p className="text-sm text-muted-foreground mb-3">{PERMIT_SUBTITLE}</p>
+          <PermitStepSection />
+        </div>
+
         {/* CTA */}
         <div className="mt-4 flex flex-col gap-3">
           <Button
@@ -1068,7 +1080,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || added || alreadyInCart}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }

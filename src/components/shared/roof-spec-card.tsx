@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { sqftToSquares } from '@/lib/option-metadata'
 import {
   ROOF_WASTE_FACTOR,
@@ -29,7 +28,6 @@ interface RoofSpecCardProps {
   metalRoofSelection?: MetalRoofSelection
   roofAddonLinearFt?: Record<string, number>
   gutterDropsConfig?: GutterDropsConfig
-  roofPermit?: 'yes' | 'no'
   flowPath?: 'full_replacement' | 'addons_only' | null
   className?: string
 }
@@ -47,12 +45,11 @@ export function RoofSpecCard({
   metalRoofSelection: mrs,
   roofAddonLinearFt: linFt,
   gutterDropsConfig,
-  roofPermit: permit,
   flowPath,
   className,
 }: RoofSpecCardProps) {
   const addonEntries = linFt ? Object.entries(linFt).filter(([, v]) => v > 0) : []
-  if (!rm && !mrs && !permit && addonEntries.length === 0) return null
+  if (!rm && !mrs && addonEntries.length === 0) return null
 
   const isAddonsOnly = flowPath === 'addons_only'
   const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0 && rm.includeFlat !== false
@@ -154,26 +151,6 @@ export function RoofSpecCard({
             </div>
           )
         })}
-        {permit && (
-          <div className="flex items-start gap-2 pt-0.5">
-            <span className="text-muted-foreground min-w-[72px]">Permit</span>
-            <div className="flex flex-col gap-1">
-              <Badge
-                variant="secondary"
-                className={`text-[10px] w-fit ${
-                  permit === 'yes'
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                }`}
-              >
-                {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
-              </Badge>
-              {permit === 'no' && (
-                <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
