@@ -68,6 +68,19 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   // Pool fence addon — perimeter linear ft, vendor enters $/lin ft. Unique to
   // pool service, no collision so safe in the global map.
   pool_fence: { priceUnit: 'linear_ft' },
+  // Per-material repair rates — vendor enters $/sqft. 6 distinct rows so
+  // vendors can price repair work per the underlying material being
+  // patched. Area source TBD pending Rodolfo verdict (full-roof footprint
+  // vs per-actual-repaired-sqft entered by homeowner). Per-service-scoped
+  // ids prefixed repair_ to avoid collision with the existing material
+  // option ids (shingle/metal/etc) which carry priceUnit:square for full-
+  // replacement billing.
+  repair_shingle: { priceUnit: 'sqft' },
+  repair_barrel_tile: { priceUnit: 'sqft' },
+  repair_metal: { priceUnit: 'sqft' },
+  repair_aluminum: { priceUnit: 'sqft' },
+  repair_terracotta: { priceUnit: 'sqft' },
+  repair_flat_roof: { priceUnit: 'sqft' },
 }
 
 // Per-service overrides — for option_ids that collide across services with
