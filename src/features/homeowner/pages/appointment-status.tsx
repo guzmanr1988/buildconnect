@@ -702,13 +702,12 @@ function buildProjectItemRows(
       detail: `${m.areaSqft.toLocaleString()} sqft (Pitch ${m.pitch})`,
     })
   }
-  // Project-level permit (PR1 of permit consolidation): prefer the
-  // sentProject.projectPermit snapshot; fall back to legacy per-item
-  // roofPermit for entries persisted before the consolidation. One row
-  // per project, not per item — but rendering on the roof item keeps
-  // continuity with the pre-consolidation surface.
+  // Project-level permit: prefer sentProject.projectPermit snapshot; fall
+  // back to legacy per-item roofPermit for entries persisted pre-PR-140.
+  // Permit is project-level not roofing-specific — render the row for any
+  // service when the choice is set.
   const permitChoice = projectPermit ?? item.roofPermit
-  if (permitChoice && item.serviceId === 'roofing') {
+  if (permitChoice) {
     rows.push({
       label: 'Permit Pulled',
       detail: permitChoice === 'yes' ? 'Yes' : 'No',

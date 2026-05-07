@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useCartStore, type ProjectPermitWaiver } from '@/stores/cart-store'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 // Standard project-permit step shape used by every wizard + inline
@@ -16,6 +17,34 @@ export function isProjectPermitValid(
   if (permit === 'yes') return true
   if (permit === 'no' && waiver?.acknowledged && waiver.signedName.trim().length >= 2) return true
   return false
+}
+
+// Read-only display row for parent surfaces (cart project-detail dialog,
+// admin project-detail-dialog, anywhere a snapshot is shown). Permit lives
+// at project level, not roofing-spec level, so this row sits at parent
+// contexts rather than inside RoofSpecCard.
+export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined | null }) {
+  if (!permit) return null
+  return (
+    <div className="rounded-xl border p-4 space-y-2">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Permit</h4>
+      <div className="flex flex-col gap-1">
+        <Badge
+          variant="secondary"
+          className={`text-[10px] w-fit ${
+            permit === 'yes'
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+          }`}
+        >
+          {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
+        </Badge>
+        {permit === 'no' && (
+          <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function PermitStepSection() {

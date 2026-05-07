@@ -142,9 +142,17 @@ export function useVendorLeadStages(): {
       email: p.homeowner?.email || '—',
       sq_ft: p.item?.roofMeasurement?.areaSqft ?? 0,
       service_category: (p.item?.serviceId ?? '') as Lead['service_category'],
-      // For roofing: permit comes from wizard-captured roofPermit field (not selections).
-      // Legacy non-roofing (windows/doors etc): permit is derived from selections.
-      permit_choice: (p.item as any)?.roofPermit ? (p.item as any).roofPermit === 'yes' : Object.values(p.item?.selections ?? {}).flat().includes('permit'),
+      // Project-level permit (PR #140): sentProject.projectPermit is the SoT;
+      // legacy per-item roofPermit is the fallback for snapshots persisted
+      // pre-PR-140; legacy non-roofing fallback (windows/doors selections-derived)
+      // remains for the windows_doors scope group removed in this same PR.
+      permit_choice: (() => {
+        const projectPermit = (p as any).projectPermit as 'yes' | 'no' | undefined
+        if (projectPermit) return projectPermit === 'yes'
+        const legacyRoofPermit = (p.item as any)?.roofPermit as 'yes' | 'no' | undefined
+        if (legacyRoofPermit) return legacyRoofPermit === 'yes'
+        return Object.values(p.item?.selections ?? {}).flat().includes('permit')
+      })(),
       financing: Object.values(p.item?.selections ?? {}).flat().includes('financed'),
       pack_items: p.item?.selections ?? {},
       slot: p.booking?.date ? `${p.booking.date}T${p.booking.time ?? '09:00'}` : p.sentAt,
