@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Download, Fence } from 'lucide-react'
@@ -110,6 +110,14 @@ export function CartPage() {
   const SENT_COLLAPSE_THRESHOLD = 4
   const shouldCollapseSent = sentProjects.length >= SENT_COLLAPSE_THRESHOLD
   const [sentExpanded, setSentExpanded] = useState(false)
+
+  // Render cart cards newest-first (descending by addedAt). Display-only —
+  // does not mutate the underlying store order. Stable-ref via useMemo per
+  // zustand_selector_stable_reference discipline.
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => b.addedAt.localeCompare(a.addedAt)),
+    [items],
+  )
 
   const openCancelDialog = (leadId: string) => {
     console.log('[homeowner-cancel] OPEN_FIRED layer=sync leadId=', leadId)
@@ -508,7 +516,7 @@ export function CartPage() {
 
       {/* Cart items */}
       <div className="flex flex-col gap-4">
-        {items.map((item, i) => {
+        {sortedItems.map((item, i) => {
           const service = SERVICE_CATALOG.find((s) => s.id === item.serviceId)
           const Icon = SERVICE_ICONS[item.serviceId] || ShoppingCart
           const gradient = ICON_GRADIENTS[item.serviceId] || 'from-blue-400 to-blue-600'
