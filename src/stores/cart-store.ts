@@ -41,6 +41,12 @@ export interface CartItem {
   // metalRoofSelection (different shape — shingle has color only, area is
   // measured by the wizard, not configurator-entered).
   shingleColor?: string
+  // Tile profile + color picked when the homeowner selects a tile material
+  // (barrel_tile or terracotta) in the roof wizard. tileType is the silhouette
+  // (Flat / Spanish / Mission); tileColor is an id from TILE_ROOF_COLORS in
+  // tile-roof-configurator.tsx. Both required when a tile material is picked.
+  tileType?: 'flat' | 'spanish' | 'mission'
+  tileColor?: string
   // Roof measurement wizard output — area + pitch captured before manual config.
   // Stored regardless of material so pitch is preserved for all material types.
   roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean }

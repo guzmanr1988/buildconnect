@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CardSlideWizard } from './card-slide-wizard'
 import { MetalRoofConfigurator, type MetalRoofSelection } from './metal-roof-configurator'
 import { ShingleColorPicker } from './shingle-color-picker'
+import { TileRoofConfigurator, type TileRoofSelection, type TileType } from './tile-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult } from './roof-measurement-wizard'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
@@ -77,9 +78,10 @@ function computeVisibleSteps(flowPath: FlowPath | null, selections: Selections):
   }
   const hasMetal = (selections['material'] ?? []).includes('metal')
   const hasShingle = (selections['material'] ?? []).includes('shingle')
+  const hasTile = (selections['material'] ?? []).includes('barrel_tile') || (selections['material'] ?? []).includes('terracotta')
   const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
   const steps = [1, 2, 3, 4]
-  if (hasMetal || hasShingle) steps.push(5)
+  if (hasMetal || hasShingle || hasTile) steps.push(5)
   steps.push(6)
   if (hasLinearFt) steps.push(7)
   steps.push(8, 9, 10)
@@ -99,7 +101,7 @@ function getNextStep(step: number, selections: Selections, path: FlowPath | null
   const next = step + 1
   if (next === 5) {
     const mats = selections['material'] ?? []
-    if (!mats.includes('metal') && !mats.includes('shingle')) return 6
+    if (!mats.includes('metal') && !mats.includes('shingle') && !mats.includes('barrel_tile') && !mats.includes('terracotta')) return 6
   }
   if (next === 7) {
     const hasLinearFt = ADDON_LINEAR_FT_IDS.some((id) => (selections['addons'] ?? []).includes(id))
@@ -124,7 +126,7 @@ function getPrevStep(step: number, selections: Selections, path: FlowPath | null
   }
   if (prev === 5) {
     const mats = selections['material'] ?? []
-    if (!mats.includes('metal') && !mats.includes('shingle')) return 4
+    if (!mats.includes('metal') && !mats.includes('shingle') && !mats.includes('barrel_tile') && !mats.includes('terracotta')) return 4
   }
   return prev
 }
@@ -169,6 +171,10 @@ export function RoofingWizard({
   const [shingleColor, setShingleColor] = useState<string>(
     (editItem?.shingleColor as string) || ''
   )
+  const [tileSelection, setTileSelection] = useState<TileRoofSelection>({
+    tileType: ((editItem?.tileType as TileType | undefined) ?? '') as TileType | '',
+    tileColor: (editItem?.tileColor as string) || '',
+  })
   const [roofMeasurement, setRoofMeasurement] = useState<{
     areaSqft: number; pitch: string; address: string
     perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean
@@ -205,6 +211,18 @@ export function RoofingWizard({
       }
     }
   }, [editItem, projectPermit, setProjectPermit, setProjectPermitWaiver])
+
+  // If the user re-measures and toggles includeFlat from true → false, prune
+  // selections.material to a single pitched entry so single-pitched mode on
+  // Step 4 doesn't render with multiple radio-shaped selections.
+  useEffect(() => {
+    if (roofMeasurement?.includeFlat !== false) return
+    const mats = selections['material'] ?? []
+    const hasFlat = mats.includes('flat_roof')
+    const pitched = mats.filter((m) => m !== 'flat_roof')
+    if (!hasFlat && pitched.length <= 1) return
+    setSelections((prev) => ({ ...prev, material: pitched.slice(0, 1) }))
+  }, [roofMeasurement?.includeFlat])
 
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
@@ -283,6 +301,8 @@ export function RoofingWizard({
       ...(flowPath && { flowPath }),
       ...(metalRoofSelection.color && { metalRoofSelection }),
       ...(shingleColor && { shingleColor }),
+      ...(tileSelection.tileType && { tileType: tileSelection.tileType as TileType }),
+      ...(tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
       ...(roofMeasurement && { roofMeasurement }),
       ...(Object.keys(roofAddonLinearFtParsed).length > 0 && { roofAddonLinearFt: roofAddonLinearFtParsed }),
       ...((selections['addons'] ?? []).includes('gutters') && gutterFloors && {
@@ -329,6 +349,11 @@ export function RoofingWizard({
   const selectedAddons = selections['addons'] ?? []
   const metalSelected = selectedMaterials.includes('metal')
   const shingleSelected = selectedMaterials.includes('shingle')
+  const tileSelected = selectedMaterials.includes('barrel_tile') || selectedMaterials.includes('terracotta')
+  // Step 4 is single-select when the home has no flat section (RoofMeasurementWizard
+  // captured includeFlat=false). Multi-select stays when the home has both flat
+  // + sloped sections so the user can pair a pitched material with flat_roof.
+  const isSinglePitchedMode = roofMeasurement?.includeFlat === false
   const linearFtAddonIds = ADDON_LINEAR_FT_IDS.filter((id) => selectedAddons.includes(id))
 
   const visibleAddonOptions = addonsGroup.options.filter((opt) =>
@@ -357,10 +382,13 @@ export function RoofingWizard({
     9: 'Which property?',
     10: 'Review and add to project',
   }
+  const step4Subtitle = isSinglePitchedMode
+    ? 'Pick the material for your roof.'
+    : 'Select all that apply — many homes have both a flat section and sloped sections.'
   const stepSubtitles: Record<number, string> = {
     1: 'Pick the option that matches your project.',
     2: "We'll use satellite data to pre-fill your roof config.",
-    4: 'Select all that apply — many homes have both a flat section and sloped sections.',
+    4: step4Subtitle,
     6: "Select any extras you'd like included.",
     7: "We'll use these measurements to give you the most accurate quote.",
     8: PERMIT_SUBTITLE,
@@ -410,6 +438,7 @@ export function RoofingWizard({
           (step === 4 && isRepairFlow && selectedRepairMaterials.length === 0) ||
           (step === 5 && metalSelected && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
           (step === 5 && shingleSelected && !shingleColor) ||
+          (step === 5 && tileSelected && (!tileSelection.tileType || !tileSelection.tileColor)) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
           (step === 8 && !isProjectPermitValid(projectPermit, projectPermitWaiver)) ||
@@ -617,7 +646,7 @@ export function RoofingWizard({
           </div>
         )}
         {step === 4 && !isRepairFlow && (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3" data-roofing-material-mode={isSinglePitchedMode ? 'single' : 'multi'}>
             {materialGroup.options.map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
               const isFlatGated = opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false
@@ -629,9 +658,23 @@ export function RoofingWizard({
                   title={isFlatGated ? 'Toggle Flat section ON in Step 1 to enable' : undefined}
                   onClick={() => {
                     if (isFlatGated) return
-                    toggleMulti('material', opt.id)
-                    if (opt.id === 'metal' && isSelected) {
-                      setMetalRoofSelection({ color: '', roofSize: '' })
+                    if (isSinglePitchedMode) {
+                      // Single-select: replace any prior pitched pick.
+                      setSingle('material', opt.id)
+                      // If user moves away from metal, clear metal config.
+                      if (opt.id !== 'metal' && metalRoofSelection.color) {
+                        setMetalRoofSelection({ color: '', roofSize: '' })
+                      }
+                      // If user moves away from a tile material, clear tile config.
+                      const isTileNow = opt.id === 'barrel_tile' || opt.id === 'terracotta'
+                      if (!isTileNow && (tileSelection.tileType || tileSelection.tileColor)) {
+                        setTileSelection({ tileType: '', tileColor: '' })
+                      }
+                    } else {
+                      toggleMulti('material', opt.id)
+                      if (opt.id === 'metal' && isSelected) {
+                        setMetalRoofSelection({ color: '', roofSize: '' })
+                      }
                     }
                   }}
                   className={cn(
@@ -644,10 +687,15 @@ export function RoofingWizard({
                   )}
                 >
                   <div className={cn(
-                    'mt-0.5 h-4 w-4 rounded border-2 shrink-0 flex items-center justify-center',
+                    'mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center',
+                    isSinglePitchedMode ? 'rounded-full border-2' : 'rounded border-2',
                     isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
                   )}>
-                    {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                    {isSelected && (
+                      isSinglePitchedMode
+                        ? <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                        : <Check className="h-2.5 w-2.5 text-white" />
+                    )}
                   </div>
                   <div>
                     <p className="text-foreground">
@@ -702,6 +750,14 @@ export function RoofingWizard({
             <ShingleColorPicker
               selectedColor={shingleColor}
               onChange={(color) => setShingleColor(color)}
+            />
+          </AnimatePresence>
+        )}
+        {step === 5 && tileSelected && (
+          <AnimatePresence>
+            <TileRoofConfigurator
+              selection={tileSelection}
+              onChange={(updated) => setTileSelection(updated)}
             />
           </AnimatePresence>
         )}
