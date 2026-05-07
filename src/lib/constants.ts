@@ -56,6 +56,25 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'extra_plywood', label: 'Extra Sheet Plywood' },
         ],
       },
+      {
+        // Per-material repair rates — visible only when service_type=repair.
+        // Mirrors the addons subgroup pattern: multi-select, each option
+        // priceUnit:sqft. Vendors price each material independently.
+        // Cart shape extension: selections.repair_materials carries the
+        // homeowner's selected materials (string[], widen-reads-narrow-writes).
+        id: 'repair_materials',
+        label: 'Repair Materials',
+        required: false,
+        type: 'multi',
+        options: [
+          { id: 'repair_shingle', label: 'Shingle' },
+          { id: 'repair_barrel_tile', label: 'Barrel Tile' },
+          { id: 'repair_metal', label: 'Standing Seam Metal' },
+          { id: 'repair_aluminum', label: 'Aluminum' },
+          { id: 'repair_terracotta', label: 'Terracotta Clay' },
+          { id: 'repair_flat_roof', label: 'Flat Roof' },
+        ],
+      },
     ],
   },
   {

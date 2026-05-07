@@ -310,9 +310,12 @@ export function RoofingWizard({
   const materialGroup = service.optionGroups.find((g) => g.id === 'material')!
   const serviceTypeGroup = service.optionGroups.find((g) => g.id === 'service_type')!
   const addonsGroup = service.optionGroups.find((g) => g.id === 'addons')!
+  const repairMaterialsGroup = service.optionGroups.find((g) => g.id === 'repair_materials')!
 
   const selectedMaterials = selections['material'] ?? []
   const selectedServiceType = (selections['service_type'] ?? [])[0] ?? null
+  const selectedRepairMaterials = selections['repair_materials'] ?? []
+  const isRepairFlow = selectedServiceType === 'repair'
   const selectedAddons = selections['addons'] ?? []
   const metalSelected = selectedMaterials.includes('metal')
   const shingleSelected = selectedMaterials.includes('shingle')
@@ -336,7 +339,7 @@ export function RoofingWizard({
     1: 'What are you doing today?',
     2: 'Measure your roof',
     3: 'What type of service?',
-    4: 'Pick your roofing material',
+    4: isRepairFlow ? 'Which materials need repair?' : 'Pick your roofing material',
     5: 'Configure metal roof',
     6: 'Any add-ons?',
     7: 'Add-on measurements',
@@ -393,7 +396,8 @@ export function RoofingWizard({
           (step === 1 && !flowPath) ||
           (step === 2 && !roofMeasurement) ||
           (step === 3 && !selectedServiceType) ||
-          (step === 4 && selectedMaterials.length === 0) ||
+          (step === 4 && !isRepairFlow && selectedMaterials.length === 0) ||
+          (step === 4 && isRepairFlow && selectedRepairMaterials.length === 0) ||
           (step === 5 && metalSelected && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
           (step === 5 && shingleSelected && !shingleColor) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
@@ -572,8 +576,38 @@ export function RoofingWizard({
           </div>
         )}
 
-        {/* S4 — Material */}
-        {step === 4 && (
+        {/* S4 — Material (repair flow renders repair_materials sub-group instead) */}
+        {step === 4 && isRepairFlow && (
+          <div className="flex flex-col gap-3">
+            {repairMaterialsGroup.options.map((opt) => {
+              const isSelected = selectedRepairMaterials.includes(opt.id)
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => toggleMulti('repair_materials', opt.id)}
+                  className={cn(
+                    'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+                    isSelected
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                      : 'border-border hover:border-primary/40 hover:bg-muted'
+                  )}
+                >
+                  <div className={cn(
+                    'mt-0.5 h-4 w-4 rounded border-2 shrink-0 flex items-center justify-center',
+                    isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                  )}>
+                    {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                  </div>
+                  <div>
+                    <p className="text-xl font-semibold text-foreground">{opt.label}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {step === 4 && !isRepairFlow && (
           <div className="flex flex-col gap-3">
             {materialGroup.options.map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
