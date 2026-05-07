@@ -6,6 +6,20 @@ import { CardSlideWizard } from './card-slide-wizard'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
+import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
+
+// Synthetic groupId used to render the project-permit step inside the
+// chip-based generic wizard. Resolves to <PermitStepSection /> instead of
+// SERVICE_CATALOG option chips. Single source of truth for every generic
+// flow's permit step (kratos verdict 2026-05-07: same step shape across
+// every wizard, project-level cart-store SoT).
+export const PERMIT_STEP_GROUP_ID = '__permit__'
+
+export const PERMIT_STEP: GenericWizardStep = {
+  groupId: PERMIT_STEP_GROUP_ID,
+  title: PERMIT_HEADING,
+  subtitle: PERMIT_SUBTITLE,
+}
 
 type Selections = Record<string, string[]>
 
@@ -77,6 +91,8 @@ export function GenericServiceWizard({
 }: GenericServiceWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
+  const projectPermit = useCartStore((s) => s.projectPermit)
+  const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
 
   const CONTENT_STEPS = steps.length
   const ADDR_STEP = CONTENT_STEPS + 1
@@ -125,6 +141,7 @@ export function GenericServiceWizard({
   function isStepRequired(s: number): boolean {
     const cfg = steps[s - 1]
     if (!cfg) return false
+    if (cfg.groupId === PERMIT_STEP_GROUP_ID) return true
     const group = service.optionGroups.find((g) => g.id === cfg.groupId)
     return group?.required ?? false
   }
@@ -132,6 +149,9 @@ export function GenericServiceWizard({
   function isStepDone(s: number): boolean {
     const cfg = steps[s - 1]
     if (!cfg) return true
+    if (cfg.groupId === PERMIT_STEP_GROUP_ID) {
+      return isProjectPermitValid(projectPermit, projectPermitWaiver)
+    }
     return (selections[cfg.groupId]?.length ?? 0) > 0
   }
 
@@ -174,6 +194,9 @@ export function GenericServiceWizard({
 
   function renderContentStep(s: number) {
     const cfg = steps[s - 1]
+    if (cfg?.groupId === PERMIT_STEP_GROUP_ID) {
+      return <PermitStepSection />
+    }
     const group = service.optionGroups.find((g) => g.id === cfg.groupId)
     if (!group) return null
     const selected = selections[group.id] ?? []
@@ -271,6 +294,12 @@ export function GenericServiceWizard({
             <p className="text-sm text-foreground">{selectedAddress.full}</p>
           </div>
         )}
+        {projectPermit && (
+          <div className="rounded-xl bg-muted/50 p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Permit</p>
+            <p className="text-sm text-foreground">{projectPermit === 'yes' ? 'Yes — permit included' : 'No permit'}</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -343,28 +372,33 @@ export const FENCING_STEPS: GenericWizardStep[] = [
   { groupId: 'material', title: 'Fence material', subtitle: 'What material would you like for your fence?' },
   { groupId: 'height', title: 'Fence height', subtitle: 'How tall should the fence be?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional extras for your fence.', skipLabel: 'Skip' },
+  PERMIT_STEP,
 ]
 
 export const DRIVEWAYS_STEPS: GenericWizardStep[] = [
   { groupId: 'scope', title: 'What type of work?', subtitle: 'Tell us the scope of your driveway project.' },
   { groupId: 'surface', title: 'Surface material', subtitle: 'What material would you like for your driveway?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional extras for your driveway.', skipLabel: 'Skip' },
+  PERMIT_STEP,
 ]
 
 export const PERGOLAS_STEPS: GenericWizardStep[] = [
   { groupId: 'structure', title: 'Structure type', subtitle: 'What kind of outdoor structure are you adding?' },
   { groupId: 'size', title: 'Size', subtitle: 'How large should the structure be?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional features for your outdoor space.', skipLabel: 'Skip' },
+  PERMIT_STEP,
 ]
 
 export const AIR_CONDITIONING_STEPS: GenericWizardStep[] = [
   { groupId: 'system', title: 'System type', subtitle: 'What HVAC system do you need?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional upgrades for your system.', skipLabel: 'Skip' },
+  PERMIT_STEP,
 ]
 
 export const WALL_PANELING_STEPS: GenericWizardStep[] = [
   { groupId: 'style', title: 'Panel style', subtitle: 'What wall panel style are you going for?' },
   { groupId: 'rooms', title: 'Which rooms?', subtitle: 'Select all the rooms you want paneled.' },
+  PERMIT_STEP,
 ]
 
 export const HOUSE_PAINTING_STEPS: GenericWizardStep[] = [
@@ -372,6 +406,7 @@ export const HOUSE_PAINTING_STEPS: GenericWizardStep[] = [
   { groupId: 'scope', title: 'Inside, outside, or both?', subtitle: 'What areas are you painting?' },
   { groupId: 'rooms', title: 'How many rooms?', subtitle: 'For interior or both — how many rooms?', skipLabel: 'Skip' },
   { groupId: 'colors', title: 'Color scheme', subtitle: 'How do you want to handle the colors?' },
+  PERMIT_STEP,
 ]
 
 export const GARAGE_STEPS: GenericWizardStep[] = [
@@ -380,6 +415,7 @@ export const GARAGE_STEPS: GenericWizardStep[] = [
   { groupId: 'size', title: 'Room size', subtitle: 'What\'s the total size of the space?' },
   { groupId: 'finish', title: 'Finish level', subtitle: 'What quality level are you targeting?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional extras to complete the room.', skipLabel: 'Skip' },
+  PERMIT_STEP,
 ]
 
 export const BLINDS_STEPS: GenericWizardStep[] = [
@@ -388,6 +424,7 @@ export const BLINDS_STEPS: GenericWizardStep[] = [
   { groupId: 'control', title: 'Control type', subtitle: 'How would you like to operate the blinds?' },
   { groupId: 'mount', title: 'Mount style', subtitle: 'Inside or outside the window frame?' },
   { groupId: 'light_control', title: 'Light control', subtitle: 'How much light do you want to let in?' },
+  PERMIT_STEP,
 ]
 
 // house_painting: skip S3 (rooms) when scope = exterior_only

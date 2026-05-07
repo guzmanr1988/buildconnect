@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, Home, Wrench } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } 
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
+import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 const ADDON_LINEAR_FT_CONFIG = [
   { id: 'gutters', label: 'Gutter linear feet' },
@@ -149,6 +150,10 @@ export function RoofingWizard({
 }: RoofingWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
+  const setProjectPermit = useCartStore((s) => s.setProjectPermit)
+  const setProjectPermitWaiver = useCartStore((s) => s.setProjectPermitWaiver)
+  const projectPermit = useCartStore((s) => s.projectPermit)
+  const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
   const [flowPath, setFlowPathState] = useState<FlowPath | null>(() => inferFlowPath(editItem))
@@ -168,11 +173,6 @@ export function RoofingWizard({
     areaSqft: number; pitch: string; address: string
     perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean
   } | null>(null)
-  const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(
-    (editItem?.roofPermit as 'yes' | 'no') ?? null
-  )
-  const [waiverAcknowledged, setWaiverAcknowledged] = useState(false)
-  const [waiverName, setWaiverName] = useState('')
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(() => {
     const raw = editItem?.roofAddonLinearFt as Record<string, number> | undefined
     if (!raw) return {}
@@ -191,6 +191,21 @@ export function RoofingWizard({
   const [editingItemId] = useState<string | null>(initEditId ?? null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Edit-flow seed: legacy items predating projectPermit-as-SoT carried roofPermit
+  // per-item. If we open one for edit and projectPermit is still null, hydrate
+  // project-level state from the legacy field so Step 8 reflects the saved choice.
+  useEffect(() => {
+    if (!editItem) return
+    const legacyPermit = (editItem.roofPermit as 'yes' | 'no' | undefined) ?? undefined
+    if (legacyPermit && projectPermit === null) {
+      setProjectPermit(legacyPermit)
+      const legacyWaiver = (editItem.permitWaiver as { acknowledged?: boolean; signedName?: string; signedAt?: string } | null | undefined) ?? null
+      if (legacyPermit === 'no' && legacyWaiver?.acknowledged && legacyWaiver.signedName && legacyWaiver.signedAt) {
+        setProjectPermitWaiver({ acknowledged: true, signedName: legacyWaiver.signedName, signedAt: legacyWaiver.signedAt })
+      }
+    }
+  }, [editItem, projectPermit, setProjectPermit, setProjectPermitWaiver])
+
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
   function setFlowPath(next: FlowPath) {
@@ -203,9 +218,8 @@ export function RoofingWizard({
         return cleaned
       })
       setMetalRoofSelection({ color: '', roofSize: '' })
-      setRoofPermit(null)
-      setWaiverAcknowledged(false)
-      setWaiverName('')
+      setProjectPermit(null)
+      setProjectPermitWaiver(null)
     }
   }
 
@@ -270,10 +284,6 @@ export function RoofingWizard({
       ...(metalRoofSelection.color && { metalRoofSelection }),
       ...(shingleColor && { shingleColor }),
       ...(roofMeasurement && { roofMeasurement }),
-      ...(roofPermit && { roofPermit }),
-      ...(roofPermit === 'no' && waiverAcknowledged && waiverName.trim().length >= 2 && {
-        permitWaiver: { acknowledged: true, signedName: waiverName.trim(), signedAt: new Date().toISOString() },
-      }),
       ...(Object.keys(roofAddonLinearFtParsed).length > 0 && { roofAddonLinearFt: roofAddonLinearFtParsed }),
       ...((selections['addons'] ?? []).includes('gutters') && gutterFloors && {
         gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
@@ -343,7 +353,7 @@ export function RoofingWizard({
     5: 'Configure metal roof',
     6: 'Any add-ons?',
     7: 'Add-on measurements',
-    8: 'Do you need a permit?',
+    8: PERMIT_HEADING,
     9: 'Which property?',
     10: 'Review and add to project',
   }
@@ -353,7 +363,7 @@ export function RoofingWizard({
     4: 'Select all that apply — many homes have both a flat section and sloped sections.',
     6: "Select any extras you'd like included.",
     7: "We'll use these measurements to give you the most accurate quote.",
-    8: 'Permits are required for full replacements in most Florida counties.',
+    8: PERMIT_SUBTITLE,
   }
   const step6Subtitle = flowPath === 'addons_only'
     ? 'Pick at least one to continue.'
@@ -402,8 +412,7 @@ export function RoofingWizard({
           (step === 5 && shingleSelected && !shingleColor) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
-          (step === 8 && roofPermit === null) ||
-          (step === 8 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
+          (step === 8 && !isProjectPermitValid(projectPermit, projectPermitWaiver)) ||
           (step === 10 && submitting)
         }
       >
@@ -833,83 +842,8 @@ export function RoofingWizard({
           )
         })()}
 
-        {/* S8 — Permit */}
-        {step === 8 && (
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => setRoofPermit('yes')}
-              className={cn(
-                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
-                roofPermit === 'yes'
-                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                  : 'border-border hover:border-primary/40 hover:bg-muted'
-              )}
-            >
-              <div className={cn(
-                'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                roofPermit === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground'
-              )}>
-                {roofPermit === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Yes — include permit</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Required for full replacements in most FL counties. Adds ~2 weeks but ensures code compliance.</p>
-                <p className="text-xs text-green-700 dark:text-green-400 mt-1 font-medium">Financing options available with permit.</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setRoofPermit('no'); setWaiverAcknowledged(false); setWaiverName('') }}
-              className={cn(
-                'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
-                roofPermit === 'no'
-                  ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-200 dark:ring-amber-800'
-                  : 'border-border hover:border-primary/40 hover:bg-muted'
-              )}
-            >
-              <div className={cn(
-                'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                roofPermit === 'no' ? 'border-amber-500 bg-amber-500' : 'border-muted-foreground'
-              )}>
-                {roofPermit === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">No permit needed</p>
-                <p className="text-xs text-muted-foreground mt-0.5">For repairs. Payment is cash, check, or wire transfer only.</p>
-              </div>
-            </button>
-
-            {roofPermit === 'no' && (
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-400">Acknowledgment Required</p>
-                <p className="text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
-                  I acknowledge that proceeding without a permit means I am personally responsible for any fines, penalties, or remediation costs imposed by the city or county if code-enforcement becomes involved. BuildConnect and the contractor are not liable for any penalties resulting from this decision.
-                </p>
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={waiverAcknowledged}
-                    onChange={(e) => setWaiverAcknowledged(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600 shrink-0"
-                  />
-                  <span className="text-xs text-amber-900 dark:text-amber-300">I understand and accept full responsibility.</span>
-                </label>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-400">Print full name</label>
-                  <input
-                    type="text"
-                    value={waiverName}
-                    onChange={(e) => setWaiverName(e.target.value)}
-                    placeholder="Your full legal name"
-                    className="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* S8 — Permit (project-level SoT, shared component across wizards) */}
+        {step === 8 && <PermitStepSection />}
 
         {/* S9 — Property */}
         {step === 9 && (
@@ -1028,11 +962,11 @@ export function RoofingWizard({
                   })}
                 </div>
               )}
-              {roofPermit && (
+              {projectPermit && (
                 <div className="rounded-xl border bg-muted/40 p-4">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Permit</p>
                   <p className="text-sm text-foreground">
-                    {roofPermit === 'yes' ? 'Yes — permit included' : 'No permit'}
+                    {projectPermit === 'yes' ? 'Yes — permit included' : 'No permit'}
                   </p>
                 </div>
               )}

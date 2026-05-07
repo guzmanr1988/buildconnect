@@ -8,6 +8,7 @@ import { CardSlideWizard } from './card-slide-wizard'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
+import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 type Selections = Record<string, string[]>
 
@@ -21,8 +22,8 @@ interface PoolWizardProps {
   onDone: () => void
 }
 
-const TOTAL_STEPS = 7
-// S1=project_type S2=pool_size S3=pool_floor S4=addons S5=addon_config S6=address S7=review
+const TOTAL_STEPS = 8
+// S1=project_type S2=pool_size S3=pool_floor S4=addons S5=addon_config S6=address S7=permit S8=review
 const CONFIGURABLE_ADDON_IDS = ['spa', 'beach', 'waterfall', 'led', 'bubbler', 'pool_fence']
 
 // Named pool sizes auto-derive sqft (W × L). Custom uses homeowner-entered value.
@@ -114,6 +115,8 @@ export function PoolWizard({
 }: PoolWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
+  const projectPermit = useCartStore((s) => s.projectPermit)
+  const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
 
   const editAddons = editItem?.addonQuantities as
     | { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number }
@@ -390,6 +393,10 @@ export function PoolWizard({
   }
 
   function renderStep7() {
+    return <PermitStepSection />
+  }
+
+  function renderStep8() {
     const addons = selections['addons'] ?? []
     const addonGroup = service.optionGroups.find((g) => g.id === 'addons')
 
@@ -455,6 +462,12 @@ export function PoolWizard({
             <p className="text-sm text-foreground">{selectedAddress.full}</p>
           </div>
         )}
+        {projectPermit && (
+          <div className="rounded-xl bg-muted/50 p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Permit</p>
+            <p className="text-sm text-foreground">{projectPermit === 'yes' ? 'Yes — permit included' : 'No permit'}</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -512,12 +525,13 @@ export function PoolWizard({
     { title: 'Any add-ons?', subtitle: 'Optional features — skip if none.' },
     { title: 'Configure your add-ons', subtitle: 'Set the details for each feature you selected.' },
     { title: 'Which property?', subtitle: 'Choose the address for this pool project.' },
+    { title: PERMIT_HEADING, subtitle: PERMIT_SUBTITLE },
     { title: 'Review your pool', subtitle: 'Everything look right? Add it to your project.' },
   ]
 
   const meta = STEP_META[step - 1]
 
-  const isRequired = (s: number) => [1, 2, 3].includes(s)
+  const isRequired = (s: number) => [1, 2, 3, 7].includes(s)
   const isDone = (s: number) => {
     if (s === 1) return (selections['project_type']?.length ?? 0) > 0
     if (s === 2) {
@@ -534,6 +548,7 @@ export function PoolWizard({
       if (sel[0] !== 'na' && poolFloorSqft <= 0) return false
       return true
     }
+    if (s === 7) return isProjectPermitValid(projectPermit, projectPermitWaiver)
     return true
   }
   const nextDisabled = (isRequired(step) && !isDone(step)) || added
@@ -547,6 +562,7 @@ export function PoolWizard({
       case 5: return renderStep5()
       case 6: return renderStep6()
       case 7: return renderStep7()
+      case 8: return renderStep8()
       default: return null
     }
   }

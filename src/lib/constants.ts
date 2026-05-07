@@ -179,16 +179,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
-        id: 'scope',
-        label: 'Preferences',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'permit', label: 'Permit' },
-          { id: 'no_permit', label: 'No Permit' },
-        ],
-      },
-      {
         id: 'payment',
         label: 'Payment Method',
         required: true,
