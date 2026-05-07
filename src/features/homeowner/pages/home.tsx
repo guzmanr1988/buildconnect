@@ -9,6 +9,7 @@ import { MOCK_HOMEOWNERS, MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { formatProjectTitle } from '@/lib/format-project-title'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
@@ -333,7 +334,7 @@ export function HomeownerHome() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-[13px] font-semibold font-heading text-foreground truncate">
-                                {p.item.serviceName}
+                                {formatProjectTitle(p.item)}
                               </p>
                               <p className="text-[11px] text-muted-foreground truncate">
                                 {tile.subtitleFor(p)}

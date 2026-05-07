@@ -14,6 +14,7 @@ import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
+import { formatProjectTitle } from '@/lib/format-project-title'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
@@ -122,7 +123,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       return {
         id: sp.id,
         name: sp.homeowner?.name || 'Customer',
-        project: sp.item.serviceName,
+        project: formatProjectTitle(sp.item),
         date: sp.sentAt,
         initials: deriveInitials(sp.homeowner?.name || 'Customer'),
         vendor: sp.contractor?.company,
@@ -188,7 +189,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     return {
       id: l.id,
       name: l.homeowner_name,
-      project: l.project.split('—')[0].trim(),
+      project: formatProjectTitle(syntheticProjectData.item),
       date: l.received_at,
       initials: deriveInitials(l.homeowner_name),
       vendor: vendor?.company ?? 'Unknown vendor',
