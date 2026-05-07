@@ -1,5 +1,7 @@
 import { SERVICE_CATALOG } from '@/lib/constants'
 
+// Ship #123 follow-up: retrigger CF deploy after squash-message UTF8 reject.
+
 /*
  * Disambiguator title for homeowner project cards.
  *
