@@ -85,6 +85,7 @@ export default function VendorDashboard() {
   const [clearDemoDialogOpen, setClearDemoDialogOpen] = useState(false)
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
   const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
+  const setDemoClearedAt = useAdminModerationStore((s) => s.setDemoClearedAt)
   const handleClearDemoData = () => {
     // Reset projects-store across ALL per-lead-keyed maps. Prior version
     // only cleared 3 of 10 — leaving accountRepIdByLead / repAcceptanceByLead /
@@ -134,10 +135,15 @@ export default function VendorDashboard() {
       localStorage.removeItem('buildconnect-id-document')
     } catch { /* storage errors non-fatal */ }
     setDemoDataHidden(true)
+    // Sentinel for hydrateFromSupabase — sent_projects rows persist
+    // server-side; this flag tells every role's hydrate path to skip the
+    // server replay so the wipe survives reload + role switch.
+    setDemoClearedAt(new Date().toISOString())
     setClearDemoDialogOpen(false)
   }
   const handleRestoreDemoData = () => {
     setDemoDataHidden(false)
+    setDemoClearedAt(null)
   }
 
   // Ship #303 — Lead Workflow stage counts for the compact summary
