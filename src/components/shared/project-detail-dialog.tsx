@@ -457,13 +457,14 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   {/* Roof Spec — shown for roofing items only */}
                   {selectedItem.project_data.item.serviceId === 'roofing' && (() => {
                     const item = selectedItem.project_data.item as any
+                    const projectPermit = selectedItem.project_data.projectPermit
                     return (
                       <RoofSpecCard
                         roofMeasurement={item.roofMeasurement}
                         metalRoofSelection={item.metalRoofSelection}
                         roofAddonLinearFt={item.roofAddonLinearFt}
                         gutterDropsConfig={item.gutterDropsConfig}
-                        roofPermit={item.roofPermit}
+                        roofPermit={projectPermit ?? item.roofPermit}
                         flowPath={item.flowPath}
                       />
                     )

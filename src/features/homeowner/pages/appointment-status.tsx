@@ -489,7 +489,10 @@ export function AppointmentStatusPage() {
                   Project Items
                 </p>
                 {sentProject?.item ? (
-                  <ProjectItemsList item={sentProject.item} />
+                  <ProjectItemsList
+                    item={sentProject.item}
+                    projectPermit={sentProject.projectPermit}
+                  />
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(lead.pack_items).map(([, items]) =>
@@ -646,7 +649,10 @@ function humanizeId(id: string): string {
   return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function buildProjectItemRows(item: CartItem): ProjectItemRow[] {
+function buildProjectItemRows(
+  item: CartItem,
+  projectPermit?: 'yes' | 'no',
+): ProjectItemRow[] {
   const rows: ProjectItemRow[] = []
   const service = SERVICE_CATALOG.find((s) => s.id === item.serviceId)
 
@@ -696,10 +702,16 @@ function buildProjectItemRows(item: CartItem): ProjectItemRow[] {
       detail: `${m.areaSqft.toLocaleString()} sqft (Pitch ${m.pitch})`,
     })
   }
-  if (item.roofPermit) {
+  // Project-level permit (PR1 of permit consolidation): prefer the
+  // sentProject.projectPermit snapshot; fall back to legacy per-item
+  // roofPermit for entries persisted before the consolidation. One row
+  // per project, not per item — but rendering on the roof item keeps
+  // continuity with the pre-consolidation surface.
+  const permitChoice = projectPermit ?? item.roofPermit
+  if (permitChoice && item.serviceId === 'roofing') {
     rows.push({
       label: 'Permit Pulled',
-      detail: item.roofPermit === 'yes' ? 'Yes' : 'No',
+      detail: permitChoice === 'yes' ? 'Yes' : 'No',
     })
   }
 
@@ -774,8 +786,14 @@ function buildProjectItemRows(item: CartItem): ProjectItemRow[] {
   return rows
 }
 
-function ProjectItemsList({ item }: { item: CartItem }) {
-  const rows = buildProjectItemRows(item)
+function ProjectItemsList({
+  item,
+  projectPermit,
+}: {
+  item: CartItem
+  projectPermit?: 'yes' | 'no'
+}) {
+  const rows = buildProjectItemRows(item, projectPermit)
   if (rows.length === 0) return null
   return (
     <ul className="flex flex-col gap-1.5">

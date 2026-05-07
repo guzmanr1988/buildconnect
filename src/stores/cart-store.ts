@@ -80,18 +80,36 @@ export interface CartItem {
   itemNotes?: string
 }
 
+export type ProjectPermitChoice = 'yes' | 'no'
+
+export interface ProjectPermitWaiver {
+  acknowledged: boolean
+  signedName: string
+  signedAt: string
+}
+
 interface CartState {
   items: CartItem[]
   projectTitle: string
   notes: string
   photos: string[]
   idDocument: string | null
+  // Project-level permit choice — replaces the per-item roofPermit pattern.
+  // Asked once per cart at submit time when at least one item triggers the
+  // permit Q (see shouldAskProjectPermit). 'yes' = vendor pulls permit;
+  // 'no' = cash-only path, blocks PACE financing.
+  projectPermit: ProjectPermitChoice | null
+  // Captured when projectPermit === 'no'. Single waiver covers the whole
+  // project (all items in cart). Null when permit is yes or not yet set.
+  projectPermitWaiver: ProjectPermitWaiver | null
   setIdDocument: (dataUrl: string | null) => void
   addItem: (item: Omit<CartItem, 'id' | 'addedAt'>) => void
   removeItem: (id: string) => void
   updateItem: (id: string, updates: Partial<CartItem>) => void
   setProjectTitle: (title: string) => void
   setNotes: (notes: string) => void
+  setProjectPermit: (choice: ProjectPermitChoice | null) => void
+  setProjectPermitWaiver: (waiver: ProjectPermitWaiver | null) => void
   addPhoto: (dataUrl: string) => void
   removePhoto: (index: number) => void
   clearCart: () => void
@@ -106,6 +124,8 @@ export const useCartStore = create<CartState>()(
       notes: '',
       photos: [],
       idDocument: null,
+      projectPermit: null,
+      projectPermitWaiver: null,
       setIdDocument: (dataUrl) => set({ idDocument: dataUrl }),
 
       addItem: (item) => {
@@ -129,15 +149,50 @@ export const useCartStore = create<CartState>()(
 
       setProjectTitle: (title) => set({ projectTitle: title }),
       setNotes: (notes) => set({ notes }),
+      setProjectPermit: (choice) => set({ projectPermit: choice }),
+      setProjectPermitWaiver: (waiver) => set({ projectPermitWaiver: waiver }),
       addPhoto: (dataUrl) => set((state) => ({ photos: state.photos.length < 20 ? [...state.photos, dataUrl] : state.photos })),
       removePhoto: (index) => set((state) => ({ photos: state.photos.filter((_, i) => i !== index) })),
 
-      clearCart: () => set({ items: [], projectTitle: '', notes: '', photos: [], idDocument: null }),
+      clearCart: () =>
+        set({
+          items: [],
+          projectTitle: '',
+          notes: '',
+          photos: [],
+          idDocument: null,
+          projectPermit: null,
+          projectPermitWaiver: null,
+        }),
 
       itemCount: () => get().items.length,
     }),
     {
       name: 'buildconnect-cart',
-    }
+      version: 1,
+      // PR1 of project-level-permit migration: lift the first non-null
+      // per-item roofPermit + permitWaiver onto project-level state so
+      // legacy carts created before this version still answer the
+      // project-level Q without a re-prompt. Future cycles (PR4) will
+      // drop CartItem.roofPermit entirely after one persist version of
+      // widen-reads compat.
+      migrate: (persistedState: unknown, version: number) => {
+        const state = (persistedState ?? {}) as Partial<CartState> & {
+          items?: CartItem[]
+        }
+        if (version < 1) {
+          const items = state.items ?? []
+          const firstPermit = items.find((i) => i.roofPermit)?.roofPermit ?? null
+          const firstWaiver =
+            items.find((i) => i.permitWaiver)?.permitWaiver ?? null
+          return {
+            ...state,
+            projectPermit: firstPermit,
+            projectPermitWaiver: firstWaiver,
+          }
+        }
+        return state
+      },
+    },
   )
 )
