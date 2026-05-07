@@ -163,12 +163,12 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
       transition={{ duration: 0.25 }}
       className="mt-4 rounded-xl border bg-background p-4 overflow-hidden"
     >
-      <h4 className="text-sm font-semibold text-foreground mb-4">Select Window Sizes</h4>
+      <h4 className="text-base font-semibold text-foreground mb-4">Select Window Sizes</h4>
 
       <div className="flex flex-col gap-1">
         {Object.entries(sizeGroups).map(([width, sizes]) => (
           <div key={width} className="flex flex-col">
-            <div className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pt-3 pb-1">
+            <div className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pt-3 pb-1">
               {width}" Width
             </div>
             {sizes.map((size) => {
@@ -178,11 +178,11 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                 <div key={size} className="flex flex-col">
                   {/* Size row - add button */}
                   <div className={cn(
-                    'flex items-center justify-between px-2 py-2 rounded-lg',
+                    'flex items-center justify-between px-2 py-2 rounded-lg min-h-[44px]',
                     hasEntries && 'bg-primary/5'
                   )}>
                     <span className={cn(
-                      'text-base font-semibold',
+                      'text-xl font-semibold',
                       hasEntries ? 'text-foreground' : 'text-muted-foreground'
                     )}>
                       {size.replace('x', '" × ')}"
