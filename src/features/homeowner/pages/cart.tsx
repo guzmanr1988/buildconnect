@@ -30,6 +30,17 @@ const SERVICE_ICONS: Record<string, React.ElementType> = {
   blinds: Blinds,
 }
 
+function formatCreatedAt(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const sameYear = d.getFullYear() === now.getFullYear()
+  const dateStr = d.toLocaleDateString('en-US', sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' })
+  const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return `Created ${dateStr} · ${timeStr}`
+}
+
 const ICON_GRADIENTS: Record<string, string> = {
   roofing: 'from-orange-400 to-red-500',
   windows_doors: 'from-sky-400 to-blue-500',
@@ -477,6 +488,9 @@ export function CartPage() {
                         <span className="font-medium">{item.address.label}:</span> {item.address.full}
                       </p>
                     )}
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {formatCreatedAt(item.addedAt)}
+                    </p>
                     {/* Show selections */}
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {Object.entries(item.selections).map(([groupId, optionIds]) => {
