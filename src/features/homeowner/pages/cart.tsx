@@ -44,6 +44,19 @@ function formatCreatedAt(iso: string): string {
   return `Created ${dateStr} · ${timeStr}`
 }
 
+// True iff iso falls within the current LOCAL calendar day. Recomputed on
+// every render; no interval needed — past local midnight the next render
+// naturally returns false and the NEW pill disappears.
+function isAddedToday(iso: string): boolean {
+  const d = new Date(iso)
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
 const ICON_GRADIENTS: Record<string, string> = {
   roofing: 'from-orange-400 to-red-500',
   windows_doors: 'from-sky-400 to-blue-500',
@@ -539,6 +552,11 @@ export function CartPage() {
                   </div>
                   <div>
                     <h3 className="text-[15px] font-semibold text-foreground">
+                      {isAddedToday(item.addedAt) && (
+                        <span className="mr-1.5 inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white align-middle animate-pulse">
+                          NEW
+                        </span>
+                      )}
                       {formatProjectTitle(item)}
                     </h3>
                     {item.address && (
