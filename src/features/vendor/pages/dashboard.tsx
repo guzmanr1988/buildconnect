@@ -15,6 +15,12 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useCartStore } from '@/stores/cart-store'
+import { useFlagThreadStore } from '@/stores/flag-thread-store'
+import { useCommissionPaymentsStore } from '@/stores/commission-payments-store'
+import { useVendorPermitsStore } from '@/stores/vendor-permits-store'
+import { useVendorEventsStore } from '@/stores/vendor-events-store'
+import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { LEAD_STAGES, useVendorLeadStages } from '@/lib/vendor-lead-stages'
@@ -80,11 +86,32 @@ export default function VendorDashboard() {
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
   const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
   const handleClearDemoData = () => {
+    // Reset projects-store across ALL per-lead-keyed maps. Prior version
+    // only cleared 3 of 10 — leaving accountRepIdByLead / repAcceptanceByLead /
+    // cancellationRequestsByLead / rescheduleRequestsByLead / leadConfirmedAtByLead /
+    // repAssignedAtByLead / leadCompletedAtByLead with orphan keys after
+    // sentProjects wipe.
     useProjectsStore.setState({
       sentProjects: [],
       assignedRepByLead: {},
+      accountRepIdByLead: {},
+      repAcceptanceByLead: {},
       leadStatusOverrides: {},
+      cancellationRequestsByLead: {},
+      rescheduleRequestsByLead: {},
+      leadConfirmedAtByLead: {},
+      repAssignedAtByLead: {},
+      leadCompletedAtByLead: {},
     })
+    // Active homeowner cart (in-progress projects pre-send).
+    useCartStore.getState().clearCart()
+    // Project-shaped peripheral stores — orphan refs to wiped sentProjects.
+    useFlagThreadStore.setState({ threadsByProject: {} })
+    useCommissionPaymentsStore.setState({ paymentsBySale: {} })
+    // Vendor-keyed demo state that accumulates across test cycles.
+    useVendorPermitsStore.setState({ permits: [] })
+    useVendorEventsStore.setState({ eventsByVendor: {} })
+    useAgreementEventsStore.setState({ events: [] })
     try {
       localStorage.removeItem('buildconnect-projects')
       localStorage.setItem(
@@ -94,6 +121,12 @@ export default function VendorDashboard() {
           version: 0,
         }),
       )
+      localStorage.removeItem('buildconnect-cart')
+      localStorage.removeItem('buildconnect-flag-thread')
+      localStorage.removeItem('buildconnect-commission-payments')
+      localStorage.removeItem('buildconnect-vendor-permits')
+      localStorage.removeItem('buildconnect-vendor-events')
+      localStorage.removeItem('buildconnect-agreement-events')
       localStorage.removeItem('buildconnect-pending-item')
       localStorage.removeItem('buildconnect-selected-contractor')
       localStorage.removeItem('buildconnect-selected-booking')
