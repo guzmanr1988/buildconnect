@@ -13,7 +13,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
-import { computeGutterTotalLinFt } from '@/lib/roof-pricing'
+import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import type { PriceLineItem } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
 
@@ -83,8 +83,8 @@ async function buildRoofingLineItems(
   // Determine if this cart item has both a pitched material AND flat_roof selected.
   // When hasFlatSection, each material gets its own area slice.
   const allMaterialIds = Object.values(item.selections ?? {}).flat()
-  const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID)
-  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && (getOptionMetadata(id, 'roofing').priceUnit === 'square' || getOptionMetadata(id, 'roofing').priceUnit === 'sqft'))
+  const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID) || allMaterialIds.includes('repair_flat_roof')
+  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && id !== 'repair_flat_roof' && (getOptionMetadata(id, 'roofing').priceUnit === 'square' || getOptionMetadata(id, 'roofing').priceUnit === 'sqft'))
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
     && (item.roofMeasurement?.includeFlat !== false)
 
@@ -104,6 +104,27 @@ async function buildRoofingLineItems(
       const unitRateDollars = priceCents / 100
 
       if (meta.priceUnit === 'square' || meta.priceUnit === 'sqft') {
+        // Per-material repair lines: route through the shared resolver so the
+        // booking-confirmation total reconciles with vendor-compare per
+        // Math-is-god. Repair has no waste-factor (homeowner repairs the
+        // exact existing surface — not a re-installation).
+        if (isRepairOption(optionId)) {
+          const rawSqft = resolveRepairAreaSqft(item, optionId)
+          const amount = Math.round(unitRateDollars * rawSqft * 100) / 100
+          const labelName = optionId.replace(/^repair_/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          lines.push({
+            id: `roofing-repair-${optionId}`,
+            label: `Repair — ${labelName}`,
+            amount,
+            originalAmount: amount,
+            source: 'preset_calculated',
+            priceUnit: 'sqft',
+            unitRate: unitRateDollars,
+            unitQuantity: rawSqft,
+          })
+          anyComputed = true
+          continue
+        }
         // Split mode: flat_roof material uses its own area slice; pitched uses the other.
         // Non-split mode (single material): use full area.
         const isFlat = optionId === FLAT_ROOF_OPTION_ID
