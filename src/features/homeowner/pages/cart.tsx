@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import type { CartItem } from '@/stores/cart-store'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
+import { shouldAskProjectPermit } from '@/lib/permit-rules'
+import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
   roofing: Home,
@@ -60,7 +62,16 @@ const ICON_GRADIENTS: Record<string, string> = {
 
 export function CartPage() {
   const navigate = useNavigate()
-  const { items, idDocument, removeItem, updateItem, setIdDocument } = useCartStore()
+  const {
+    items,
+    idDocument,
+    removeItem,
+    updateItem,
+    setIdDocument,
+    projectPermit,
+    setProjectPermit,
+    setProjectPermitWaiver,
+  } = useCartStore()
   const { sentProjects } = useProjectsStore()
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const requestCancellation = useProjectsStore((s) => s.requestCancellation)
@@ -83,6 +94,12 @@ export function CartPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelDialogLeadId, setCancelDialogLeadId] = useState<string>('')
   const [cancelReason, setCancelReason] = useState<string>('')
+
+  // Project-level permit Q is asked once per cart at first Send-to-Contractor
+  // when shouldAskProjectPermit(items) AND no answer yet. Pending-item is
+  // captured so we resume the navigate after the user confirms.
+  const [permitDialogOpen, setPermitDialogOpen] = useState(false)
+  const [pendingPermitItem, setPendingPermitItem] = useState<CartItem | null>(null)
 
   // Ship #242 — collapse the "Sent to Contractor" section when the list
   // gets long. Under the threshold, render inline as-before; at/above
@@ -172,8 +189,7 @@ export function CartPage() {
     return getBusinessDaysSince(sentAt) <= 3
   }
 
-  const handleSendToContractor = (item: typeof items[0]) => {
-    // Store the item and homeowner info so the booking flow can reference it
+  const proceedToVendorCompare = (item: typeof items[0]) => {
     localStorage.setItem('buildconnect-pending-item', JSON.stringify(item))
     localStorage.setItem('buildconnect-homeowner-info', JSON.stringify({
       name: profile?.name || 'Homeowner',
@@ -185,6 +201,27 @@ export function CartPage() {
       localStorage.setItem('buildconnect-id-document', idDocument)
     }
     navigate('/home/vendor-compare')
+  }
+
+  const handleSendToContractor = (item: typeof items[0]) => {
+    if (!projectPermit && shouldAskProjectPermit(items)) {
+      setPendingPermitItem(item)
+      setPermitDialogOpen(true)
+      return
+    }
+    proceedToVendorCompare(item)
+  }
+
+  const handlePermitConfirm = (
+    choice: 'yes' | 'no',
+    waiver: { acknowledged: boolean; signedName: string; signedAt: string } | null,
+  ) => {
+    setProjectPermit(choice)
+    setProjectPermitWaiver(waiver)
+    setPermitDialogOpen(false)
+    const item = pendingPermitItem
+    setPendingPermitItem(null)
+    if (item) proceedToVendorCompare(item)
   }
 
   // Dialog JSX extracted so it renders in every return branch — apollo T1
@@ -232,6 +269,17 @@ export function CartPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+
+  const permitDialogJsx = (
+    <ProjectPermitDialog
+      open={permitDialogOpen}
+      onOpenChange={(open) => {
+        setPermitDialogOpen(open)
+        if (!open) setPendingPermitItem(null)
+      }}
+      onConfirm={handlePermitConfirm}
+    />
   )
 
   if (items.length === 0 && sentProjects.length === 0) {
@@ -408,6 +456,7 @@ export function CartPage() {
           </div>
         </div>
         {cancelDialogJsx}
+        {permitDialogJsx}
       </div>
     )
   }
@@ -1045,6 +1094,7 @@ export function CartPage() {
       </Dialog>
 
       {cancelDialogJsx}
+      {permitDialogJsx}
     </div>
   )
 }

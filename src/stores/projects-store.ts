@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from './cart-store'
+import { useCartStore } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
 import { useActivityLogStore } from './activity-log-store'
 import { supabase } from '@/lib/supabase'
@@ -113,6 +114,16 @@ export interface SentProject {
   // recomputing via catalog store (different SoT). Optional: absent on
   // legacy records + when vendor has no Supabase catalog price set.
   quotedPriceCents?: number
+  // Project-level permit choice + waiver, snapshotted from cart-store at
+  // sendProject time. Replaces the per-item CartItem.roofPermit pattern.
+  // Optional for back-compat with persisted entries pre-this-change; read
+  // surfaces fall back to item.roofPermit when projectPermit is undefined.
+  projectPermit?: 'yes' | 'no'
+  projectPermitWaiver?: {
+    acknowledged: boolean
+    signedName: string
+    signedAt: string
+  } | null
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -452,6 +463,13 @@ export const useProjectsStore = create<ProjectsState>()(
           computedLineItems && computedLineItems.length > 0
             ? computedLineItems.map((p) => ({ ...p }))
             : undefined
+        // Project-level permit snapshot — read from cart-store at write-time
+        // (immutable-ledger-freeze-at-write). Cart-level state is the single
+        // source for the answer the homeowner gave at submit; per-project
+        // freeze means later cart edits don't retro-rewrite this record.
+        const cartState = useCartStore.getState()
+        const projectPermitSnapshot = cartState.projectPermit ?? undefined
+        const projectPermitWaiverSnapshot = cartState.projectPermitWaiver ?? undefined
         const next: SentProject = {
           id: crypto.randomUUID(),
           item,
@@ -466,6 +484,8 @@ export const useProjectsStore = create<ProjectsState>()(
           ...(contractor.quotedPriceCents && contractor.quotedPriceCents > 0
             ? { quotedPriceCents: contractor.quotedPriceCents }
             : {}),
+          ...(projectPermitSnapshot ? { projectPermit: projectPermitSnapshot } : {}),
+          ...(projectPermitWaiverSnapshot ? { projectPermitWaiver: projectPermitWaiverSnapshot } : {}),
         }
         set((state) => {
           if (state.sentProjects.some((p) => p.item.id === item.id)) return state
