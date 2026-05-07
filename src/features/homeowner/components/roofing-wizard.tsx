@@ -320,6 +320,10 @@ export function RoofingWizard({
     7: "We'll use these measurements to give you the most accurate quote.",
     8: 'Permits are required for full replacements in most Florida counties.',
   }
+  const step6Subtitle = flowPath === 'addons_only'
+    ? 'Pick at least one to continue.'
+    : stepSubtitles[6]
+  const resolvedSubtitle = step === 6 ? step6Subtitle : stepSubtitles[step]
 
   return (
     <div
@@ -339,13 +343,13 @@ export function RoofingWizard({
         step={displayStep}
         totalSteps={totalDisplaySteps}
         title={stepTitles[step] ?? ''}
-        subtitle={stepSubtitles[step]}
+        subtitle={resolvedSubtitle}
         direction={direction}
         onBack={goBack}
         onNext={step === 10 ? handleAddToProject : goNext}
-        onSkip={step === 6 ? () => {
+        onSkip={step === 6 && flowPath !== 'addons_only' ? () => {
           setDirection(1)
-          setStep(flowPath === 'addons_only' ? 9 : 8)
+          setStep(8)
         } : undefined}
         skipLabel="Skip add-ons"
         nextLabel={
@@ -359,6 +363,7 @@ export function RoofingWizard({
           (step === 3 && !selectedServiceType) ||
           (step === 4 && selectedMaterials.length === 0) ||
           (step === 5 && (!metalRoofSelection.color || !metalRoofSelection.roofSize)) ||
+          (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
           (step === 8 && roofPermit === null) ||
           (step === 8 && roofPermit === 'no' && (!waiverAcknowledged || waiverName.trim().length < 2)) ||
