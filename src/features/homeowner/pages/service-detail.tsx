@@ -4,34 +4,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence } from 'lucide-react'
-import {
-  GenericServiceWizard,
-  FENCING_STEPS,
-  DRIVEWAYS_STEPS,
-  PERGOLAS_STEPS,
-  AIR_CONDITIONING_STEPS,
-  WALL_PANELING_STEPS,
-  HOUSE_PAINTING_STEPS,
-  GARAGE_STEPS,
-  BLINDS_STEPS,
-  housePaintingGetNext,
-  housePaintingGetPrev,
-  type GenericWizardStep,
-} from '../components/generic-service-wizard'
-
-function getStepsForService(id: string): GenericWizardStep[] {
-  switch (id) {
-    case 'fencing':          return FENCING_STEPS
-    case 'driveways':        return DRIVEWAYS_STEPS
-    case 'pergolas':         return PERGOLAS_STEPS
-    case 'air_conditioning': return AIR_CONDITIONING_STEPS
-    case 'wall_paneling':    return WALL_PANELING_STEPS
-    case 'house_painting':   return HOUSE_PAINTING_STEPS
-    case 'garage':           return GARAGE_STEPS
-    case 'blinds':           return BLINDS_STEPS
-    default:                 return DRIVEWAYS_STEPS
-  }
-}
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -315,65 +287,6 @@ export function ServiceDetailPage() {
           Go back
         </Button>
       </div>
-    )
-  }
-
-  // Chip-tap restoration arc complete — every configurable service now flows
-  // through the chip-tap render path. PoolWizard / GenericServiceWizard files
-  // remain dormant per project_buildconnect_wizard_dormant_preserve so the
-  // refined-wizard option stays available for end-of-pre-launch polish.
-  const GENERIC_WIZARD_SERVICES: string[] = []
-  if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
-    const editId = editItemForService?.id as string | null ?? null
-    const defaultAddrKey = (() => {
-      const edit = editItemForService?.address as CartItemAddress | undefined
-      if (!edit) return 'primary'
-      const match = addressOptions.find((o) => o.label === edit.label)
-      return match?.key ?? 'primary'
-    })()
-    const isHousePainting = serviceId === 'house_painting'
-    const isMeasureable = serviceId === 'driveways' || serviceId === 'fencing' || serviceId === 'pergolas'
-    const isFencing = serviceId === 'fencing'
-    const measureCtaLabel = serviceId === 'driveways'
-      ? 'Measure your driveway area'
-      : isFencing
-      ? 'Measure your fence line'
-      : 'Measure your outdoor space'
-    return (
-      <>
-        {isMeasureable && (
-          <div className="px-4 pt-4 pb-0" data-satellite-measure-cta={serviceId}>
-            <p className="text-sm font-semibold text-foreground mb-2 max-w-[580px] mx-auto text-center">{measureCtaLabel}</p>
-            <SatelliteMeasure
-              key={areaMeasureKey}
-              serviceCategory={serviceId as ServiceCategory}
-              gmpEnabled={getFlag('googleMapsPlatform')}
-              initialAddress={selectedAddress?.full ?? ''}
-              onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined, address: result.address })}
-            />
-          </div>
-        )}
-        {/* Mandatory measurement gate for driveways + pergolas — wizard hidden until area is measured. */}
-        {(serviceId === 'driveways' || serviceId === 'pergolas') && !areaMeasurement ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground" data-measure-gate="required">
-            {serviceId === 'driveways' ? 'Measure your driveway above to continue.' : 'Measure your outdoor space above to continue.'}
-          </div>
-        ) : (
-          <GenericServiceWizard
-            service={service}
-            steps={getStepsForService(serviceId ?? '')}
-            {...(isHousePainting && { getNextStep: housePaintingGetNext, getPrevStep: housePaintingGetPrev })}
-            addressOptions={addressOptions}
-            defaultAddressKey={defaultAddrKey}
-            editItem={editItemForService}
-            editingItemId={editId}
-            onCancel={() => navigate('/home')}
-            onDone={() => navigate('/home/cart')}
-            {...(isMeasureable && areaMeasurement && !isFencing && { initialAreaSqft: areaMeasurement.areaSqft })}
-            {...(isFencing && areaMeasurement?.perimeterFt != null && { initialPerimeterFt: areaMeasurement.perimeterFt })}
-          />
-        )}
-      </>
     )
   }
 
