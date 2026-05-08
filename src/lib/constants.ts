@@ -292,6 +292,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'spa_15x7', label: '15×7' },
           { id: 'spa_custom', label: 'Custom Size' },
         ],
+        revealsOn: { group: 'addons', equals: 'spa' },
       },
       {
         id: 'beach_size',
@@ -304,6 +305,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'beach_15x7', label: '15×7' },
           { id: 'beach_custom', label: 'Custom Size' },
         ],
+        revealsOn: { group: 'addons', equals: 'beach' },
       },
       {
         id: 'water_feature_units',
@@ -314,6 +316,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'laminar_jet', label: 'Laminar Jet' },
           { id: 'waterfall_unit', label: 'Waterfall' },
         ],
+        revealsOn: { group: 'addons', equals: 'waterfall' },
       },
     ],
   },

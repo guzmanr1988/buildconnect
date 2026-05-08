@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence } from 'lucide-react'
-import { PoolWizard } from '../components/pool-wizard'
 import {
   GenericServiceWizard,
   FENCING_STEPS,
@@ -319,41 +318,10 @@ export function ServiceDetailPage() {
     )
   }
 
-  if (serviceId === 'pool') {
-    const editId = editItemForService?.id as string | null ?? null
-    const defaultAddrKey = (() => {
-      const edit = editItemForService?.address as CartItemAddress | undefined
-      if (!edit) return 'primary'
-      const match = addressOptions.find((o) => o.label === edit.label)
-      return match?.key ?? 'primary'
-    })()
-    return (
-      <PoolWizard
-        service={service}
-        editItem={editItemForService}
-        addressOptions={addressOptions}
-        defaultAddressKey={defaultAddrKey}
-        editingItemId={editId}
-        onCancel={() => navigate('/home')}
-        onDone={() => navigate('/home/cart')}
-      />
-    )
-  }
-
-  // Card-slide wizard delegates — propagated from roofing pilot (PR #30).
-  // All chip-select services route through GenericServiceWizard + dispatch table.
-  // Chip-tap restoration arc: services migrated out of GenericServiceWizard
-  // into the chip-tap render path. Wizard files + step configs stay dormant
-  // per project_buildconnect_wizard_dormant_preserve. Config-PR-gw1 moved
-  // driveways/fencing/pergolas; gw2 moved wall_paneling/blinds; AC-rejoin-trim
-  // moved air_conditioning; gw3-garage-only-split moved garage; this PR
-  // (Config-PR-house_painting-rejoin-trim) moves house_painting on the
-  // durable spread-fix base (catalog-store.ts:534/548/559 now `{...bundled,
-  // ...g, options}` so bundle-only fields like revealsOn survive the server
-  // merge). house_painting rooms group uses revealsOn.notEquals='exterior_only'
-  // to mirror the wizard's step-skip logic. Pool stays on PoolWizard until
-  // Config-PR-pool — wizard files remain dormant per
-  // project_buildconnect_wizard_dormant_preserve.
+  // Chip-tap restoration arc complete — every configurable service now flows
+  // through the chip-tap render path. PoolWizard / GenericServiceWizard files
+  // remain dormant per project_buildconnect_wizard_dormant_preserve so the
+  // refined-wizard option stays available for end-of-pre-launch polish.
   const GENERIC_WIZARD_SERVICES: string[] = []
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
