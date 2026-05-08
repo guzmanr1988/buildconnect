@@ -134,6 +134,34 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
               { id: 'impact_glass', label: 'Impact Glass' }, { id: 'low_e', label: 'Low-E Glass' },
             ]},
           ]},
+          { id: 'storm_front', label: 'Storm Front', subGroups: [
+            { id: 'storm_front_sizes', label: 'Storm Front Sizes', required: false, type: 'multi' as const, options: [
+              { id: 'sf_24x80', label: '24×80' },
+              { id: 'sf_24x96', label: '24×96' },
+              { id: 'sf_36x80', label: '36×80' },
+              { id: 'sf_36x96', label: '36×96' },
+              { id: 'sf_48x80', label: '48×80' },
+              { id: 'sf_48x96', label: '48×96' },
+              { id: 'sf_60x80', label: '60×80' },
+              { id: 'sf_60x96', label: '60×96' },
+            ]},
+            { id: 'storm_front_types', label: 'Storm Front Types', required: false, type: 'single' as const, options: [
+              { id: 'storm_front_only', label: 'Storm Front' },
+            ]},
+            { id: 'sf_frame_colors', label: 'Frame Colors', required: false, type: 'single' as const, options: [
+              { id: 'white', label: 'White' }, { id: 'bronze', label: 'Bronze' }, { id: 'black', label: 'Black' },
+            ]},
+            { id: 'sf_glass_colors', label: 'Glass Colors', required: false, type: 'single' as const, options: [
+              { id: 'grey_white', label: 'Grey-White', description: 'Dark Grey Tinted Glass' },
+              { id: 'clear_white', label: 'Clear-White', description: 'Light grey tinted' },
+              { id: 'clear', label: 'Clear' },
+              { id: 'gray', label: 'Gray', description: 'Tint color grey' },
+              { id: 'green', label: 'Green', description: 'Low-E Color only' },
+            ]},
+            { id: 'sf_glass_types', label: 'Glass Types', required: false, type: 'single' as const, options: [
+              { id: 'impact_glass', label: 'Impact Glass' }, { id: 'low_e', label: 'Low-E Glass' },
+            ]},
+          ]},
           { id: 'garage_doors', label: 'Garage Doors', subGroups: [
             { id: 'garage_door_type', label: 'Garage Door Type', required: false, type: 'single' as const, options: [
               { id: 'single_garage', label: 'Single Garage Door' },

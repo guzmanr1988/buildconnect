@@ -34,6 +34,7 @@ export interface CartItem {
   selectionQuantities?: Record<string, number>
   windowSelections?: ConfiguratorEntry[]
   doorSelections?: ConfiguratorEntry[]
+  stormFrontSelections?: ConfiguratorEntry[]
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
   metalRoofSelection?: { color: string; roofSize: string }
   // Architectural Shingle color id from GAF Timberline HDZ palette. Optional;
