@@ -1,0 +1,43 @@
+-- Migration 032 — drop rogue air_conditioning Permit option_group.
+--
+-- Background: PR #140 (e9b1cc2) universalized the permit step as project-
+-- level UI via PermitStepSection. As part of that arc, the windows_doors
+-- per-service permit option_group ("Permit / No Permit" pill) was removed
+-- from bundled SERVICE_CATALOG. Permit became project-level state across
+-- every service; no service should retain a per-service permit option_group.
+--
+-- A single rogue option_group was discovered live on prod during PR #153
+-- (Config-PR-gw2 chip-tap restoration arc). Apollo's prod-walk caught AC
+-- chip-tap stuck at 1/2 because option_groups contained one row that was
+-- never carried into a migration:
+--
+--     service_id = 'air_conditioning'
+--     group_id   = 'Permit' (uppercase, non-conventional)
+--     label      = 'Permit'
+--     required   = true
+--     type       = 'single'
+--     0 child option rows
+--
+-- Wizard surfaces bypass required-empty option_groups, so the row was
+-- invisible until chip-tap (which has no such bypass) tried to satisfy
+-- it. The bundled SERVICE_CATALOG has zero permit option_groups across
+-- all 12 services. This row is a pre-#140 leftover that hermes filed
+-- live and the PR #140 cleanup missed.
+--
+-- Fix: DELETE the row. options.option_group_id has ON DELETE CASCADE
+-- (verified against information_schema), so child option rows (if any
+-- ever existed under this group) cascade with the parent. Plain DELETE
+-- is idempotent — deletes nothing if the row is absent — so this
+-- migration is safe to re-run across environments where hermes never
+-- filed the row (i.e. every non-prod env).
+--
+-- Already-applied note: the same DELETE was applied to prod via the
+-- Supabase Management API PAT path before this migration was filed.
+-- This migration captures the change for audit-trail + future-env
+-- replay + defense against re-files. n=3 in the bundle-edit-needs-
+-- server-data-update class (sibling of migration 027 + PR #140
+-- windows_doors-permit removal).
+
+DELETE FROM option_groups
+WHERE service_id = 'air_conditioning'
+  AND group_id = 'Permit';
