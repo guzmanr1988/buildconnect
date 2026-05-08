@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Inbox, CalendarCheck, Handshake, Archive, X } from 'lucide-react'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import type { Lead } from '@/types'
 
@@ -77,10 +77,15 @@ const sentProjectStatusMap: Record<string, Lead['status']> = {
 // /vendor/lead-workflow tiles and /vendor compact summary row (#303).
 // Cancellation-aware (#171/#184) + completedAt-aware (#295) bucketing.
 //
-// Cross-vendor-visibility intentionally loose in demo mode (does NOT
-// filter sentProjects by contractor.vendor_id) per Rodolfo "they all
-// should work" — task_1776818232208_731 lifts to strict scope post-
-// launch when real vendor accounts wire up.
+// 2026-05-08 — task_1776818232208_731 lift: scope-aligned with
+// /vendor/projects (lead-inbox.tsx). Both surfaces now strict-filter
+// sentProjects by contractorMatchesVendor() so counts reconcile (per
+// MATH IS GOD + SOURCE OF TRUTH; banked feedback_shared_state_key_
+// source_consistency). Pre-launch single-test-vendor scenario: all
+// homeowner-booked leads route to that vendor and must show on BOTH
+// surfaces; pre-lift /workflow leaked cross-vendor data while
+// /projects correctly scoped, producing the surface-count mismatch
+// Rodolfo flagged.
 export function useVendorLeadStages(): {
   leads: LeadExt[]
   stages: Record<LeadStageKey, LeadExt[]>
@@ -97,6 +102,7 @@ export function useVendorLeadStages(): {
   const leadCompletedAtByLead = useProjectsStore((s) => s.leadCompletedAtByLead)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
+  const vendor = useResolvedVendor()
   const profile = useAuthStore((s) => s.profile)
   const effectiveMockLeads = useEffectiveMockLeads()
   // account_rep gate: checks both hardcoded account_rep_id (mock-data stamps)
@@ -126,8 +132,22 @@ export function useVendorLeadStages(): {
     // Filter now strips ONLY truly-malformed entries (undefined p OR
     // non-string id); downstream reads use ?. for .item to handle
     // undefined gracefully.
+    // 2026-05-08 — task_1776818232208_731 lift: added strict vendor-
+    // scope predicate via contractorMatchesVendor() so this surface
+    // matches lead-inbox.tsx scope. Bidirectional id resolver handles
+    // the booking-write-side mock-id ('v-1') vs read-side UUID
+    // mismatch for non-mock-mapped vendor logins.
     () => sentProjects
-      .filter((p): p is typeof p => !!p && typeof p.id === 'string')
+      .filter((p): p is typeof p => {
+        if (!p || typeof p.id !== 'string') return false
+        if (!vendor) return false
+        if (!contractorMatchesVendor(p.contractor, vendor)) return false
+        if (profile?.role === 'account_rep' && profile.id) {
+          const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
+          return accountRepIdByLead[leadId] === profile.id
+        }
+        return true
+      })
       .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       _projectId: p.id,
@@ -162,7 +182,7 @@ export function useVendorLeadStages(): {
       reviewStatus: p.reviewStatus,
       reviewNote: p.reviewNote,
     })),
-    [sentProjects, VENDOR_ID],
+    [sentProjects, VENDOR_ID, vendor, profile?.role, profile?.id, accountRepIdByLead],
   )
 
   return useMemo(() => {
