@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '@/components/shared/kpi-card'
 import { PageHeader } from '@/components/shared/page-header'
-import { MOCK_CLOSED_SALES, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import type { ClosedSale } from '@/types'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -208,8 +209,9 @@ export default function VendorBanking() {
   // shape rows from sentProjects with commission computed via the current
   // effective rate. Matches admin/overview mockSoldSales pattern.
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const mockClosedSales = useEffectiveMockClosedSales()
   const sales = useMemo<ClosedSale[]>(() => {
-    const fixture = MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID)
+    const fixture = mockClosedSales.filter((s) => s.vendor_id === VENDOR_ID)
     const live = sentProjects
       .filter((p) =>
         p.contractor?.vendor_id === VENDOR_ID
@@ -235,7 +237,7 @@ export default function VendorBanking() {
         }
       })
     return [...fixture, ...live]
-  }, [sentProjects, VENDOR_ID, commPct])
+  }, [sentProjects, VENDOR_ID, commPct, mockClosedSales])
 
   // Ship #188 / #189 — payment methods are a list per vendor. Source
   // is vendor-billing-store.paymentMethodsByVendor (post-#189 migrate

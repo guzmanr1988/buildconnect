@@ -9,7 +9,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
-import { MOCK_CLOSED_SALES, MOCK_SETTINGS, MOCK_VENDORS } from '@/lib/mock-data'
+import { MOCK_SETTINGS, MOCK_VENDORS } from '@/lib/mock-data'
+import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useCommissionPaymentsStore } from '@/stores/commission-payments-store'
@@ -38,8 +39,9 @@ export default function VendorReportsPage() {
   const vendorPct = 100 - commPct
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const mockClosedSales = useEffectiveMockClosedSales()
   const sales = useMemo<ClosedSale[]>(() => {
-    const fixture = MOCK_CLOSED_SALES.filter((s) => s.vendor_id === VENDOR_ID)
+    const fixture = mockClosedSales.filter((s) => s.vendor_id === VENDOR_ID)
     const live = sentProjects
       .filter((p) =>
         p.contractor?.vendor_id === VENDOR_ID
@@ -65,7 +67,7 @@ export default function VendorReportsPage() {
         }
       })
     return [...fixture, ...live]
-  }, [sentProjects, VENDOR_ID, commPct])
+  }, [sentProjects, VENDOR_ID, commPct, mockClosedSales])
 
   const commissionPaymentsBySale = useCommissionPaymentsStore((s) => s.paymentsBySale)
 

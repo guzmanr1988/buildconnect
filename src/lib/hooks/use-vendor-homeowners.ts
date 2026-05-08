@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
@@ -56,6 +57,10 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
   const mockLeads = useEffectiveMockLeads()
   const profile = useAuthStore((s) => s.profile)
   const isRep = profile?.role === 'account_rep'
+  // Clear Demo gate — source (c) below pulls hardcoded fixture homeowners
+  // from HOMEOWNER_VENDOR_COMPANIES; honor demoDataHidden so the wipe
+  // surfaces here too (mirrors useEffectiveMockLeads gating sources a/b).
+  const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
 
   return useMemo(() => {
     if (!vendor) return []
@@ -126,15 +131,18 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
 
     // (c) Admin-fixture homeowners — only for vendor-admin, not reps.
     // Reps see only their assigned homeowners (sources a + b above).
+    // Skipped when demoDataHidden so Clear Demo wipes this surface.
     if (isRep) return Array.from(byEmail.values()).sort((a, b) => a.name.localeCompare(b.name))
-    Object.entries(HOMEOWNER_VENDOR_COMPANIES).forEach(([hoId, companies]) => {
-      if (!companies.includes(vendor.company)) return
-      const entry = ADMIN_FIXTURE_HOMEOWNERS.find((h) => h.id === hoId)
-      if (!entry) return
-      const occurrences = companies.filter((c) => c === vendor.company).length
-      bumpProjectCount({ ...entry, projectCount: occurrences })
-    })
+    if (!demoDataHidden) {
+      Object.entries(HOMEOWNER_VENDOR_COMPANIES).forEach(([hoId, companies]) => {
+        if (!companies.includes(vendor.company)) return
+        const entry = ADMIN_FIXTURE_HOMEOWNERS.find((h) => h.id === hoId)
+        if (!entry) return
+        const occurrences = companies.filter((c) => c === vendor.company).length
+        bumpProjectCount({ ...entry, projectCount: occurrences })
+      })
+    }
 
     return Array.from(byEmail.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [vendor, vendorId, mockLeads, sentProjects, isRep, profile?.id, accountRepIdByLead])
+  }, [vendor, vendorId, mockLeads, sentProjects, isRep, profile?.id, accountRepIdByLead, demoDataHidden])
 }

@@ -21,6 +21,7 @@ import { useCommissionPaymentsStore } from '@/stores/commission-payments-store'
 import { useVendorPermitsStore } from '@/stores/vendor-permits-store'
 import { useVendorEventsStore } from '@/stores/vendor-events-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
+import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { LEAD_STAGES, useVendorLeadStages } from '@/lib/vendor-lead-stages'
@@ -113,6 +114,12 @@ export default function VendorDashboard() {
     useVendorPermitsStore.setState({ permits: [] })
     useVendorEventsStore.setState({ eventsByVendor: {} })
     useAgreementEventsStore.setState({ events: [] })
+    // Admin-vendor chat thread fixtures — useAdminMessagesStore default
+    // state is non-empty (SEED), so removeItem would reseed on reload.
+    // setState({messages:[]}) auto-persists empty via zustand persist
+    // middleware; default-merge resolves persisted-wins on reload, keeping
+    // the surface empty post-Clear-Demo. Surfaces /vendor/messages.
+    useAdminMessagesStore.setState({ messages: [] })
     try {
       localStorage.removeItem('buildconnect-projects')
       localStorage.setItem(
@@ -128,6 +135,10 @@ export default function VendorDashboard() {
       localStorage.removeItem('buildconnect-vendor-permits')
       localStorage.removeItem('buildconnect-vendor-events')
       localStorage.removeItem('buildconnect-agreement-events')
+      // Note: NO removeItem('buildconnect-admin-messages') — the store's
+      // default state is non-empty (SEED), so removing the persisted entry
+      // would let SEED re-hydrate on reload. The setState({messages:[]})
+      // above auto-persists empty via the persist middleware instead.
       localStorage.removeItem('buildconnect-pending-item')
       localStorage.removeItem('buildconnect-selected-contractor')
       localStorage.removeItem('buildconnect-selected-booking')
