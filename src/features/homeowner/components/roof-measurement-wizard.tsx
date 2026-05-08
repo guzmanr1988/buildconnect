@@ -271,7 +271,7 @@ function StepBar({ step }: { step: number }) {
   return (
     <div className="space-y-1.5 mb-5">
       <div className="flex gap-1.5">
-        {[1, 2, 3, 4].map((n) => (
+        {[1, 2, 3].map((n) => (
           <div
             key={n}
             className={cn(
@@ -281,7 +281,7 @@ function StepBar({ step }: { step: number }) {
           />
         ))}
       </div>
-      <p className="text-[11px] text-muted-foreground font-medium">Step {step} of 4</p>
+      <p className="text-[11px] text-muted-foreground font-medium">Step {step} of 3</p>
     </div>
   )
 }
@@ -294,9 +294,13 @@ interface Props {
   defaultAddress: string
   onComplete: (result: RoofWizardResult) => void
   flowPath?: 'full_replacement' | 'addons_only' | null
+  // Material is sourced from the chip-tap selection on service-detail; the
+  // wizard reads it as a prop and no longer asks the homeowner to re-pick.
+  material?: Exclude<RoofMaterialKey, 'flat_roof'> | null
+  hasFlatSection?: boolean
 }
 
-export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath }: Props) {
+export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState(defaultAddress)
@@ -310,8 +314,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
   const [includeFlat, setIncludeFlat] = useState(false)
-  const [material, setMaterial] = useState<Exclude<RoofMaterialKey, 'flat_roof'> | null>(null)
-  const [flatSelected, setFlatSelected] = useState(false)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -326,17 +328,11 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setShowAdjust(false)
       setAdjFlatArea('')
       setAdjPerimeterFt('')
-      setIncludeFlat(false)
-      setMaterial(null)
-      setFlatSelected(false)
+      setIncludeFlat(hasFlatSection)
     }
-  }, [open, defaultAddress])
+  }, [open, defaultAddress, hasFlatSection])
 
-  useEffect(() => {
-    if (!includeFlat) setFlatSelected(false)
-  }, [includeFlat])
-
-  const anyMaterialSelected = material !== null || flatSelected
+  const anyMaterialSelected = material !== null || hasFlatSection
   const stepThreeComplete = anyMaterialSelected
 
   const startMeasuring = async () => {
@@ -394,13 +390,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const handleComplete = () => {
     if (!stepThreeComplete) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
-    const hasFlatSection = material !== null && flatSelected
+    const hasFlatAlongPitched = material !== null && hasFlatSection
     onComplete({
       address: address.trim(),
       areaSqft: includeFlat ? Math.round(finalArea + finalFlatAreaSqft) : Math.round(finalArea),
       pitch: finalPitch,
       material: dominantMaterial,
-      hasFlatSection,
+      hasFlatSection: hasFlatAlongPitched,
       perimeterFt: Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0),
       // Persist split areas so pricing engine can bill each material
       // against its own slice. Undefined when manual entry (no Solar data).
@@ -419,7 +415,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
             Roof Measurement
           </DialogTitle>
           <DialogDescription className="sr-only">
-            4-step wizard to measure your roof and pre-fill your configuration.
+            3-step wizard to measure your roof and pre-fill your configuration.
           </DialogDescription>
         </DialogHeader>
 
@@ -672,99 +668,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
             </div>
           )}
 
-          {/* ── Step 3: Material ── */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground mb-0.5">
-                  {flowPath === 'addons_only' ? 'What is your existing roof?' : 'What type of roof are you replacing?'}
-                </p>
-                <p className="text-[13px] text-muted-foreground mb-3">
-                  Pick the main material. Add Flat Roof if you also have a flat section.
-                </p>
-              </div>
-              {/* Pitched materials — radio behavior: one at a time */}
-              <div className="grid grid-cols-2 gap-2">
-                {MATERIAL_OPTIONS.map((opt) => {
-                  const isSelected = material === opt.key
-                  return (
-                    <button
-                      key={opt.key}
-                      onClick={() => setMaterial(isSelected ? null : opt.key as Exclude<RoofMaterialKey, 'flat_roof'>)}
-                      className={cn(
-                        'rounded-xl border p-3 text-left transition-all',
-                        isSelected
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                          : 'border-border bg-card hover:bg-muted/40',
-                      )}
-                    >
-                      <p className={cn('text-sm font-semibold', isSelected ? 'text-primary' : 'text-foreground')}>
-                        {opt.label}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{opt.sub}</p>
-                    </button>
-                  )
-                })}
-              </div>
-              {/* Flat-detection hint — shown when Solar saw flat segments but homeowner hasn't ticked Flat yet */}
-              {measurement?.flatAreaSqft !== undefined && measurement.flatAreaSqft > 0 && !flatSelected && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2.5 text-[12px] text-blue-800 dark:text-blue-300">
-                  Looks like part of your roof is flat — about {measurement.flatAreaSqft.toLocaleString()} sqft. Tap Flat Roof below to add a separate price for that section.
-                </div>
-              )}
-              {/* Flat Roof — checkbox behavior: independent toggle */}
-              {(() => {
-                const isFlatGated = !includeFlat
-                return (
-                  <>
-                    <button
-                      disabled={isFlatGated}
-                      title={isFlatGated ? 'Toggle the Flat section ON in Step 1 to enable' : undefined}
-                      onClick={() => !isFlatGated && setFlatSelected((v) => !v)}
-                      className={cn(
-                        'w-full rounded-xl border p-3 text-left transition-all',
-                        isFlatGated
-                          ? 'border-border opacity-40 cursor-not-allowed'
-                          : flatSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                            : 'border-border bg-card hover:bg-muted/40',
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
-                          isFlatGated ? 'border-border bg-background' : flatSelected ? 'border-primary bg-primary' : 'border-border bg-background',
-                        )}>
-                          {flatSelected && !isFlatGated && <div className="h-2 w-2 rounded-sm bg-white" />}
-                        </div>
-                        <div>
-                          <p className={cn('text-sm font-semibold', !isFlatGated && flatSelected ? 'text-primary' : 'text-foreground')}>
-                            {FLAT_ROOF_OPTION.label}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">{FLAT_ROOF_OPTION.sub}</p>
-                        </div>
-                      </div>
-                    </button>
-                    <p className="text-[11px] text-muted-foreground -mt-2 px-1">
-                      {isFlatGated
-                        ? 'Toggle the Flat section ON in Step 1 to enable this option.'
-                        : 'Add Flat Roof if part of the home has a flat section like a porch or garage. The measurement will split into pitched and flat areas automatically.'}
-                    </p>
-                  </>
-                )
-              })()}
-
-              <div className="flex justify-between gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
-                <Button size="sm" disabled={!stepThreeComplete} onClick={() => setStep(4)}>
-                  Next →
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 4: Ready ── */}
-          {step === 4 && stepThreeComplete && (
+          {/* ── Step 3: Ready ── */}
+          {step === 3 && stepThreeComplete && (
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-foreground mb-0.5">You're all set!</p>
@@ -773,16 +678,16 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 </p>
               </div>
               {(() => {
-                const hasFlatSection = material !== null && flatSelected
+                const hasFlatAlongPitched = material !== null && hasFlatSection
                 const pitchedLabel = material ? (MATERIAL_OPTIONS.find((m) => m.key === material)?.label ?? material) : null
-                const materialLabel = pitchedLabel && flatSelected
+                const materialLabel = pitchedLabel && hasFlatSection
                   ? `${pitchedLabel} + Flat Roof`
                   : pitchedLabel ?? FLAT_ROOF_OPTION.label
                 const rows: { label: string; value: string }[] = [
                   { label: 'Address', value: address },
                 ]
                 if (flowPath !== 'addons_only') {
-                  if (hasFlatSection && measurement?.pitchedAreaSqft !== undefined) {
+                  if (hasFlatAlongPitched && measurement?.pitchedAreaSqft !== undefined) {
                     const pitchedWaste = Math.round(measurement.pitchedAreaSqft * ROOF_WASTE_FACTOR)
                     const flatWaste = Math.round(measurement.flatAreaSqft * ROOF_WASTE_FACTOR)
                     rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft → ${pitchedWaste.toLocaleString()} sqft w/waste (${sqftToSquares(pitchedWaste)} squares)` })
@@ -812,7 +717,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 )
               })()}
               <div className="flex justify-between gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => setStep(3)}>Back</Button>
+                <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
                 <Button size="sm" onClick={handleComplete}>
                   Start Configuring →
                 </Button>

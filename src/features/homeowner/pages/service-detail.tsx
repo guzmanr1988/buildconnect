@@ -29,7 +29,7 @@ import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
 import { ShingleColorPicker } from '../components/shingle-color-picker'
 import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
-import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof-measurement-wizard'
+import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -213,9 +213,6 @@ export function ServiceDetailPage() {
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
   const handleWizardComplete = (result: RoofWizardResult) => {
-    const materials = [result.material]
-    if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
-    setSelections((prev) => ({ ...prev, material: materials }))
     if (result.material === 'metal') {
       const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
@@ -475,12 +472,21 @@ export function ServiceDetailPage() {
             </div>
           </div>
 
-          <RoofMeasurementWizard
-            open={wizardOpen}
-            onClose={() => setWizardOpen(false)}
-            defaultAddress={selectedAddress?.full ?? ''}
-            onComplete={handleWizardComplete}
-          />
+          {(() => {
+            const matSelections = selections['material'] ?? []
+            const dominantMaterial = (matSelections.find((m) => m !== 'flat_roof') ?? null) as Exclude<RoofMaterialKey, 'flat_roof'> | null
+            const hasFlatSection = matSelections.includes('flat_roof')
+            return (
+              <RoofMeasurementWizard
+                open={wizardOpen}
+                onClose={() => setWizardOpen(false)}
+                defaultAddress={selectedAddress?.full ?? ''}
+                onComplete={handleWizardComplete}
+                material={dominantMaterial}
+                hasFlatSection={hasFlatSection}
+              />
+            )
+          })()}
         </motion.div>
       )}
 
