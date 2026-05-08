@@ -342,7 +342,11 @@ export function ServiceDetailPage() {
 
   // Card-slide wizard delegates — propagated from roofing pilot (PR #30).
   // All chip-select services route through GenericServiceWizard + dispatch table.
-  const GENERIC_WIZARD_SERVICES = ['driveways', 'fencing', 'pergolas', 'air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
+  // Config-PR-gw1 (chip-tap restoration arc): driveways/fencing/pergolas
+  // moved to the chip-tap render path. Wizard files (GenericServiceWizard +
+  // FENCING_STEPS / DRIVEWAYS_STEPS / PERGOLAS_STEPS) stay dormant per
+  // project_buildconnect_wizard_dormant_preserve.
+  const GENERIC_WIZARD_SERVICES = ['air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
@@ -587,8 +591,8 @@ export function ServiceDetailPage() {
         </motion.div>
       )}
 
-      {/* Area measurement CTA — driveways + pergolas, additive (CHAIN IS GOD) */}
-      {(serviceId === 'driveways' || serviceId === 'pergolas') && (
+      {/* Area measurement CTA — driveways + pergolas + fencing, additive (CHAIN IS GOD) */}
+      {(serviceId === 'driveways' || serviceId === 'pergolas' || serviceId === 'fencing') && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -602,9 +606,13 @@ export function ServiceDetailPage() {
               <div className="flex-1 min-w-0">
                 {areaMeasurement ? (
                   <>
-                    <p className="text-sm font-semibold text-foreground">Area measured</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {serviceId === 'fencing' ? 'Fence line measured' : 'Area measured'}
+                    </p>
                     <p className="text-[13px] text-muted-foreground mt-0.5">
-                      {areaMeasurement.areaSqft.toLocaleString()} sq ft · {areaMeasurement.address}
+                      {serviceId === 'fencing' && areaMeasurement.perimeterFt != null
+                        ? `${areaMeasurement.perimeterFt.toLocaleString()} lin ft`
+                        : `${areaMeasurement.areaSqft.toLocaleString()} sq ft`} · {areaMeasurement.address}
                     </p>
                     <button
                       className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
@@ -616,7 +624,11 @@ export function ServiceDetailPage() {
                 ) : (
                   <>
                     <p className="text-sm font-semibold text-foreground mb-1">
-                      {serviceId === 'driveways' ? 'Measure your driveway area' : 'Measure your outdoor space'}
+                      {serviceId === 'driveways'
+                        ? 'Measure your driveway area'
+                        : serviceId === 'fencing'
+                        ? 'Measure your fence line'
+                        : 'Measure your outdoor space'}
                     </p>
                     <SatelliteMeasure
                       key={areaMeasureKey}
@@ -1185,6 +1197,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
                 ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
+                ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(addonQuantities && { addonQuantities }),
@@ -1301,11 +1314,11 @@ export function ServiceDetailPage() {
               <p className="text-xs text-muted-foreground mt-1">{service.description}</p>
             </div>
 
-            {/* ── Driveways / Pergolas: Area measurement card ── */}
-            {(['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && (
+            {/* ── Driveways / Pergolas / Fencing: Area / Fence-line measurement card ── */}
+            {(['driveways', 'pergolas', 'fencing'] as string[]).includes(serviceId ?? '') && areaMeasurement && (
               <div className="border-b border-border/50 pb-4">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Area Measurement
+                  {serviceId === 'fencing' ? 'Fence Line Measurement' : 'Area Measurement'}
                 </h4>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -1313,7 +1326,9 @@ export function ServiceDetailPage() {
                       {areaMeasurement.address}
                     </span>
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      {areaMeasurement.areaSqft.toLocaleString()} sq ft
+                      {serviceId === 'fencing' && areaMeasurement.perimeterFt != null
+                        ? `${areaMeasurement.perimeterFt.toLocaleString()} lin ft`
+                        : `${areaMeasurement.areaSqft.toLocaleString()} sq ft`}
                     </span>
                   </div>
                 </div>
