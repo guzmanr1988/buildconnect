@@ -342,11 +342,13 @@ export function ServiceDetailPage() {
 
   // Card-slide wizard delegates — propagated from roofing pilot (PR #30).
   // All chip-select services route through GenericServiceWizard + dispatch table.
-  // Config-PR-gw1 (chip-tap restoration arc): driveways/fencing/pergolas
-  // moved to the chip-tap render path. Wizard files (GenericServiceWizard +
-  // FENCING_STEPS / DRIVEWAYS_STEPS / PERGOLAS_STEPS) stay dormant per
-  // project_buildconnect_wizard_dormant_preserve.
-  const GENERIC_WIZARD_SERVICES = ['air_conditioning', 'wall_paneling', 'house_painting', 'garage', 'blinds']
+  // Chip-tap restoration arc: services migrated out of GenericServiceWizard
+  // into the chip-tap render path. Wizard files + step configs stay dormant
+  // per project_buildconnect_wizard_dormant_preserve. Config-PR-gw1 moved
+  // driveways/fencing/pergolas; gw2 moved air_conditioning/wall_paneling/
+  // blinds. Remaining GW slots: house_painting (custom getNextStep/Prev),
+  // garage. Pool stays on PoolWizard until Config-PR-pool.
+  const GENERIC_WIZARD_SERVICES = ['house_painting', 'garage']
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
