@@ -35,6 +35,7 @@ import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
 import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 
@@ -355,6 +356,9 @@ export function ServiceDetailPage() {
       const current = prev[group.id] ?? []
       if (group.type === 'single') {
         return { ...prev, [group.id]: [optionId] }
+      }
+      if (serviceId === 'roofing' && group.id === 'material') {
+        return { ...prev, [group.id]: applyRoofingMaterialPitchedSingleton(current, optionId) }
       }
       if (current.includes(optionId)) {
         return { ...prev, [group.id]: current.filter((id) => id !== optionId) }
@@ -1081,6 +1085,19 @@ export function ServiceDetailPage() {
                   }
                 }
               }
+              // chip-tap-as-SoT cart-side gate (defense-in-depth): when chip-tap
+              // material excludes flat_roof, strip flat contribution from the cart
+              // payload so pricing and downstream consumers bill pitched-only. The
+              // wizard's includeFlat default already derives from chip-tap intent,
+              // but this gate catches: user-toggled-flat post-mount, direct-wizard-
+              // entry mismatches, future regressions on the upstream propagation.
+              const cartRoofMeasurement = (() => {
+                if (serviceId !== 'roofing' || !roofMeasurement) return null
+                const includeFlatForCart = (selections['material'] ?? []).includes('flat_roof')
+                if (includeFlatForCart) return roofMeasurement
+                const pitchedOnly = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
+                return { ...roofMeasurement, areaSqft: pitchedOnly, flatAreaSqft: 0, includeFlat: false }
+              })()
               const itemData = {
                 serviceId: service.id,
                 serviceName: service.name,
@@ -1094,7 +1111,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && shingleColor && { shingleColor }),
                 ...(serviceId === 'roofing' && tileSelection.tileType && { tileType: tileSelection.tileType }),
                 ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
-                ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
+                ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),

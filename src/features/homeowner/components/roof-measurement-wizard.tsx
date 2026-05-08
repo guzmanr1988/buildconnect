@@ -328,9 +328,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setShowAdjust(false)
       setAdjFlatArea('')
       setAdjPerimeterFt('')
+      // chip-tap-as-SoT: includeFlat derives from chip-tap intent. The Solar
+      // post-detection override (was line 358) is removed so chip-tap stays
+      // authoritative. For dormant/legacy mounts (material prop omitted, defaults
+      // to null), Solar detection still drives default in the post-measure branch.
       setIncludeFlat(hasFlatSection)
     }
-  }, [open, defaultAddress, hasFlatSection])
+  }, [open, defaultAddress, hasFlatSection, material])
 
   const anyMaterialSelected = material !== null || hasFlatSection
   const stepThreeComplete = anyMaterialSelected
@@ -355,7 +359,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
       setAdjPerimeterFt(String(result.perimeterFt))
-      setIncludeFlat(result.flatAreaSqft > 0)
+      // Only override includeFlat from Solar when chip-tap context is absent
+      // (dormant/legacy mounts with material=null). With chip-tap context, the
+      // open-reset effect above already set includeFlat=hasFlatSection and that
+      // intent wins over Solar detection.
+      if (material === null) {
+        setIncludeFlat(result.flatAreaSqft > 0)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
@@ -665,6 +675,21 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Step 3 fallback: chip-tap empty (no material picked).
+              stepThreeComplete=false, success block below would render blank.
+              Tell the user how to recover. */}
+          {step === 3 && !stepThreeComplete && (
+            <div className="space-y-3 py-4">
+              <p className="text-sm font-semibold text-foreground">Pick a material to continue</p>
+              <p className="text-[13px] text-muted-foreground">
+                Close this modal, tap a roofing material chip on the page, then re-open the wizard.
+              </p>
+              <div className="flex justify-end pt-1">
+                <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
+              </div>
             </div>
           )}
 
