@@ -1,0 +1,34 @@
+name: quote-protection
+
+# Pre-merge regression gate for the Solar API to cart pricing chain.
+# Replays recorded Solar API responses through extracted pure-fn pipeline
+# and asserts cart shape + step-2 totals match the locked fixture baselines.
+# A failing assertion blocks merge.
+#
+# See tests/snapshots/quote-protection/README.md for fixture update flow.
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/**'
+      - 'src/stores/**'
+      - 'src/features/homeowner/**'
+      - 'tests/snapshots/quote-protection/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/quote-protection.yml'
+  push:
+    branches:
+      - main
+
+jobs:
+  quote-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run quote-protection

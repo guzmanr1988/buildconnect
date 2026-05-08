@@ -1,0 +1,9 @@
+# Pricing-protection snapshot baselines — fixture mutations require explicit
+# review from argus (regression-class lock keeper) and analyst (pricing-truth
+# arbiter). Both expected_outputs and recorded Solar JSON are in scope.
+# Updating any fixture file requires:
+#   1. A reason in the PR description (lands in __meta.reason).
+#   2. A bumped __meta.snapshotSHA to the new commit.
+#   3. Updated __meta.recordedAt if the Solar response was re-captured.
+# See tests/snapshots/quote-protection/README.md for full update flow.
+tests/snapshots/quote-protection/ @argus @analyst

@@ -1,0 +1,113 @@
+{
+  "__meta": {
+    "snapshotSHA": "aa8c7257e25b70c4ddf72ec34e2f38a6bd5987da",
+    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. v1 ships with chip=metal-only + chip=metal+flat (both runner-GREEN against pure-fn pipeline). chip=flat-only deferred to v1.1 pending apollo walker disposition (option-A/B/C call). Re-keyed 2026-05-08 per source-trace: step2 surfaces and cart payload diverge because (a) step2 'Total Used for pricing' label inside measurement modal applies asymmetric waste via computeRoofTotal (pitched 2% + flat 1% post-waste) while cart writes RAW; (b) step2 'Flat Area' label STILL renders even when includeFlat=false toggle is off. Encoded as expected.step2 + expected.cart so runner asserts modal-Total-label and cart-payload independently. Asymmetric-waste step2 display + flat-renders-when-toggle-off + wasteFactor useSplit-gate edge in pricing.ts are post-v1 bugs filed for fix.",
+    "recordedAt": "2026-05-08T21:48:00Z",
+    "recordedBundle": "BUrV7oIT",
+    "recordedBy": "apollo",
+    "rekeyedAt": "2026-05-08T22:30:00Z",
+    "rekeyedBy": "apollo (per hephaestus source-trace 1778277435667 + 1778277647844)",
+    "surfaceDefinitions": {
+      "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(...).totalSqft. Note: 'Flat Area' label still renders when measurement.flatAreaSqft>0 even if includeFlat toggle is OFF — flat number is shown but excluded from Total.",
+      "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw values, with flatAreaSqft zeroed when includeFlat=false."
+    }
+  },
+  "address": "1320 Granada Blvd, Coral Gables, FL 33134",
+  "roofShape": "pitched-plus-flat-terrace",
+  "sharedSolarFile": "fixture.solar.json",
+  "sharedWizardInputs": {
+    "address": "1320 Granada Blvd, Coral Gables, FL 33134",
+    "mode": "full"
+  },
+  "outputs": {
+    "chip=metal-only": {
+      "userActions": [
+        { "step": 1, "type": "chip-tap", "value": "standing_seam_metal" }
+      ],
+      "expected": {
+        "step2": {
+          "gateLogic": {
+            "pitchedSqft": 2053,
+            "flatSqft": 484,
+            "totalSqft": 2094,
+            "squares": 21,
+            "includeFlatDefault": false
+          },
+          "canonicalTruth": {
+            "pitchedSqft": 2475,
+            "flatSqft": 480,
+            "totalSqft": 2525,
+            "squares": 26
+          }
+        },
+        "cart": {
+          "gateLogic": {
+            "roofMeasurement": {
+              "pitchedSqft": 2053,
+              "flatSqft": 0,
+              "totalSqft": 2053
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          },
+          "canonicalTruth": {
+            "roofMeasurement": {
+              "pitchedSqft": 2475,
+              "flatSqft": 0,
+              "totalSqft": 2475
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          }
+        }
+      }
+    },
+    "chip=metal+flat": {
+      "userActions": [
+        { "step": 1, "type": "chip-tap", "value": "standing_seam_metal" },
+        { "step": 1, "type": "chip-tap", "value": "flat_roof" }
+      ],
+      "expected": {
+        "step2": {
+          "gateLogic": {
+            "pitchedSqft": 2053,
+            "flatSqft": 484,
+            "totalSqft": 2578,
+            "squares": 26,
+            "includeFlatDefault": true
+          },
+          "canonicalTruth": {
+            "pitchedSqft": 2475,
+            "flatSqft": 480,
+            "totalSqft": 2955,
+            "squares": 30
+          }
+        },
+        "cart": {
+          "gateLogic": {
+            "roofMeasurement": {
+              "pitchedSqft": 2053,
+              "flatSqft": 479,
+              "totalSqft": 2532
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          },
+          "canonicalTruth": {
+            "roofMeasurement": {
+              "pitchedSqft": 2475,
+              "flatSqft": 480,
+              "totalSqft": 2955
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
