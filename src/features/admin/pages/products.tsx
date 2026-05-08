@@ -103,8 +103,16 @@ type GroupFormData = {
 
 const emptyGroupForm: GroupFormData = { id: '', label: '', required: true, type: 'single' }
 
-type OptionFormData = { id: string; label: string; description: string }
-const emptyOptionForm: OptionFormData = { id: '', label: '', description: '' }
+type PriceUnit = 'flat' | 'square' | 'sqft' | 'linear_ft'
+type OptionFormData = { id: string; label: string; description: string; priceUnit: PriceUnit }
+const emptyOptionForm: OptionFormData = { id: '', label: '', description: '', priceUnit: 'flat' }
+
+const PRICE_UNIT_OPTIONS: Array<{ value: PriceUnit; label: string; helper: string }> = [
+  { value: 'flat', label: 'Flat ($)', helper: 'Single dollar amount' },
+  { value: 'square', label: 'Per Square ($/sq)', helper: '1 square = 100 sqft (roofing)' },
+  { value: 'sqft', label: 'Per Sq Ft ($/sqft)', helper: 'Multiplied by measured area' },
+  { value: 'linear_ft', label: 'Per Linear Ft ($/lin ft)', helper: 'Multiplied by linear feet' },
+]
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                              */
@@ -383,11 +391,16 @@ export default function ProductsAdminPage() {
   function openEditOption(
     serviceId: string,
     groupId: string,
-    opt: { id: string; label: string; description?: string }
+    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
   ) {
     setOptionContext({ serviceId, groupId })
     setEditingOptionId(opt.id)
-    setOptionForm({ id: opt.id, label: opt.label, description: opt.description ?? '' })
+    setOptionForm({
+      id: opt.id,
+      label: opt.label,
+      description: opt.description ?? '',
+      priceUnit: opt.priceUnit ?? 'flat',
+    })
     setOptionDialogOpen(true)
   }
 
@@ -413,12 +426,14 @@ export default function ProductsAdminPage() {
         await updateOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
           label: optionForm.label,
           description: optionForm.description || undefined,
+          priceUnit: optionForm.priceUnit,
         })
       } else {
         await addOption(optionContext.serviceId, optionContext.groupId, {
           id: optionForm.id,
           label: optionForm.label,
           description: optionForm.description || undefined,
+          priceUnit: optionForm.priceUnit,
         })
       }
       setOptionDialogOpen(false)
@@ -523,11 +538,16 @@ export default function ProductsAdminPage() {
     groupId: string,
     optionId: string,
     subGroupId: string,
-    subOpt: { id: string; label: string; description?: string }
+    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
   ) {
     setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
     setEditingSubOptionId(subOpt.id)
-    setSubOptionForm({ id: subOpt.id, label: subOpt.label, description: subOpt.description ?? '' })
+    setSubOptionForm({
+      id: subOpt.id,
+      label: subOpt.label,
+      description: subOpt.description ?? '',
+      priceUnit: subOpt.priceUnit ?? 'flat',
+    })
     setSubOptionDialogOpen(true)
   }
 
@@ -543,6 +563,7 @@ export default function ProductsAdminPage() {
           {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
+            priceUnit: subOptionForm.priceUnit,
           }
         )
       } else {
@@ -555,6 +576,7 @@ export default function ProductsAdminPage() {
             id: subOptionForm.id,
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
+            priceUnit: subOptionForm.priceUnit,
           }
         )
       }
@@ -1406,6 +1428,29 @@ export default function ProductsAdminPage() {
                 onChange={(e) => setOptionForm((f) => ({ ...f, description: e.target.value }))}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label>Pricing Unit</Label>
+              <Select
+                value={optionForm.priceUnit}
+                onValueChange={(v) => setOptionForm((f) => ({ ...f, priceUnit: v as PriceUnit }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    <span>{PRICE_UNIT_OPTIONS.find((p) => p.value === optionForm.priceUnit)?.label ?? 'Flat ($)'}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {PRICE_UNIT_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{p.label}</span>
+                        <span className="text-xs text-muted-foreground">{p.helper}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOptionDialogOpen(false)}>
@@ -1527,6 +1572,29 @@ export default function ProductsAdminPage() {
                 value={subOptionForm.description}
                 onChange={(e) => setSubOptionForm((f) => ({ ...f, description: e.target.value }))}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pricing Unit</Label>
+              <Select
+                value={subOptionForm.priceUnit}
+                onValueChange={(v) => setSubOptionForm((f) => ({ ...f, priceUnit: v as PriceUnit }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    <span>{PRICE_UNIT_OPTIONS.find((p) => p.value === subOptionForm.priceUnit)?.label ?? 'Flat ($)'}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {PRICE_UNIT_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{p.label}</span>
+                        <span className="text-xs text-muted-foreground">{p.helper}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

@@ -11,6 +11,8 @@
  * 2026-04-19 per kratos msg 1776569779716).
  */
 
+import type { ServiceConfig, ServiceOption } from '@/types'
+
 export type OptionMetadata = {
   requiresQuantity?: boolean
   quantityRange?: { min: number; max: number }
@@ -110,10 +112,47 @@ export const OPTION_METADATA_BY_SERVICE: Record<string, Record<string, OptionMet
   },
 }
 
-export function getOptionMetadata(optionId: string, serviceId?: string): OptionMetadata {
-  if (serviceId) {
-    const scoped = OPTION_METADATA_BY_SERVICE[serviceId]?.[optionId]
-    if (scoped) return scoped
+export function getOptionMetadata(
+  optionId: string,
+  serviceId?: string,
+  option?: { priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft' },
+): OptionMetadata {
+  // Catalog-overlay wins (admin-edited per option); falls back to the static
+  // map below for older rows that don't carry priceUnit yet. Only priceUnit
+  // is admin-editable today — other flags (requiresQuantity / supportsPercentMarkup)
+  // remain static FE config.
+  const fallback: OptionMetadata = serviceId
+    ? OPTION_METADATA_BY_SERVICE[serviceId]?.[optionId] ?? OPTION_METADATA[optionId] ?? {}
+    : OPTION_METADATA[optionId] ?? {}
+  if (option?.priceUnit) {
+    return { ...fallback, priceUnit: option.priceUnit }
   }
-  return OPTION_METADATA[optionId] ?? {}
+  return fallback
+}
+
+// Walk a service's option-groups + sub-groups for an option by id. Used by
+// pricing consumers (computeVendorTotal, buildRoofingLineItems) to pass the
+// matched option into getOptionMetadata so the catalog priceUnit overlay
+// applies to net-new admin-added options that have no static OPTION_METADATA
+// entry. Returns undefined when the (serviceId, optionId) pair isn't in the
+// catalog — caller falls back to the static map by passing undefined.
+export function findCatalogOption(
+  services: ServiceConfig[],
+  serviceId: string,
+  optionId: string,
+): ServiceOption | undefined {
+  const service = services.find((s) => s.id === serviceId)
+  if (!service) return undefined
+  for (const group of service.optionGroups) {
+    const direct = group.options.find((o) => o.id === optionId)
+    if (direct) return direct
+    for (const opt of group.options) {
+      if (!opt.subGroups) continue
+      for (const sub of opt.subGroups) {
+        const subOpt = sub.options.find((o) => o.id === optionId)
+        if (subOpt) return subOpt
+      }
+    }
+  }
+  return undefined
 }

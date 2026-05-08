@@ -13,6 +13,7 @@ import { useCartStore } from '@/stores/cart-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+import { useCatalogStore } from '@/stores/catalog-store'
 import { haversineMiles } from '@/lib/geo-distance'
 import {
   computeVendorTotal,
@@ -149,15 +150,16 @@ export function VendorComparePage() {
     // Compare Vendors via undefined totalsByVendor[id].
   }, [featuredVendors.map((v) => v.id).join('|')])
 
+  const services = useCatalogStore((s) => s.services)
   const totalsByVendor = useMemo(() => {
     const out: Record<string, VendorTotalResult> = {}
     for (const v of featuredVendors) {
       const map = priceMaps[v.id]
       if (!map) continue
-      out[v.id] = computeVendorTotal(map, cartItems)
+      out[v.id] = computeVendorTotal(map, cartItems, services)
     }
     return out
-  }, [priceMaps, cartItems])
+  }, [priceMaps, cartItems, services])
 
   // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
   // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.

@@ -55,6 +55,7 @@ type DbOption = {
   option_id: string
   label: string
   description: string | null
+  price_unit: string | null
   sort_order: number
   sub_groups: DbSubGroup[]
 }
@@ -74,6 +75,7 @@ type DbSubOption = {
   sub_option_id: string
   label: string
   description: string | null
+  price_unit: string | null
   sort_order: number
 }
 
@@ -81,11 +83,18 @@ type DbSubOption = {
 /* Row → ServiceConfig reshape                                      */
 /* ---------------------------------------------------------------- */
 
+function priceUnitFromDb(v: string | null): ServiceOption['priceUnit'] | undefined {
+  if (v === 'flat' || v === 'square' || v === 'sqft' || v === 'linear_ft') return v
+  return undefined
+}
+
 function subOptionFromRow(r: DbSubOption): ServiceOption {
+  const priceUnit = priceUnitFromDb(r.price_unit)
   return {
     id: r.sub_option_id,
     label: r.label,
     ...(r.description ? { description: r.description } : {}),
+    ...(priceUnit ? { priceUnit } : {}),
   }
 }
 
@@ -107,10 +116,12 @@ function optionFromRow(r: DbOption): ServiceOption {
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(subGroupFromRow)
+  const priceUnit = priceUnitFromDb(r.price_unit)
   return {
     id: r.option_id,
     label: r.label,
     ...(r.description ? { description: r.description } : {}),
+    ...(priceUnit ? { priceUnit } : {}),
     ...(subGroups.length > 0 ? { subGroups } : {}),
   }
 }
@@ -303,6 +314,7 @@ export async function createOption(
     option_id: option.id,
     label: option.label,
     description: option.description ?? null,
+    price_unit: option.priceUnit ?? null,
     sort_order: 999,
   })
   if (error) throw new Error(`createOption: ${error.message}`)
@@ -318,6 +330,7 @@ export async function updateOption(
   const dbPatch: Record<string, unknown> = {}
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
+  if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
   const { error } = await supabase
     .from('options')
     .update(dbPatch)
@@ -446,6 +459,7 @@ export async function createSubOption(
     sub_option_id: subOption.id,
     label: subOption.label,
     description: subOption.description ?? null,
+    price_unit: subOption.priceUnit ?? null,
     sort_order: 999,
   })
   if (error) throw new Error(`createSubOption: ${error.message}`)
@@ -463,6 +477,7 @@ export async function updateSubOption(
   const dbPatch: Record<string, unknown> = {}
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
+  if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
   const { error } = await supabase
     .from('sub_options')
     .update(dbPatch)
