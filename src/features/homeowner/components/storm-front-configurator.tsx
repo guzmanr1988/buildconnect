@@ -1,0 +1,301 @@
+import { motion } from 'framer-motion'
+import { Minus, Plus, PlusCircle, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
+
+const STORM_FRONT_SIZES = [
+  '24x80', '24x96',
+  '36x80', '36x96',
+  '48x80', '48x96',
+  '60x80', '60x96',
+]
+
+const STORM_FRONT_TYPES = ['Storm Front']
+
+function StormFrontIcon({ size = 20 }: { size?: number }) {
+  const s = size
+  const stroke = 'currentColor'
+  const sw = 1.5
+  return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={sw}>
+      <rect x="3" y="2" width="18" height="20" rx="1" />
+      <line x1="7" y1="2" x2="7" y2="22" />
+      <line x1="11" y1="2" x2="11" y2="22" />
+      <line x1="15" y1="2" x2="15" y2="22" />
+      <line x1="19" y1="2" x2="19" y2="22" />
+    </svg>
+  )
+}
+
+const FRAME_COLORS = [
+  { label: 'White', color: '#ffffff' },
+  { label: 'Bronze', color: '#8B6914' },
+  { label: 'Black', color: '#1a1a1a' },
+]
+
+const GLASS_COLORS = [
+  { id: 'grey-white', label: 'Grey-White', note: 'Dark Grey Tinted Glass - Mostly selected for Bathroom windows or any windows for maximum privacy', color: '#6b7280', requiresLowE: false },
+  { id: 'clear-white', label: 'Clear-White', note: 'Light grey tinted - mostly added for bathroom windows or any windows for maximum privacy', color: '#d1d5db', requiresLowE: false },
+  { id: 'clear', label: 'Clear', note: '', color: '#e0f2fe', requiresLowE: false },
+  { id: 'gray', label: 'Gray', note: 'Tint color grey added to the Impact glass', color: '#9ca3af', requiresLowE: false },
+  { id: 'green', label: 'Green', note: 'Only available with Low-Emissivity Glass coating', color: '#6ee7b7', requiresLowE: true },
+]
+
+const GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+
+export interface StormFrontSelection {
+  id: string
+  size: string
+  type: string
+  frameColor: string
+  glassColor: string
+  glassType: string
+  quantity: number
+}
+
+interface StormFrontConfiguratorProps {
+  selections: StormFrontSelection[]
+  onChange: (selections: StormFrontSelection[]) => void
+  onSave?: () => void
+}
+
+export function StormFrontConfigurator({ selections, onChange, onSave }: StormFrontConfiguratorProps) {
+  function addEntry(size: string) {
+    onChange([
+      ...selections,
+      { id: crypto.randomUUID(), size, type: 'Storm Front', frameColor: 'White', glassColor: 'Clear-White', glassType: 'Impact Glass', quantity: 1 },
+    ])
+  }
+
+  function removeEntry(id: string) {
+    onChange(selections.filter((s) => s.id !== id))
+  }
+
+  function updateEntry(id: string, field: 'type' | 'quantity' | 'frameColor' | 'glassColor' | 'glassType', value: string | number) {
+    onChange(
+      selections.map((s) => {
+        if (s.id !== id) return s
+        const updated = { ...s, [field]: value }
+        if (field === 'glassType' && value === 'Low-E Glass') {
+          updated.glassColor = 'Green'
+        }
+        if (field === 'glassType' && value !== 'Low-E Glass' && s.glassColor === 'Green') {
+          updated.glassColor = 'Clear-White'
+        }
+        return updated
+      })
+    )
+  }
+
+  function adjustQuantity(id: string, delta: number) {
+    const entry = selections.find((s) => s.id === id)
+    if (!entry) return
+    const newQty = Math.max(1, entry.quantity + delta)
+    updateEntry(id, 'quantity', newQty)
+  }
+
+  const totalStormFronts = selections.reduce((sum, s) => sum + s.quantity, 0)
+
+  const sizeGroups: Record<string, string[]> = {}
+  STORM_FRONT_SIZES.forEach((size) => {
+    const width = size.split('x')[0]
+    if (!sizeGroups[width]) sizeGroups[width] = []
+    sizeGroups[width].push(size)
+  })
+
+  function getEntries(size: string) {
+    return selections.filter((s) => s.size === size)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.25 }}
+      className="mt-4 rounded-xl border bg-background p-4 overflow-hidden"
+      data-product-id="storm_front"
+      data-storm-front-configurator="true"
+    >
+      <h4 className="text-base font-semibold text-foreground mb-4">Select Storm Front Sizes</h4>
+
+      <div className="flex flex-col gap-1">
+        {Object.entries(sizeGroups).map(([width, sizes]) => (
+          <div key={width} className="flex flex-col">
+            <div className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pt-3 pb-1">
+              {width}" Width
+            </div>
+            {sizes.map((size) => {
+              const entries = getEntries(size)
+              const hasEntries = entries.length > 0
+              return (
+                <div key={size} className="flex flex-col">
+                  <div
+                    className={cn(
+                      'flex items-center justify-between px-2 py-2 rounded-lg min-h-[44px]',
+                      hasEntries && 'bg-primary/5'
+                    )}
+                    data-storm-front-size-row={size}
+                  >
+                    <span className={cn(
+                      'text-xl font-semibold',
+                      hasEntries ? 'text-foreground' : 'text-muted-foreground'
+                    )}>
+                      {size.replace('x', '" × ')}"
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1 text-primary"
+                      onClick={() => addEntry(size)}
+                      data-storm-front-add-button={size}
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
+                  </div>
+
+                  {entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex flex-col gap-2 px-2 py-2.5 ml-4 border-l-2 border-primary/20"
+                      data-storm-front-entry={entry.id}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={entry.type}
+                          onValueChange={(v) => updateEntry(entry.id, 'type', v ?? '')}
+                        >
+                          <SelectTrigger
+                            className="h-8 text-xs flex-1 text-center [&>span]:text-center [&>span]:w-full"
+                            data-storm-front-type-select={entry.id}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="min-w-[180px]">
+                            {STORM_FRONT_TYPES.map((type) => (
+                              <SelectItem key={type} value={type} className="text-xs py-2.5 pl-3 pr-4">
+                                <div className="flex items-center gap-2">
+                                  <StormFrontIcon size={28} />
+                                  <span>{type}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1.5">
+                          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustQuantity(entry.id, -1)} data-storm-front-qty-minus={entry.id}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm font-semibold w-6 text-center text-primary" data-storm-front-qty-value={entry.id}>{entry.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustQuantity(entry.id, 1)} data-storm-front-qty-plus={entry.id}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeEntry(entry.id)} data-storm-front-remove={entry.id}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={entry.frameColor}
+                          onValueChange={(v) => updateEntry(entry.id, 'frameColor', v ?? '')}
+                        >
+                          <SelectTrigger
+                            className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full"
+                            data-storm-front-frame-color-select={entry.id}
+                          >
+                            <SelectValue placeholder="Frame" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FRAME_COLORS.map((c) => (
+                              <SelectItem key={c.label} value={c.label} className="text-xs py-2 pl-3 pr-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
+                                  <span>{c.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={entry.glassColor}
+                          onValueChange={(v) => updateEntry(entry.id, 'glassColor', v ?? '')}
+                        >
+                          <SelectTrigger
+                            className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full"
+                            data-storm-front-glass-color-select={entry.id}
+                          >
+                            <SelectValue placeholder="Glass" />
+                          </SelectTrigger>
+                          <SelectContent className="w-[320px] max-w-[90vw]">
+                            {GLASS_COLORS.filter((c) => {
+                              if (c.requiresLowE && entry.glassType !== 'Low-E Glass') return false
+                              return true
+                            }).map((c) => (
+                              <SelectItem key={c.id} value={c.label} className="text-xs py-3 pl-3 pr-4 [&>span]:whitespace-normal">
+                                <div className="flex items-start gap-2.5">
+                                  <div
+                                    className="w-6 h-6 rounded-full shrink-0 mt-0.5 border border-gray-300 shadow-inner"
+                                    style={{ backgroundColor: c.color }}
+                                  />
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="font-semibold text-xs">{c.label}</span>
+                                    {c.note && <span className="text-[10px] text-muted-foreground leading-tight whitespace-normal">{c.note}</span>}
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={entry.glassType}
+                          onValueChange={(v) => updateEntry(entry.id, 'glassType', v ?? '')}
+                        >
+                          <SelectTrigger
+                            className="h-7 text-[11px] flex-1 [&>span]:text-center [&>span]:w-full"
+                            data-storm-front-glass-type-select={entry.id}
+                          >
+                            <SelectValue placeholder="Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GLASS_TYPES.map((t) => (
+                              <SelectItem key={t} value={t} className="text-xs py-2 text-center justify-center pl-4 pr-4">{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 pt-4 border-t flex items-center justify-between">
+        <span className="text-sm font-medium text-muted-foreground">Total Storm Fronts</span>
+        <span
+          className={cn(
+            'text-lg font-bold',
+            totalStormFronts > 0 ? 'text-primary' : 'text-muted-foreground'
+          )}
+          data-storm-front-total
+        >
+          {totalStormFronts}
+        </span>
+      </div>
+      {totalStormFronts > 0 && onSave && (
+        <Button
+          className="w-full mt-4 h-10 rounded-xl text-sm font-semibold"
+          onClick={onSave}
+          data-storm-front-save-button
+        >
+          Save Selection
+        </Button>
+      )}
+    </motion.div>
+  )
+}

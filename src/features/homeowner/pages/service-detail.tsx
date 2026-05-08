@@ -54,6 +54,7 @@ import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial
 import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
+import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof-measurement-wizard'
@@ -158,6 +159,13 @@ export function ServiceDetailPage() {
     !(editItemForService?.doorSelections as DoorSelection[] | undefined)?.length
   )
   const doorTotal = doorSelections.reduce((sum, s) => sum + s.quantity, 0)
+  const [stormFrontSelections, setStormFrontSelections] = useState<StormFrontSelection[]>(
+    (editItemForService?.stormFrontSelections as StormFrontSelection[]) || []
+  )
+  const [stormFrontConfigOpen, setStormFrontConfigOpen] = useState(
+    !(editItemForService?.stormFrontSelections as StormFrontSelection[] | undefined)?.length
+  )
+  const stormFrontTotal = stormFrontSelections.reduce((sum, s) => sum + s.quantity, 0)
   const [garageDoorSelection, setGarageDoorSelection] = useState<GarageDoorSelection>(
     (editItemForService?.garageDoorSelection as GarageDoorSelection) || { type: '', size: '', color: '', glass: '' }
   )
@@ -269,6 +277,8 @@ export function ServiceDetailPage() {
     if (ws?.length) { setWindowSelections(ws); setWindowConfigOpen(false) }
     const ds = legacy.doorSelections as DoorSelection[] | undefined
     if (ds?.length) { setDoorSelections(ds); setDoorConfigOpen(false) }
+    const sfs = legacy.stormFrontSelections as StormFrontSelection[] | undefined
+    if (sfs?.length) { setStormFrontSelections(sfs); setStormFrontConfigOpen(false) }
     const gs = legacy.garageDoorSelection as GarageDoorSelection | undefined
     if (gs?.type) { setGarageDoorSelection(gs); setGarageDoorConfigOpen(false) }
     const ms = legacy.metalRoofSelection as MetalRoofSelection | undefined
@@ -727,6 +737,9 @@ export function ServiceDetailPage() {
                           if (serviceId === 'windows_doors' && option.id === 'doors') {
                             setDoorConfigOpen((prev) => selected.includes('doors') ? !prev : true)
                           }
+                          if (serviceId === 'windows_doors' && option.id === 'storm_front') {
+                            setStormFrontConfigOpen((prev) => selected.includes('storm_front') ? !prev : true)
+                          }
                           // Ship #255 — multi-select material. `selected` is the
                           // pre-click state, so includes('metal') tells us whether
                           // THIS click de-selects metal (was in, now out) or adds
@@ -775,6 +788,11 @@ export function ServiceDetailPage() {
                         {serviceId === 'windows_doors' && option.id === 'doors' && doorTotal > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
                             {doorTotal}
+                          </span>
+                        )}
+                        {serviceId === 'windows_doors' && option.id === 'storm_front' && stormFrontTotal > 0 && (
+                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
+                            {stormFrontTotal}
                           </span>
                         )}
                         {/* Install pills derive their count from the Products selection — no separate stepper. */}
@@ -1012,6 +1030,15 @@ export function ServiceDetailPage() {
                       )}
                     </AnimatePresence>
                     <AnimatePresence>
+                      {selected.includes('storm_front') && stormFrontConfigOpen && (
+                        <StormFrontConfigurator
+                          selections={stormFrontSelections}
+                          onChange={setStormFrontSelections}
+                          onSave={() => setStormFrontConfigOpen(false)}
+                        />
+                      )}
+                    </AnimatePresence>
+                    <AnimatePresence>
                       {selected.includes('garage_doors') && garageDoorConfigOpen && (
                         <GarageDoorConfigurator
                           selection={garageDoorSelection}
@@ -1137,6 +1164,7 @@ export function ServiceDetailPage() {
                 ...(hasQuantities && { selectionQuantities: prunedQuantities }),
                 ...(serviceId === 'windows_doors' && windowSelections.length > 0 && { windowSelections }),
                 ...(serviceId === 'windows_doors' && doorSelections.length > 0 && { doorSelections }),
+                ...(serviceId === 'windows_doors' && stormFrontSelections.length > 0 && { stormFrontSelections }),
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
                 ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
@@ -1180,6 +1208,8 @@ export function ServiceDetailPage() {
               setWindowConfigOpen(true)
               setDoorSelections([])
               setDoorConfigOpen(true)
+              setStormFrontSelections([])
+              setStormFrontConfigOpen(true)
               setGarageDoorSelection({ type: '', size: '', color: '', glass: '' })
               setGarageDoorConfigOpen(true)
               setMetalRoofSelection({ color: '', roofSize: '' })
@@ -1510,6 +1540,31 @@ export function ServiceDetailPage() {
                         <span className="text-[11px] bg-background rounded px-2 py-0.5 border">Frame: {d.frameColor}</span>
                         <span className="text-[11px] bg-background rounded px-2 py-0.5 border">Glass: {d.glassColor}</span>
                         <span className="text-[11px] bg-background rounded px-2 py-0.5 border">{d.glassType}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Storm Front selections */}
+            {serviceId === 'windows_doors' && stormFrontSelections.length > 0 && (
+              <div className="border-b border-border/50 pb-4">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Storm Fronts ({stormFrontSelections.reduce((s, sf) => s + sf.quantity, 0)} total)
+                </h4>
+                <div className="flex flex-col gap-2">
+                  {stormFrontSelections.map((sf) => (
+                    <div key={sf.id} className="rounded-lg bg-muted/50 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{sf.size.replace('x', '" × ')}"</span>
+                        <span className="text-xs font-medium text-primary">Qty: {sf.quantity}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        <span className="text-[11px] bg-background rounded px-2 py-0.5 border">{sf.type}</span>
+                        <span className="text-[11px] bg-background rounded px-2 py-0.5 border">Frame: {sf.frameColor}</span>
+                        <span className="text-[11px] bg-background rounded px-2 py-0.5 border">Glass: {sf.glassColor}</span>
+                        <span className="text-[11px] bg-background rounded px-2 py-0.5 border">{sf.glassType}</span>
                       </div>
                     </div>
                   ))}
