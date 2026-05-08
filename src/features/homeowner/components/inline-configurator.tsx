@@ -5,6 +5,7 @@ import { Check, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ServiceConfig, OptionGroup } from '@/types'
 import { cn } from '@/lib/utils'
+import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
 
 interface InlineConfiguratorProps {
   service: ServiceConfig
@@ -25,6 +26,9 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
       const current = prev[group.id] ?? []
       if (group.type === 'single') {
         return { ...prev, [group.id]: [optionId] }
+      }
+      if (service.id === 'roofing' && group.id === 'material') {
+        return { ...prev, [group.id]: applyRoofingMaterialPitchedSingleton(current, optionId) }
       }
       // multi
       if (current.includes(optionId)) {
