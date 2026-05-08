@@ -52,9 +52,9 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import {
   MOCK_VENDORS,
   MOCK_TRANSACTIONS,
-  MOCK_CLOSED_SALES,
   MOCK_BANK_ACCOUNTS,
 } from '@/lib/mock-data'
+import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
@@ -68,7 +68,6 @@ const fadeUp = {
   }),
 } satisfies Variants
 
-const baselineRevenue = MOCK_CLOSED_SALES.reduce((s, c) => s + c.commission, 0)
 const pendingPayouts = MOCK_TRANSACTIONS
   .filter((t) => t.type === 'payout' && t.status === 'pending')
   .reduce((s, t) => s + t.amount, 0)
@@ -99,6 +98,11 @@ export default function BankingPage() {
   // commission on top of the MOCK_CLOSED_SALES baseline so banking KPIs +
   // chart reflect Mark-Sold actions taken through the mock loop.
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+  const mockClosedSales = useEffectiveMockClosedSales()
+  const baselineRevenue = useMemo(
+    () => mockClosedSales.reduce((s, c) => s + c.commission, 0),
+    [mockClosedSales],
+  )
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
