@@ -346,12 +346,12 @@ export function ServiceDetailPage() {
   // into the chip-tap render path. Wizard files + step configs stay dormant
   // per project_buildconnect_wizard_dormant_preserve. Config-PR-gw1 moved
   // driveways/fencing/pergolas; gw2 moved wall_paneling/blinds; AC-rejoin-trim
-  // moved air_conditioning post-Config-PR-AC-permit-data DROP (rogue server
-  // permit option_group dropped per migration_032 — universal permit lives at
-  // project-level via PermitStepSection since PR #140). Remaining GW slots:
-  // house_painting (custom getNextStep/Prev), garage. Pool stays on
-  // PoolWizard until Config-PR-pool.
-  const GENERIC_WIZARD_SERVICES = ['house_painting', 'garage']
+  // moved air_conditioning; this PR (Config-PR-gw3 garage-only split) moves
+  // garage. house_painting stays on wizard pending Config-PR-catalog-store-
+  // spread-fix (server-wins spread at catalog-store.ts:545 strips bundle-only
+  // fields like revealsOn — chip-tap render-side reveal-rules wouldn't fire
+  // until that lands). Pool stays on PoolWizard until Config-PR-pool.
+  const GENERIC_WIZARD_SERVICES = ['house_painting']
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
