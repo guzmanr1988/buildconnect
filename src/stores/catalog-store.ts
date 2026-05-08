@@ -523,6 +523,12 @@ function unionOptions(
   return missing.length > 0 ? [...merged, ...missing] : merged
 }
 
+// Spread order: bundled first, server second. Server fields win on overlap
+// (preserves SOURCE-OF-TRUTH for admin-edited fields), but bundle-only fields
+// (e.g. revealsOn, badge metadata) are preserved when server omits them.
+// Pre-fix variant `{ ...g, options: ... }` stripped bundled fields whenever
+// the server row didn't carry them — surfaced as the house_painting/rooms
+// revealsOn drop on chip-tap render path (apollo PR #154 walk).
 function unionSubGroups(
   serverSubGroups: OptionGroup[],
   bundledSubGroups: OptionGroup[]
@@ -531,7 +537,7 @@ function unionSubGroups(
   const merged = serverSubGroups.map((sg) => {
     const bundled = bundledSubGroups.find((b) => b.id === sg.id)
     if (!bundled) return sg
-    return { ...sg, options: unionOptions(sg.options, bundled.options) }
+    return { ...bundled, ...sg, options: unionOptions(sg.options, bundled.options) }
   })
   const missing = bundledSubGroups.filter((b) => !seenIds.has(b.id))
   return missing.length > 0 ? [...merged, ...missing] : merged
@@ -545,7 +551,7 @@ function unionOptionGroups(
   const merged = serverGroups.map((g) => {
     const bundled = bundledGroups.find((b) => b.id === g.id)
     if (!bundled) return g
-    return { ...g, options: unionOptions(g.options, bundled.options) }
+    return { ...bundled, ...g, options: unionOptions(g.options, bundled.options) }
   })
   const missing = bundledGroups.filter((b) => !seenIds.has(b.id))
   return missing.length > 0 ? [...merged, ...missing] : merged
@@ -556,7 +562,7 @@ function unionBundledFillingGaps(services: ServiceConfig[]): ServiceConfig[] {
   const merged = services.map((s) => {
     const bundled = SERVICE_CATALOG.find((b) => b.id === s.id)
     if (!bundled) return s
-    return { ...s, optionGroups: unionOptionGroups(s.optionGroups, bundled.optionGroups) }
+    return { ...bundled, ...s, optionGroups: unionOptionGroups(s.optionGroups, bundled.optionGroups) }
   })
   const missing = SERVICE_CATALOG.filter((s) => !seenIds.has(s.id))
   return missing.length > 0 ? [...merged, ...missing] : merged
