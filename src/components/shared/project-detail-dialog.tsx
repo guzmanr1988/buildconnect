@@ -11,7 +11,7 @@ import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-d
 import { deriveInitials } from '@/lib/initials'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
@@ -77,6 +77,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   const isAdminWorkflow = viewMode === 'admin-workflow'
   const [windowsExpanded, setWindowsExpanded] = useState(false)
   const [doorsExpanded, setDoorsExpanded] = useState(false)
+  const [stormFrontsExpanded, setStormFrontsExpanded] = useState(false)
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -488,7 +489,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const wdProductLine = wLineItems.find((l) => l.id === 'wd-product')
                     const totalWQty: number = pd.item.windowSelections.reduce((s: number, w: any) => s + w.quantity, 0)
                     const totalDQty: number = (pd.item.doorSelections ?? []).reduce((s: number, d: any) => s + d.quantity, 0)
-                    const totalUnits = totalWQty + totalDQty
+                    const totalSFQty: number = (pd.item.stormFrontSelections ?? []).reduce((s: number, sf: any) => s + sf.quantity, 0)
+                    const totalUnits = totalWQty + totalDQty + totalSFQty
                     const fmt = (n: number) => `$${n.toLocaleString()}`
                     type WRow = { w: any; unitPrice: number; hasCatalogPrice: boolean; lineTotal: number | null }
                     const windowRows: WRow[] = pd.item.windowSelections.map((w: any) => {
@@ -552,7 +554,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const wdProductLine2 = dLineItems.find((l) => l.id === 'wd-product')
                     const totalWQty2: number = (pd.item.windowSelections ?? []).reduce((s: number, w: any) => s + w.quantity, 0)
                     const totalDQty: number = pd.item.doorSelections.reduce((s: number, d: any) => s + d.quantity, 0)
-                    const totalUnits2 = totalWQty2 + totalDQty
+                    const totalSFQty2: number = (pd.item.stormFrontSelections ?? []).reduce((s: number, sf: any) => s + sf.quantity, 0)
+                    const totalUnits2 = totalWQty2 + totalDQty + totalSFQty2
                     const fmt = (n: number) => `$${n.toLocaleString()}`
                     type DRow = { d: any; unitPrice: number; hasCatalogPrice: boolean; lineTotal: number | null }
                     const doorRows: DRow[] = pd.item.doorSelections.map((d: any) => {
@@ -607,6 +610,71 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     )
                   })()}
 
+                  {selectedItem.project_data.item.stormFrontSelections && selectedItem.project_data.item.stormFrontSelections.length > 0 && (() => {
+                    const pd = selectedItem.project_data
+                    const sfLineItems: Array<{ id: string; amount: number }> =
+                      pd.priceLineItems?.length > 0
+                        ? pd.priceLineItems
+                        : (PRICE_LINE_ITEM_PRESETS[pd.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+                    const wdProductLine3 = sfLineItems.find((l) => l.id === 'wd-product')
+                    const totalWQty3: number = (pd.item.windowSelections ?? []).reduce((s: number, w: any) => s + w.quantity, 0)
+                    const totalDQty3: number = (pd.item.doorSelections ?? []).reduce((s: number, d: any) => s + d.quantity, 0)
+                    const totalSFQty: number = pd.item.stormFrontSelections.reduce((s: number, sf: any) => s + sf.quantity, 0)
+                    const totalUnits3 = totalWQty3 + totalDQty3 + totalSFQty
+                    const fmt = (n: number) => `$${n.toLocaleString()}`
+                    type SFRow = { sf: any; unitPrice: number; hasCatalogPrice: boolean; lineTotal: number | null }
+                    const sfRows: SFRow[] = pd.item.stormFrontSelections.map((sf: any) => {
+                      const unitPrice = stormFrontCatalogUnitPrice(sf, getVendorPrice, pd.item.serviceId)
+                      const hasCatalogPrice = unitPrice > 0
+                      const lineTotal = hasCatalogPrice
+                        ? unitPrice * sf.quantity
+                        : (wdProductLine3 && totalUnits3 > 0 ? Math.round(wdProductLine3.amount / totalUnits3 * sf.quantity) : null)
+                      return { sf, unitPrice, hasCatalogPrice, lineTotal }
+                    })
+                    const stormFrontsTotal = sfRows.reduce((s: number, r: SFRow) => s + (r.lineTotal ?? 0), 0)
+                    const sfVisible = isAdminWorkflow ? stormFrontsExpanded : true
+                    return (
+                      <div className="rounded-xl border p-4 space-y-2">
+                        {isAdminWorkflow ? (
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between"
+                            onClick={() => setStormFrontsExpanded((e) => !e)}
+                          >
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storm Fronts</h4>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{totalSFQty} storm front{totalSFQty !== 1 ? 's' : ''} · {fmt(stormFrontsTotal)}</span>
+                              {stormFrontsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </div>
+                          </button>
+                        ) : (
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storm Fronts</h4>
+                        )}
+                        {sfVisible && sfRows.map(({ sf, unitPrice, hasCatalogPrice, lineTotal }) => (
+                          <div key={sf.id} className="flex items-center justify-between text-[10px]">
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge variant="outline">{sf.size.replace('x', '"×')}" ×{sf.quantity}</Badge>
+                              <Badge variant="secondary">{sf.type}</Badge>
+                              <Badge variant="outline">{sf.frameColor}</Badge>
+                              <Badge variant="outline">{sf.glassColor}</Badge>
+                            </div>
+                            {hasCatalogPrice ? (
+                              <div className="flex items-center gap-1 text-xs ml-2">
+                                <span className="text-muted-foreground">{sf.quantity}</span>
+                                <span className="text-muted-foreground">×</span>
+                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                <span className="text-muted-foreground">=</span>
+                                <span className="font-bold text-primary">{fmt(unitPrice * sf.quantity)}</span>
+                              </div>
+                            ) : lineTotal !== null ? (
+                              <span className="ml-2 text-xs font-bold text-primary whitespace-nowrap">{fmt(lineTotal)}</span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
                   {/* Phase C — Garage Doors, Install Windows, Install Doors, Permit price cards (catalog-first) */}
                   {(() => {
                     const pd = selectedItem.project_data
@@ -618,7 +686,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const gd = pd.item?.garageDoorSelection
                     const ws = pd.item?.windowSelections as Array<{ id: string; quantity: number }> | undefined
                     const ds = pd.item?.doorSelections as Array<{ id: string; quantity: number }> | undefined
-                    const hasAny = gd?.type || (ws?.length) || (ds?.length) || lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
+                    const sfs = pd.item?.stormFrontSelections as Array<{ id: string; quantity: number }> | undefined
+                    const hasAny = gd?.type || (ws?.length) || (ds?.length) || (sfs?.length) || lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
                     if (!hasAny) return null
                     const fmtD = (n: number) => `$${n.toLocaleString()}`
                     return (
@@ -717,6 +786,35 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                             </div>
                           )
                         })()}
+                        {sfs && sfs.length > 0 && (() => {
+                          const installSFLine = findLine('wd-install-storm-front')
+                          const totalQty = sfs.reduce((s, sf) => s + sf.quantity, 0)
+                          const catalogUnit = getVendorPrice(pd.item.serviceId, 'install_storm_front')
+                          const hasCatalog = catalogUnit > 0
+                          const displayTotal = hasCatalog ? catalogUnit * totalQty : installSFLine?.amount
+                          if (!displayTotal) return null
+                          return (
+                            <div className="rounded-xl border p-4 space-y-2">
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Install Storm Front</h4>
+                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
+                                <span className="text-muted-foreground">Installation labor</span>
+                                {hasCatalog ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-muted-foreground">{totalQty} ×</span>
+                                    <span className="font-medium">{fmtD(catalogUnit)}</span>
+                                    <span className="text-xs text-muted-foreground">=</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">×{totalQty}</span>
+                                    <span className="font-bold text-primary">{fmtD(displayTotal)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })()}
                         {(() => {
                           const permitLine = lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
                           const catalogPrice = getVendorPrice(pd.item.serviceId, 'permit')
@@ -786,7 +884,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       const item = pd.item as any
                       const totalWQty = item.windowSelections?.reduce((s: number, w: any) => s + w.quantity, 0) ?? 0
                       const totalDQty = item.doorSelections?.reduce((s: number, d: any) => s + d.quantity, 0) ?? 0
-                      const totalUnits = totalWQty + totalDQty
+                      const totalSFQty = item.stormFrontSelections?.reduce((s: number, sf: any) => s + sf.quantity, 0) ?? 0
+                      const totalUnits = totalWQty + totalDQty + totalSFQty
                       const wdProductLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-product')
 
                       let windowsAmt = 0
@@ -800,6 +899,12 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         const unit = doorCatalogUnitPrice(d, getVendorPrice, serviceId)
                         if (unit > 0) doorsAmt += unit * d.quantity
                         else if (wdProductLine && totalUnits > 0) doorsAmt += Math.round(wdProductLine.amount / totalUnits * d.quantity)
+                      }
+                      let stormFrontsAmt = 0
+                      for (const sf of item.stormFrontSelections ?? []) {
+                        const unit = stormFrontCatalogUnitPrice(sf, getVendorPrice, serviceId)
+                        if (unit > 0) stormFrontsAmt += unit * sf.quantity
+                        else if (wdProductLine && totalUnits > 0) stormFrontsAmt += Math.round(wdProductLine.amount / totalUnits * sf.quantity)
                       }
                       let garageAmt = 0
                       const gd = item.garageDoorSelection
@@ -820,6 +925,12 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         const dInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-doors')
                         installDAmt = catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
                       }
+                      let installSFAmt = 0
+                      if (totalSFQty > 0) {
+                        const catalogInstallSF = getVendorPrice(serviceId, 'install_storm_front')
+                        const sfInstallLine = (priceLineItems as LineItem[]).find((l) => l.id === 'wd-install-storm-front')
+                        installSFAmt = catalogInstallSF > 0 ? catalogInstallSF * totalSFQty : (sfInstallLine?.amount ?? 0)
+                      }
                       let permitAmt = 0
                       const hasPermit = item.selections && Object.values(item.selections as Record<string, string[]>).flat().includes('permit')
                       if (hasPermit) {
@@ -829,9 +940,10 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       }
 
                       const catalogLines: LineItem[] = [
-                        { id: 'wd-product', label: 'Windows & Doors (Product)', amount: windowsAmt + doorsAmt },
+                        { id: 'wd-product', label: 'Windows & Doors (Product)', amount: windowsAmt + doorsAmt + stormFrontsAmt },
                         { id: 'wd-install-windows', label: 'Window Installation', amount: installWAmt },
                         { id: 'wd-install-doors', label: 'Door Installation', amount: installDAmt },
+                        { id: 'wd-install-storm-front', label: 'Storm Front Installation', amount: installSFAmt },
                         { id: 'wd-garage-door', label: 'Garage Door', amount: garageAmt },
                         { id: 'wd-permit', label: 'Permit Fee', amount: permitAmt },
                       ].filter((l) => l.amount > 0)

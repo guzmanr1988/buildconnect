@@ -103,6 +103,40 @@ export function doorCatalogUnitPrice(
   )
 }
 
+const STORM_FRONT_TYPE_IDS: Record<string, string> = {
+  'Storm Front': 'storm_front_only',
+}
+
+const STORM_FRONT_SIZE_IDS: Record<string, string> = {
+  '24x80': 'sf_24x80',
+  '24x96': 'sf_24x96',
+  '36x80': 'sf_36x80',
+  '36x96': 'sf_36x96',
+  '48x80': 'sf_48x80',
+  '48x96': 'sf_48x96',
+  '60x80': 'sf_60x80',
+  '60x96': 'sf_60x96',
+}
+
+/** Unit price for one storm front (before multiplying by quantity). */
+export function stormFrontCatalogUnitPrice(
+  entry: ConfigEntryLike,
+  getPrice: GetPriceFn,
+  serviceId: string,
+): number {
+  return sumOptionPrices(
+    [
+      STORM_FRONT_SIZE_IDS[entry.size],
+      STORM_FRONT_TYPE_IDS[entry.type],
+      FRAME_COLOR_IDS[entry.frameColor],
+      GLASS_COLOR_IDS[entry.glassColor],
+      GLASS_TYPE_IDS[entry.glassType],
+    ],
+    getPrice,
+    serviceId,
+  )
+}
+
 export interface GarageDoorSelectionLike {
   type: string
   size: string
@@ -123,6 +157,7 @@ export interface WindowsDoorsCatalogItem {
   serviceId: string
   windowSelections?: Array<ConfigEntryLike & { quantity: number }>
   doorSelections?: Array<ConfigEntryLike & { quantity: number }>
+  stormFrontSelections?: Array<ConfigEntryLike & { quantity: number }>
   garageDoorSelection?: GarageDoorSelectionLike
   selections?: Record<string, string[]>
 }
@@ -142,10 +177,12 @@ export function computeWindowsDoorsCatalogTotal(
 
   const wInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-windows')
   const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
+  const sfInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-storm-front')
   const wdProductLine = resolvedLineItems.find((l) => l.id === 'wd-product')
   const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
   const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
-  const totalUnits = totalWQty + totalDQty
+  const totalSFQty = item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
+  const totalUnits = totalWQty + totalDQty + totalSFQty
 
   // Windows — product cost. Catalog-first; fallback to wd-product distributed
   // across all window+door units (not install line — that's a separate cost).
@@ -168,6 +205,16 @@ export function computeWindowsDoorsCatalogTotal(
     }
   }
 
+  // Storm fronts — product cost. Same distribution from wd-product.
+  for (const sf of item.stormFrontSelections ?? []) {
+    const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
+    if (unit > 0) {
+      total += unit * sf.quantity
+    } else if (wdProductLine && totalUnits > 0) {
+      total += Math.round(wdProductLine.amount / totalUnits * sf.quantity)
+    }
+  }
+
   // Garage door — product cost
   const gd = item.garageDoorSelection
   if (gd?.type) {
@@ -186,6 +233,12 @@ export function computeWindowsDoorsCatalogTotal(
   if (totalDQty > 0) {
     const catalogInstallD = getPrice(item.serviceId, 'install_doors')
     total += catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+  }
+
+  // Install Storm Front (labor, separate from product)
+  if (totalSFQty > 0) {
+    const catalogInstallSF = getPrice(item.serviceId, 'install_storm_front')
+    total += catalogInstallSF > 0 ? catalogInstallSF * totalSFQty : (sfInstallLine?.amount ?? 0)
   }
 
   // Permit

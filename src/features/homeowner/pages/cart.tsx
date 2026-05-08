@@ -980,6 +980,7 @@ export function CartPage() {
                       // matches the configurator pill pattern and keeps one source of truth.
                       const windowsTotal = viewItem.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
                       const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+                      const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
                       return (
                         <div key={groupId}>
                           <p className="text-sm font-semibold text-foreground mb-1.5">
@@ -995,8 +996,10 @@ export function CartPage() {
                               if (optId === 'bubbler' && aq?.bubblerCount) qty = ` ×${aq.bubblerCount}`
                               if (optId === 'windows' && windowsTotal > 0) qty = ` ${windowsTotal}`
                               if (optId === 'doors' && doorsTotal > 0) qty = ` ${doorsTotal}`
+                              if (optId === 'storm_front' && stormFrontsTotal > 0) qty = ` ${stormFrontsTotal}`
                               if (optId === 'install_windows' && windowsTotal > 0) qty = ` ${windowsTotal}`
                               if (optId === 'install_doors' && doorsTotal > 0) qty = ` ${doorsTotal}`
+                              if (optId === 'install_storm_front' && stormFrontsTotal > 0) qty = ` ${stormFrontsTotal}`
                               if (optId === 'waterfall' && (aq?.laminarJets || aq?.waterfalls)) {
                                 const parts = []
                                 if (aq?.laminarJets) parts.push(`${aq.laminarJets} Jets`)

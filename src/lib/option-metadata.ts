@@ -46,6 +46,7 @@ export function sqftToSquares(sqft: number): number {
 export const OPTION_METADATA: Record<string, OptionMetadata> = {
   install_windows: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
   install_doors: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
+  install_storm_front: { requiresQuantity: true, quantityRange: { min: 1, max: 50 } },
   low_e: { supportsPercentMarkup: true },
   casement: { supportsPercentMarkup: true },
   // Roofing materials — vendor enters $/square (1 sq = 100 sqft); quantity = waste-included squares

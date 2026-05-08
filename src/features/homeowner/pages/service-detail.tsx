@@ -806,6 +806,11 @@ export function ServiceDetailPage() {
                             {doorTotal}
                           </span>
                         )}
+                        {serviceId === 'windows_doors' && option.id === 'install_storm_front' && stormFrontTotal > 0 && (
+                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
+                            {stormFrontTotal}
+                          </span>
+                        )}
                         {serviceId === 'windows_doors' && option.id === 'garage_doors' && garageDoorSelection.type && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {garageDoorSelection.type === 'single_garage' ? 'S' : 'D'}
@@ -1124,6 +1129,8 @@ export function ServiceDetailPage() {
                     prunedQuantities[oid] = windowTotal
                   } else if (serviceId === 'windows_doors' && oid === 'install_doors') {
                     prunedQuantities[oid] = doorTotal
+                  } else if (serviceId === 'windows_doors' && oid === 'install_storm_front') {
+                    prunedQuantities[oid] = stormFrontTotal
                   } else if (selectionQuantities[oid] !== undefined) {
                     prunedQuantities[oid] = selectionQuantities[oid]
                   }
@@ -1463,6 +1470,9 @@ export function ServiceDetailPage() {
                           )}
                           {serviceId === 'windows_doors' && optId === 'install_doors' && doorTotal > 0 && (
                             <span className="ml-1.5 text-xs opacity-75">{doorTotal}</span>
+                          )}
+                          {serviceId === 'windows_doors' && optId === 'install_storm_front' && stormFrontTotal > 0 && (
+                            <span className="ml-1.5 text-xs opacity-75">{stormFrontTotal}</span>
                           )}
                           {/* Inline addon details */}
                           {serviceId === 'pool' && optId === 'led' && ledCount > 0 && (
