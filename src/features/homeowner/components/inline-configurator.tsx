@@ -91,6 +91,9 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                       <button
                         key={option.id}
                         type="button"
+                        data-chip-id={option.id}
+                        data-chip-group={group.id}
+                        data-chip-state={isSelected ? 'active' : 'inactive'}
                         onClick={() => handleSelect(group, option.id)}
                         className={cn(
                           'inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all duration-150',

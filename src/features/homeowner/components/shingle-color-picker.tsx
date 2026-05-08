@@ -40,6 +40,9 @@ export function ShingleColorPicker({ selectedColor, onChange }: ShingleColorPick
             type="button"
             title={c.label}
             onClick={() => onChange(c.id)}
+            data-chip-id={c.id}
+            data-chip-group="shingle_color"
+            data-chip-state={selectedColor === c.id ? 'active' : 'inactive'}
             className="flex flex-col items-center gap-1 transition-all duration-150"
           >
             <div

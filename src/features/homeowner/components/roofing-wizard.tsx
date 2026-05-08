@@ -532,6 +532,9 @@ export function RoofingWizard({
                 <button
                   key={opt.id}
                   type="button"
+                  data-chip-id={opt.id}
+                  data-chip-group="service_type"
+                  data-chip-state={isSelected ? 'active' : 'inactive'}
                   onClick={() => setSingle('service_type', opt.id)}
                   className={cn(
                     'flex items-center gap-3 rounded-xl border p-4 text-left transition-all duration-150',
@@ -562,6 +565,9 @@ export function RoofingWizard({
                 <button
                   key={opt.id}
                   type="button"
+                  data-chip-id={opt.id}
+                  data-chip-group="repair_materials"
+                  data-chip-state={isSelected ? 'active' : 'inactive'}
                   onClick={() => toggleMulti('repair_materials', opt.id)}
                   className={cn(
                     'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
@@ -595,6 +601,10 @@ export function RoofingWizard({
                   type="button"
                   disabled={isFlatGated}
                   title={isFlatGated ? 'Toggle Flat section ON in Step 1 to enable' : undefined}
+                  data-chip-id={opt.id}
+                  data-chip-group="material"
+                  data-chip-state={isSelected ? 'active' : 'inactive'}
+                  data-chip-gated={isFlatGated ? 'true' : undefined}
                   onClick={() => {
                     if (isFlatGated) return
                     if (isSinglePitchedMode) {
@@ -711,6 +721,9 @@ export function RoofingWizard({
                 <button
                   key={opt.id}
                   type="button"
+                  data-chip-id={opt.id}
+                  data-chip-group="addons"
+                  data-chip-state={isSelected ? 'active' : 'inactive'}
                   onClick={() => {
                     toggleMulti('addons', opt.id)
                     if (ADDON_LINEAR_FT_IDS.includes(opt.id)) {
@@ -766,6 +779,9 @@ export function RoofingWizard({
                           <button
                             key={n}
                             type="button"
+                            data-chip-id={String(n)}
+                            data-chip-group="gutter_floors"
+                            data-chip-state={isSelected ? 'active' : 'inactive'}
                             onClick={() => setGutterFloors(n)}
                             className={cn(
                               'rounded-xl border p-3 text-center transition-all duration-150',
@@ -789,6 +805,9 @@ export function RoofingWizard({
                           <button
                             key={n}
                             type="button"
+                            data-chip-id={String(n)}
+                            data-chip-group="gutter_drops"
+                            data-chip-state={isSelected ? 'active' : 'inactive'}
                             onClick={() => setGutterDrops(n)}
                             className={cn(
                               'rounded-xl border p-3 text-center transition-all duration-150',

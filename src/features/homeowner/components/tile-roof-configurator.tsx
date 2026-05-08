@@ -62,6 +62,9 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
                   onClick={() => onChange({ ...selection, tileType: t.id })}
                   data-testid={`tile-type-card-${t.id}`}
                   data-roofing-tile-type-card={t.id}
+                  data-chip-id={t.id}
+                  data-chip-group="tile_type"
+                  data-chip-state={isSelected ? 'active' : 'inactive'}
                   className={cn(
                     'rounded-xl border p-3 text-left transition-all duration-150',
                     isSelected
@@ -96,6 +99,9 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
                 onClick={() => onChange({ ...selection, tileColor: c.id })}
                 data-testid={`tile-color-circle-${c.id}`}
                 data-roofing-tile-color-circle={c.id}
+                data-chip-id={c.id}
+                data-chip-group="tile_color"
+                data-chip-state={selection.tileColor === c.id ? 'active' : 'inactive'}
                 className={cn(
                   'flex flex-col items-center gap-1 transition-all duration-150',
                 )}
