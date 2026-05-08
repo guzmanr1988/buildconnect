@@ -7,7 +7,6 @@ import { computeRoofTotal } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -564,19 +563,9 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     </div>
                     {flowPath !== 'addons_only' && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
                       <div className="border-t pt-3 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Area Breakdown
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="include-flat" className="text-xs text-muted-foreground">Include flat area</Label>
-                            <Switch
-                              id="include-flat"
-                              checked={includeFlat}
-                              onCheckedChange={setIncludeFlat}
-                            />
-                          </div>
-                        </div>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Area Breakdown
+                        </span>
                         {/* Flat area */}
                         <div>
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
@@ -597,6 +586,11 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </p>
                         </div>
                         <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
+                        {finalFlatAreaSqft > 0 && !includeFlat && (
+                          <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
+                            Flat section detected. Tap the Flat Roof chip on the page to include it in your order.
+                          </p>
+                        )}
                       </div>
                     )}
                     {flowPath !== 'addons_only' && (() => {
