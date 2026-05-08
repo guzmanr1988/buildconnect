@@ -45,6 +45,47 @@ export function isMockVendor(id: string | null | undefined): boolean {
 }
 
 /**
+ * Bidirectional match between a sentProject's contractor identity and
+ * the resolved vendor object. Pre-launch fix for the identity-scheme
+ * gap between booking-write side (vendor-compare.tsx writes
+ * contractor.vendor_id from MOCK_VENDORS featured list, always a
+ * mock-id like 'v-1') and read-side (useResolvedVendor returns
+ * MOCK_VENDORS entry with id='v-1' for mapped accounts but synthesizes
+ * vendor.id = profile.id (a real Supabase UUID) for unmapped vendors).
+ *
+ * Match attempts, in order:
+ * 1. Direct id equality (mock==mock or UUID==UUID, after a future
+ *    write-side normalization)
+ * 2. Forward mock->UUID via DEMO_VENDOR_UUID_BY_MOCK_ID (today's
+ *    common case: contractor stored as 'v-1', vendor synthesized
+ *    as the corresponding UUID)
+ * 3. Reverse UUID->mock (forward-compat for if booking-write switches
+ *    schemes and starts writing UUIDs)
+ * 4. Company-name fallback for legacy pre-#165 sentProjects that
+ *    pre-date the contractor.vendor_id field
+ *
+ * Used by lead-inbox.tsx and vendor-lead-stages.ts so /vendor/projects
+ * and /vendor/lead-workflow apply the same scope predicate (was
+ * intentionally divergent pre-task_1776818232208_731 lift).
+ */
+export function contractorMatchesVendor(
+  contractor: { vendor_id?: string; company?: string } | undefined,
+  vendor: Vendor,
+): boolean {
+  if (!contractor) return false
+  const cid = contractor.vendor_id
+  if (cid) {
+    if (cid === vendor.id) return true
+    if (DEMO_VENDOR_UUID_BY_MOCK_ID[cid] === vendor.id) return true
+    for (const [mockId, uuid] of Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID)) {
+      if (uuid === cid && mockId === vendor.id) return true
+    }
+    return false
+  }
+  return !!contractor.company && contractor.company === vendor.company
+}
+
+/**
  * Resolve the current authed vendor's scope — returns:
  * - mockVendorId: string in 'v-1'..'v-5' if the profile maps to a featured
  *   mock vendor via DEMO_VENDOR_UUID_BY_MOCK_ID, else null.

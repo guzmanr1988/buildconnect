@@ -22,7 +22,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { sqftToSquares } from '@/lib/option-metadata'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
-import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { deriveInitials } from '@/lib/initials'
@@ -98,8 +98,7 @@ export default function LeadInbox() {
   const homeownerLeads: Lead[] = useMemo(() => sentProjects
     .filter((p) => {
       if (!vendor) return false
-      if (p.contractor?.vendor_id) { if (p.contractor.vendor_id !== vendor.id) return false }
-      else if (p.contractor?.company !== vendor.company) return false
+      if (!contractorMatchesVendor(p.contractor, vendor)) return false
       // Rep-scope: account_rep sees only sentProjects assigned to them
       if (profile?.role === 'account_rep' && profile.id) {
         const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
@@ -137,7 +136,7 @@ export default function LeadInbox() {
       pack_items: p.item.selections,
       slot: p.sentAt,
       received_at: p.sentAt,
-    })), [sentProjects, VENDOR_ID, vendor?.id, vendor?.company, getVendorPrice])
+    })), [sentProjects, VENDOR_ID, vendor, getVendorPrice, profile?.role, profile?.id, accountRepIdByLead])
 
   const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
   const assigneeMap = useAssigneeMap(VENDOR_ID)
