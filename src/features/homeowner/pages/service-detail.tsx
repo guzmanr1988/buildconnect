@@ -345,13 +345,13 @@ export function ServiceDetailPage() {
   // Chip-tap restoration arc: services migrated out of GenericServiceWizard
   // into the chip-tap render path. Wizard files + step configs stay dormant
   // per project_buildconnect_wizard_dormant_preserve. Config-PR-gw1 moved
-  // driveways/fencing/pergolas; gw2 moved wall_paneling/blinds. AC stays on
-  // wizard until Config-PR-AC-permit-data seeds the missing service_options
-  // Permit rows (chip-tap can't satisfy required-empty; wizard bypassed).
-  // Remaining GW slots: air_conditioning (rejoin-trim post-seed),
+  // driveways/fencing/pergolas; gw2 moved wall_paneling/blinds; AC-rejoin-trim
+  // moved air_conditioning post-Config-PR-AC-permit-data DROP (rogue server
+  // permit option_group dropped per migration_032 — universal permit lives at
+  // project-level via PermitStepSection since PR #140). Remaining GW slots:
   // house_painting (custom getNextStep/Prev), garage. Pool stays on
   // PoolWizard until Config-PR-pool.
-  const GENERIC_WIZARD_SERVICES = ['air_conditioning', 'house_painting', 'garage']
+  const GENERIC_WIZARD_SERVICES = ['house_painting', 'garage']
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
