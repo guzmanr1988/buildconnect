@@ -857,7 +857,26 @@ export const useCatalogStore = create<CatalogState>()(
       // wizard + SERVICE_CATALOG.roofing.material. Existing persisted v15
       // catalogs would render the 5-option roofing list (no aluminum) until
       // re-hydration. Version bump forces migrate() reset to bundled.
-      version: 16,
+      //
+      // Ship — version bump 16→17 one-shot eviction: v16 was bumped
+      // 2026-05-07 BEFORE migration 033 was applied 2026-05-08. Migration
+      // 033 flipped Supabase option_groups.type for roofing.material from
+      // 'single' to 'multi' to match the bundled SERVICE_CATALOG (Ship #255
+      // post-PR-162 alignment). Any client that visited prod between the
+      // v16 deploy and the migration-033 PAT update persisted services.
+      // services with roofing.material.type='single'. On reload,
+      // onRehydrateStorage runs unionBundledFillingGaps which uses
+      // server-wins-on-overlap spread `{...bundled, ...persisted}` —
+      // persisted 'single' beats bundled 'multi' until hydrateFromServer
+      // races the chip-tap renderer. Window of vulnerability surfaces as
+      // single-select chip-tap when user expects multi. Sibling pattern of
+      // Ship #259 (8→9) — same root recurrence because v16 was created
+      // pre-migration-033-application. Version bump forces one-time
+      // migrate() reset to bundled SERVICE_CATALOG (type:'multi' baked in
+      // since Ship #255); subsequent hydrateFromServer re-fetches
+      // post-migration-033 server data which is also type='multi'. Net:
+      // stale clients evict in one reload cycle.
+      version: 17,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
