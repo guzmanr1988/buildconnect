@@ -672,6 +672,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'four_to_five', label: '4–5 rooms' },
           { id: 'whole_interior', label: 'Whole interior' },
         ],
+        revealsOn: { group: 'scope', notEquals: 'exterior_only' },
       },
       {
         id: 'colors',
