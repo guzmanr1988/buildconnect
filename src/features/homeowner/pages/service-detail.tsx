@@ -1081,6 +1081,19 @@ export function ServiceDetailPage() {
                   }
                 }
               }
+              // chip-tap-as-SoT cart-side gate: when chip-tap material excludes
+              // flat_roof, strip flat contribution from the roofMeasurement payload
+              // so pricing engine + downstream consumers bill pitched-only. Wizard
+              // internals untouched; preview UI unchanged. Stricter fallback derives
+              // pitched from areaSqft - flatAreaSqft when pitchedAreaSqft is absent
+              // (legacy items / pure-manual entry without Solar baseline).
+              const cartRoofMeasurement = (() => {
+                if (serviceId !== 'roofing' || !roofMeasurement) return null
+                const includeFlatForCart = (selections['material'] ?? []).includes('flat_roof')
+                if (includeFlatForCart) return roofMeasurement
+                const pitchedOnly = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
+                return { ...roofMeasurement, areaSqft: pitchedOnly, flatAreaSqft: 0, includeFlat: false }
+              })()
               const itemData = {
                 serviceId: service.id,
                 serviceName: service.name,
@@ -1094,7 +1107,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && shingleColor && { shingleColor }),
                 ...(serviceId === 'roofing' && tileSelection.tileType && { tileType: tileSelection.tileType }),
                 ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
-                ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
+                ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
