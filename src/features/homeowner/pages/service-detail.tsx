@@ -484,13 +484,6 @@ export function ServiceDetailPage() {
                 onComplete={handleWizardComplete}
                 material={dominantMaterial}
                 hasFlatSection={hasFlatSection}
-                onAddFlatRoof={() => {
-                  setSelections((prev) => {
-                    const current = prev['material'] ?? []
-                    if (current.includes('flat_roof')) return prev
-                    return { ...prev, material: [...current, 'flat_roof'] }
-                  })
-                }}
               />
             )
           })()}
