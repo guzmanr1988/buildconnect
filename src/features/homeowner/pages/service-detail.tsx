@@ -346,12 +346,15 @@ export function ServiceDetailPage() {
   // into the chip-tap render path. Wizard files + step configs stay dormant
   // per project_buildconnect_wizard_dormant_preserve. Config-PR-gw1 moved
   // driveways/fencing/pergolas; gw2 moved wall_paneling/blinds; AC-rejoin-trim
-  // moved air_conditioning; this PR (Config-PR-gw3 garage-only split) moves
-  // garage. house_painting stays on wizard pending Config-PR-catalog-store-
-  // spread-fix (server-wins spread at catalog-store.ts:545 strips bundle-only
-  // fields like revealsOn — chip-tap render-side reveal-rules wouldn't fire
-  // until that lands). Pool stays on PoolWizard until Config-PR-pool.
-  const GENERIC_WIZARD_SERVICES = ['house_painting']
+  // moved air_conditioning; gw3-garage-only-split moved garage; this PR
+  // (Config-PR-house_painting-rejoin-trim) moves house_painting on the
+  // durable spread-fix base (catalog-store.ts:534/548/559 now `{...bundled,
+  // ...g, options}` so bundle-only fields like revealsOn survive the server
+  // merge). house_painting rooms group uses revealsOn.notEquals='exterior_only'
+  // to mirror the wizard's step-skip logic. Pool stays on PoolWizard until
+  // Config-PR-pool — wizard files remain dormant per
+  // project_buildconnect_wizard_dormant_preserve.
+  const GENERIC_WIZARD_SERVICES: string[] = []
   if (GENERIC_WIZARD_SERVICES.includes(serviceId ?? '')) {
     const editId = editItemForService?.id as string | null ?? null
     const defaultAddrKey = (() => {
@@ -411,12 +414,16 @@ export function ServiceDetailPage() {
 
   // A revealsOn group stays hidden (and does not count toward required progress)
   // until the referenced gate-group has a matching selection. With `equals`, the
-  // gate must contain that specific option id; without, any selection triggers.
+  // gate must contain that specific option id; with `notEquals`, the gate must
+  // have a selection that does NOT match the named id (used by house_painting
+  // rooms group: hidden when scope=exterior_only); without either, any selection
+  // in the gate-group triggers reveal.
   const isRevealed = (g: OptionGroup) => {
     if (!g.revealsOn) return true
     const selected = selections[g.revealsOn.group] ?? []
     if (selected.length === 0) return false
     if (g.revealsOn.equals) return selected.includes(g.revealsOn.equals)
+    if (g.revealsOn.notEquals) return !selected.includes(g.revealsOn.notEquals)
     return true
   }
 

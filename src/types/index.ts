@@ -321,6 +321,9 @@ export interface OptionGroup {
   // Only render + count-toward-progress once the referenced group has a matching
   // selection. With `equals`, reveal only when the referenced group contains that
   // specific option id (useful for "Install → sub-group reveals; No Install → stays
-  // hidden"). Without `equals`, any selection in the gate-group triggers reveal.
-  revealsOn?: { group: string; equals?: string }
+  // hidden"). With `notEquals`, reveal only when the referenced group has a
+  // selection that does NOT match (useful for "Exterior only → rooms group stays
+  // hidden; Interior or Both → rooms reveals"). Without either, any selection in
+  // the gate-group triggers reveal.
+  revealsOn?: { group: string; equals?: string; notEquals?: string }
 }
