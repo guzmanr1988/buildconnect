@@ -497,90 +497,29 @@ export function RoofingWizard({
         {step === 2 && (
           <div className="space-y-4">
             <MeasurementTutorialCTA serviceId={service.id} />
-            <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-                  <Home className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  {roofMeasurement ? (
-                    <>
-                      <p className="text-sm font-semibold text-foreground mb-2">Roof measured</p>
-                      <div className="space-y-1">
-                        {roofMeasurement.address && (
-                          <p className="text-[13px] text-foreground">{roofMeasurement.address}</p>
-                        )}
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                          {flowPath !== 'addons_only' && (
-                            <>
-                              <span className="text-[12px] text-muted-foreground">Main roof</span>
-                              <span className="text-[12px] font-medium text-foreground">
-                                {(() => {
-                                  const sqft = roofMeasurement.pitchedAreaSqft ?? roofMeasurement.areaSqft
-                                  const sq = Math.ceil((sqft * 1.02) / 100)
-                                  return `${sqft.toLocaleString()} sqft (${sq} sq)`
-                                })()}
-                              </span>
-                            </>
-                          )}
-                          {roofMeasurement.perimeterFt ? (
-                            <>
-                              <span className="text-[12px] text-muted-foreground">Linear ft</span>
-                              <span className="text-[12px] font-medium text-foreground">~{roofMeasurement.perimeterFt.toLocaleString()} lin ft</span>
-                            </>
-                          ) : null}
-                          {flowPath !== 'addons_only' && roofMeasurement.flatAreaSqft !== undefined && roofMeasurement.flatAreaSqft > 0 && roofMeasurement.includeFlat !== false && (
-                            <>
-                              <span className="text-[12px] text-muted-foreground">Flat</span>
-                              <span className="text-[12px] font-medium text-foreground">
-                                {roofMeasurement.flatAreaSqft.toLocaleString()} sqft ({Math.ceil((roofMeasurement.flatAreaSqft * 1.01) / 100)} sq)
-                              </span>
-                            </>
-                          )}
-                          {flowPath !== 'addons_only' && roofMeasurement.pitch && (
-                            <>
-                              <span className="text-[12px] text-muted-foreground">Pitch</span>
-                              <span className="text-[12px] font-medium text-foreground">{roofMeasurement.pitch}</span>
-                            </>
-                          )}
-                          {flowPath !== 'addons_only' && roofMeasurement.pitchedAreaSqft !== undefined && roofMeasurement.flatAreaSqft !== undefined && (
-                            <>
-                              <span className="text-[12px] text-muted-foreground font-semibold">Total</span>
-                              <span className="text-[12px] font-semibold text-foreground">
-                                {(() => {
-                                  const { totalSqft, totalSquares } = computeRoofTotal({
-                                    pitchedAreaSqft: roofMeasurement.pitchedAreaSqft!,
-                                    flatAreaSqft: roofMeasurement.flatAreaSqft!,
-                                    includeFlat: roofMeasurement.includeFlat ?? (roofMeasurement.flatAreaSqft! > 0),
-                                  })
-                                  return `${totalSqft.toLocaleString()} sqft (${totalSquares} sq)`
-                                })()}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        className="mt-3 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
-                        onClick={() => setWizardOpen(true)}
-                      >
-                        Re-measure
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
-                      <p className="text-[13px] text-muted-foreground mt-0.5">
-                        We'll measure your roof from satellite data and pre-fill your configuration.
-                      </p>
-                      <Button size="sm" className="mt-3" onClick={() => setWizardOpen(true)}>
-                        Measure My Roof
-                      </Button>
-                    </>
-                  )}
+            {/* Post-measurement summary card hidden per Rodolfo 2026-05-08:
+                "hide this just keep the continue buttom". roofMeasurement
+                state still gets set (downstream config pre-fill preserved);
+                only the visible breakdown is suppressed. Pre-measurement
+                CTA still renders to drive the Measure My Roof entry. */}
+            {!roofMeasurement && (
+              <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                    <Home className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
+                    <p className="text-[13px] text-muted-foreground mt-0.5">
+                      We'll measure your roof from satellite data and pre-fill your configuration.
+                    </p>
+                    <Button size="sm" className="mt-3" onClick={() => setWizardOpen(true)}>
+                      Measure My Roof
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
