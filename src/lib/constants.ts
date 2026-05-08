@@ -204,6 +204,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         options: [
           { id: 'install_windows', label: 'Install Windows' },
           { id: 'install_doors', label: 'Install Doors' },
+          { id: 'install_storm_front', label: 'Install Storm Front' },
         ],
       },
       {

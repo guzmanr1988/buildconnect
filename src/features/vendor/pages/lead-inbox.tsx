@@ -14,7 +14,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
@@ -403,7 +403,8 @@ export default function LeadInbox() {
                               const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
                               const totalWQty = sp.item.windowSelections!.reduce((s, w) => s + w.quantity, 0)
                               const totalDQty = sp.item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
-                              const totalUnits = totalWQty + totalDQty
+                              const totalSFQty = sp.item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
+                              const totalUnits = totalWQty + totalDQty + totalSFQty
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
@@ -456,7 +457,8 @@ export default function LeadInbox() {
                               const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
                               const totalWQty2 = sp.item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
                               const totalDQty = sp.item.doorSelections!.reduce((s, d) => s + d.quantity, 0)
-                              const totalUnits2 = totalWQty2 + totalDQty
+                              const totalSFQty2 = sp.item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
+                              const totalUnits2 = totalWQty2 + totalDQty + totalSFQty2
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
@@ -501,6 +503,60 @@ export default function LeadInbox() {
                                   <div className="pt-2 border-t flex items-center justify-between">
                                     <span className="text-sm font-medium text-muted-foreground">Total Doors</span>
                                     <span className="text-lg font-bold text-primary">{totalDQty}</span>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {sp.item.stormFrontSelections && sp.item.stormFrontSelections.length > 0 && (() => {
+                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
+                              const totalWQty3 = sp.item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
+                              const totalDQty3 = sp.item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
+                              const totalSFQty = sp.item.stormFrontSelections!.reduce((s, sf) => s + sf.quantity, 0)
+                              const totalUnits3 = totalWQty3 + totalDQty3 + totalSFQty
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Storm Fronts Selected</h4>
+                                  <div className="flex flex-col gap-1">
+                                    {sp.item.stormFrontSelections!.map((sf) => {
+                                      const unitPrice = stormFrontCatalogUnitPrice(sf, getVendorPrice, sp.item.serviceId)
+                                      const hasCatalogPrice = unitPrice > 0
+                                      const lineTotal = hasCatalogPrice
+                                        ? unitPrice * sf.quantity
+                                        : (wdProductLine && totalUnits3 > 0 ? Math.round(wdProductLine.amount / totalUnits3 * sf.quantity) : null)
+                                      return (
+                                        <div key={sf.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-base font-semibold text-foreground">
+                                              {sf.size.replace('x', '" × ')}"
+                                            </span>
+                                            {hasCatalogPrice ? (
+                                              <div className="flex items-center gap-1 text-sm">
+                                                <span className="text-muted-foreground">{sf.quantity}</span>
+                                                <span className="text-muted-foreground">×</span>
+                                                <span className="font-medium">{fmt(unitPrice)}</span>
+                                                <span className="text-muted-foreground">=</span>
+                                                <span className="font-bold text-primary">{fmt(unitPrice * sf.quantity)}</span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-sm text-muted-foreground">×{sf.quantity}</span>
+                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            <Badge variant="secondary" className="text-[10px]">{sf.type}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{sf.frameColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{sf.glassColor}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">{sf.glassType}</Badge>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                  <div className="pt-2 border-t flex items-center justify-between">
+                                    <span className="text-sm font-medium text-muted-foreground">Total Storm Fronts</span>
+                                    <span className="text-lg font-bold text-primary">{totalSFQty}</span>
                                   </div>
                                 </div>
                               )
@@ -628,6 +684,39 @@ export default function LeadInbox() {
                               return (
                                 <div className="rounded-xl border bg-background p-4 space-y-3">
                                   <h4 className="text-sm font-semibold text-foreground">Install Doors</h4>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
+                                      <span className="text-sm text-foreground">Installation labor</span>
+                                      {hasCatalog ? (
+                                        <div className="flex items-center gap-1 text-sm">
+                                          <span className="text-muted-foreground">{totalQty} ×</span>
+                                          <span className="font-medium">{fmt(catalogUnit)}</span>
+                                          <span className="text-muted-foreground">=</span>
+                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
+                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                            {/* Install Storm Front — price card */}
+                            {sp.item.stormFrontSelections && sp.item.stormFrontSelections.length > 0 && (() => {
+                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-storm-front')
+                              const totalQty = sp.item.stormFrontSelections!.reduce((sum, sf) => sum + sf.quantity, 0)
+                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_storm_front')
+                              const hasCatalog = catalogUnit > 0
+                              const fallbackTotal = installLine?.amount ?? null
+                              if (!hasCatalog && fallbackTotal === null) return null
+                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
+                              return (
+                                <div className="rounded-xl border bg-background p-4 space-y-3">
+                                  <h4 className="text-sm font-semibold text-foreground">Install Storm Front</h4>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Installation labor</span>
