@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus,
   Pencil,
   Trash2,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   GripVertical,
   Package,
   Layers,
   ListChecks,
+  Search,
+  X,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -142,6 +146,32 @@ export default function ProductsAdminPage() {
   // Refresh when the admin switches back to this tab — picks up vendor edits
   // made in another client without requiring a manual reload.
   useRefetchOnFocus(hydrateFromServer)
+
+  // --- Search/filter + Collapse-all (PR #145 admin UX 5-pack) ---
+  const [query, setQuery] = useState('')
+  // Controlled Accordion value so the Collapse-All / Expand-All toggle can
+  // drive open state programmatically. Default empty array = all collapsed.
+  const [expandedServices, setExpandedServices] = useState<string[]>([])
+  const filteredServices = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return services
+    return services.filter((s) => {
+      const haystack = [
+        s.name,
+        s.tagline,
+        s.description ?? '',
+        ...(s.features ?? []),
+      ]
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [services, query])
+  const allExpanded =
+    filteredServices.length > 0 && expandedServices.length >= filteredServices.length
+  const toggleAllServices = () => {
+    setExpandedServices(allExpanded ? [] : filteredServices.map((s) => s.id))
+  }
 
   // --- Service dialog ---
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false)
@@ -569,9 +599,65 @@ export default function ProductsAdminPage() {
         </Button>
       </PageHeader>
 
+      {/* Search + Collapse-all toolbar */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            data-admin-products-search="true"
+            type="search"
+            placeholder="Search services by name, tagline, or feature..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Button
+          data-admin-products-collapse-all-toggle="true"
+          variant="outline"
+          size="sm"
+          onClick={toggleAllServices}
+          disabled={filteredServices.length === 0}
+          className="gap-2 shrink-0"
+        >
+          {allExpanded ? (
+            <>
+              <ChevronUp className="h-4 w-4" />
+              Collapse all
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              Expand all
+            </>
+          )}
+        </Button>
+      </div>
+
+      {query && filteredServices.length === 0 && (
+        <p className="text-sm text-muted-foreground italic">
+          No services match &ldquo;{query}&rdquo;.
+        </p>
+      )}
+
       {/* Services list */}
-      <Accordion type="multiple" className="space-y-4">
-        {services.map((service, idx) => (
+      <Accordion
+        type="multiple"
+        value={expandedServices}
+        onValueChange={setExpandedServices}
+        className="space-y-4"
+      >
+        {filteredServices.map((service, idx) => (
           <motion.div
             key={service.id}
             initial={{ opacity: 0, y: 12 }}
@@ -579,8 +665,12 @@ export default function ProductsAdminPage() {
             transition={{ delay: idx * 0.04, duration: 0.3 }}
           >
             <AccordionItem value={service.id} className="border-0">
-              <Card className="rounded-xl shadow-sm hover:shadow-md transition overflow-hidden">
-                <CardHeader className="pb-0">
+              <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+                <CardHeader
+                  data-admin-service-sticky-header="true"
+                  className="pb-2 sticky top-0 z-20 bg-card rounded-t-xl border-b border-transparent data-[expanded=true]:border-border"
+                  data-expanded={expandedServices.includes(service.id) ? 'true' : 'false'}
+                >
                   <div className="flex items-start justify-between gap-1 sm:gap-2">
                     <AccordionTrigger className="hover:no-underline py-0 flex-1 min-w-0 [&[data-state=open]>svg]:hidden">
                       <div className="flex flex-col items-stretch gap-1 sm:gap-1.5 min-w-0 flex-1">
@@ -681,7 +771,7 @@ export default function ProductsAdminPage() {
                         const groupOpen = openGroups.has(groupKey)
                         return (
                         <Card
-                          {...dragProps}
+                          {...dragProps.row}
                           className={cn(
                             'rounded-lg border-dashed transition-all',
                             dragState.isDragging && 'opacity-60 scale-[0.98] shadow-lg cursor-grabbing',
@@ -691,26 +781,70 @@ export default function ProductsAdminPage() {
                         >
                           <CardContent className="p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <button
-                                type="button"
-                                onClick={() => toggleGroup(groupKey)}
-                                aria-expanded={groupOpen}
-                                aria-controls={`group-panel-${groupKey}`}
-                                className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
-                              >
-                                <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', groupOpen && 'rotate-90')} aria-hidden="true" />
-                                <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="text-sm font-medium">{group.label}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {group.type}
-                                </Badge>
-                                {group.required && (
-                                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                    Required
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  {...dragProps.handle}
+                                  aria-label={`Drag to reorder ${group.label}`}
+                                  className="h-7 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                >
+                                  <GripVertical className="h-3.5 w-3.5" />
+                                </button>
+                                <div className="flex flex-col shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3.5 w-5 rounded-sm"
+                                    data-admin-row-move-up="true"
+                                    onClick={dragProps.helpers.moveUp}
+                                    disabled={!dragProps.helpers.canMoveUp}
+                                    aria-label={`Move ${group.label} up`}
+                                  >
+                                    <ChevronUp className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-3.5 w-5 rounded-sm"
+                                    data-admin-row-move-down="true"
+                                    onClick={dragProps.helpers.moveDown}
+                                    disabled={!dragProps.helpers.canMoveDown}
+                                    aria-label={`Move ${group.label} down`}
+                                  >
+                                    <ChevronDown className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleGroup(groupKey)}
+                                  aria-expanded={groupOpen}
+                                  aria-controls={`group-panel-${groupKey}`}
+                                  className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                                >
+                                  <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', groupOpen && 'rotate-90')} aria-hidden="true" />
+                                  <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <span className="text-sm font-medium truncate">{group.label}</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    {group.type}
                                   </Badge>
-                                )}
-                              </button>
+                                  {group.required && (
+                                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                      Required
+                                    </Badge>
+                                  )}
+                                </button>
+                              </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1 hidden sm:inline-flex"
+                                  data-admin-add-option-top="true"
+                                  onClick={() => openAddOption(service.id, group.id)}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Add Option
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -749,7 +883,7 @@ export default function ProductsAdminPage() {
                                 renderItem={(opt, _oi, optDragProps, optDragState) => (
                                 <div className="space-y-2">
                                   <div
-                                    {...optDragProps}
+                                    {...optDragProps.row}
                                     className={cn(
                                       'flex items-center justify-between gap-2 rounded-md px-2 py-2 text-base hover:bg-muted/50 transition-colors group/opt',
                                       optDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
@@ -757,8 +891,39 @@ export default function ProductsAdminPage() {
                                       optDragState.anyDragging && 'select-none',
                                     )}
                                   >
-                                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        {...optDragProps.handle}
+                                        aria-label={`Drag to reorder ${opt.label}`}
+                                        className="h-6 w-5 flex items-center justify-center text-muted-foreground/40 group-hover/opt:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                      >
+                                        <GripVertical className="h-3.5 w-3.5" />
+                                      </button>
+                                      <div className="flex flex-col shrink-0">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-3 w-5 rounded-sm"
+                                          data-admin-row-move-up="true"
+                                          onClick={optDragProps.helpers.moveUp}
+                                          disabled={!optDragProps.helpers.canMoveUp}
+                                          aria-label={`Move ${opt.label} up`}
+                                        >
+                                          <ChevronUp className="h-2.5 w-2.5" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-3 w-5 rounded-sm"
+                                          data-admin-row-move-down="true"
+                                          onClick={optDragProps.helpers.moveDown}
+                                          disabled={!optDragProps.helpers.canMoveDown}
+                                          aria-label={`Move ${opt.label} down`}
+                                        >
+                                          <ChevronDown className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </div>
                                       <span className="truncate">{opt.label}</span>
                                       {opt.description && (
                                         <span className="text-sm text-muted-foreground hidden sm:inline truncate">
@@ -811,32 +976,66 @@ export default function ProductsAdminPage() {
                                         onReorder={(from, to) => reorderSubGroups(service.id, group.id, opt.id, from, to)}
                                         renderItem={(subGroup, _sgi, sgDragProps, sgDragState) => (
                                         <div
-                                          {...sgDragProps}
+                                          {...sgDragProps.row}
                                           className={cn(
-                                            'space-y-1 rounded-md transition-all',
+                                            'space-y-1 rounded-md transition-all group/sg',
                                             sgDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
                                             sgDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
                                             sgDragState.anyDragging && 'select-none',
                                           )}
                                         >
-                                          <div className="flex items-center justify-between">
-                                            <button
-                                              type="button"
-                                              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                                              onClick={() => toggleSubGroup(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`)}
-                                            >
-                                              <ChevronRight className={cn('h-3 w-3 text-muted-foreground transition-transform', openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && 'rotate-90')} />
-                                              <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
-                                              <span className="text-sm font-medium">{subGroup.label}</span>
-                                              <Badge variant="outline" className="text-[11px]">
-                                                {subGroup.options.length} items
-                                              </Badge>
-                                              {subGroup.required && (
-                                                <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                                  Required
+                                          <div className="flex items-center justify-between gap-1">
+                                            <div className="flex items-center gap-1 min-w-0 flex-1">
+                                              <button
+                                                type="button"
+                                                {...sgDragProps.handle}
+                                                aria-label={`Drag to reorder ${subGroup.label}`}
+                                                className="h-6 w-5 flex items-center justify-center text-muted-foreground/40 group-hover/sg:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                              >
+                                                <GripVertical className="h-3 w-3" />
+                                              </button>
+                                              <div className="flex flex-col shrink-0">
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-3 w-5 rounded-sm"
+                                                  data-admin-row-move-up="true"
+                                                  onClick={sgDragProps.helpers.moveUp}
+                                                  disabled={!sgDragProps.helpers.canMoveUp}
+                                                  aria-label={`Move ${subGroup.label} up`}
+                                                >
+                                                  <ChevronUp className="h-2.5 w-2.5" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-3 w-5 rounded-sm"
+                                                  data-admin-row-move-down="true"
+                                                  onClick={sgDragProps.helpers.moveDown}
+                                                  disabled={!sgDragProps.helpers.canMoveDown}
+                                                  aria-label={`Move ${subGroup.label} down`}
+                                                >
+                                                  <ChevronDown className="h-2.5 w-2.5" />
+                                                </Button>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
+                                                onClick={() => toggleSubGroup(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`)}
+                                              >
+                                                <ChevronRight className={cn('h-3 w-3 text-muted-foreground transition-transform shrink-0', openSubGroups.has(`${service.id}-${group.id}-${opt.id}-${subGroup.id}`) && 'rotate-90')} />
+                                                <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                <span className="text-sm font-medium truncate">{subGroup.label}</span>
+                                                <Badge variant="outline" className="text-[11px]">
+                                                  {subGroup.options.length} items
                                                 </Badge>
-                                              )}
-                                            </button>
+                                                {subGroup.required && (
+                                                  <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                                    Required
+                                                  </Badge>
+                                                )}
+                                              </button>
+                                            </div>
                                             <div className="flex items-center gap-0.5 shrink-0">
                                               <Button
                                                 variant="ghost"
@@ -874,7 +1073,7 @@ export default function ProductsAdminPage() {
                                               onReorder={(from, to) => reorderSubOptions(service.id, group.id, opt.id, subGroup.id, from, to)}
                                               renderItem={(subOpt, _soi, soDragProps, soDragState) => (
                                               <div
-                                                {...soDragProps}
+                                                {...soDragProps.row}
                                                 className={cn(
                                                   'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors group/subopt',
                                                   soDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
@@ -882,8 +1081,39 @@ export default function ProductsAdminPage() {
                                                   soDragState.anyDragging && 'select-none',
                                                 )}
                                               >
-                                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                  <GripVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+                                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                                  <button
+                                                    type="button"
+                                                    {...soDragProps.handle}
+                                                    aria-label={`Drag to reorder ${subOpt.label}`}
+                                                    className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 group-hover/subopt:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                                  >
+                                                    <GripVertical className="h-3 w-3" />
+                                                  </button>
+                                                  <div className="flex flex-col shrink-0">
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-2.5 w-5 rounded-sm"
+                                                      data-admin-row-move-up="true"
+                                                      onClick={soDragProps.helpers.moveUp}
+                                                      disabled={!soDragProps.helpers.canMoveUp}
+                                                      aria-label={`Move ${subOpt.label} up`}
+                                                    >
+                                                      <ChevronUp className="h-2.5 w-2.5" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-2.5 w-5 rounded-sm"
+                                                      data-admin-row-move-down="true"
+                                                      onClick={soDragProps.helpers.moveDown}
+                                                      disabled={!soDragProps.helpers.canMoveDown}
+                                                      aria-label={`Move ${subOpt.label} down`}
+                                                    >
+                                                      <ChevronDown className="h-2.5 w-2.5" />
+                                                    </Button>
+                                                  </div>
                                                   <span className="truncate">{subOpt.label}</span>
                                                   {subOpt.description && (
                                                     <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -936,6 +1166,7 @@ export default function ProductsAdminPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 text-xs gap-1 text-muted-foreground mt-1"
+                                data-admin-add-option-bottom="true"
                                 onClick={() => openAddOption(service.id, group.id)}
                               >
                                 <Plus className="h-3 w-3" />
