@@ -88,12 +88,12 @@ export default function VendorDashboard() {
   const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
   const setDemoClearedAt = useAdminModerationStore((s) => s.setDemoClearedAt)
   const handleClearDemoData = () => {
-    // Reset projects-store across ALL per-lead-keyed maps. Prior version
-    // only cleared 3 of 10 — leaving accountRepIdByLead / repAcceptanceByLead /
-    // cancellationRequestsByLead / rescheduleRequestsByLead / leadConfirmedAtByLead /
-    // repAssignedAtByLead / leadCompletedAtByLead with orphan keys after
-    // sentProjects wipe.
-    useProjectsStore.setState({
+    // Reset projects-store across ALL per-lead-keyed maps via callback-form
+    // shallow-merge. Preserves _supabaseMigrationDone:true and _userUuid so
+    // hydrate doesn't re-fire migration on reload (zustand_handler_partial_
+    // write_default_fill class — apollo PR-B walker 2026-05-08).
+    useProjectsStore.setState((s) => ({
+      ...s,
       sentProjects: [],
       assignedRepByLead: {},
       accountRepIdByLead: {},
@@ -104,7 +104,7 @@ export default function VendorDashboard() {
       leadConfirmedAtByLead: {},
       repAssignedAtByLead: {},
       leadCompletedAtByLead: {},
-    })
+    }))
     // Active homeowner cart (in-progress projects pre-send).
     useCartStore.getState().clearCart()
     // Project-shaped peripheral stores — orphan refs to wiped sentProjects.
@@ -121,14 +121,13 @@ export default function VendorDashboard() {
     // the surface empty post-Clear-Demo. Surfaces /vendor/messages.
     useAdminMessagesStore.setState({ messages: [] })
     try {
-      localStorage.removeItem('buildconnect-projects')
-      localStorage.setItem(
-        'buildconnect-projects',
-        JSON.stringify({
-          state: { sentProjects: [], assignedRepByLead: {}, leadStatusOverrides: {} },
-          version: 0,
-        }),
-      )
+      // NOTE: do NOT removeItem('buildconnect-projects') or rewrite it slim.
+      // The setState above already shallow-merged + zustand persist auto-
+      // wrote the full state (including _supabaseMigrationDone:true and
+      // _userUuid). A slim 3-key rewrite drops 9 keys, so on reload the
+      // persist merge() falls back to currentState defaults
+      // (_supabaseMigrationDone:false), which re-triggers
+      // hydrateFromSupabase's migration block — perceived data resurrection.
       localStorage.removeItem('buildconnect-cart')
       localStorage.removeItem('buildconnect-flag-thread')
       localStorage.removeItem('buildconnect-commission-payments')
