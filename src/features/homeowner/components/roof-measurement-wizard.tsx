@@ -7,6 +7,7 @@ import { computeRoofTotal } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -297,15 +298,9 @@ interface Props {
   // wizard reads it as a prop and no longer asks the homeowner to re-pick.
   material?: Exclude<RoofMaterialKey, 'flat_roof'> | null
   hasFlatSection?: boolean
-  // Callback fired when the user accepts the "add flat roof" prompt that
-  // surfaces when Solar detects a flat section but the chip-tap material
-  // selection does not include flat_roof. The parent (service-detail) is
-  // expected to push 'flat_roof' onto selections.material so chip-tap
-  // remains source-of-truth. Optional for legacy/dormant consumers.
-  onAddFlatRoof?: () => void
 }
 
-export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false, onAddFlatRoof }: Props) {
+export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState(defaultAddress)
@@ -318,16 +313,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPitch, setAdjPitch] = useState('')
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
-  // includeFlat is derived from chip-tap (hasFlatSection prop), not from
-  // Solar detection or a user-controllable Switch. Chip-tap is source-of-
-  // truth for whether the estimate includes flat-roof material — the modal
-  // surfaces a CTA when Solar finds flat that chip-tap excluded, but the
-  // write-time gate in handleComplete + the area-breakdown render gate
-  // both consult chip-tap directly. The previous local useState +
-  // user-toggle Switch could silently disagree with chip-tap (Solar
-  // auto-flipped includeFlat=true on detection regardless of chip-tap
-  // intent), causing the cart to bake in flat sqft the user did not pick.
-  const includeFlat = hasFlatSection
+  const [includeFlat, setIncludeFlat] = useState(false)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -342,8 +328,9 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setShowAdjust(false)
       setAdjFlatArea('')
       setAdjPerimeterFt('')
+      setIncludeFlat(hasFlatSection)
     }
-  }, [open, defaultAddress])
+  }, [open, defaultAddress, hasFlatSection])
 
   const anyMaterialSelected = material !== null || hasFlatSection
   const stepThreeComplete = anyMaterialSelected
@@ -368,11 +355,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
       setAdjPerimeterFt(String(result.perimeterFt))
-      // Solar-derived auto-toggle removed. includeFlat is derived from
-      // hasFlatSection (chip-tap-as-SoT). When chip-tap excludes flat_roof
-      // but Solar detected flat area, an inline CTA below offers to add
-      // flat_roof to selections; the user opts in via chip-tap rather
-      // than via Solar-driven auto-on.
+      setIncludeFlat(result.flatAreaSqft > 0)
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
@@ -569,11 +552,21 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                         Used for gutter, fascia, and soffit estimates
                       </p>
                     </div>
-                    {flowPath !== 'addons_only' && hasFlatSection && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
+                    {flowPath !== 'addons_only' && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
                       <div className="border-t pt-3 space-y-3">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Area Breakdown
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Area Breakdown
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="include-flat" className="text-xs text-muted-foreground">Include flat area</Label>
+                            <Switch
+                              id="include-flat"
+                              checked={includeFlat}
+                              onCheckedChange={setIncludeFlat}
+                            />
+                          </div>
+                        </div>
                         {/* Flat area */}
                         <div>
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
@@ -594,24 +587,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </p>
                         </div>
                         <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
-                      </div>
-                    )}
-                    {flowPath !== 'addons_only' && !hasFlatSection && (measurement.flatAreaSqft ?? 0) > 0 && onAddFlatRoof && (
-                      <div className="border-t pt-3">
-                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
-                          <p className="text-[13px] text-amber-900">
-                            We detected ~{Math.round(measurement.flatAreaSqft ?? 0).toLocaleString()} sqft of low-pitch (flat) roof from satellite. It is not in your current material selection, so it is not included in your estimate.
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs border-amber-400 bg-white hover:bg-amber-100"
-                            onClick={onAddFlatRoof}
-                          >
-                            Add Flat Roof to materials
-                          </Button>
-                        </div>
                       </div>
                     )}
                     {flowPath !== 'addons_only' && (() => {
