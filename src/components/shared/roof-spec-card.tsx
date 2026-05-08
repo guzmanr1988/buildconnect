@@ -111,7 +111,7 @@ export function RoofSpecCard({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Flat</span>
                   <span className="font-medium">
-                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * 1.01) / 100)} sq)
+                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * 1.02) / 100)} sq)
                   </span>
                 </div>
               </>

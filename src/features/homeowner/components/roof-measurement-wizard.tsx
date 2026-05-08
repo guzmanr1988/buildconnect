@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
-import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2 } from 'lucide-react'
+import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2, Pencil, Check } from 'lucide-react'
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -313,6 +314,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
   const [includeFlat, setIncludeFlat] = useState(false)
+  // Inline pencil-edit overrides for AREA BREAKDOWN. Override input is RAW;
+  // display is POST-WASTE; cart payload is RAW (uniform with satellite path).
+  const [editingFlat, setEditingFlat] = useState(false)
+  const [editingPitched, setEditingPitched] = useState(false)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -327,6 +332,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setShowAdjust(false)
       setAdjFlatArea('')
       setAdjPerimeterFt('')
+      setEditingFlat(false)
+      setEditingPitched(false)
       // chip-tap-as-SoT: includeFlat derives from chip-tap intent. The Solar
       // post-detection override (was line 358) is removed so chip-tap stays
       // authoritative. For dormant/legacy mounts (material prop omitted, defaults
@@ -515,25 +522,34 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           <div className="flex items-center gap-1.5 mb-0.5">
                             <Layers className="h-3.5 w-3.5 text-primary" />
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              Material Order
+                              Material Order{' '}
+                              <span className="text-muted-foreground/70 normal-case font-medium">
+                                ({material !== null ? (includeFlat ? 'pitched + flat' : 'pitched') : 'flat'})
+                              </span>
                             </span>
                           </div>
                           {(() => {
-                            const { pitchedWaste } = computeRoofTotal({
+                            const { pitchedWaste, flatWaste, totalSqft } = computeRoofTotal({
                               pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
                               flatAreaSqft: Math.round(finalFlatAreaSqft),
                               includeFlat,
                             })
-                            const pitchedSquares = Math.ceil(pitchedWaste / 100)
+                            const orderSqft = material !== null
+                              ? (includeFlat ? totalSqft : pitchedWaste)
+                              : flatWaste
+                            const orderSquares = Math.ceil(orderSqft / 100)
+                            const sublabel = material !== null
+                              ? (includeFlat
+                                  ? `Pitched ${Math.round(derivedPitchedAreaSqft).toLocaleString()} + Flat ${Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste`
+                                  : `Pitched: ${Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste`)
+                              : `Flat: ${Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste`
                             return (
                               <>
                                 <p className="text-xl font-bold text-foreground">
-                                  {pitchedWaste.toLocaleString()}{' '}
-                                  <span className="text-sm font-normal text-muted-foreground">sqft ({pitchedSquares} squares)</span>
+                                  {orderSqft.toLocaleString()}{' '}
+                                  <span className="text-sm font-normal text-muted-foreground">sqft ({orderSquares} squares)</span>
                                 </p>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">
-                                  Pitched: {Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste
-                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{sublabel}</p>
                               </>
                             )
                           })()}
@@ -568,40 +584,139 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     </div>
                     {flowPath !== 'addons_only' && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
                       <div className="border-t pt-3 space-y-3">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Area Breakdown
-                        </span>
-                        {/* Flat area */}
-                        <div>
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-                          <p className="text-xl font-bold text-foreground mt-0.5">
-                            {Math.round(finalFlatAreaSqft * 1.01).toLocaleString()}{' '}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              sqft ({Math.ceil((finalFlatAreaSqft * 1.01) / 100)} squares)
-                            </span>
-                          </p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Area Breakdown
+                          </span>
+                          {/* Item 1 (PR #174): restored Include flat area toggle. Seeds from chip-tap-derived hasFlatSection prop; user toggle override per-modal-session. */}
+                          {finalFlatAreaSqft > 0 && (
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="include-flat-toggle" className="text-[11px] text-muted-foreground cursor-pointer m-0">
+                                Include flat area
+                              </Label>
+                              <Switch id="include-flat-toggle" checked={includeFlat} onCheckedChange={setIncludeFlat} />
+                            </div>
+                          )}
+                        </div>
+                        {/* Flat area panel: dimmed + Not included badge when chip excludes flat AND toggle off (item 6). */}
+                        <div className={cn('relative', !includeFlat && !hasFlatSection && finalFlatAreaSqft > 0 && 'opacity-60')}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
+                            {finalFlatAreaSqft > 0 && !includeFlat && (
+                              <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
+                                Not included
+                              </span>
+                            )}
+                          </div>
+                          {editingFlat ? (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={adjFlatArea}
+                                onChange={(e) => setAdjFlatArea(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === 'Escape') setEditingFlat(false)
+                                }}
+                                onBlur={() => setEditingFlat(false)}
+                                autoFocus
+                                className="h-9 text-base w-28"
+                                placeholder="raw sqft"
+                              />
+                              <span className="text-xs text-muted-foreground">sqft (raw)</span>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setEditingFlat(false)}
+                                className="text-primary hover:text-primary/80 transition-colors"
+                                aria-label="Save flat sqft"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-xl font-bold text-foreground">
+                                {Math.round(finalFlatAreaSqft * 1.02).toLocaleString()}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">
+                                  sqft ({Math.ceil((finalFlatAreaSqft * 1.02) / 100)} squares)
+                                </span>
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setEditingFlat(true)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Edit flat sqft"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 1% waste
+                            Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste
                           </p>
                         </div>
+                        {/* Pitched */}
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Pitched</p>
-                          <p className="text-sm font-semibold text-foreground">
-                            {derivedPitchedAreaSqft.toLocaleString()} sqft
-                          </p>
+                          {editingPitched ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={adjArea}
+                                onChange={(e) => setAdjArea(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === 'Escape') setEditingPitched(false)
+                                }}
+                                onBlur={() => setEditingPitched(false)}
+                                autoFocus
+                                className="h-9 text-base w-28"
+                                placeholder="raw sqft"
+                              />
+                              <span className="text-xs text-muted-foreground">sqft (raw)</span>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setEditingPitched(false)}
+                                className="text-primary hover:text-primary/80 transition-colors"
+                                aria-label="Save pitched sqft"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground">
+                                {derivedPitchedAreaSqft.toLocaleString()} sqft
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setEditingPitched(true)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Edit pitched sqft"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground">We estimated the flat area from satellite — adjust if it looks off.</p>
-                        {finalFlatAreaSqft > 0 && !includeFlat && (
+                        <p className="text-[11px] text-muted-foreground">Tap the pencil to enter your real measurement when the satellite is off.</p>
+                        {/* Action-first helper: only when chip excludes flat AND toggle off (item 6). */}
+                        {finalFlatAreaSqft > 0 && !hasFlatSection && !includeFlat && (
                           <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
-                            Flat section detected. Tap the Flat Roof chip on the page to include it in your order.
+                            + Add flat section to order — tap the Flat Roof chip on the page, or flip the toggle above.
                           </p>
                         )}
                       </div>
                     )}
                     {flowPath !== 'addons_only' && (() => {
+                      // 5b: gate Total inputs by chip-tap (parallel to handleComplete + service-detail.tsx:1097).
+                      // Display = cart-truth across all 3 chip modes + toggle states.
+                      const isPitchedSelected = material !== null
                       const { totalSqft, totalSquares } = computeRoofTotal({
-                        pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
-                        flatAreaSqft: Math.round(finalFlatAreaSqft),
+                        pitchedAreaSqft: isPitchedSelected ? Math.round(derivedPitchedAreaSqft) : 0,
+                        flatAreaSqft: includeFlat ? Math.round(finalFlatAreaSqft) : 0,
                         includeFlat,
                       })
                       return (

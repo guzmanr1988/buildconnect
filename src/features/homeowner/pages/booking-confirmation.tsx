@@ -155,9 +155,9 @@ async function buildRoofingLineItems(
         } else {
           rawSqft = areaSqft
         }
-        // For square pricing: apply per-component waste (flat=1%, pitched=2%) then convert.
+        // For square pricing: apply 2% waste (top-of-real bias) then convert.
         // For legacy sqft pricing: bill directly against raw sqft.
-        const wasteFactor = (useSplit && isFlat) ? 1.01 : 1.02
+        const wasteFactor = 1.02
         const qty = useSquares ? sqftToSquares(Math.round(rawSqft * wasteFactor)) : rawSqft
         const amount = Math.round(unitRateDollars * qty * 100) / 100
         const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
