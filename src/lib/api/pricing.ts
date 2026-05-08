@@ -158,7 +158,7 @@ export function computeVendorTotal(
           const rawSqft = useSplit
             ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
             : (item.roofMeasurement?.areaSqft ?? 0)
-          const wasteFactor = (useSplit && isFlatOpt) ? 1.01 : 1.02
+          const wasteFactor = 1.02
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)
         } else if (meta.priceUnit === 'sqft') {

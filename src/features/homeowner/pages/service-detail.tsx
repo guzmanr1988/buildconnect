@@ -1088,16 +1088,15 @@ export function ServiceDetailPage() {
                   }
                 }
               }
-              // chip-tap-as-SoT cart-side gate (defense-in-depth): when chip-tap
-              // material excludes flat_roof, strip flat contribution from the cart
-              // payload so pricing and downstream consumers bill pitched-only. The
-              // wizard's includeFlat default already derives from chip-tap intent,
-              // but this gate catches: user-toggled-flat post-mount, direct-wizard-
-              // entry mismatches, future regressions on the upstream propagation.
+              // Defense-in-depth cart-side gate: trust roofMeasurement.includeFlat
+              // (the wizard's user-intent SoT, seeded from chip-tap and toggle-overridable)
+              // as the predicate for flat-in-cart. Aligns with handleComplete write-side
+              // gating instead of contradicting it: when toggle ON, flat reaches cart;
+              // when toggle OFF or legacy payload (includeFlat undefined), flat stripped.
+              // Pitched-side gating stays at handleComplete (PR #173 material===null).
               const cartRoofMeasurement = (() => {
                 if (serviceId !== 'roofing' || !roofMeasurement) return null
-                const includeFlatForCart = (selections['material'] ?? []).includes('flat_roof')
-                if (includeFlatForCart) return roofMeasurement
+                if (roofMeasurement.includeFlat === true) return roofMeasurement
                 const pitchedOnly = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 return { ...roofMeasurement, areaSqft: pitchedOnly, flatAreaSqft: 0, includeFlat: false }
               })()
@@ -1316,7 +1315,7 @@ export function ServiceDetailPage() {
                       const label = matOpts.find(o => o.id === matId)?.label ?? matId
                       const areaLabel = showSplit
                         ? matId === 'flat_roof'
-                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${Math.ceil((roofMeasurement!.flatAreaSqft! * 1.01) / 100)} sq)`
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${Math.ceil((roofMeasurement!.flatAreaSqft! * 1.02) / 100)} sq)`
                           : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${Math.ceil((roofMeasurement!.pitchedAreaSqft! * 1.02) / 100)} sq)`
                         : undefined
                       return (
