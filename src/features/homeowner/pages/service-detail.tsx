@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence } from 'lucide-react'
-import { RoofingWizard } from '../components/roofing-wizard'
 import { PoolWizard } from '../components/pool-wizard'
 import {
   GenericServiceWizard,
@@ -57,6 +56,8 @@ import { DoorConfigurator, type DoorSelection } from '../components/door-configu
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
+import { ShingleColorPicker } from '../components/shingle-color-picker'
+import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult } from '../components/roof-measurement-wizard'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { AnimatePresence } from 'framer-motion'
@@ -178,6 +179,13 @@ export function ServiceDetailPage() {
   const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(
     !(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
   )
+  const [shingleColor, setShingleColor] = useState<string>(
+    (editItemForService?.shingleColor as string) || ''
+  )
+  const [tileSelection, setTileSelection] = useState<TileRoofSelection>({
+    tileType: (editItemForService?.tileType as TileType) || '',
+    tileColor: (editItemForService?.tileColor as string) || '',
+  })
   const [editingItemId, setEditingItemId] = useState<string | null>(
     (editItemForService?.id as string) || null
   )
@@ -283,6 +291,13 @@ export function ServiceDetailPage() {
     if (gs?.type) { setGarageDoorSelection(gs); setGarageDoorConfigOpen(false) }
     const ms = legacy.metalRoofSelection as MetalRoofSelection | undefined
     if (ms?.color) { setMetalRoofSelection(ms); setMetalRoofConfigOpen(false) }
+    if (typeof legacy.shingleColor === 'string') setShingleColor(legacy.shingleColor)
+    if (typeof legacy.tileType === 'string' || typeof legacy.tileColor === 'string') {
+      setTileSelection({
+        tileType: (legacy.tileType as TileType) || '',
+        tileColor: (legacy.tileColor as string) || '',
+      })
+    }
     if (typeof legacy.id === 'string') setEditingItemId(legacy.id)
     localStorage.removeItem('buildconnect-edit-item')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -301,37 +316,6 @@ export function ServiceDetailPage() {
           Go back
         </Button>
       </div>
-    )
-  }
-
-  // Roofing delegates to the card-slide wizard (pilot — propagate to other services post-launch).
-  if (serviceId === 'roofing') {
-    const editData2 = editItemForService
-    const editId = editData2?.id as string | null ?? null
-    const addrOpts: Array<{ key: string; label: string; full: string }> = [
-      { key: 'primary', label: 'Primary', full: homeownerProfile.address || '' },
-      ...(homeownerProfile.additional_addresses ?? []).map((a) => ({
-        key: a.id,
-        label: a.label,
-        full: [a.street, a.city, a.state, a.zip].filter(Boolean).join(', '),
-      })),
-    ]
-    const defaultAddrKey = (() => {
-      const edit = editData2?.address as CartItemAddress | undefined
-      if (!edit) return 'primary'
-      const match = addrOpts.find((o) => o.label === edit.label)
-      return match?.key ?? 'primary'
-    })()
-    return (
-      <RoofingWizard
-        service={service}
-        editItem={editData2}
-        addressOptions={addrOpts}
-        defaultAddressKey={defaultAddrKey}
-        editingItemId={editId}
-        onCancel={() => navigate('/home')}
-        onDone={() => navigate('/home/cart')}
-      />
     )
   }
 
@@ -821,6 +805,16 @@ export function ServiceDetailPage() {
                             {metalRoofSelection.roofSize ? `${metalRoofDisplaySquares(metalRoofSelection.roofSize)} sq` : 'Configured'}
                           </span>
                         )}
+                        {serviceId === 'roofing' && option.id === 'shingle' && shingleColor && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            Configured
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && (option.id === 'barrel_tile' || option.id === 'terracotta') && tileSelection.tileType && tileSelection.tileColor && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            Configured
+                          </span>
+                        )}
                         {serviceId === 'pool' && option.id === 'led' && ledCount > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
                             {ledCount}
@@ -892,6 +886,18 @@ export function ServiceDetailPage() {
                       />
                     )}
                   </AnimatePresence>
+                )}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('shingle') && (
+                  <ShingleColorPicker
+                    selectedColor={shingleColor}
+                    onChange={setShingleColor}
+                  />
+                )}
+                {serviceId === 'roofing' && group.id === 'material' && (selected.includes('barrel_tile') || selected.includes('terracotta')) && (
+                  <TileRoofConfigurator
+                    selection={tileSelection}
+                    onChange={setTileSelection}
+                  />
                 )}
                 {/* Payment method note */}
                 {group.id === 'payment' && (
@@ -1174,6 +1180,9 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && stormFrontSelections.length > 0 && { stormFrontSelections }),
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
+                ...(serviceId === 'roofing' && shingleColor && { shingleColor }),
+                ...(serviceId === 'roofing' && tileSelection.tileType && { tileType: tileSelection.tileType }),
+                ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
                 ...(serviceId === 'roofing' && roofMeasurement && { roofMeasurement }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
