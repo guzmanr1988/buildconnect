@@ -683,22 +683,33 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   Pick the main material. Add Flat Roof if you also have a flat section.
                 </p>
               </div>
-              {/* Pitched materials — radio behavior: one at a time */}
+              {/* Pitched materials — radio behavior: pick one, the other three lock until you unselect */}
               <div className="grid grid-cols-2 gap-2">
                 {MATERIAL_OPTIONS.map((opt) => {
                   const isSelected = material === opt.key
+                  const isLocked = material !== null && !isSelected
                   return (
                     <button
                       key={opt.key}
+                      type="button"
+                      disabled={isLocked}
                       onClick={() => setMaterial(isSelected ? null : opt.key as Exclude<RoofMaterialKey, 'flat_roof'>)}
+                      data-testid={`roof-material-card-${opt.key}`}
+                      data-roofing-material-card={opt.key}
+                      data-roofing-material-locked={isLocked ? 'true' : 'false'}
                       className={cn(
                         'rounded-xl border p-3 text-left transition-all',
                         isSelected
                           ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                          : 'border-border bg-card hover:bg-muted/40',
+                          : isLocked
+                            ? 'border-border opacity-40 cursor-not-allowed'
+                            : 'border-border bg-card hover:bg-muted/40',
                       )}
                     >
-                      <p className={cn('text-sm font-semibold', isSelected ? 'text-primary' : 'text-foreground')}>
+                      <p className={cn(
+                        'text-sm font-semibold',
+                        isSelected ? 'text-primary' : 'text-foreground',
+                      )}>
                         {opt.label}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{opt.sub}</p>
