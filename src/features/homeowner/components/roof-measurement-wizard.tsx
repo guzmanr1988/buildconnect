@@ -400,17 +400,22 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     if (!stepThreeComplete) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatAlongPitched = material !== null && hasFlatSection
+    // chip=flat-only (material===null): user did not select any pitched material via chip-tap.
+    // Strip pitched contribution from cart payload so billed area === flat-only.
+    // Mirrors service-detail.tsx cart-side gate but at the source so the write itself is honest.
+    const isPitchedSelected = material !== null
+    const pitchedSqftOut = isPitchedSelected ? Math.round(derivedPitchedAreaSqft) : 0
+    const flatSqftOut = includeFlat ? Math.round(finalFlatAreaSqft) : 0
+    const areaSqftOut = pitchedSqftOut + flatSqftOut
     onComplete({
       address: address.trim(),
-      areaSqft: includeFlat ? Math.round(finalArea + finalFlatAreaSqft) : Math.round(finalArea),
+      areaSqft: areaSqftOut,
       pitch: finalPitch,
       material: dominantMaterial,
       hasFlatSection: hasFlatAlongPitched,
       perimeterFt: Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0),
-      // Persist split areas so pricing engine can bill each material
-      // against its own slice. Undefined when manual entry (no Solar data).
-      pitchedAreaSqft: measurement ? Math.round(derivedPitchedAreaSqft) : undefined,
-      flatAreaSqft: measurement ? (includeFlat ? Math.round(finalFlatAreaSqft) : 0) : undefined,
+      pitchedAreaSqft: measurement ? pitchedSqftOut : undefined,
+      flatAreaSqft: measurement ? flatSqftOut : undefined,
       includeFlat,
     })
   }
