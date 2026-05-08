@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase'
-import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import type { CartItem } from '@/stores/cart-store'
+import type { ServiceConfig } from '@/types'
 
 /*
  * Pricing API — Phase 3+4.
@@ -105,7 +106,13 @@ export type VendorTotalResult = {
  */
 export function computeVendorTotal(
   priceMap: VendorPriceMap,
-  cartItems: CartItem[]
+  cartItems: CartItem[],
+  // Catalog overlay for priceUnit. Pass useCatalogStore.getState().services
+  // from the caller so admin-edited priceUnit on net-new options drives the
+  // billing branch (square / sqft / linear_ft) instead of silently falling
+  // back to flat. Optional for back-compat — when undefined, only the static
+  // OPTION_METADATA map applies (legacy behavior).
+  services?: ServiceConfig[],
 ): VendorTotalResult {
   let hasSelections = false
   let totalCents = 0
@@ -127,7 +134,10 @@ export function computeVendorTotal(
           continue
         }
         coveredServices.add(item.serviceId)
-        const meta = getOptionMetadata(optionId, item.serviceId)
+        const catalogOption = services
+          ? findCatalogOption(services, item.serviceId, optionId)
+          : undefined
+        const meta = getOptionMetadata(optionId, item.serviceId, catalogOption)
         if (meta.requiresQuantity) {
           const qty = item.selectionQuantities?.[optionId] ?? meta.quantityRange?.min ?? 1
           totalCents += basePrice * qty
@@ -138,7 +148,11 @@ export function computeVendorTotal(
           const hasSplitData = item.roofMeasurement?.pitchedAreaSqft !== undefined
             && item.roofMeasurement?.flatAreaSqft !== undefined
           const hasFlatSelected = allMatIds.includes('flat_roof')
-          const hasPitchedSelected = allMatIds.some((id) => id !== 'flat_roof' && getOptionMetadata(id, item.serviceId).priceUnit === 'square')
+          const hasPitchedSelected = allMatIds.some((id) => {
+            if (id === 'flat_roof') return false
+            const sib = services ? findCatalogOption(services, item.serviceId, id) : undefined
+            return getOptionMetadata(id, item.serviceId, sib).priceUnit === 'square'
+          })
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
             && (item.roofMeasurement?.includeFlat !== false)
           const rawSqft = useSplit

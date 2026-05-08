@@ -306,6 +306,10 @@ export interface ServiceOption {
   label: string
   description?: string
   subGroups?: OptionGroup[]
+  // Per-option pricing unit. Wins over the static OPTION_METADATA map in
+  // option-metadata.ts when set; map remains as the fallback for older
+  // persisted rows that don't carry the field yet.
+  priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft'
 }
 
 export interface OptionGroup {

@@ -152,25 +152,50 @@ export function useLongPressDrag({
     [disableAt]
   )
 
-  // A row that's currently draggable. Consumers spread these props on
-  // the element that represents the grabbable surface. The
-  // `data-reorderable-row` + `data-reorderable-index` attributes give
-  // probe harnesses (Apollo matrix) a stable selector so the drag
-  // surface can be targeted independent of Tailwind class churn.
+  // Row-level props: ref + probe attrs + sentinel marking the row body as
+  // drag-LOCKED (drag-listener is NOT bound here). The ref is needed for
+  // hit-testing each row's bounds; data-reorderable-row/-index are stable
+  // selectors for probe harnesses.
   const getRowProps = useCallback(
     (index: number) => ({
       ref: (n: HTMLElement | null) => {
         rowRefs.current[index] = n
       },
-      onPointerDown: onPointerDown(index),
       'data-reorderable-row': 'true' as const,
       'data-reorderable-index': String(index),
-      // touch-action: none on the row prevents iOS from hijacking the
-      // long-press as a text-selection / magnifier gesture while we're
-      // arming the drag. Desktop ignores it.
-      style: { touchAction: 'none' as const },
+      'data-admin-row-drag-locked': 'true' as const,
+    }),
+    []
+  )
+
+  // Handle-only props: onPointerDown lives here (and ONLY here) so the
+  // drag is initiated by long-pressing the GripVertical handle, not by
+  // pressing anywhere on the row body. touch-action:none on the handle
+  // prevents iOS from hijacking the long-press as a text-selection /
+  // magnifier gesture while we're arming the drag.
+  const getHandleProps = useCallback(
+    (index: number) => ({
+      onPointerDown: onPointerDown(index),
+      'data-admin-row-drag-handle': 'true' as const,
+      style: { touchAction: 'none' as const, cursor: 'grab' as const },
     }),
     [onPointerDown]
+  )
+
+  // One-step precision-move helpers for the up/down chevron buttons —
+  // sibling affordance to drag for users who don't want to long-press.
+  const getMoveHelpers = useCallback(
+    (index: number, total: number) => ({
+      moveUp: () => {
+        if (index > 0) onReorder(index, index - 1)
+      },
+      moveDown: () => {
+        if (index < total - 1) onReorder(index, index + 1)
+      },
+      canMoveUp: index > 0,
+      canMoveDown: index < total - 1,
+    }),
+    [onReorder]
   )
 
   // Reset refs array when list length changes. Called by consumers.
@@ -187,6 +212,8 @@ export function useLongPressDrag({
   return {
     ...state,
     getRowProps,
+    getHandleProps,
+    getMoveHelpers,
     setRowCount,
   }
 }

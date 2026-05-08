@@ -12,9 +12,10 @@ import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
-import type { PriceLineItem } from '@/types'
+import { useCatalogStore } from '@/stores/catalog-store'
+import type { PriceLineItem, ServiceConfig } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
 
 type BookingDetails = { service: string; vendor: string; date: string; time: string }
@@ -61,6 +62,11 @@ async function buildRoofingLineItems(
   item: CartItem,
   vendorMockId: string,
   projectPermit?: 'yes' | 'no',
+  // Catalog overlay for priceUnit. Caller passes
+  // useCatalogStore.getState().services so admin-edited priceUnit on a
+  // roofing option overrides the static OPTION_METADATA fallback. Optional
+  // for back-compat — undefined preserves legacy static-only behavior.
+  services?: ServiceConfig[],
 ): Promise<PriceLineItem[] | null> {
   const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendorMockId]
   if (!uuid) return null
@@ -85,7 +91,12 @@ async function buildRoofingLineItems(
   // When hasFlatSection, each material gets its own area slice.
   const allMaterialIds = Object.values(item.selections ?? {}).flat()
   const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID) || allMaterialIds.includes('repair_flat_roof')
-  const hasPitchedSelected = allMaterialIds.some((id) => id !== FLAT_ROOF_OPTION_ID && id !== 'repair_flat_roof' && (getOptionMetadata(id, 'roofing').priceUnit === 'square' || getOptionMetadata(id, 'roofing').priceUnit === 'sqft'))
+  const hasPitchedSelected = allMaterialIds.some((id) => {
+    if (id === FLAT_ROOF_OPTION_ID || id === 'repair_flat_roof') return false
+    const sib = services ? findCatalogOption(services, 'roofing', id) : undefined
+    const u = getOptionMetadata(id, 'roofing', sib).priceUnit
+    return u === 'square' || u === 'sqft'
+  })
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
     && (item.roofMeasurement?.includeFlat !== false)
 
@@ -101,7 +112,8 @@ async function buildRoofingLineItems(
       const priceCents = priceMap.get(key)
       if (priceCents === undefined) continue
 
-      const meta = getOptionMetadata(optionId, 'roofing')
+      const catalogOption = services ? findCatalogOption(services, 'roofing', optionId) : undefined
+      const meta = getOptionMetadata(optionId, 'roofing', catalogOption)
       const unitRateDollars = priceCents / 100
 
       if (meta.priceUnit === 'square' || meta.priceUnit === 'sqft') {
@@ -299,7 +311,8 @@ export function BookingConfirmationPage() {
           // Supabase catalog. Falls back to preset on error or missing data.
           let computedLineItems: PriceLineItem[] | undefined
           if (pendingItem.serviceId === 'roofing' && contractor.vendor_id) {
-            const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined)
+            const services = useCatalogStore.getState().services
+            const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined, services)
             if (built) computedLineItems = built
           } else if (contractor.vendor_id) {
             // PR #118 fix-forward — for non-roofing services, snapshot a
