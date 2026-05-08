@@ -625,6 +625,9 @@ export function ServiceDetailPage() {
                       <button
                         key={option.id}
                         type="button"
+                        data-chip-id={option.id}
+                        data-chip-group={group.id}
+                        data-chip-state={isSelected ? 'active' : 'inactive'}
                         onClick={() => {
                           handleSelect(group, option.id)
                           // Auto-close addon menu after size selection

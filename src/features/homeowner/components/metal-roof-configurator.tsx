@@ -102,6 +102,9 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
                         type="button"
                         title={c.label}
                         onClick={() => onChange({ ...selection, color: c.id })}
+                        data-chip-id={c.id}
+                        data-chip-group="metal_color"
+                        data-chip-state={selection.color === c.id ? 'active' : 'inactive'}
                         className={cn(
                           'flex flex-col items-center gap-1 transition-all duration-150',
                         )}
