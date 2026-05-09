@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
 
 // ─── Places Autocomplete hook ────────────────────────────────────────────────
@@ -246,45 +245,6 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
   }
 }
 
-// ─── Material options ─────────────────────────────────────────────────────────
-
-interface MaterialOption {
-  key: RoofMaterialKey
-  label: string
-  sub: string
-}
-
-const MATERIAL_OPTIONS: MaterialOption[] = [
-  { key: 'metal',      label: 'Metal',       sub: 'Standing seam, 50+ years' },
-  { key: 'shingle',    label: 'Shingle',     sub: 'Architectural, 25–30 years' },
-  { key: 'barrel_tile', label: 'Tile',       sub: 'Barrel tile, classic FL look' },
-  { key: 'aluminum',   label: 'Aluminum',    sub: 'Lightweight, corrosion-resistant' },
-]
-
-// Flat Roof is a separate checkbox-style card — selectable alone OR alongside one pitched material
-const FLAT_ROOF_OPTION: MaterialOption = { key: 'flat_roof', label: 'Flat Roof', sub: 'Low-slope commercial-style' }
-
-// ─── Stepper bar ──────────────────────────────────────────────────────────────
-
-function StepBar({ step }: { step: number }) {
-  return (
-    <div className="space-y-1.5 mb-5">
-      <div className="flex gap-1.5">
-        {[1, 2, 3].map((n) => (
-          <div
-            key={n}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors duration-300',
-              n <= step ? 'bg-primary' : 'bg-muted',
-            )}
-          />
-        ))}
-      </div>
-      <p className="text-[11px] text-muted-foreground font-medium">Step {step} of 3</p>
-    </div>
-  )
-}
-
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
 interface Props {
@@ -294,17 +254,14 @@ interface Props {
   onComplete: (result: RoofWizardResult) => void
   flowPath?: 'full_replacement' | 'addons_only' | null
   // Material is sourced from the chip-tap selection on service-detail; the
-  // wizard reads it as a prop and no longer asks the homeowner to re-pick.
+  // wizard reads it as a prop to drive includeFlat default + dominantMaterial
+  // on save. Material picking lives on the chip-tap surface; the modal is
+  // measurement-only.
   material?: Exclude<RoofMaterialKey, 'flat_roof'> | null
   hasFlatSection?: boolean
-  // Step 3 alternate write surface: when present, the wizard renders an
-  // inline material picker that mutates chip-tap selections. Picking a
-  // material there flows back through this callback so the page underneath
-  // stays in sync (one SoT, two write surfaces).
-  onSelectMaterial?: (material: Exclude<RoofMaterialKey, 'flat_roof'> | null, hasFlat: boolean) => void
 }
 
-export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false, onSelectMaterial }: Props) {
+export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState(defaultAddress)
@@ -325,36 +282,14 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
-  useEffect(() => {
-    if (open) {
-      setStep(1)
-      setAddress(defaultAddress)
-      setMeasuring(false)
-      setMeasureError(false)
-      setMeasureErrorMsg('')
-      setMeasurement(null)
-      setShowAdjust(false)
-      setAdjFlatArea('')
-      setAdjPerimeterFt('')
-      setEditingFlat(false)
-      setEditingPitched(false)
-      // chip-tap-as-SoT: includeFlat derives from chip-tap intent. The Solar
-      // post-detection override (was line 358) is removed so chip-tap stays
-      // authoritative. For dormant/legacy mounts (material prop omitted, defaults
-      // to null), Solar detection still drives default in the post-measure branch.
-      setIncludeFlat(hasFlatSection)
-    }
-  }, [open, defaultAddress, hasFlatSection, material])
-
-  const anyMaterialSelected = material !== null || hasFlatSection
-  const stepThreeComplete = anyMaterialSelected
-
-  const startMeasuring = async () => {
-    if (!address.trim()) return
+  // Internal measurement runner — accepts an explicit address arg so the open
+  // auto-trigger can call it without depending on the (just-set) `address`
+  // state's timing. The Step 1 fallback button calls runMeasurement(address).
+  const runMeasurement = useCallback(async (addr: string) => {
+    if (!addr.trim()) return
     setStep(2)
     setMeasureError(false)
     setMeasureErrorMsg('')
-    // If Google Maps Platform is OFF, skip the API call and fall through to manual entry
     if (!gmpEnabled) {
       setMeasureErrorMsg('Satellite measurement is disabled — please enter your measurements manually.')
       setMeasureError(true)
@@ -362,17 +297,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     }
     setMeasuring(true)
     try {
-      const result = await measureRoofFromAddress(address.trim())
+      const result = await measureRoofFromAddress(addr.trim())
       if (result.canonicalAddress) setAddress(result.canonicalAddress)
       setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
       setAdjArea(String(Math.max(0, result.areaSqft - (result.flatAreaSqft || 0))))
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
       setAdjPerimeterFt(String(result.perimeterFt))
-      // Only override includeFlat from Solar when chip-tap context is absent
-      // (dormant/legacy mounts with material=null). With chip-tap context, the
-      // open-reset effect above already set includeFlat=hasFlatSection and that
-      // intent wins over Solar detection.
       if (material === null) {
         setIncludeFlat(result.flatAreaSqft > 0)
       }
@@ -394,7 +325,40 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     } finally {
       setMeasuring(false)
     }
+  }, [gmpEnabled, material])
+
+  useEffect(() => {
+    if (!open) return
+    setAddress(defaultAddress)
+    setMeasuring(false)
+    setMeasureError(false)
+    setMeasureErrorMsg('')
+    setMeasurement(null)
+    setShowAdjust(false)
+    setAdjFlatArea('')
+    setAdjPerimeterFt('')
+    setEditingFlat(false)
+    setEditingPitched(false)
+    // chip-tap-as-SoT: includeFlat derives from chip-tap intent. Solar post-
+    // detection only overrides when chip-tap context is absent (material=null).
+    setIncludeFlat(hasFlatSection)
+
+    const addr = defaultAddress.trim()
+    if (!addr) {
+      // No known address — fall through to the address-entry surface.
+      setStep(1)
+      return
+    }
+    // Address known from chip-tap context — auto-trigger measurement so the
+    // modal opens directly into the measurement card (single-screen shape).
+    void runMeasurement(addr)
+  }, [open, defaultAddress, hasFlatSection, material, runMeasurement])
+
+  const startMeasuring = () => {
+    void runMeasurement(address)
   }
+
+  const canSave = !!measurement || (measureError && !!adjArea.trim() && !!adjPitch.trim())
 
   // adjArea = pitched-only footprint (not total). flat is additive on top.
   const finalArea = adjArea
@@ -413,7 +377,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   })
 
   const handleComplete = () => {
-    if (!stepThreeComplete) return
+    if (!canSave) return
+    // Material is sourced from chip-tap (the SoT). When the modal is opened
+    // before any material chip is picked, fall back to flat_roof so legacy
+    // dormant callers (roofing-wizard.tsx) keep working.
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatAlongPitched = material !== null && hasFlatSection
     // Pass through RAW measurements regardless of chip-tap intent. Service-detail
@@ -445,14 +412,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
             Roof Measurement
           </DialogTitle>
           <DialogDescription className="sr-only">
-            3-step wizard to measure your roof and pre-fill your configuration.
+            Measure your roof and pre-fill your configuration.
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-1">
-          <StepBar step={step} />
-
-          {/* ── Step 1: Address ── */}
+          {/* ── Step 1: Address (fallback only — when no defaultAddress is supplied) ── */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
@@ -600,99 +565,17 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
               )}
 
               {!measuring && (measurement || measureError) && (
-                <div className="flex justify-between gap-2 pt-1">
-                  <Button variant="ghost" size="sm" onClick={() => setStep(1)}>Back</Button>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
                   <Button
                     size="sm"
-                    disabled={measureError && (!adjArea.trim() || !adjPitch.trim())}
-                    onClick={() => setStep(3)}
+                    disabled={!canSave}
+                    onClick={handleComplete}
                   >
-                    Next →
+                    Save
                   </Button>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ── Step 3: Review + inline material picker ──
-              Single layout across material-not-picked and material-picked
-              states. Breakdown card is read-only (canonical shape, source =
-              wizard-step3). The material picker writes to chip-tap state via
-              onSelectMaterial — same SoT, alternate write surface. */}
-          {step === 3 && (
-            <div className="space-y-4" data-roof-wizard-step="3">
-              <div>
-                <p className="text-sm font-semibold text-foreground mb-0.5">
-                  {stepThreeComplete ? "You're all set!" : 'Pick a material to continue'}
-                </p>
-                <p className="text-[13px] text-muted-foreground mb-3 truncate">{address}</p>
-              </div>
-              {flowPath !== 'addons_only' && measurement && (
-                <RoofMeasurementBreakdownCard
-                  pitchedAreaSqft={Math.round(derivedPitchedAreaSqft)}
-                  flatAreaSqft={Math.round(finalFlatAreaSqft)}
-                  pitch={finalPitch || measurement.pitch}
-                  perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
-                  material={material}
-                  includeFlat={includeFlat}
-                  hasFlatSection={hasFlatSection}
-                  pitchedOmittedTriggered={wizardPitchedOmittedTriggered}
-                  flowPath={flowPath ?? null}
-                  source="wizard-step3"
-                />
-              )}
-              {flowPath !== 'addons_only' && onSelectMaterial && (
-                <div className="space-y-2" data-roof-wizard-material-picker="true">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Material
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MATERIAL_OPTIONS.map((opt) => {
-                      const isSelected = material === opt.key
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          data-chip-id={opt.key}
-                          data-chip-group="material"
-                          data-chip-state={isSelected ? 'active' : 'inactive'}
-                          onClick={() => onSelectMaterial(opt.key as Exclude<RoofMaterialKey, 'flat_roof'>, hasFlatSection)}
-                          className={cn(
-                            'rounded-xl border p-3 text-left transition-all duration-150',
-                            isSelected
-                              ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                              : 'border-border hover:border-primary/40 hover:bg-muted',
-                          )}
-                        >
-                          <p className="text-sm font-semibold text-foreground">{opt.label}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">{opt.sub}</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <label className="flex items-start gap-2 cursor-pointer pt-1">
-                    <input
-                      type="checkbox"
-                      data-chip-id="flat_roof"
-                      data-chip-group="material"
-                      data-chip-state={hasFlatSection ? 'active' : 'inactive'}
-                      checked={hasFlatSection}
-                      onChange={(e) => onSelectMaterial(material, e.target.checked)}
-                      className="mt-0.5 h-4 w-4"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{FLAT_ROOF_OPTION.label}</p>
-                      <p className="text-[11px] text-muted-foreground">{FLAT_ROOF_OPTION.sub}</p>
-                    </div>
-                  </label>
-                </div>
-              )}
-              <div className="flex justify-between gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
-                <Button size="sm" disabled={!stepThreeComplete} onClick={handleComplete}>
-                  Start Configuring →
-                </Button>
-              </div>
             </div>
           )}
         </div>

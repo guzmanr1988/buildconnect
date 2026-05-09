@@ -229,8 +229,14 @@ export function ServiceDetailPage() {
 
   const handleWizardComplete = (result: RoofWizardResult) => {
     if (result.material === 'metal') {
-      const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
-      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
+      // Metal is a pitched material — bill against the pitched slice only.
+      // pitchedAreaSqft is split-aware (Solar segments classified). Fall back
+      // to (areaSqft - flat) when no split exists, then to areaSqft as last
+      // resort for legacy/mock measurements that don't carry the split.
+      const pitchedOnly = result.pitchedAreaSqft
+        ?? Math.max(0, result.areaSqft - (result.flatAreaSqft ?? 0))
+      const pitchedWithWaste = Math.round((pitchedOnly || result.areaSqft) * ROOF_WASTE_FACTOR)
+      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(pitchedWithWaste)) }))
       setMetalRoofConfigOpen(true)
     }
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat })
@@ -310,6 +316,22 @@ export function ServiceDetailPage() {
       return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
     })
   }, [roofMeasurement?.perimeterFt, (selections['addons'] ?? []).join(',')])
+
+  // Squares auto-prefill for metal: handles the chip-tap-after-measure path
+  // (handleWizardComplete only fires when the wizard knew metal at save time;
+  // when measurement happens first and metal is chip-tapped after, we still
+  // want the Roof Size input pre-filled). Pitched-only formula matches the
+  // wizard handler. Manual overrides preserved via `prev.roofSize ? prev`.
+  useEffect(() => {
+    if (!roofMeasurement) return
+    if (!(selections['material'] ?? []).includes('metal')) return
+    const pitchedOnly = roofMeasurement.pitchedAreaSqft
+      ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
+    const base = pitchedOnly || roofMeasurement.areaSqft
+    if (!base) return
+    const squares = String(sqftToSquares(Math.round(base * ROOF_WASTE_FACTOR)))
+    setMetalRoofSelection((prev) => prev.roofSize ? prev : { ...prev, roofSize: squares })
+  }, [roofMeasurement?.pitchedAreaSqft, roofMeasurement?.flatAreaSqft, roofMeasurement?.areaSqft, (selections['material'] ?? []).join(',')])
 
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -560,14 +582,6 @@ export function ServiceDetailPage() {
               onComplete={handleWizardComplete}
               material={dominantMaterial}
               hasFlatSection={hasFlatSection}
-              onSelectMaterial={(materialKey, hasFlat) => {
-                setSelections((prev) => {
-                  const newMats: string[] = []
-                  if (materialKey) newMats.push(materialKey)
-                  if (hasFlat) newMats.push('flat_roof')
-                  return { ...prev, material: newMats }
-                })
-              }}
             />
           </motion.div>
         )
