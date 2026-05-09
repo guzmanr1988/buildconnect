@@ -37,15 +37,15 @@ export interface CartItem {
   stormFrontSelections?: ConfiguratorEntry[]
   garageDoorSelection?: { type: string; size: string; color: string; glass: string }
   metalRoofSelection?: { color: string; roofSize: string }
-  // Architectural Shingle color id from GAF Timberline HDZ palette. Optional;
-  // populated when the homeowner picks Shingle in the roof wizard. Sibling of
-  // metalRoofSelection (different shape — shingle has color only, area is
-  // measured by the wizard, not configurator-entered).
+  shingleSelection?: { color: string; roofSize: string }
+  tileSelection?: { tileType: 'flat' | 'spanish' | 'mission'; tileColor: string; roofSize: string }
+  aluminumSelection?: { color: string; roofSize: string }
+  flatRoofSelection?: { membraneType: 'tpo' | 'epdm' | 'modified_bitumen'; roofSize: string }
+  // Legacy widen-reads fields — preserved so cart items persisted before the
+  // shingleSelection / tileSelection consolidation still render correctly on
+  // every consumer surface (homeowner cart, vendor inbox, project-detail
+  // dialog). Write-side now sets the consolidated selection objects above.
   shingleColor?: string
-  // Tile profile + color picked when the homeowner selects a tile material
-  // (barrel_tile or terracotta) in the roof wizard. tileType is the silhouette
-  // (Flat / Spanish / Mission); tileColor is an id from TILE_ROOF_COLORS in
-  // tile-roof-configurator.tsx. Both required when a tile material is picked.
   tileType?: 'flat' | 'spanish' | 'mission'
   tileColor?: string
   // Roof measurement wizard output — area + pitch captured before manual config.

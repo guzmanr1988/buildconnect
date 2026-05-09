@@ -174,6 +174,7 @@ export function RoofingWizard({
   const [tileSelection, setTileSelection] = useState<TileRoofSelection>({
     tileType: ((editItem?.tileType as TileType | undefined) ?? '') as TileType | '',
     tileColor: (editItem?.tileColor as string) || '',
+    roofSize: '',
   })
   const [roofMeasurement, setRoofMeasurement] = useState<{
     areaSqft: number; pitch: string; address: string
@@ -617,7 +618,7 @@ export function RoofingWizard({
                       // If user moves away from a tile material, clear tile config.
                       const isTileNow = opt.id === 'barrel_tile' || opt.id === 'terracotta'
                       if (!isTileNow && (tileSelection.tileType || tileSelection.tileColor)) {
-                        setTileSelection({ tileType: '', tileColor: '' })
+                        setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
                       }
                     } else {
                       toggleMulti('material', opt.id)
