@@ -1,9 +1,16 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
 // Homeowner-side document store. Auto-generated project submission records
 // (PDFs containing homeowner ID + no-permit waiver when applicable) land here
-// after sendProject. LS-only for demo; Supabase Storage migration deferred to Tranche-2.
+// after sendProject. In-memory only (PR #194) — was LS-persisted, but each
+// PDF carries the homeowner ID image (200-500KB base64) and the array
+// accumulates unboundedly across sends, blowing the 5MB Safari LS quota
+// after ~10 test submissions. PRs #191/#193 fixed projects-store; this
+// store was the remaining bloat source on Rodolfo's apex device. Reload
+// drops docs[] back to []; users can regenerate from sentProjects on
+// demand. Tranche-2 Supabase Storage migration is the durable persistence.
+// Boot-purge in main.tsx evicts the orphaned 'buildconnect-homeowner-docs'
+// LS key once per device on first load after deploy.
 
 export type HomeownerDocCategory = 'project-submission' | 'other'
 
@@ -30,21 +37,16 @@ interface HomeownerDocsState {
   getDocsForHomeowner: (homeownerId: string) => HomeownerDoc[]
 }
 
-export const useHomeownerDocsStore = create<HomeownerDocsState>()(
-  persist(
-    (set, get) => ({
-      docs: [],
-      addDoc: (doc) => {
-        const newDoc: HomeownerDoc = {
-          ...doc,
-          id: `hdoc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          createdAt: new Date().toISOString(),
-        }
-        set((s) => ({ docs: [...s.docs, newDoc] }))
-      },
-      removeDoc: (id) => set((s) => ({ docs: s.docs.filter((d) => d.id !== id) })),
-      getDocsForHomeowner: (homeownerId) => get().docs.filter((d) => d.homeownerId === homeownerId),
-    }),
-    { name: 'buildconnect-homeowner-docs' }
-  )
-)
+export const useHomeownerDocsStore = create<HomeownerDocsState>()((set, get) => ({
+  docs: [],
+  addDoc: (doc) => {
+    const newDoc: HomeownerDoc = {
+      ...doc,
+      id: `hdoc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+    }
+    set((s) => ({ docs: [...s.docs, newDoc] }))
+  },
+  removeDoc: (id) => set((s) => ({ docs: s.docs.filter((d) => d.id !== id) })),
+  getDocsForHomeowner: (homeownerId) => get().docs.filter((d) => d.homeownerId === homeownerId),
+}))
