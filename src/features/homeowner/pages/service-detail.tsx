@@ -1,5 +1,5 @@
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
-import { computeRoofTotal } from '@/lib/roof-area-math'
+import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -163,6 +163,11 @@ export function ServiceDetailPage() {
   )
   const [wizardOpen, setWizardOpen] = useState(false)
   const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean } | null>(null)
+  // Under-quote guard: explicit acknowledgment that order is flat-add-on only
+  // when chip-tap excludes pitched but satellite detected significant pitched area.
+  // Reset on material-selection change so user re-acknowledges if they re-fall
+  // into the gate state.
+  const [flatOnlyAck, setFlatOnlyAck] = useState(false)
   const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; perimeterFt?: number; address: string } | null>(null)
   const [areaMeasureKey, setAreaMeasureKey] = useState(0)
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
@@ -270,6 +275,13 @@ export function ServiceDetailPage() {
     if (typeof legacy.id === 'string') setEditingItemId(legacy.id)
     localStorage.removeItem('buildconnect-edit-item')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset the under-quote acknowledgment whenever material selections change
+  // so re-falling into the gate state forces re-acknowledgment.
+  useEffect(() => {
+    setFlatOnlyAck(false)
+  }, [(selections['material'] ?? []).join(',')])
+
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)
@@ -310,6 +322,15 @@ export function ServiceDetailPage() {
   const completedRequired = requiredGroups.filter(
     (g) => (selections[g.id]?.length ?? 0) > 0
   ).length
+
+  // Under-quote guard — chip-tap = no pitched material AND satellite measured
+  // significant pitched area. Shared evaluator with wizard Step 2 framing
+  // (single source of truth so display + commit gate cannot diverge).
+  const pitchedOmittedTriggered = serviceId === 'roofing' && evalPitchedOmittedTriggered({
+    pitchedAreaSqft: roofMeasurement?.pitchedAreaSqft ?? 0,
+    flatAreaSqft: roofMeasurement?.flatAreaSqft ?? 0,
+    hasPitchedMaterialSelected: (selections['material'] ?? []).some((m) => m !== 'flat_roof'),
+  })
   const allRequiredDone = completedRequired === requiredGroups.length
 
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
@@ -1037,6 +1058,55 @@ export function ServiceDetailPage() {
           <PermitStepSection />
         </div>
 
+        {/* Under-quote guard: chip-tap excludes pitched but satellite measured
+            >200 sqft pitched + >20% of total. Block Add-to-Project until user
+            either taps a pitched material chip (gate clears via state change)
+            or explicitly acknowledges flat-add-on-only via the toggle below.
+            Display-truth peer lives in the wizard Step 2 Pitched row (RED).
+            Per banked project_buildconnect_quote_top_of_real (under-detection
+            is launch-blocker — quotes err HIGH not LOW). */}
+        {pitchedOmittedTriggered && !alreadyInCart && (
+          <div
+            data-pitched-not-included="true"
+            role="alert"
+            className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-4"
+          >
+            <h3 className="text-base font-semibold text-amber-900 dark:text-amber-200 mb-2">
+              Your roof has ~{(roofMeasurement?.pitchedAreaSqft ?? 0).toLocaleString()} sqft of pitched area (the main roof) not in this order.
+            </h3>
+            <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">
+              To include it, tap a pitched material above (Shingle, Tile, Metal, Aluminum, or Terracotta).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.querySelector('[data-chip-group="material"]') as HTMLElement | null
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }}
+              className="text-sm font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2"
+            >
+              Tap a pitched material to include it
+            </button>
+            <label className="mt-3 flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                data-pitched-acknowledge="true"
+                checked={flatOnlyAck}
+                onChange={(e) => setFlatOnlyAck(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <div className="flex-1">
+                <span className="block text-sm text-amber-900 dark:text-amber-200 font-medium">
+                  Order flat add-on only — main roof handled separately
+                </span>
+                <span className="block text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                  Add will not include the pitched {(roofMeasurement?.pitchedAreaSqft ?? 0).toLocaleString()} sqft.
+                </span>
+              </div>
+            </label>
+          </div>
+        )}
+
         {/* CTA */}
         <div className="mt-4 flex flex-col gap-3">
           <Button
@@ -1045,7 +1115,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck)}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -1105,6 +1175,13 @@ export function ServiceDetailPage() {
               // Pitched-side gating stays at handleComplete (PR #173 material===null).
               const cartRoofMeasurement = (() => {
                 if (serviceId !== 'roofing' || !roofMeasurement) return null
+                // Chip=flat-only with explicit ack: strip pitched (user opted-out via ack toggle).
+                // SoT-of-strip moved here from wizard handleComplete so the under-quote gate
+                // evaluator can read raw pitched on its read path.
+                if (pitchedOmittedTriggered && flatOnlyAck) {
+                  const flatOnly = roofMeasurement.flatAreaSqft ?? 0
+                  return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
+                }
                 if (roofMeasurement.includeFlat === true) return roofMeasurement
                 const pitchedOnly = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 return { ...roofMeasurement, areaSqft: pitchedOnly, flatAreaSqft: 0, includeFlat: false }
@@ -1123,6 +1200,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && tileSelection.tileType && { tileType: tileSelection.tileType }),
                 ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
                 ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
+                ...(serviceId === 'roofing' && pitchedOmittedTriggered && flatOnlyAck && { pitchedExcludedAck: true }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
@@ -1173,6 +1251,7 @@ export function ServiceDetailPage() {
               setRoofMeasurement(null)
               setRoofPermit(null)
               setAddonLinearFt({})
+              setFlatOnlyAck(false)
               setAdded(true)
               setTimeout(() => setAdded(false), 1200)
             }}
