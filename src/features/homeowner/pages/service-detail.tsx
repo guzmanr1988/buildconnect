@@ -592,6 +592,18 @@ export function ServiceDetailPage() {
         const matSelections = selections['material'] ?? []
         const dominantMaterial = (matSelections.find((m) => m !== 'flat_roof') ?? null) as Exclude<RoofMaterialKey, 'flat_roof'> | null
         const hasFlatSection = matSelections.includes('flat_roof')
+        // Pre-chip-tap default-included override (parity with PR #187 wizard
+        // preview): when the user has measured but not yet chip-tapped a
+        // material, default the on-page breakdown card to pitched-included
+        // with a shingle placeholder so post-Save returns to a sensible
+        // display instead of the misleading "0 sqft + Pitched NOT INCLUDED"
+        // shape. The placeholder only affects breakdown DISPLAY props on
+        // this card; pitchedOmittedTriggered remains the real value at the
+        // page level so the Add to Project gate (line ~1491) and warning
+        // banner (line ~1441) still fire correctly until chip-tap is done.
+        const noChipTapYet = dominantMaterial === null && !hasFlatSection
+        const previewMaterial = noChipTapYet ? 'shingle' : dominantMaterial
+        const previewPitchedOmittedTriggered = noChipTapYet ? false : pitchedOmittedTriggered
         return (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -650,10 +662,10 @@ export function ServiceDetailPage() {
                 flatAreaSqft={roofMeasurement.flatAreaSqft ?? 0}
                 pitch={roofMeasurement.pitch}
                 perimeterFt={roofMeasurement.perimeterFt ?? 0}
-                material={dominantMaterial}
+                material={previewMaterial}
                 includeFlat={roofMeasurement.includeFlat ?? hasFlatSection}
                 hasFlatSection={hasFlatSection}
-                pitchedOmittedTriggered={pitchedOmittedTriggered}
+                pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                 source="service-detail"
                 onToggleFlat={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeFlat: on } : prev)}
               />
