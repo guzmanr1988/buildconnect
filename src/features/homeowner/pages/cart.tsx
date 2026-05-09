@@ -727,46 +727,43 @@ export function CartPage() {
         </label>
         <div className="rounded-xl border bg-card p-4">
           {idDocument ? (
-            // Ship #267 — stack vertically on mobile (was single flex row,
-            // overlapped at narrow viewports). #268 — Download moved
-            // inline next to Replace (popup is view-only per Rodolfo);
-            // the two actions live in a sub-flex group so they share the
-            // mobile-stack rhythm and desktop-inline alignment.
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer self-start sm:self-auto">
+            <div className="flex flex-row items-start gap-3">
+              <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer">
                 <img src={idDocument} alt="ID Document" className="w-full h-full object-cover" />
               </button>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">ID Uploaded</p>
-                <p className="text-xs text-muted-foreground">Click image to preview</p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto">
-                  Replace
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      const reader = new FileReader()
-                      reader.onload = () => {
-                        if (typeof reader.result === 'string') setIdDocument(reader.result)
-                      }
-                      reader.readAsDataURL(file)
-                      e.target.value = ''
-                    }}
-                    className="hidden"
-                  />
-                </label>
-                <a
-                  href={idDocument}
-                  download="id-document"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Download
-                </a>
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">ID Uploaded</p>
+                  <p className="text-xs text-muted-foreground">Click image to preview</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto">
+                    Replace
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          if (typeof reader.result === 'string') setIdDocument(reader.result)
+                        }
+                        reader.readAsDataURL(file)
+                        e.target.value = ''
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  <a
+                    href={idDocument}
+                    download="id-document"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </a>
+                </div>
               </div>
             </div>
           ) : (
