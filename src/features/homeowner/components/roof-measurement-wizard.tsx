@@ -3,7 +3,7 @@ import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2, Pencil, Check } from 'lucide-react'
-import { computeRoofTotal } from '@/lib/roof-area-math'
+import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -403,6 +403,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const finalPitch = adjPitch || (measurement?.pitch ?? '')
   const derivedPitchedAreaSqft = finalArea
 
+  const wizardPitchedOmittedTriggered = evalPitchedOmittedTriggered({
+    pitchedAreaSqft: derivedPitchedAreaSqft,
+    flatAreaSqft: finalFlatAreaSqft,
+    hasPitchedMaterialSelected: material !== null,
+  })
+
   const handleComplete = () => {
     if (!stepThreeComplete) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
@@ -657,8 +663,18 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                           </p>
                         </div>
                         {/* Pitched */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Pitched</p>
+                        <div
+                          {...(wizardPitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
+                          className={wizardPitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : ''}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <p className="text-xs text-muted-foreground">Pitched</p>
+                            {wizardPitchedOmittedTriggered && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+                                Not included
+                              </span>
+                            )}
+                          </div>
                           {editingPitched ? (
                             <div className="flex items-center gap-2">
                               <Input
@@ -687,7 +703,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-foreground">
+                              <p className={`text-sm font-semibold ${wizardPitchedOmittedTriggered ? 'text-red-900 dark:text-red-200' : 'text-foreground'}`}>
                                 {derivedPitchedAreaSqft.toLocaleString()} sqft
                               </p>
                               <button
@@ -699,6 +715,11 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
                             </div>
+                          )}
+                          {wizardPitchedOmittedTriggered && (
+                            <p className="text-[11px] text-red-800 dark:text-red-300 mt-1">
+                              This is the main roof. Tap a pitched material on the page to include it.
+                            </p>
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground">Tap the pencil to enter your real measurement when the satellite is off.</p>
