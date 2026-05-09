@@ -391,6 +391,17 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     hasPitchedMaterialSelected: material !== null,
   })
 
+  // Modal preview override: when the user opens the wizard before chip-tapping
+  // any material on the page (material === null && !hasFlatSection), the
+  // breakdown card defaults to pitched-INCLUDED so real numbers show up
+  // immediately instead of "flat 0 sqft + Pitched not included". Chip-tap
+  // remains the SoT at cart-commit time — handleComplete still uses the real
+  // material prop. Flat-only chip-tap (hasFlatSection=true, material=null)
+  // is excluded from the override so flat-only users see flat-order shape.
+  const noChipTapYet = material === null && !hasFlatSection
+  const previewMaterial = noChipTapYet ? 'shingle' : material
+  const previewPitchedOmittedTriggered = noChipTapYet ? false : wizardPitchedOmittedTriggered
+
   const handleComplete = () => {
     if (!canSave) return
     // Material is sourced from chip-tap (the SoT). When the modal is opened
@@ -511,10 +522,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     flatAreaSqft={Math.round(finalFlatAreaSqft)}
                     pitch={showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
                     perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
-                    material={material}
+                    material={previewMaterial}
                     includeFlat={includeFlat}
                     hasFlatSection={hasFlatSection}
-                    pitchedOmittedTriggered={wizardPitchedOmittedTriggered}
+                    pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                     flowPath={flowPath ?? null}
                     source="wizard-step2"
                     onToggleFlat={setIncludeFlat}

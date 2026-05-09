@@ -264,8 +264,15 @@ export function ServiceDetailPage() {
     const flatSqft = result.flatAreaSqft ?? 0
     const pitchedSqft = result.pitchedAreaSqft ?? Math.max(0, result.areaSqft - flatSqft)
     const pitchedBase = pitchedSqft || result.areaSqft
-    const pitchedSquares = String(sqftToSquares(Math.round(pitchedBase * ROOF_WASTE_FACTOR)))
-    const flatSquares = String(sqftToSquares(Math.round(flatSqft * ROOF_WASTE_FACTOR)))
+    // ceil-rounding to match modal breakdown display + Rodolfo's quote-top-of-real
+    // rule: measurements/quotes err HIGH not LOW. Math.round at 2,042 sqft yields
+    // 20 (under-quote) while Math.ceil yields 21 (matches modal "21 squares").
+    const pitchedSquares = pitchedBase > 0
+      ? String(Math.max(1, Math.ceil((pitchedBase * ROOF_WASTE_FACTOR) / 100)))
+      : ''
+    const flatSquares = flatSqft > 0
+      ? String(Math.max(1, Math.ceil((flatSqft * ROOF_WASTE_FACTOR) / 100)))
+      : ''
     if (result.material === 'metal') {
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
       setMetalRoofConfigOpen(true)
@@ -389,11 +396,12 @@ export function ServiceDetailPage() {
     const pitchedSqft = roofMeasurement.pitchedAreaSqft
       ?? Math.max(0, (roofMeasurement.areaSqft ?? 0) - flatSqft)
     const pitchedBase = pitchedSqft || (roofMeasurement.areaSqft ?? 0)
+    // ceil-rounding (quote-top-of-real): matches modal breakdown display.
     const pitchedSquares = pitchedBase > 0
-      ? String(sqftToSquares(Math.round(pitchedBase * ROOF_WASTE_FACTOR)))
+      ? String(Math.max(1, Math.ceil((pitchedBase * ROOF_WASTE_FACTOR) / 100)))
       : ''
     const flatSquares = flatSqft > 0
-      ? String(sqftToSquares(Math.round(flatSqft * ROOF_WASTE_FACTOR)))
+      ? String(Math.max(1, Math.ceil((flatSqft * ROOF_WASTE_FACTOR) / 100)))
       : ''
     const mats = selections['material'] ?? []
     if (pitchedSquares) {
