@@ -1,4 +1,5 @@
 import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, Blinds, Fence } from 'lucide-react'
+import { motion } from 'framer-motion'
 import type { ServiceConfig, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -40,58 +41,61 @@ interface ServiceCardProps {
   onToggle: () => void
 }
 
+// V1 — Premium polished baseline.
 export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps) {
   const isPhase2 = !!service.phase2
   const Icon = SERVICE_ICONS[service.id] || Home
   const iconGradient = ICON_GRADIENTS[service.id] || 'from-blue-400 to-blue-600'
 
   return (
-    <button
+    <motion.button
       type="button"
       disabled={isPhase2}
       onClick={isPhase2 ? undefined : onToggle}
+      whileHover={isPhase2 ? undefined : { y: -3 }}
+      whileTap={isPhase2 ? undefined : { scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       className={cn(
-        'group relative flex h-full w-full flex-col text-left rounded-2xl border bg-card p-5 transition-all duration-300 ease-out',
-        'hover:shadow-lg hover:shadow-black/[0.04] hover:-translate-y-[2px]',
+        'group relative flex h-full w-full flex-col text-left rounded-2xl border bg-card p-4 overflow-hidden',
+        'shadow-sm hover:shadow-lg hover:shadow-black/[0.05] transition-shadow duration-300',
         'dark:hover:shadow-black/20 dark:hover:border-white/[0.08]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
         isExpanded && 'shadow-lg shadow-primary/[0.06] border-primary/25 dark:border-primary/30 ring-1 ring-primary/10',
-        isPhase2 && 'opacity-45 pointer-events-none'
+        isPhase2 && 'opacity-45 pointer-events-none',
       )}
     >
-      {/* Badge — top right */}
-      {service.badge && (
-        <div className="absolute top-4 right-4">
-          <span className={cn(
-            'inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-semibold leading-none',
-            service.badgeColor
-          )}>
+      <div className="flex items-start justify-between mb-3">
+        <motion.div
+          className={cn(
+            'flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-br shadow-sm',
+            iconGradient,
+          )}
+          whileHover={{ rotate: -4, scale: 1.06 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+        >
+          <Icon className="h-5 w-5 text-white" strokeWidth={1.8} />
+        </motion.div>
+        {service.badge && (
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-semibold leading-none',
+              service.badgeColor,
+            )}
+          >
             {service.badge}
           </span>
-        </div>
-      )}
-
-      {/* Icon */}
-      <div className={cn(
-        'mb-4 flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-br shadow-sm transition-transform duration-300',
-        iconGradient,
-        'group-hover:scale-105'
-      )}>
-        <Icon className="h-5 w-5 text-white" strokeWidth={1.8} />
+        )}
       </div>
 
-      {/* Title */}
-      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug mb-1 pr-14">
+      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug truncate">
         {service.name}
       </h3>
 
-      {/* Description — exactly 2 lines */}
-      <p className="text-[12px] text-muted-foreground leading-[1.65] line-clamp-2 mb-auto">
+      <p className="text-[12px] text-muted-foreground leading-[1.55] line-clamp-2 mt-1 mb-3">
         {service.description}
       </p>
 
-      {/* Features — quiet dot-separated text */}
-      <div className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground mt-4 mb-4">
+      <div className="flex flex-wrap items-center gap-x-1 text-[10px] text-muted-foreground mt-auto mb-3">
         {service.features.slice(0, 3).map((feature, i) => (
           <span key={feature} className="flex items-center gap-1">
             {i > 0 && <span className="text-border">·</span>}
@@ -100,24 +104,23 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         ))}
       </div>
 
-      {/* Bottom CTA — always at bottom thanks to flex + mb-auto above */}
       {!isPhase2 && (
-        <div className="flex items-center gap-2 pt-3 border-t border-border/40">
-          <span className={cn(
-            'text-[12px] font-medium transition-colors duration-200 text-primary'
-          )}>
+        <div className="flex items-center justify-between pt-2 border-t border-border/40">
+          <span className="text-[12px] font-medium text-primary">
             {isExpanded ? 'Selected' : 'Get started'}
           </span>
-          <div className={cn(
-            'flex h-5 w-5 items-center justify-center rounded-full transition-all duration-300 ml-auto',
-            isExpanded
-              ? 'bg-primary text-white'
-              : 'bg-primary/8 text-primary group-hover:bg-primary/15'
-          )}>
-            <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
-          </div>
+          <motion.div
+            className={cn(
+              'flex h-6 w-6 items-center justify-center rounded-full',
+              isExpanded ? 'bg-primary text-white' : 'bg-primary/10 text-primary',
+            )}
+            whileHover={{ x: 2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          >
+            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </motion.div>
         </div>
       )}
-    </button>
+    </motion.button>
   )
 }
