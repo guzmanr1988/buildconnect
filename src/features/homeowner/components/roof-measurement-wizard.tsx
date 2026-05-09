@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { sqftToSquares } from '@/lib/option-metadata'
 import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
-import { Loader2, RotateCcw, MapPin, Ruler, Layers, Home, CheckCircle2, Pencil, Check } from 'lucide-react'
-import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
+import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
+import { evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
 
 // ─── Places Autocomplete hook ────────────────────────────────────────────────
 // Loads the Maps JS SDK once (idempotent), then binds google.maps.places.Autocomplete
@@ -298,9 +297,14 @@ interface Props {
   // wizard reads it as a prop and no longer asks the homeowner to re-pick.
   material?: Exclude<RoofMaterialKey, 'flat_roof'> | null
   hasFlatSection?: boolean
+  // Step 3 alternate write surface: when present, the wizard renders an
+  // inline material picker that mutates chip-tap selections. Picking a
+  // material there flows back through this callback so the page underneath
+  // stays in sync (one SoT, two write surfaces).
+  onSelectMaterial?: (material: Exclude<RoofMaterialKey, 'flat_roof'> | null, hasFlat: boolean) => void
 }
 
-export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false }: Props) {
+export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplete, flowPath, material = null, hasFlatSection = false, onSelectMaterial }: Props) {
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const [step, setStep] = useState(1)
   const [address, setAddress] = useState(defaultAddress)
@@ -399,7 +403,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       ? Math.max(0, (measurement.areaSqft || 0) - (measurement.flatAreaSqft || 0))
       : 0
   const finalFlatAreaSqft = measurement ? Math.max(0, Number(adjFlatArea) || 0) : 0
-  const finalWaste = Math.round(finalArea * ROOF_WASTE_FACTOR)
   const finalPitch = adjPitch || (measurement?.pitch ?? '')
   const derivedPitchedAreaSqft = finalArea
 
@@ -521,237 +524,35 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       Satellite data wasn't available for this address — measurements below are estimates. Tap <span className="font-semibold">Adjust manually</span> to correct them before continuing.
                     </div>
                   )}
-                  <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                    {flowPath !== 'addons_only' && (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Layers className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              Material Order{' '}
-                              <span className="text-muted-foreground/70 normal-case font-medium">
-                                ({material !== null ? (includeFlat ? 'pitched + flat' : 'pitched') : 'flat'})
-                              </span>
-                            </span>
-                          </div>
-                          {(() => {
-                            const { pitchedWaste, flatWaste, totalSqft } = computeRoofTotal({
-                              pitchedAreaSqft: Math.round(derivedPitchedAreaSqft),
-                              flatAreaSqft: Math.round(finalFlatAreaSqft),
-                              includeFlat,
-                            })
-                            const orderSqft = material !== null
-                              ? (includeFlat ? totalSqft : pitchedWaste)
-                              : flatWaste
-                            const orderSquares = Math.ceil(orderSqft / 100)
-                            const sublabel = material !== null
-                              ? (includeFlat
-                                  ? `Pitched ${Math.round(derivedPitchedAreaSqft).toLocaleString()} + Flat ${Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste`
-                                  : `Pitched: ${Math.round(derivedPitchedAreaSqft).toLocaleString()} sqft + 2% waste`)
-                              : `Flat: ${Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste`
-                            return (
-                              <>
-                                <p className="text-xl font-bold text-foreground">
-                                  {orderSqft.toLocaleString()}{' '}
-                                  <span className="text-sm font-normal text-muted-foreground">sqft ({orderSquares} squares)</span>
-                                </p>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">{sublabel}</p>
-                              </>
-                            )
-                          })()}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Ruler className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              Roof Pitch
-                            </span>
-                          </div>
-                          <p className="text-xl font-bold text-foreground">
-                            {showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    <div className={flowPath === 'addons_only' ? '' : 'border-t pt-3'}>
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <Ruler className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Roof Perimeter
-                        </span>
-                      </div>
-                      <p className="text-xl font-bold text-foreground">
-                        ~{(Number(adjPerimeterFt) || measurement.perimeterFt).toLocaleString()}{' '}
-                        <span className="text-sm font-normal text-muted-foreground">lin ft</span>
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Used for gutter, fascia, and soffit estimates
-                      </p>
-                    </div>
-                    {flowPath !== 'addons_only' && measurement.pitchedAreaSqft !== undefined && (measurement.pitchedAreaSqft > 0 || measurement.flatAreaSqft > 0) && (
-                      <div className="border-t pt-3 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Area Breakdown
-                          </span>
-                          {/* Item 1 (PR #174): restored Include flat area toggle. Seeds from chip-tap-derived hasFlatSection prop; user toggle override per-modal-session. */}
-                          {finalFlatAreaSqft > 0 && (
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="include-flat-toggle" className="text-[11px] text-muted-foreground cursor-pointer m-0">
-                                Include flat area
-                              </Label>
-                              <Switch id="include-flat-toggle" checked={includeFlat} onCheckedChange={setIncludeFlat} />
-                            </div>
-                          )}
-                        </div>
-                        {/* Flat area panel: dimmed + Not included badge when chip excludes flat AND toggle off (item 6). */}
-                        <div className={cn('relative', !includeFlat && !hasFlatSection && finalFlatAreaSqft > 0 && 'opacity-60')}>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-                            {finalFlatAreaSqft > 0 && !includeFlat && (
-                              <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
-                                Not included
-                              </span>
-                            )}
-                          </div>
-                          {editingFlat ? (
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <Input
-                                type="number"
-                                min="0"
-                                value={adjFlatArea}
-                                onChange={(e) => setAdjFlatArea(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === 'Escape') setEditingFlat(false)
-                                }}
-                                onBlur={() => setEditingFlat(false)}
-                                autoFocus
-                                className="h-9 text-base w-28"
-                                placeholder="raw sqft"
-                              />
-                              <span className="text-xs text-muted-foreground">sqft (raw)</span>
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => setEditingFlat(false)}
-                                className="text-primary hover:text-primary/80 transition-colors"
-                                aria-label="Save flat sqft"
-                              >
-                                <Check className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xl font-bold text-foreground">
-                                {Math.round(finalFlatAreaSqft * 1.02).toLocaleString()}{' '}
-                                <span className="text-sm font-normal text-muted-foreground">
-                                  sqft ({Math.ceil((finalFlatAreaSqft * 1.02) / 100)} squares)
-                                </span>
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setEditingFlat(true)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Edit flat sqft"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          )}
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Flat: {Math.round(finalFlatAreaSqft).toLocaleString()} sqft + 2% waste
-                          </p>
-                        </div>
-                        {/* Pitched */}
-                        <div
-                          {...(wizardPitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
-                          className={wizardPitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : ''}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <p className="text-xs text-muted-foreground">Pitched</p>
-                            {wizardPitchedOmittedTriggered && (
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
-                                Not included
-                              </span>
-                            )}
-                          </div>
-                          {editingPitched ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min="0"
-                                value={adjArea}
-                                onChange={(e) => setAdjArea(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === 'Escape') setEditingPitched(false)
-                                }}
-                                onBlur={() => setEditingPitched(false)}
-                                autoFocus
-                                className="h-9 text-base w-28"
-                                placeholder="raw sqft"
-                              />
-                              <span className="text-xs text-muted-foreground">sqft (raw)</span>
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => setEditingPitched(false)}
-                                className="text-primary hover:text-primary/80 transition-colors"
-                                aria-label="Save pitched sqft"
-                              >
-                                <Check className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <p className={`text-sm font-semibold ${wizardPitchedOmittedTriggered ? 'text-red-900 dark:text-red-200' : 'text-foreground'}`}>
-                                {derivedPitchedAreaSqft.toLocaleString()} sqft
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setEditingPitched(true)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Edit pitched sqft"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          )}
-                          {wizardPitchedOmittedTriggered && (
-                            <p className="text-[11px] text-red-800 dark:text-red-300 mt-1">
-                              This is the main roof. Tap a pitched material on the page to include it.
-                            </p>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">Tap the pencil to enter your real measurement when the satellite is off.</p>
-                        {/* Action-first helper: only when chip excludes flat AND toggle off (item 6). */}
-                        {finalFlatAreaSqft > 0 && !hasFlatSection && !includeFlat && (
-                          <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
-                            + Add flat section to order — tap the Flat Roof chip on the page, or flip the toggle above.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {flowPath !== 'addons_only' && (() => {
-                      // 5b: gate Total inputs by chip-tap (parallel to handleComplete + service-detail.tsx:1097).
-                      // Display = cart-truth across all 3 chip modes + toggle states.
-                      const isPitchedSelected = material !== null
-                      const { totalSqft, totalSquares } = computeRoofTotal({
-                        pitchedAreaSqft: isPitchedSelected ? Math.round(derivedPitchedAreaSqft) : 0,
-                        flatAreaSqft: includeFlat ? Math.round(finalFlatAreaSqft) : 0,
-                        includeFlat,
-                      })
-                      return (
-                        <div className="border-t pt-3">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
-                          <p className="text-xl font-bold text-foreground mt-0.5">
-                            {totalSqft.toLocaleString()}{' '}
-                            <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
-                          </p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Used for pricing</p>
-                        </div>
-                      )
-                    })()}
-                  </div>
+                  <RoofMeasurementBreakdownCard
+                    pitchedAreaSqft={Math.round(derivedPitchedAreaSqft)}
+                    flatAreaSqft={Math.round(finalFlatAreaSqft)}
+                    pitch={showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
+                    perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
+                    material={material}
+                    includeFlat={includeFlat}
+                    hasFlatSection={hasFlatSection}
+                    pitchedOmittedTriggered={wizardPitchedOmittedTriggered}
+                    flowPath={flowPath ?? null}
+                    source="wizard-step2"
+                    onToggleFlat={setIncludeFlat}
+                    editing={{
+                      pitched: {
+                        active: editingPitched,
+                        rawValue: adjArea,
+                        onChange: setAdjArea,
+                        onStart: () => setEditingPitched(true),
+                        onDone: () => setEditingPitched(false),
+                      },
+                      flat: {
+                        active: editingFlat,
+                        rawValue: adjFlatArea,
+                        onChange: setAdjFlatArea,
+                        onStart: () => setEditingFlat(true),
+                        onDone: () => setEditingFlat(false),
+                      },
+                    }}
+                  />
 
                   <button
                     className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
@@ -813,72 +614,82 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
             </div>
           )}
 
-          {/* Step 3 fallback: chip-tap empty (no material picked).
-              stepThreeComplete=false, success block below would render blank.
-              Tell the user how to recover. */}
-          {step === 3 && !stepThreeComplete && (
-            <div className="space-y-3 py-4">
-              <p className="text-sm font-semibold text-foreground">Pick a material to continue</p>
-              <p className="text-[13px] text-muted-foreground">
-                Close this modal, tap a roofing material chip on the page, then re-open the wizard.
-              </p>
-              <div className="flex justify-end pt-1">
-                <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 3: Ready ── */}
-          {step === 3 && stepThreeComplete && (
-            <div className="space-y-4">
+          {/* ── Step 3: Review + inline material picker ──
+              Single layout across material-not-picked and material-picked
+              states. Breakdown card is read-only (canonical shape, source =
+              wizard-step3). The material picker writes to chip-tap state via
+              onSelectMaterial — same SoT, alternate write surface. */}
+          {step === 3 && (
+            <div className="space-y-4" data-roof-wizard-step="3">
               <div>
-                <p className="text-sm font-semibold text-foreground mb-0.5">You're all set!</p>
-                <p className="text-[13px] text-muted-foreground mb-3">
-                  Here's what we'll pre-fill in your configuration.
+                <p className="text-sm font-semibold text-foreground mb-0.5">
+                  {stepThreeComplete ? "You're all set!" : 'Pick a material to continue'}
                 </p>
+                <p className="text-[13px] text-muted-foreground mb-3 truncate">{address}</p>
               </div>
-              {(() => {
-                const hasFlatAlongPitched = material !== null && hasFlatSection
-                const pitchedLabel = material ? (MATERIAL_OPTIONS.find((m) => m.key === material)?.label ?? material) : null
-                const materialLabel = pitchedLabel && hasFlatSection
-                  ? `${pitchedLabel} + Flat Roof`
-                  : pitchedLabel ?? FLAT_ROOF_OPTION.label
-                const rows: { label: string; value: string }[] = [
-                  { label: 'Address', value: address },
-                ]
-                if (flowPath !== 'addons_only') {
-                  if (hasFlatAlongPitched && measurement?.pitchedAreaSqft !== undefined) {
-                    const pitchedWaste = Math.round(measurement.pitchedAreaSqft * ROOF_WASTE_FACTOR)
-                    const flatWaste = Math.round(measurement.flatAreaSqft * ROOF_WASTE_FACTOR)
-                    rows.push({ label: 'Pitched section', value: `${measurement.pitchedAreaSqft.toLocaleString()} sqft → ${pitchedWaste.toLocaleString()} sqft w/waste (${sqftToSquares(pitchedWaste)} squares)` })
-                    rows.push({ label: 'Flat section', value: `${measurement.flatAreaSqft.toLocaleString()} sqft → ${flatWaste.toLocaleString()} sqft w/waste (${sqftToSquares(flatWaste)} squares)` })
-                  } else {
-                    rows.push({ label: 'Material Order', value: `${finalWaste.toLocaleString()} sqft (${sqftToSquares(finalWaste)} squares)` })
-                  }
-                  rows.push({ label: 'Roof Pitch', value: finalPitch })
-                }
-                const finalPerimeterFt = Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0)
-                if (finalPerimeterFt) rows.push({ label: 'Perimeter', value: `~${finalPerimeterFt.toLocaleString()} lin ft` })
-                if (flowPath !== 'addons_only') {
-                  rows.push({ label: 'Material', value: materialLabel })
-                }
-                return (
-                  <div className="rounded-xl border bg-muted/20 divide-y divide-border">
-                    {rows.map(({ label, value }) => (
-                      <div key={label} className="flex items-start gap-3 px-4 py-2.5">
-                        <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
-                          <p className="text-sm text-foreground font-medium leading-tight">{value}</p>
-                        </div>
-                      </div>
-                    ))}
+              {flowPath !== 'addons_only' && measurement && (
+                <RoofMeasurementBreakdownCard
+                  pitchedAreaSqft={Math.round(derivedPitchedAreaSqft)}
+                  flatAreaSqft={Math.round(finalFlatAreaSqft)}
+                  pitch={finalPitch || measurement.pitch}
+                  perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
+                  material={material}
+                  includeFlat={includeFlat}
+                  hasFlatSection={hasFlatSection}
+                  pitchedOmittedTriggered={wizardPitchedOmittedTriggered}
+                  flowPath={flowPath ?? null}
+                  source="wizard-step3"
+                />
+              )}
+              {flowPath !== 'addons_only' && onSelectMaterial && (
+                <div className="space-y-2" data-roof-wizard-material-picker="true">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Material
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MATERIAL_OPTIONS.map((opt) => {
+                      const isSelected = material === opt.key
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          data-chip-id={opt.key}
+                          data-chip-group="material"
+                          data-chip-state={isSelected ? 'active' : 'inactive'}
+                          onClick={() => onSelectMaterial(opt.key as Exclude<RoofMaterialKey, 'flat_roof'>, hasFlatSection)}
+                          className={cn(
+                            'rounded-xl border p-3 text-left transition-all duration-150',
+                            isSelected
+                              ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                              : 'border-border hover:border-primary/40 hover:bg-muted',
+                          )}
+                        >
+                          <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{opt.sub}</p>
+                        </button>
+                      )
+                    })}
                   </div>
-                )
-              })()}
+                  <label className="flex items-start gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      data-chip-id="flat_roof"
+                      data-chip-group="material"
+                      data-chip-state={hasFlatSection ? 'active' : 'inactive'}
+                      checked={hasFlatSection}
+                      onChange={(e) => onSelectMaterial(material, e.target.checked)}
+                      className="mt-0.5 h-4 w-4"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{FLAT_ROOF_OPTION.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{FLAT_ROOF_OPTION.sub}</p>
+                    </div>
+                  </label>
+                </div>
+              )}
               <div className="flex justify-between gap-2 pt-1">
                 <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back</Button>
-                <Button size="sm" onClick={handleComplete}>
+                <Button size="sm" disabled={!stepThreeComplete} onClick={handleComplete}>
                   Start Configuring →
                 </Button>
               </div>
