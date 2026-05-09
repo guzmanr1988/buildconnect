@@ -23,6 +23,31 @@ function updateProject(id: string, fields: Record<string, unknown>) {
     .then(({ error }) => { if (error) console.error('[projects] update failed:', error.message) })
 }
 
+// Athena gap #4 — server-side audit trail for reschedule negotiations.
+// Mirrors the in-memory rescheduleRequestsByLead map into the
+// reschedule_requests table (migration 035). request inserts a fresh
+// pending row; counter / approve / reject UPDATE the active pending row
+// found by lead_id. Resolved (approved/rejected) rows stay as audit
+// history, paired with the activity_log reschedule_requested /
+// reschedule_resolved events for full event-by-event reconstruction.
+//
+// Best-effort: failures log but do NOT block the local zustand write —
+// the in-memory + LS state remains the source of truth at session-end,
+// matching the cancellation_request shape (sent_projects.cancellation_request).
+function insertRescheduleRequest(fields: Record<string, unknown>) {
+  supabase.from('reschedule_requests')
+    .insert(fields)
+    .then(({ error }) => { if (error) console.error('[reschedule] insert failed:', error.message) })
+}
+
+function updatePendingRescheduleRequest(leadId: string, fields: Record<string, unknown>) {
+  supabase.from('reschedule_requests')
+    .update(fields)
+    .eq('lead_id', leadId)
+    .eq('status', 'pending')
+    .then(({ error }) => { if (error) console.error('[reschedule] update failed:', error.message) })
+}
+
 export interface ContractorInfo {
   // Ship #165 per task_1776731114470_226 — vendor_id FK is the stable
   // bridge key. Prefer it in all cross-surface lookups (was company-name
@@ -813,9 +838,10 @@ export const useProjectsStore = create<ProjectsState>()(
 
       // Ship #191 — reschedule request (post-approval two-party).
       requestReschedule: (leadId, requestedBy, proposedDate, proposedTime, originalDate, originalTime, reason) => {
+        const requestedAt = new Date().toISOString()
         const reschedReq = {
           requestedBy,
-          requestedAt: new Date().toISOString(),
+          requestedAt,
           proposedDate,
           proposedTime,
           originalDate,
@@ -830,12 +856,29 @@ export const useProjectsStore = create<ProjectsState>()(
           },
         }))
         logEvent({ eventType: 'reschedule_requested', leadId, meta: { requestedBy, proposedDate, proposedTime } })
-        if (get().sentProjects.find((p) => p.id === leadId)) {
+        const project = get().sentProjects.find((p) => p.id === leadId)
+        if (project) {
           updateProject(leadId, { reschedule_request: reschedReq })
         }
+        // Athena gap #4 — also write to the normalized reschedule_requests
+        // table for server-side audit trail (separate from the embedded JSONB).
+        insertRescheduleRequest({
+          lead_id: leadId,
+          requested_by: requestedBy,
+          requested_at: requestedAt,
+          proposed_date: proposedDate,
+          proposed_time: proposedTime,
+          original_date: originalDate,
+          original_time: originalTime,
+          status: 'pending',
+          ...(reason ? { reason } : {}),
+          ...(project?.homeowner_id ? { homeowner_id: project.homeowner_id } : {}),
+          ...(project?.vendor_id ? { vendor_id: project.vendor_id } : {}),
+        })
       },
 
       approveReschedule: (leadId) => {
+        const resolvedAt = new Date().toISOString()
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
@@ -847,7 +890,7 @@ export const useProjectsStore = create<ProjectsState>()(
               [leadId]: {
                 ...prev,
                 status: 'approved',
-                resolvedAt: new Date().toISOString(),
+                resolvedAt,
               },
             },
             leadStatusOverrides: {
@@ -865,12 +908,16 @@ export const useProjectsStore = create<ProjectsState>()(
         if (get().sentProjects.find((p) => p.id === leadId)) {
           updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
         }
+        updatePendingRescheduleRequest(leadId, { status: 'approved', resolved_at: resolvedAt })
       },
 
       counterReschedule: (leadId, proposedDate, proposedTime, reason) => {
+        const requestedAt = new Date().toISOString()
+        let flippedRequestedBy: 'homeowner' | 'vendor' | 'rep' | undefined
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
+          flippedRequestedBy = prev.requestedBy === 'homeowner' ? 'vendor' : 'homeowner'
           return {
             rescheduleRequestsByLead: {
               ...state.rescheduleRequestsByLead,
@@ -878,10 +925,10 @@ export const useProjectsStore = create<ProjectsState>()(
                 // Counter flips the proposer; clears resolvedAt; resets status to pending.
                 // originalDate/originalTime stay as the FIRST-proposed slot.
                 ...prev,
-                requestedBy: prev.requestedBy === 'homeowner' ? 'vendor' : 'homeowner',
+                requestedBy: flippedRequestedBy,
                 proposedDate,
                 proposedTime,
-                requestedAt: new Date().toISOString(),
+                requestedAt,
                 status: 'pending',
                 resolvedAt: undefined,
                 ...(reason !== undefined ? { reason } : {}),
@@ -893,9 +940,19 @@ export const useProjectsStore = create<ProjectsState>()(
         if (get().sentProjects.find((p) => p.id === leadId)) {
           updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
         }
+        if (flippedRequestedBy) {
+          updatePendingRescheduleRequest(leadId, {
+            requested_by: flippedRequestedBy,
+            requested_at: requestedAt,
+            proposed_date: proposedDate,
+            proposed_time: proposedTime,
+            ...(reason !== undefined ? { reason } : {}),
+          })
+        }
       },
 
       rejectReschedule: (leadId) => {
+        const resolvedAt = new Date().toISOString()
         set((state) => {
           const prev = state.rescheduleRequestsByLead[leadId]
           if (!prev) return state
@@ -905,7 +962,7 @@ export const useProjectsStore = create<ProjectsState>()(
               [leadId]: {
                 ...prev,
                 status: 'rejected',
-                resolvedAt: new Date().toISOString(),
+                resolvedAt,
               },
             },
           }
@@ -914,6 +971,7 @@ export const useProjectsStore = create<ProjectsState>()(
         if (get().sentProjects.find((p) => p.id === leadId)) {
           updateProject(leadId, { reschedule_request: get().rescheduleRequestsByLead[leadId] })
         }
+        updatePendingRescheduleRequest(leadId, { status: 'rejected', resolved_at: resolvedAt })
       },
     }),
     {
