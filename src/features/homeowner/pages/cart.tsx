@@ -17,6 +17,7 @@ import { RoofSpecCard } from '@/components/shared/roof-spec-card'
 import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
 import { shouldAskProjectPermit } from '@/lib/permit-rules'
 import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
+import { toast } from 'sonner'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
   roofing: Home,
@@ -212,17 +213,39 @@ export function CartPage() {
   }
 
   const proceedToVendorCompare = (item: typeof items[0]) => {
-    localStorage.setItem('buildconnect-pending-item', JSON.stringify(item))
-    localStorage.setItem('buildconnect-homeowner-info', JSON.stringify({
-      name: profile?.name || 'Homeowner',
-      phone: profile?.phone || '—',
-      email: profile?.email || '—',
-      address: profile?.address || 'Address pending',
-    }))
-    if (idDocument) {
-      localStorage.setItem('buildconnect-id-document', idDocument)
+    // Strip itemPhotos before stringify — base64 photos are owned by
+    // cart-store (zustand persist) and aren't consumed downstream by the
+    // booking flow (booking-confirmation/booking-calendar only read
+    // serviceName/serviceId/measurement fields). Duplicating them here as
+    // a second LS copy was the silent-throw source: the combined payload
+    // (cart-store persist + this pending-item key + idDocument key) blew
+    // past the ~5MB browser quota, localStorage.setItem threw
+    // QuotaExceededError, and with no try/catch the handler exited before
+    // navigate() — Send to Contractor button "did nothing" with zero
+    // visible feedback.
+    const { itemPhotos: _photos, ...itemForLS } = item
+    try {
+      localStorage.setItem('buildconnect-pending-item', JSON.stringify(itemForLS))
+      localStorage.setItem('buildconnect-homeowner-info', JSON.stringify({
+        name: profile?.name || 'Homeowner',
+        phone: profile?.phone || '—',
+        email: profile?.email || '—',
+        address: profile?.address || 'Address pending',
+      }))
+      if (idDocument) {
+        localStorage.setItem('buildconnect-id-document', idDocument)
+      }
+      navigate('/home/vendor-compare')
+    } catch (err) {
+      const isQuota =
+        err instanceof DOMException &&
+        (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014)
+      if (isQuota) {
+        toast.error('Project too large to send. Try removing some project photos and try again.')
+      } else {
+        toast.error('Could not send to contractor. Please try again.')
+      }
     }
-    navigate('/home/vendor-compare')
   }
 
   const handleSendToContractor = (item: typeof items[0]) => {
