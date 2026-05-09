@@ -976,6 +976,26 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: 'buildconnect-projects',
+      // PR #191 — strip heavyweight base64 fields (itemPhotos, idDocument)
+      // from the persisted shape so sentProjects[] does not accumulate
+      // photo+ID payload to the LS quota ceiling. PR #189 added a try/catch
+      // toast on the send-time write but Rodolfo apex hit the toast on a
+      // 0-photo project — root cause was prior sent projects persisting
+      // their photos+IDs forever in `buildconnect-projects`. Server-side
+      // is authoritative: upsertProject (this file) writes item + id_document
+      // to sent_projects on send, and hydrateFromSupabase reconstructs them
+      // back into in-memory state on session start. Stripping from LS persist
+      // is therefore zero-data-loss — local state is fully restored from the
+      // server. Active cart-store stays untouched (drafts have no server
+      // backup; PR #189 already strips at the send-time pending-item LS write).
+      partialize: (state) => ({
+        ...state,
+        sentProjects: state.sentProjects.map((sp) => ({
+          ...sp,
+          item: { ...sp.item, itemPhotos: undefined },
+          idDocument: undefined,
+        })),
+      }),
       // Hydration-race guard: default zustand-persist shallow-merge makes
       // persistedState override currentState entirely. If a sentProject gets
       // written (e.g. booking-confirmation.useEffect → sendProject) BEFORE
