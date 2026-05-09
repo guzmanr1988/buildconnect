@@ -21,6 +21,7 @@ import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
+import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
 import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
@@ -290,6 +291,26 @@ export function ServiceDetailPage() {
     setFlatOnlyAck(false)
   }, [(selections['material'] ?? []).join(',')])
 
+  // Anchor 4: linear-feet auto-fill on measurement. If the user picked a
+  // perimeter-driven addon BEFORE measuring (the chip handler at line ~707
+  // seeds '' when perimeterFt is undefined), back-fill the seeded blank as
+  // soon as a perimeter lands. Existing non-empty values are preserved so
+  // the user's manual overrides don't get clobbered.
+  useEffect(() => {
+    const peri = roofMeasurement?.perimeterFt
+    if (!peri) return
+    const selectedAddons = selections['addons'] ?? []
+    setAddonLinearFt((prev) => {
+      const updates: Record<string, string> = {}
+      for (const id of ADDON_LINEAR_FT_IDS) {
+        if (selectedAddons.includes(id) && !prev[id]) {
+          updates[id] = String(peri)
+        }
+      }
+      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
+    })
+  }, [roofMeasurement?.perimeterFt, (selections['addons'] ?? []).join(',')])
+
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)
@@ -461,67 +482,96 @@ export function ServiceDetailPage() {
       </motion.div>
 
       {/* Roof measurement wizard CTA — roofing only, additive (CHAIN IS GOD) */}
-      {serviceId === 'roofing' && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.12 }}
-        >
-          <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-                <Home className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                {roofMeasurement ? (
-                  <>
-                    <p className="text-sm font-semibold text-foreground">Roof measured</p>
-                    <p className="text-[13px] text-muted-foreground mt-0.5">
-                      {roofMeasurement.areaSqft.toLocaleString()} sq ft · Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''} · {roofMeasurement.address}
-                    </p>
-                    <button
-                      className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
-                      onClick={() => setWizardOpen(true)}
-                    >
-                      Re-measure
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
-                    <p className="text-[13px] text-muted-foreground mt-0.5">
-                      We'll measure your roof from satellite data and pre-fill your configuration. Skip this if you already know your measurements.
-                    </p>
-                    <Button
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => setWizardOpen(true)}
-                    >
-                      Measure My Roof
-                    </Button>
-                  </>
-                )}
+      {serviceId === 'roofing' && (() => {
+        const matSelections = selections['material'] ?? []
+        const dominantMaterial = (matSelections.find((m) => m !== 'flat_roof') ?? null) as Exclude<RoofMaterialKey, 'flat_roof'> | null
+        const hasFlatSection = matSelections.includes('flat_roof')
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.12 }}
+            className="space-y-3"
+          >
+            <div className="rounded-2xl border bg-primary/5 border-primary/20 p-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                  <Home className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {roofMeasurement ? (
+                    <>
+                      <p className="text-sm font-semibold text-foreground">Roof measured</p>
+                      <p className="text-[12px] text-muted-foreground mt-0.5 truncate">{roofMeasurement.address}</p>
+                      <div className="mt-2 flex items-center gap-3 text-xs">
+                        <button
+                          className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                          onClick={() => setWizardOpen(true)}
+                        >
+                          Re-measure
+                        </button>
+                        <span className="text-muted-foreground/40">·</span>
+                        <button
+                          className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                          onClick={() => setWizardOpen(true)}
+                        >
+                          Adjust manually
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
+                      <p className="text-[13px] text-muted-foreground mt-0.5">
+                        We'll measure your roof from satellite data and pre-fill your configuration. Skip this if you already know your measurements.
+                      </p>
+                      <Button
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => setWizardOpen(true)}
+                      >
+                        Measure My Roof
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {(() => {
-            const matSelections = selections['material'] ?? []
-            const dominantMaterial = (matSelections.find((m) => m !== 'flat_roof') ?? null) as Exclude<RoofMaterialKey, 'flat_roof'> | null
-            const hasFlatSection = matSelections.includes('flat_roof')
-            return (
-              <RoofMeasurementWizard
-                open={wizardOpen}
-                onClose={() => setWizardOpen(false)}
-                defaultAddress={selectedAddress?.full ?? ''}
-                onComplete={handleWizardComplete}
+            {roofMeasurement && (
+              <RoofMeasurementBreakdownCard
+                pitchedAreaSqft={roofMeasurement.pitchedAreaSqft ?? 0}
+                flatAreaSqft={roofMeasurement.flatAreaSqft ?? 0}
+                pitch={roofMeasurement.pitch}
+                perimeterFt={roofMeasurement.perimeterFt ?? 0}
                 material={dominantMaterial}
+                includeFlat={roofMeasurement.includeFlat ?? hasFlatSection}
                 hasFlatSection={hasFlatSection}
+                pitchedOmittedTriggered={pitchedOmittedTriggered}
+                source="service-detail"
+                onToggleFlat={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeFlat: on } : prev)}
               />
-            )
-          })()}
-        </motion.div>
-      )}
+            )}
+
+            <RoofMeasurementWizard
+              open={wizardOpen}
+              onClose={() => setWizardOpen(false)}
+              defaultAddress={selectedAddress?.full ?? ''}
+              onComplete={handleWizardComplete}
+              material={dominantMaterial}
+              hasFlatSection={hasFlatSection}
+              onSelectMaterial={(materialKey, hasFlat) => {
+                setSelections((prev) => {
+                  const newMats: string[] = []
+                  if (materialKey) newMats.push(materialKey)
+                  if (hasFlat) newMats.push('flat_roof')
+                  return { ...prev, material: newMats }
+                })
+              }}
+            />
+          </motion.div>
+        )
+      })()}
 
       {/* Area measurement CTA — driveways + pergolas + fencing, additive (CHAIN IS GOD) */}
       {(serviceId === 'driveways' || serviceId === 'pergolas' || serviceId === 'fencing') && (
@@ -1105,6 +1155,61 @@ export function ServiceDetailPage() {
           })}
         </div>
 
+        {/* Anchor 5 — Per-addon summary card. Roofing only.
+            Shows each selected addon with its auto-filled (or manually
+            entered) linear-ft. Visual shape matches the roof breakdown card
+            so homeowners see one consistent summary surface across measure
+            -> material -> addons. */}
+        {serviceId === 'roofing' && (selections['addons'] ?? []).length > 0 && (() => {
+          const selectedAddons = selections['addons'] ?? []
+          const addonOpts = service.optionGroups.find(g => g.id === 'addons')?.options ?? []
+          const rows = selectedAddons.map((id) => {
+            const label = addonOpts.find(o => o.id === id)?.label ?? id
+            if (id === 'gutters') {
+              const peri = Number(addonLinearFt['gutters'] ?? 0) || 0
+              const total = computeGutterTotalLinFt(
+                peri,
+                gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
+              )
+              const sublabel = gutterFloors
+                ? `${peri.toLocaleString()} perimeter + ${gutterDrops} drop${gutterDrops === 1 ? '' : 's'} × ${GUTTER_DROP_FT_BY_FLOORS[gutterFloors]} ft (${gutterFloors === 1 ? '1-story' : '2-story'})`
+                : `${peri.toLocaleString()} perimeter`
+              return { id, label, qty: total, unit: 'lin ft', sublabel }
+            }
+            if (ADDON_LINEAR_FT_IDS.includes(id)) {
+              const qty = Number(addonLinearFt[id] ?? 0) || 0
+              return { id, label, qty, unit: 'lin ft', sublabel: roofMeasurement?.perimeterFt ? `Auto-filled from roof perimeter` : 'Enter linear feet above' }
+            }
+            return null
+          }).filter((r): r is NonNullable<typeof r> => r !== null)
+          if (rows.length === 0) return null
+          return (
+            <div className="mt-6" data-addon-summary-card="true">
+              <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Add-on Summary
+                </span>
+                <div className="space-y-2">
+                  {rows.map((r) => (
+                    <div key={r.id} className="flex items-baseline justify-between gap-3" data-addon-row={r.id}>
+                      <p className="text-sm font-medium text-foreground">{r.label}</p>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-foreground">
+                          {r.qty.toLocaleString()}{' '}
+                          <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>
+                        </p>
+                        {r.sublabel && (
+                          <p className="text-[11px] text-muted-foreground">{r.sublabel}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Address selector — which property this project targets. Primary +
             any additional addresses from the homeowner profile. Shared across
             all 11 services, lives right above the Add-to-Project CTA. */}
@@ -1545,17 +1650,32 @@ export function ServiceDetailPage() {
                   <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                     Add-Ons
                   </h4>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     {(selections['addons'] ?? []).map((optId) => {
                       const label = addonOpts.find(o => o.id === optId)?.label ?? optId
-                      const linFt = ADDON_LINEAR_FT_IDS.includes(optId) ? addonLinearFt[optId] : undefined
+                      const isLinearFt = ADDON_LINEAR_FT_IDS.includes(optId)
+                      const rawLinFt = isLinearFt ? Number(addonLinearFt[optId] ?? 0) || 0 : 0
+                      const isGutter = optId === 'gutters' && isLinearFt && rawLinFt > 0 && gutterFloors !== null
+                      const totalLinFt = isGutter
+                        ? computeGutterTotalLinFt(rawLinFt, { floors: gutterFloors!, drops: gutterDrops })
+                        : rawLinFt
+                      const perFloor = isGutter ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors!] : 0
                       return (
-                        <div key={optId} className="flex items-center gap-2">
-                          <span className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
-                            {label}
-                          </span>
-                          {linFt && (
-                            <span className="text-xs text-muted-foreground">· {linFt} lin ft</span>
+                        <div key={optId} className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
+                              {label}
+                            </span>
+                            {isLinearFt && rawLinFt > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                · {totalLinFt.toLocaleString()} lin ft
+                              </span>
+                            )}
+                          </div>
+                          {isGutter && (
+                            <p className="text-[11px] text-muted-foreground pl-1">
+                              {rawLinFt.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloor} ft ({gutterFloors === 1 ? '1-story' : '2-story'})
+                            </p>
                           )}
                         </div>
                       )
