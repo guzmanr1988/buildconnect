@@ -196,7 +196,7 @@ function getRoofSegments(solar: SolarRecording): RoofSegmentStat[] {
  * Mirrors roof-measurement-wizard.tsx surfaces:
  *  - step2: what the user sees on the Step-2 panel inside the modal
  *           (Total label uses computeRoofTotal post-waste; Flat label
- *            shows round(rawFlat*1.01) regardless of includeFlat toggle;
+ *            shows round(rawFlat*1.02) regardless of includeFlat toggle;
  *            Pitched label shows raw pre-waste).
  *  - cart : what handleComplete writes to cart-store.roofMeasurement
  *           (raw pre-waste values; flatAreaSqft zeroed when !includeFlat).
@@ -216,7 +216,7 @@ function runScenarioOutput(
     flatAreaSqft,
     includeFlat,
   })
-  const step2FlatSqft = flatAreaSqft > 0 ? Math.round(flatAreaSqft * 1.01) : 0
+  const step2FlatSqft = flatAreaSqft > 0 ? Math.round(flatAreaSqft * 1.02) : 0
 
   const step2: Step2Expected = {
     pitchedSqft: pitchedAreaSqft,

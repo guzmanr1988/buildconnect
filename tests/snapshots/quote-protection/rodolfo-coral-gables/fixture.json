@@ -5,8 +5,8 @@
     "recordedAt": "2026-05-08T21:48:00Z",
     "recordedBundle": "BUrV7oIT",
     "recordedBy": "apollo",
-    "rekeyedAt": "2026-05-08T22:30:00Z",
-    "rekeyedBy": "apollo (per hephaestus source-trace 1778277435667 + 1778277647844)",
+    "rekeyedAt": "2026-05-09T00:55:00Z",
+    "rekeyedBy": "hephaestus (post-#174 close — flat waste 1.01 -> 1.02 to match main; rebased on 164904b)",
     "surfaceDefinitions": {
       "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(...).totalSqft. Note: 'Flat Area' label still renders when measurement.flatAreaSqft>0 even if includeFlat toggle is OFF — flat number is shown but excluded from Total.",
       "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw values, with flatAreaSqft zeroed when includeFlat=false."
@@ -28,7 +28,7 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 484,
+            "flatSqft": 489,
             "totalSqft": 2094,
             "squares": 21,
             "includeFlatDefault": false
@@ -73,8 +73,8 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 484,
-            "totalSqft": 2578,
+            "flatSqft": 489,
+            "totalSqft": 2583,
             "squares": 26,
             "includeFlatDefault": true
           },
