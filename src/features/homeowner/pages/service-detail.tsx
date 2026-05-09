@@ -1650,17 +1650,32 @@ export function ServiceDetailPage() {
                   <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                     Add-Ons
                   </h4>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     {(selections['addons'] ?? []).map((optId) => {
                       const label = addonOpts.find(o => o.id === optId)?.label ?? optId
-                      const linFt = ADDON_LINEAR_FT_IDS.includes(optId) ? addonLinearFt[optId] : undefined
+                      const isLinearFt = ADDON_LINEAR_FT_IDS.includes(optId)
+                      const rawLinFt = isLinearFt ? Number(addonLinearFt[optId] ?? 0) || 0 : 0
+                      const isGutter = optId === 'gutters' && isLinearFt && rawLinFt > 0 && gutterFloors !== null
+                      const totalLinFt = isGutter
+                        ? computeGutterTotalLinFt(rawLinFt, { floors: gutterFloors!, drops: gutterDrops })
+                        : rawLinFt
+                      const perFloor = isGutter ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors!] : 0
                       return (
-                        <div key={optId} className="flex items-center gap-2">
-                          <span className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
-                            {label}
-                          </span>
-                          {linFt && (
-                            <span className="text-xs text-muted-foreground">· {linFt} lin ft</span>
+                        <div key={optId} className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-sm font-medium">
+                              {label}
+                            </span>
+                            {isLinearFt && rawLinFt > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                · {totalLinFt.toLocaleString()} lin ft
+                              </span>
+                            )}
+                          </div>
+                          {isGutter && (
+                            <p className="text-[11px] text-muted-foreground pl-1">
+                              {rawLinFt.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloor} ft ({gutterFloors === 1 ? '1-story' : '2-story'})
+                            </p>
                           )}
                         </div>
                       )
