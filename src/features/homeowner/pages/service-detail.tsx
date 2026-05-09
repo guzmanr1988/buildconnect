@@ -1,4 +1,4 @@
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
@@ -176,6 +176,14 @@ export function ServiceDetailPage() {
       ? Object.fromEntries(Object.entries(editItemForService.roofAddonLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
       : {}
   )
+  const [gutterFloors, setGutterFloors] = useState<1 | 2 | null>(() => {
+    const persisted = (editItemForService?.gutterDropsConfig as { floors?: 1 | 2 } | undefined)?.floors
+    return persisted === 1 || persisted === 2 ? persisted : null
+  })
+  const [gutterDrops, setGutterDrops] = useState<number>(() => {
+    const persisted = (editItemForService?.gutterDropsConfig as { drops?: number } | undefined)?.drops
+    return persisted && persisted >= 1 && persisted <= 5 ? persisted : 2
+  })
 
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
@@ -794,24 +802,108 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
-                {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only */}
-                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.some((c) => selected.includes(c.id)) && (
-                  <div className="mt-3 space-y-2">
-                    {ADDON_LINEAR_FT_CONFIG.filter((c) => selected.includes(c.id)).map((c) => (
-                      <div key={c.id} className="flex items-center gap-3">
-                        <Label className="text-sm w-36 shrink-0">{c.label}</Label>
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          className="max-w-[140px]"
-                          placeholder="linear feet"
-                          value={addonLinearFt[c.id] ?? ''}
-                          onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                        />
+                {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only.
+                    Floors + drops chips render inline ONLY when gutters chip is active
+                    (ported from wizard Step 7; cart payload shape gutterDropsConfig
+                    preserved so vendor inbox + lead-workflow + roof-spec-card readers
+                    pick it up unchanged). */}
+                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.some((c) => selected.includes(c.id)) && (() => {
+                  const showGutterDrops = selected.includes('gutters')
+                  const gutterPerimeter = Number(addonLinearFt['gutters'] ?? 0) || 0
+                  const perFloor = gutterFloors ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors] : 0
+                  const gutterTotal = computeGutterTotalLinFt(
+                    gutterPerimeter,
+                    gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
+                  )
+                  const floorsLabel = gutterFloors === 1 ? '1-story' : '2-story'
+                  return (
+                    <div className="mt-3 space-y-3">
+                      {showGutterDrops && (
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">How many floors does the home have?</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {([1, 2] as const).map((n) => {
+                                const isSelected = gutterFloors === n
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    data-chip-id={String(n)}
+                                    data-chip-group="gutter_floors"
+                                    data-chip-state={isSelected ? 'active' : 'inactive'}
+                                    onClick={() => setGutterFloors(n)}
+                                    className={cn(
+                                      'rounded-xl border p-3 text-center transition-all duration-150',
+                                      isSelected
+                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
+                                    )}
+                                  >
+                                    <span className="text-sm">{n === 1 ? 'One story' : 'Two stories'}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">How many downspouts (drops)?</Label>
+                            <div className="grid grid-cols-5 gap-2">
+                              {[1, 2, 3, 4, 5].map((n) => {
+                                const isSelected = gutterDrops === n
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    data-chip-id={String(n)}
+                                    data-chip-group="gutter_drops"
+                                    data-chip-state={isSelected ? 'active' : 'inactive'}
+                                    onClick={() => setGutterDrops(n)}
+                                    className={cn(
+                                      'rounded-xl border p-3 text-center transition-all duration-150',
+                                      isSelected
+                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
+                                    )}
+                                  >
+                                    <span className="text-sm">{n}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">Most homes have 2 or 3 drops.</p>
+                          </div>
+                        </>
+                      )}
+                      <div className="space-y-2">
+                        {ADDON_LINEAR_FT_CONFIG.filter((c) => selected.includes(c.id)).map((c) => (
+                          <div key={c.id} className="flex items-center gap-3">
+                            <Label className="text-sm w-36 shrink-0">{c.label}</Label>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              className="max-w-[140px]"
+                              placeholder="linear feet"
+                              value={addonLinearFt[c.id] ?? ''}
+                              onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {showGutterDrops && gutterFloors && gutterPerimeter > 0 && (
+                        <div className="rounded-xl border bg-muted/40 p-3 space-y-1" data-roofing-gutter-breakdown="true">
+                          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total gutter lin ft</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {gutterTotal.toLocaleString()} lin ft
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {gutterPerimeter.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
@@ -1205,6 +1297,9 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
+                ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
+                  gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
+                }),
                 ...(addonQuantities && { addonQuantities }),
                 ...(itemAddress && { address: itemAddress }),
                 ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),
