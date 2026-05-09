@@ -29,7 +29,9 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useAdminHomeowners } from '@/lib/hooks/use-admin-data'
 import { matchesSearch } from '@/lib/search-match'
+import { deriveInitials } from '@/lib/initials'
 import type { LeadStatus } from '@/types'
 
 // ─── Mock Homeowners (extended) ───
@@ -138,14 +140,28 @@ export default function HomeownersPage() {
     [demoDataHidden]
   )
 
-  const homeowners = useMemo(
-    () =>
-      HOMEOWNERS.map((h) => ({
-        ...h,
-        status: homeownerStatusOverrides[h.id] ?? h.status,
-      })),
-    [homeownerStatusOverrides]
-  )
+  const { data: realHomeowners = [] } = useAdminHomeowners()
+
+  const homeowners = useMemo(() => {
+    const realRows = realHomeowners.map((p) => ({
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      phone: p.phone || '',
+      address: p.address || '',
+      avatar_color: p.avatar_color || '#3b82f6',
+      initials: p.initials || deriveInitials(p.name),
+      status: homeownerStatusOverrides[p.id] ?? p.status,
+      created_at: p.created_at,
+    }))
+    const fixtureRows = demoDataHidden
+      ? []
+      : HOMEOWNERS.map((h) => ({
+          ...h,
+          status: homeownerStatusOverrides[h.id] ?? h.status,
+        }))
+    return [...realRows, ...fixtureRows]
+  }, [realHomeowners, homeownerStatusOverrides, demoDataHidden])
 
   // Multi-field search (ship #134) via shared matchesSearch util: name /
   // email / phone (digits-normalized) / address / project-id (fixture
@@ -198,7 +214,7 @@ export default function HomeownersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Homeowner Management"
-        description={`${HOMEOWNERS.length} registered homeowners`}
+        description={`${homeowners.length} registered homeowners`}
       >
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-sm">

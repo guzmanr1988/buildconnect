@@ -10,6 +10,7 @@ import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
+import { useAdminLeads } from '@/lib/hooks/use-admin-data'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
@@ -26,8 +27,13 @@ export default function WorkflowPage() {
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
-  const mockLeads = useEffectiveMockLeads()
+  const fixtureLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
+  // Real leads from Supabase (RLS gates to admin role); always shown.
+  // Fixture leads merge in only when demoDataHidden=false (Clear Demo Data
+  // semantics preserved).
+  const { data: realLeads = [] } = useAdminLeads()
+  const mockLeads = useMemo(() => [...realLeads, ...fixtureLeads], [realLeads, fixtureLeads])
 
   // Ship #212 (Rodolfo-direct P0 diagnostic) — leads-empty arc.
   // Log admin-workflow read snapshot on sentProjects mutation so we
