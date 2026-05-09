@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Download, Fence } from 'lucide-react'
+import { ArrowLeft, Trash2, ShoppingCart, Send, Clock, Eye, Calendar, Star, User, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, XCircle, Pencil, Plus, ChevronDown, Blinds, Fence } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -79,10 +79,8 @@ export function CartPage() {
   const navigate = useNavigate()
   const {
     items,
-    idDocument,
     removeItem,
     updateItem,
-    setIdDocument,
     projectPermit,
     setProjectPermit,
     setProjectPermitWaiver,
@@ -232,9 +230,6 @@ export function CartPage() {
         email: profile?.email || '—',
         address: profile?.address || 'Address pending',
       }))
-      if (idDocument) {
-        localStorage.setItem('buildconnect-id-document', idDocument)
-      }
       navigate('/home/vendor-compare')
     } catch (err) {
       const isQuota =
@@ -704,11 +699,11 @@ export function CartPage() {
                 <Button
                   size="default"
                   className="flex-1 h-10 gap-2 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-700"
-                  disabled={!idDocument}
+                  disabled={!profile?.id_document_url}
                   onClick={() => handleSendToContractor(item)}
                 >
                   <Send className="h-4 w-4" />
-                  {idDocument ? 'Send to Contractor' : 'Upload ID First'}
+                  {profile?.id_document_url ? 'Send to Contractor' : 'Upload ID First'}
                 </Button>
               </div>
             </motion.div>
@@ -716,79 +711,48 @@ export function CartPage() {
         })}
       </div>
 
-      {/* Upload ID */}
+      {/* Photo ID — managed on Documents page (PR #197). Single profile-level
+          ID; cart shows current status + deep-link to manage. */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.3 }}
       >
         <label className="text-sm font-medium text-foreground mb-2 block">
-          Upload Your ID <span className="text-destructive">*</span>
+          Photo ID <span className="text-destructive">*</span>
         </label>
         <div className="rounded-xl border bg-card p-4">
-          {idDocument ? (
+          {profile?.id_document_url ? (
             <div className="flex flex-row items-start gap-3">
               <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer">
-                <img src={idDocument} alt="ID Document" className="w-full h-full object-cover" />
+                <img src={profile.id_document_url} alt="ID Document" className="w-full h-full object-cover" />
               </button>
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">ID Uploaded</p>
+                  <p className="text-sm font-medium text-foreground">ID on file</p>
                   <p className="text-xs text-muted-foreground">Click image to preview</p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <label className="cursor-pointer inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto">
-                    Replace
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        const reader = new FileReader()
-                        reader.onload = () => {
-                          if (typeof reader.result === 'string') setIdDocument(reader.result)
-                        }
-                        reader.readAsDataURL(file)
-                        e.target.value = ''
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  <a
-                    href={idDocument}
-                    download="id-document"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download
-                  </a>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/home/documents')}
+                  className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto self-start"
+                >
+                  Manage on Documents page
+                </button>
               </div>
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center gap-2 py-4 rounded-lg border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition">
+            <button
+              type="button"
+              onClick={() => navigate('/home/documents')}
+              className="w-full flex flex-col items-center justify-center gap-2 py-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30 transition"
+            >
               <Plus className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground font-medium">Upload ID Document</span>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  const reader = new FileReader()
-                  reader.onload = () => {
-                    if (typeof reader.result === 'string') setIdDocument(reader.result)
-                  }
-                  reader.readAsDataURL(file)
-                  e.target.value = ''
-                }}
-                className="hidden"
-              />
-            </label>
+              <span className="text-sm text-muted-foreground font-medium">Upload your ID on the Documents page</span>
+            </button>
           )}
           <p className="text-[10px] text-muted-foreground leading-relaxed mt-3">
-            A valid photo identification is required for the contractor to verify your identity and for any necessary paperwork related to your project. Your information is kept secure and confidential.
+            A valid photo ID is required before you can send a project to a contractor. It's used to verify your identity and for any paperwork tied to your project. Your information is kept secure and confidential.
           </p>
         </div>
       </motion.div>
@@ -1129,8 +1093,8 @@ export function CartPage() {
           <DialogHeader>
             <DialogTitle className="font-heading">ID Document</DialogTitle>
           </DialogHeader>
-          {idDocument && (
-            <img src={idDocument} alt="ID Document Preview" className="w-full rounded-lg" />
+          {profile?.id_document_url && (
+            <img src={profile.id_document_url} alt="ID Document Preview" className="w-full rounded-lg" />
           )}
           <DialogFooter>
             <Button

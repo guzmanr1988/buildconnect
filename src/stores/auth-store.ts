@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
         // Filter to columns that exist in the profiles table.
         const PROFILE_DB_COLUMNS = new Set([
           'name', 'phone', 'address', 'company', 'avatar_color', 'initials', 'status',
-          'avatar_url', 'additional_addresses', 'contractor_licenses',
+          'avatar_url', 'id_document_url', 'additional_addresses', 'contractor_licenses',
           'noncircumvention_agreement_signed_at', 'noncircumvention_agreement_signed_name',
           'noncircumvention_agreement_version', 'noncircumvention_agreement_text_snapshot',
           'noncircumvention_agreement_signature_metadata',
@@ -97,6 +97,20 @@ export const useAuthStore = create<AuthState>()(
         set({ session: null, profile: null, isAuthenticated: false, role: null })
       },
     }),
-    { name: 'buildconnect-auth' }
+    {
+      name: 'buildconnect-auth',
+      // PR #197 — strip id_document_url from auth-store LS persist. Profile
+      // can carry up to 2MB base64 in this field (Tranche-3 will move to
+      // Storage URL). Persisting it would re-trigger the LS-quota toast that
+      // PRs #189-#196 spent the night fixing. Server is authoritative:
+      // AuthBootstrap.getProfile rehydrates id_document_url on session
+      // resume, so the in-memory profile stays complete across reloads.
+      partialize: (state) => ({
+        ...state,
+        profile: state.profile
+          ? { ...state.profile, id_document_url: undefined }
+          : null,
+      }),
+    },
   )
 )

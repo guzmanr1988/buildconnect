@@ -74,6 +74,13 @@ export interface Profile {
   // 1776720343679). Mock-side for v1; Tranche-2 moves to Supabase Storage
   // bucket + image moderation.
   avatar_url?: string
+  // PR #197 — homeowner ID document URL (or base64 dataURL until Tranche-3
+  // Storage migration). Single-row-per-user; cart's Send-to-Contractor gate
+  // reads this instead of cart-store.idDocument so the requirement is
+  // durable across sessions. Stripped from auth-store LS persist (partialize)
+  // so a 100KB-2MB base64 doesn't blow the LS quota — re-fetched from server
+  // on session resume.
+  id_document_url?: string
   // Initials field is optional going forward. AvatarInitials auto-derives
   // from name when initials is absent/empty (ship #164 per task_1776721365362
   // _726; rename-residue prevention). Legacy fixtures may still hardcode

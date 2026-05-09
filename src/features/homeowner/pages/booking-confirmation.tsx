@@ -300,7 +300,9 @@ export function BookingConfirmationPage() {
             time: booking.time,
           })
 
-          const idDoc = localStorage.getItem('buildconnect-id-document') || undefined
+          // PR #197 — ID is profile-level (profile.id_document_url) instead of
+          // a per-send LS key. Server-authoritative; survives reloads/sessions.
+          const idDoc = useAuthStore.getState().profile?.id_document_url || undefined
           logDiag('BRANCH=success (calling sendProject)', {
             serviceName: pendingItem.serviceName,
             vendor: contractor.company,
@@ -395,13 +397,9 @@ export function BookingConfirmationPage() {
           localStorage.removeItem('buildconnect-selected-contractor')
           localStorage.removeItem('buildconnect-selected-booking')
           localStorage.removeItem('buildconnect-homeowner-info')
-          // PR #196 — buildconnect-id-document standalone key (set by
-          // cart.tsx:236) was missed in PR #194 cleanup. ID image is
-          // already snapshotted onto sent_projects.id_document via
-          // sendProject upsert + into the homeowner-docs PDF; standalone
-          // LS copy is consumed only by this BRANCH=success path. Safe
-          // to remove here; idle survival was the multi-send LS-bloat
-          // accumulator.
+          // PR #197 — ID lives on profile.id_document_url, not LS. The
+          // standalone buildconnect-id-document key removal stays defensive
+          // for any pre-#197 cart that might still carry one through migrate.
           localStorage.removeItem('buildconnect-id-document')
           setState('success')
         } catch (err) {
