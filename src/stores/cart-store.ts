@@ -181,15 +181,32 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 1,
-      // PR1 of project-level-permit migration: lift the first non-null
-      // per-item roofPermit + permitWaiver onto project-level state so
-      // legacy carts created before this version still answer the
-      // project-level Q without a re-prompt. Future cycles (PR4) will
-      // drop CartItem.roofPermit entirely after one persist version of
-      // widen-reads compat.
+      version: 2,
+      // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
+      // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
+      // unblocked once but cart-store had no partialize, so first send
+      // post-nuke re-bloated LS via cart-store persist write (idDocument
+      // up to 2MB + uncapped per-item photos). In-memory only: photos
+      // and ID re-upload on reload, mirrors PR #194 trade-off. Persisted:
+      // items meta (sans itemPhotos), projectTitle, notes, projectPermit,
+      // projectPermitWaiver.
+      partialize: (state) => ({
+        ...state,
+        idDocument: null,
+        photos: [],
+        items: state.items.map((item) => ({
+          ...item,
+          itemPhotos: undefined,
+        })),
+      }),
+      // v1 migrate: lift first non-null per-item roofPermit/waiver onto
+      // project-level state for pre-PR1 legacy carts.
+      // v2 migrate (PR #196): scrub heavy base64 fields from any existing
+      // persisted state on first hydrate post-deploy. Without this,
+      // Rodolfo's already-bloated cart-store sits fat in LS until next
+      // write — multi-send-blocked users would stay blocked indefinitely.
       migrate: (persistedState: unknown, version: number) => {
-        const state = (persistedState ?? {}) as Partial<CartState> & {
+        let state = (persistedState ?? {}) as Partial<CartState> & {
           items?: CartItem[]
         }
         if (version < 1) {
@@ -197,10 +214,21 @@ export const useCartStore = create<CartState>()(
           const firstPermit = items.find((i) => i.roofPermit)?.roofPermit ?? null
           const firstWaiver =
             items.find((i) => i.permitWaiver)?.permitWaiver ?? null
-          return {
+          state = {
             ...state,
             projectPermit: firstPermit,
             projectPermitWaiver: firstWaiver,
+          }
+        }
+        if (version < 2) {
+          state = {
+            ...state,
+            idDocument: null,
+            photos: [],
+            items: (state.items ?? []).map((item) => ({
+              ...item,
+              itemPhotos: undefined,
+            })),
           }
         }
         return state
