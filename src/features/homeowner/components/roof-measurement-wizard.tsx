@@ -431,7 +431,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
         <DialogHeader>
           <DialogTitle className="font-heading flex items-center gap-2">
             <Home className="h-4 w-4 text-primary" />
@@ -598,9 +598,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
                     <Button
-                      size="sm"
+                      size="default"
                       disabled={!canSave}
                       onClick={handleComplete}
+                      className="h-12 px-6 text-sm font-semibold"
                     >
                       Save
                     </Button>
