@@ -976,6 +976,27 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: 'buildconnect-projects',
+      version: 1,
+      // PR #191 partialize strips heavyweight base64 fields (itemPhotos,
+      // idDocument) on every WRITE — but legacy LS entries persisted before
+      // #191 keep the bloat forever and re-trigger QuotaExceededError on
+      // each new send. Bump persist version + run migrate-on-rehydrate to
+      // scrub existing sentProjects[] one time per device. Server-side is
+      // authoritative (hydrateFromSupabase backfills photos+ID into in-memory
+      // state on session start), so the migration is zero-data-loss.
+      // Idempotent: runs once per device on first reload after deploy.
+      migrate: (persistedState: unknown, version: number) => {
+        const state = (persistedState ?? {}) as Partial<ProjectsState>
+        if (version < 1) {
+          const sentProjects = (state.sentProjects ?? []).map((sp) => ({
+            ...sp,
+            item: { ...sp.item, itemPhotos: undefined },
+            idDocument: undefined,
+          }))
+          return { ...state, sentProjects }
+        }
+        return state
+      },
       // PR #191 — strip heavyweight base64 fields (itemPhotos, idDocument)
       // from the persisted shape so sentProjects[] does not accumulate
       // photo+ID payload to the LS quota ceiling. PR #189 added a try/catch
