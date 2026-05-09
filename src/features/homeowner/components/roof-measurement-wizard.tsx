@@ -413,12 +413,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     if (!stepThreeComplete) return
     const dominantMaterial: RoofMaterialKey = material ?? 'flat_roof'
     const hasFlatAlongPitched = material !== null && hasFlatSection
-    // chip=flat-only (material===null): user did not select any pitched material via chip-tap.
-    // Strip pitched contribution from cart payload so billed area === flat-only.
-    // Mirrors service-detail.tsx cart-side gate but at the source so the write itself is honest.
-    const isPitchedSelected = material !== null
-    const pitchedSqftOut = isPitchedSelected ? Math.round(derivedPitchedAreaSqft) : 0
-    const flatSqftOut = includeFlat ? Math.round(finalFlatAreaSqft) : 0
+    // Pass through RAW measurements regardless of chip-tap intent. Service-detail
+    // evalPitchedOmittedTriggered + cart-side IIFE are SoT for what reaches the
+    // cart payload. Stripping at source defeats the under-quote gate evaluator
+    // (it would read the zeroed value and never fire).
+    const pitchedSqftOut = Math.round(derivedPitchedAreaSqft)
+    const flatSqftOut = Math.round(finalFlatAreaSqft)
     const areaSqftOut = pitchedSqftOut + flatSqftOut
     onComplete({
       address: address.trim(),

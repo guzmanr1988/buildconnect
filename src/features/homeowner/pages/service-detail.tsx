@@ -1175,6 +1175,13 @@ export function ServiceDetailPage() {
               // Pitched-side gating stays at handleComplete (PR #173 material===null).
               const cartRoofMeasurement = (() => {
                 if (serviceId !== 'roofing' || !roofMeasurement) return null
+                // Chip=flat-only with explicit ack: strip pitched (user opted-out via ack toggle).
+                // SoT-of-strip moved here from wizard handleComplete so the under-quote gate
+                // evaluator can read raw pitched on its read path.
+                if (pitchedOmittedTriggered && flatOnlyAck) {
+                  const flatOnly = roofMeasurement.flatAreaSqft ?? 0
+                  return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
+                }
                 if (roofMeasurement.includeFlat === true) return roofMeasurement
                 const pitchedOnly = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 return { ...roofMeasurement, areaSqft: pitchedOnly, flatAreaSqft: 0, includeFlat: false }
