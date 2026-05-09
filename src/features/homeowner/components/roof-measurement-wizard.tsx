@@ -245,6 +245,30 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
   }
 }
 
+// ─── Step indicator ───────────────────────────────────────────────────────────
+
+function StepBar({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center justify-center gap-2 pt-1 pb-3">
+      {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
+        <div
+          key={n}
+          className={
+            n === current
+              ? 'h-1.5 w-8 rounded-full bg-primary transition-all'
+              : n < current
+                ? 'h-1.5 w-6 rounded-full bg-primary/50 transition-all'
+                : 'h-1.5 w-6 rounded-full bg-muted transition-all'
+          }
+        />
+      ))}
+      <span className="ml-2 text-[11px] text-muted-foreground">
+        Step {current} of {total}
+      </span>
+    </div>
+  )
+}
+
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
 interface Props {
@@ -304,9 +328,8 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
       setAdjPerimeterFt(String(result.perimeterFt))
-      if (material === null) {
-        setIncludeFlat(result.flatAreaSqft > 0)
-      }
+      // Include-flat default stays OFF on measurement complete — user opts in
+      // explicitly via the breakdown-card toggle when they want flat priced.
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       if (msg === 'Could not find address') {
@@ -339,20 +362,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     setAdjPerimeterFt('')
     setEditingFlat(false)
     setEditingPitched(false)
-    // chip-tap-as-SoT: includeFlat derives from chip-tap intent. Solar post-
-    // detection only overrides when chip-tap context is absent (material=null).
-    setIncludeFlat(hasFlatSection)
-
-    const addr = defaultAddress.trim()
-    if (!addr) {
-      // No known address — fall through to the address-entry surface.
-      setStep(1)
-      return
-    }
-    // Address known from chip-tap context — auto-trigger measurement so the
-    // modal opens directly into the measurement card (single-screen shape).
-    void runMeasurement(addr)
-  }, [open, defaultAddress, hasFlatSection, material, runMeasurement])
+    // Include-flat defaults OFF on every open. User opts in explicitly via the
+    // breakdown-card toggle when they want flat priced — covers regular pitched
+    // jobs (the common case) where flat detection shouldn't inflate totals.
+    setIncludeFlat(false)
+    setStep(1)
+  }, [open, defaultAddress])
 
   const startMeasuring = () => {
     void runMeasurement(address)
@@ -416,8 +431,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
           </DialogDescription>
         </DialogHeader>
 
+        <StepBar current={step} total={2} />
+
         <div className="py-1">
-          {/* ── Step 1: Address (fallback only — when no defaultAddress is supplied) ── */}
+          {/* ── Step 1: Address ── */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
@@ -565,15 +582,18 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
               )}
 
               {!measuring && (measurement || measureError) && (
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-                  <Button
-                    size="sm"
-                    disabled={!canSave}
-                    onClick={handleComplete}
-                  >
-                    Save
-                  </Button>
+                <div className="flex justify-between gap-2 pt-1">
+                  <Button variant="ghost" size="sm" onClick={() => setStep(1)}>← Back</Button>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+                    <Button
+                      size="sm"
+                      disabled={!canSave}
+                      onClick={handleComplete}
+                    >
+                      Save
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
