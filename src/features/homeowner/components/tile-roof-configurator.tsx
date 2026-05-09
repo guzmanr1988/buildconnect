@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 export type TileType = 'flat' | 'spanish' | 'mission'
@@ -6,6 +8,7 @@ export type TileType = 'flat' | 'spanish' | 'mission'
 export interface TileRoofSelection {
   tileType: TileType | ''
   tileColor: string
+  roofSize: string
 }
 
 export const TILE_TYPES: Array<{ id: TileType; label: string; description: string }> = [
@@ -32,10 +35,12 @@ export const TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string 
 interface TileRoofConfiguratorProps {
   selection: TileRoofSelection
   onChange: (selection: TileRoofSelection) => void
+  onSave?: () => void
 }
 
-export function TileRoofConfigurator({ selection, onChange }: TileRoofConfiguratorProps) {
+export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofConfiguratorProps) {
   const selectedColor = TILE_ROOF_COLORS.find((c) => c.id === selection.tileColor)
+  const isComplete = !!selection.tileType && !!selection.tileColor && selection.roofSize.trim().length > 0
 
   return (
     <motion.div
@@ -49,7 +54,6 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
       <h4 className="text-sm font-semibold text-foreground mb-4">Tile Roof Options</h4>
 
       <div className="flex flex-col gap-5">
-        {/* Tile Type cards */}
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Tile Type</span>
           <div className="grid grid-cols-3 gap-2">
@@ -87,7 +91,6 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
           </div>
         </div>
 
-        {/* Tile Color palette */}
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
           <div className="flex flex-wrap gap-2">
@@ -125,11 +128,24 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
             ))}
           </div>
         </div>
+
+        <div>
+          <span className="text-xs font-medium text-muted-foreground mb-0.5 block">Roof Size (Squares)</span>
+          <span className="text-[10px] text-muted-foreground/70 mb-1.5 block">1 square = 100 sqft</span>
+          <Input
+            type="number"
+            min="0"
+            placeholder="e.g. 18"
+            value={selection.roofSize}
+            onChange={(e) => onChange({ ...selection, roofSize: e.target.value })}
+            className="h-10"
+          />
+        </div>
       </div>
 
-      {(selection.tileType || selection.tileColor) && (
+      {(selection.tileType || selection.tileColor || selection.roofSize) && (
         <div className="mt-4 pt-4 border-t">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {selection.tileType && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
                 {TILE_TYPES.find((t) => t.id === selection.tileType)?.label}
@@ -144,7 +160,20 @@ export function TileRoofConfigurator({ selection, onChange }: TileRoofConfigurat
                 {selectedColor.label}
               </span>
             )}
+            {selection.roofSize && (
+              <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
+                {Number(selection.roofSize).toLocaleString()} squares
+              </span>
+            )}
           </div>
+          {isComplete && onSave && (
+            <Button
+              className="w-full h-10 rounded-xl text-sm font-semibold"
+              onClick={onSave}
+            >
+              Save Selection
+            </Button>
+          )}
         </div>
       )}
     </motion.div>

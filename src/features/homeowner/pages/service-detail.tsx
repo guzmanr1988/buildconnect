@@ -28,8 +28,10 @@ import { DoorConfigurator, type DoorSelection } from '../components/door-configu
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
-import { ShingleColorPicker } from '../components/shingle-color-picker'
+import { ShingleRoofConfigurator, type ShingleRoofSelection } from '../components/shingle-roof-configurator'
 import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
+import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
+import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { AnimatePresence } from 'framer-motion'
@@ -152,13 +154,41 @@ export function ServiceDetailPage() {
   const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(
     !(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
   )
-  const [shingleColor, setShingleColor] = useState<string>(
-    (editItemForService?.shingleColor as string) || ''
-  )
-  const [tileSelection, setTileSelection] = useState<TileRoofSelection>({
-    tileType: (editItemForService?.tileType as TileType) || '',
-    tileColor: (editItemForService?.tileColor as string) || '',
+  const [shingleSelection, setShingleSelection] = useState<ShingleRoofSelection>(() => {
+    const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
+    if (saved) return saved
+    const legacyColor = (editItemForService?.shingleColor as string) || ''
+    return { color: legacyColor, roofSize: '' }
   })
+  const [shingleConfigOpen, setShingleConfigOpen] = useState(
+    !(editItemForService?.shingleSelection as ShingleRoofSelection | undefined)?.color
+      && !(editItemForService?.shingleColor as string)
+  )
+  const [tileSelection, setTileSelection] = useState<TileRoofSelection>(() => {
+    const saved = editItemForService?.tileSelection as TileRoofSelection | undefined
+    if (saved) return saved
+    return {
+      tileType: (editItemForService?.tileType as TileType) || '',
+      tileColor: (editItemForService?.tileColor as string) || '',
+      roofSize: '',
+    }
+  })
+  const [tileConfigOpen, setTileConfigOpen] = useState(
+    !(editItemForService?.tileSelection as TileRoofSelection | undefined)?.tileType
+      && !(editItemForService?.tileType as string)
+  )
+  const [aluminumSelection, setAluminumSelection] = useState<AluminumRoofSelection>(
+    (editItemForService?.aluminumSelection as AluminumRoofSelection) || { color: '', roofSize: '' }
+  )
+  const [aluminumConfigOpen, setAluminumConfigOpen] = useState(
+    !(editItemForService?.aluminumSelection as AluminumRoofSelection | undefined)?.color
+  )
+  const [flatRoofSelection, setFlatRoofSelection] = useState<FlatRoofSelection>(
+    (editItemForService?.flatRoofSelection as FlatRoofSelection) || { membraneType: '', roofSize: '' }
+  )
+  const [flatRoofConfigOpen, setFlatRoofConfigOpen] = useState(
+    !(editItemForService?.flatRoofSelection as FlatRoofSelection | undefined)?.membraneType
+  )
   const [editingItemId, setEditingItemId] = useState<string | null>(
     (editItemForService?.id as string) || null
   )
@@ -228,16 +258,33 @@ export function ServiceDetailPage() {
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
   const handleWizardComplete = (result: RoofWizardResult) => {
+    // Pitched-only formula (canonical): Solar split when present, else
+    // (areaSqft - flat) when no split, else areaSqft as last-resort fallback
+    // for legacy/mock measurements. Matches PR #184 metal handler.
+    const flatSqft = result.flatAreaSqft ?? 0
+    const pitchedSqft = result.pitchedAreaSqft ?? Math.max(0, result.areaSqft - flatSqft)
+    const pitchedBase = pitchedSqft || result.areaSqft
+    const pitchedSquares = String(sqftToSquares(Math.round(pitchedBase * ROOF_WASTE_FACTOR)))
+    const flatSquares = String(sqftToSquares(Math.round(flatSqft * ROOF_WASTE_FACTOR)))
     if (result.material === 'metal') {
-      // Metal is a pitched material — bill against the pitched slice only.
-      // pitchedAreaSqft is split-aware (Solar segments classified). Fall back
-      // to (areaSqft - flat) when no split exists, then to areaSqft as last
-      // resort for legacy/mock measurements that don't carry the split.
-      const pitchedOnly = result.pitchedAreaSqft
-        ?? Math.max(0, result.areaSqft - (result.flatAreaSqft ?? 0))
-      const pitchedWithWaste = Math.round((pitchedOnly || result.areaSqft) * ROOF_WASTE_FACTOR)
-      setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(pitchedWithWaste)) }))
+      setMetalRoofSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
       setMetalRoofConfigOpen(true)
+    }
+    if (result.material === 'shingle') {
+      setShingleSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
+      setShingleConfigOpen(true)
+    }
+    if (result.material === 'barrel_tile') {
+      setTileSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
+      setTileConfigOpen(true)
+    }
+    if (result.material === 'aluminum') {
+      setAluminumSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
+      setAluminumConfigOpen(true)
+    }
+    if (result.material === 'flat_roof') {
+      setFlatRoofSelection((prev) => ({ ...prev, roofSize: flatSquares }))
+      setFlatRoofConfigOpen(true)
     }
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat })
     setWizardOpen(false)
@@ -280,13 +327,26 @@ export function ServiceDetailPage() {
     if (gs?.type) { setGarageDoorSelection(gs); setGarageDoorConfigOpen(false) }
     const ms = legacy.metalRoofSelection as MetalRoofSelection | undefined
     if (ms?.color) { setMetalRoofSelection(ms); setMetalRoofConfigOpen(false) }
-    if (typeof legacy.shingleColor === 'string') setShingleColor(legacy.shingleColor)
-    if (typeof legacy.tileType === 'string' || typeof legacy.tileColor === 'string') {
+    const ss = legacy.shingleSelection as ShingleRoofSelection | undefined
+    if (ss?.color) {
+      setShingleSelection(ss); setShingleConfigOpen(false)
+    } else if (typeof legacy.shingleColor === 'string') {
+      setShingleSelection((prev) => ({ ...prev, color: legacy.shingleColor as string }))
+    }
+    const ts = legacy.tileSelection as TileRoofSelection | undefined
+    if (ts?.tileType) {
+      setTileSelection(ts); setTileConfigOpen(false)
+    } else if (typeof legacy.tileType === 'string' || typeof legacy.tileColor === 'string') {
       setTileSelection({
         tileType: (legacy.tileType as TileType) || '',
         tileColor: (legacy.tileColor as string) || '',
+        roofSize: '',
       })
     }
+    const al = legacy.aluminumSelection as AluminumRoofSelection | undefined
+    if (al?.color) { setAluminumSelection(al); setAluminumConfigOpen(false) }
+    const fr = legacy.flatRoofSelection as FlatRoofSelection | undefined
+    if (fr?.membraneType) { setFlatRoofSelection(fr); setFlatRoofConfigOpen(false) }
     if (typeof legacy.id === 'string') setEditingItemId(legacy.id)
     localStorage.removeItem('buildconnect-edit-item')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -317,20 +377,36 @@ export function ServiceDetailPage() {
     })
   }, [roofMeasurement?.perimeterFt, (selections['addons'] ?? []).join(',')])
 
-  // Squares auto-prefill for metal: handles the chip-tap-after-measure path
-  // (handleWizardComplete only fires when the wizard knew metal at save time;
-  // when measurement happens first and metal is chip-tapped after, we still
-  // want the Roof Size input pre-filled). Pitched-only formula matches the
-  // wizard handler. Manual overrides preserved via `prev.roofSize ? prev`.
+  // Sibling of anchor 4: auto-prefill Roof Size in each material configurator
+  // from the measurement. Pitched materials (shingle/barrel_tile/metal/aluminum/
+  // terracotta) source from pitchedAreaSqft (with PR #184 defensive fallback:
+  // Solar split, else areaSqft - flat, else areaSqft). flat_roof sources from
+  // flatAreaSqft. Only seeds when configurator's roofSize is blank — manual
+  // overrides preserved.
   useEffect(() => {
     if (!roofMeasurement) return
-    if (!(selections['material'] ?? []).includes('metal')) return
-    const pitchedOnly = roofMeasurement.pitchedAreaSqft
-      ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
-    const base = pitchedOnly || roofMeasurement.areaSqft
-    if (!base) return
-    const squares = String(sqftToSquares(Math.round(base * ROOF_WASTE_FACTOR)))
-    setMetalRoofSelection((prev) => prev.roofSize ? prev : { ...prev, roofSize: squares })
+    const flatSqft = roofMeasurement.flatAreaSqft ?? 0
+    const pitchedSqft = roofMeasurement.pitchedAreaSqft
+      ?? Math.max(0, (roofMeasurement.areaSqft ?? 0) - flatSqft)
+    const pitchedBase = pitchedSqft || (roofMeasurement.areaSqft ?? 0)
+    const pitchedSquares = pitchedBase > 0
+      ? String(sqftToSquares(Math.round(pitchedBase * ROOF_WASTE_FACTOR)))
+      : ''
+    const flatSquares = flatSqft > 0
+      ? String(sqftToSquares(Math.round(flatSqft * ROOF_WASTE_FACTOR)))
+      : ''
+    const mats = selections['material'] ?? []
+    if (pitchedSquares) {
+      if (mats.includes('metal')) setMetalRoofSelection((p) => p.roofSize ? p : { ...p, roofSize: pitchedSquares })
+      if (mats.includes('shingle')) setShingleSelection((p) => p.roofSize ? p : { ...p, roofSize: pitchedSquares })
+      if (mats.includes('barrel_tile') || mats.includes('terracotta')) {
+        setTileSelection((p) => p.roofSize ? p : { ...p, roofSize: pitchedSquares })
+      }
+      if (mats.includes('aluminum')) setAluminumSelection((p) => p.roofSize ? p : { ...p, roofSize: pitchedSquares })
+    }
+    if (flatSquares && mats.includes('flat_roof')) {
+      setFlatRoofSelection((p) => p.roofSize ? p : { ...p, roofSize: flatSquares })
+    }
   }, [roofMeasurement?.pitchedAreaSqft, roofMeasurement?.flatAreaSqft, roofMeasurement?.areaSqft, (selections['material'] ?? []).join(',')])
 
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -761,6 +837,42 @@ export function ServiceDetailPage() {
                               setMetalRoofConfigOpen(true)
                             }
                           }
+                          if (serviceId === 'roofing' && group.id === 'material' && option.id === 'shingle') {
+                            const wasSelected = selected.includes('shingle')
+                            if (wasSelected) {
+                              setShingleConfigOpen(false)
+                              setShingleSelection({ color: '', roofSize: '' })
+                            } else {
+                              setShingleConfigOpen(true)
+                            }
+                          }
+                          if (serviceId === 'roofing' && group.id === 'material' && (option.id === 'barrel_tile' || option.id === 'terracotta')) {
+                            const wasSelected = selected.includes(option.id)
+                            if (wasSelected) {
+                              setTileConfigOpen(false)
+                              setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
+                            } else {
+                              setTileConfigOpen(true)
+                            }
+                          }
+                          if (serviceId === 'roofing' && group.id === 'material' && option.id === 'aluminum') {
+                            const wasSelected = selected.includes('aluminum')
+                            if (wasSelected) {
+                              setAluminumConfigOpen(false)
+                              setAluminumSelection({ color: '', roofSize: '' })
+                            } else {
+                              setAluminumConfigOpen(true)
+                            }
+                          }
+                          if (serviceId === 'roofing' && group.id === 'material' && option.id === 'flat_roof') {
+                            const wasSelected = selected.includes('flat_roof')
+                            if (wasSelected) {
+                              setFlatRoofConfigOpen(false)
+                              setFlatRoofSelection({ membraneType: '', roofSize: '' })
+                            } else {
+                              setFlatRoofConfigOpen(true)
+                            }
+                          }
                           if (serviceId === 'windows_doors' && option.id === 'garage_doors') {
                             setGarageDoorConfigOpen((prev) => selected.includes('garage_doors') ? !prev : true)
                           }
@@ -825,14 +937,24 @@ export function ServiceDetailPage() {
                             {metalRoofSelection.roofSize ? `${metalRoofDisplaySquares(metalRoofSelection.roofSize)} sq` : 'Configured'}
                           </span>
                         )}
-                        {serviceId === 'roofing' && option.id === 'shingle' && shingleColor && (
+                        {serviceId === 'roofing' && option.id === 'shingle' && shingleSelection.color && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            Configured
+                            {shingleSelection.roofSize ? `${Number(shingleSelection.roofSize).toLocaleString()} sq` : 'Configured'}
                           </span>
                         )}
                         {serviceId === 'roofing' && (option.id === 'barrel_tile' || option.id === 'terracotta') && tileSelection.tileType && tileSelection.tileColor && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            Configured
+                            {tileSelection.roofSize ? `${Number(tileSelection.roofSize).toLocaleString()} sq` : 'Configured'}
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && option.id === 'aluminum' && aluminumSelection.color && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {aluminumSelection.roofSize ? `${Number(aluminumSelection.roofSize).toLocaleString()} sq` : 'Configured'}
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && option.id === 'flat_roof' && flatRoofSelection.membraneType && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {flatRoofSelection.roofSize ? `${Number(flatRoofSelection.roofSize).toLocaleString()} sq` : 'Configured'}
                           </span>
                         )}
                         {serviceId === 'pool' && option.id === 'led' && ledCount > 0 && (
@@ -991,17 +1113,49 @@ export function ServiceDetailPage() {
                     )}
                   </AnimatePresence>
                 )}
-                {serviceId === 'roofing' && group.id === 'material' && selected.includes('shingle') && (
-                  <ShingleColorPicker
-                    selectedColor={shingleColor}
-                    onChange={setShingleColor}
-                  />
+                {serviceId === 'roofing' && group.id === 'material' && (
+                  <AnimatePresence>
+                    {selected.includes('shingle') && shingleConfigOpen && (
+                      <ShingleRoofConfigurator
+                        selection={shingleSelection}
+                        onChange={setShingleSelection}
+                        onSave={() => setShingleConfigOpen(false)}
+                      />
+                    )}
+                  </AnimatePresence>
                 )}
-                {serviceId === 'roofing' && group.id === 'material' && (selected.includes('barrel_tile') || selected.includes('terracotta')) && (
-                  <TileRoofConfigurator
-                    selection={tileSelection}
-                    onChange={setTileSelection}
-                  />
+                {serviceId === 'roofing' && group.id === 'material' && (
+                  <AnimatePresence>
+                    {(selected.includes('barrel_tile') || selected.includes('terracotta')) && tileConfigOpen && (
+                      <TileRoofConfigurator
+                        selection={tileSelection}
+                        onChange={setTileSelection}
+                        onSave={() => setTileConfigOpen(false)}
+                      />
+                    )}
+                  </AnimatePresence>
+                )}
+                {serviceId === 'roofing' && group.id === 'material' && (
+                  <AnimatePresence>
+                    {selected.includes('aluminum') && aluminumConfigOpen && (
+                      <AluminumRoofConfigurator
+                        selection={aluminumSelection}
+                        onChange={setAluminumSelection}
+                        onSave={() => setAluminumConfigOpen(false)}
+                      />
+                    )}
+                  </AnimatePresence>
+                )}
+                {serviceId === 'roofing' && group.id === 'material' && (
+                  <AnimatePresence>
+                    {selected.includes('flat_roof') && flatRoofConfigOpen && (
+                      <FlatRoofConfigurator
+                        selection={flatRoofSelection}
+                        onChange={setFlatRoofSelection}
+                        onSave={() => setFlatRoofConfigOpen(false)}
+                      />
+                    )}
+                  </AnimatePresence>
                 )}
                 {/* Payment method note */}
                 {group.id === 'payment' && (
@@ -1407,9 +1561,27 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && stormFrontSelections.length > 0 && { stormFrontSelections }),
                 ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
-                ...(serviceId === 'roofing' && shingleColor && { shingleColor }),
+                ...(serviceId === 'roofing' && shingleSelection.color && { shingleSelection }),
+                // Widen-reads-narrow-writes: persist shingleColor too so older
+                // consumer surfaces (cart, vendor inbox, project-detail dialog)
+                // that read the legacy field keep rendering until they're ported.
+                ...(serviceId === 'roofing' && shingleSelection.color && { shingleColor: shingleSelection.color }),
+                ...(serviceId === 'roofing' && tileSelection.tileType && tileSelection.tileColor && {
+                  tileSelection: {
+                    tileType: tileSelection.tileType as 'flat' | 'spanish' | 'mission',
+                    tileColor: tileSelection.tileColor,
+                    roofSize: tileSelection.roofSize,
+                  },
+                }),
                 ...(serviceId === 'roofing' && tileSelection.tileType && { tileType: tileSelection.tileType }),
                 ...(serviceId === 'roofing' && tileSelection.tileColor && { tileColor: tileSelection.tileColor }),
+                ...(serviceId === 'roofing' && aluminumSelection.color && { aluminumSelection }),
+                ...(serviceId === 'roofing' && flatRoofSelection.membraneType && {
+                  flatRoofSelection: {
+                    membraneType: flatRoofSelection.membraneType as 'tpo' | 'epdm' | 'modified_bitumen',
+                    roofSize: flatRoofSelection.roofSize,
+                  },
+                }),
                 ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
                 ...(serviceId === 'roofing' && pitchedOmittedTriggered && flatOnlyAck && { pitchedExcludedAck: true }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
@@ -1462,6 +1634,14 @@ export function ServiceDetailPage() {
               setGarageDoorConfigOpen(true)
               setMetalRoofSelection({ color: '', roofSize: '' })
               setMetalRoofConfigOpen(true)
+              setShingleSelection({ color: '', roofSize: '' })
+              setShingleConfigOpen(true)
+              setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
+              setTileConfigOpen(true)
+              setAluminumSelection({ color: '', roofSize: '' })
+              setAluminumConfigOpen(true)
+              setFlatRoofSelection({ membraneType: '', roofSize: '' })
+              setFlatRoofConfigOpen(true)
               setRoofMeasurement(null)
               setRoofPermit(null)
               setAddonLinearFt({})
