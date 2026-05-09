@@ -601,6 +601,15 @@ export function ServiceDetailPage() {
             if (group.id === 'garage_door_type' || group.id === 'garage_door_size' || group.id === 'garage_door_color' || group.id === 'garage_door_glass') {
               return false
             }
+            // Hide water_feature_units chip group on homeowner side; the
+            // canonical UI is the count-stepper waterfall configurator
+            // (Laminar Jets + Waterfalls counts) further down. The
+            // optionGroup stays in SERVICE_CATALOG because vendor catalog
+            // page consumes it for per-unit pricing (laminar_jet /
+            // waterfall_unit). Sibling of garage_door_* exclusion above.
+            if (group.id === 'water_feature_units') {
+              return false
+            }
             return true
           }).map((group) => {
             const selected = selections[group.id] ?? []
@@ -1382,10 +1391,16 @@ export function ServiceDetailPage() {
               )
             })()}
 
-            {/* Selected options — skip material+addons for roofing (rendered above) */}
+            {/* Selected options — skip material+addons for roofing (rendered above);
+                also skip water_feature_units (vendor-side priceable group; canonical
+                homeowner UI is the count-stepper waterfall configurator).
+                Pairs with the rendering-loop exclusion at line 600+ so any stale
+                selections['water_feature_units'] from prior sessions don't leak
+                into the summary display. */}
             {service.optionGroups
               .filter(g => (selections[g.id]?.length ?? 0) > 0)
               .filter(g => !(serviceId === 'roofing' && (g.id === 'material' || g.id === 'addons')))
+              .filter(g => g.id !== 'water_feature_units')
               .map((group) => {
               const selected = selections[group.id] ?? []
               return (
