@@ -254,6 +254,8 @@ export default function VendorCatalog() {
                             return (
                               <div
                                 key={option.id}
+                                data-option-id={option.id}
+                                data-group-id={group.id}
                                 className={cn(
                                   'flex items-center justify-between gap-3 rounded-lg border p-2.5 transition',
                                   optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
