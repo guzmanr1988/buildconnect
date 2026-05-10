@@ -819,6 +819,22 @@ export function ServiceDetailPage() {
                 <div className="flex flex-wrap gap-2">
                   {group.options.map((option) => {
                     const isSelected = selected.includes(option.id)
+                    // PR — roofing material primary lock. Once a non-flat material is
+                    // picked, every OTHER non-flat chip becomes unclickable. Flat Roof
+                    // is additive (coexists with non-flat sections per Granada walk
+                    // anchor), so it stays clickable both ways and picking flat first
+                    // does NOT lock the other chips. The currently-selected chip stays
+                    // clickable so users can deselect/replace.
+                    const hasNonFlatMaterialPicked =
+                      serviceId === 'roofing' &&
+                      group.id === 'material' &&
+                      selected.some((s) => s !== 'flat_roof')
+                    const isLocked =
+                      serviceId === 'roofing' &&
+                      group.id === 'material' &&
+                      option.id !== 'flat_roof' &&
+                      !isSelected &&
+                      hasNonFlatMaterialPicked
                     return (
                       <button
                         key={option.id}
@@ -826,6 +842,8 @@ export function ServiceDetailPage() {
                         data-chip-id={option.id}
                         data-chip-group={group.id}
                         data-chip-state={isSelected ? 'active' : 'inactive'}
+                        data-chip-locked={isLocked ? 'true' : 'false'}
+                        disabled={isLocked}
                         onClick={() => {
                           handleSelect(group, option.id)
                           // Auto-close addon menu after size selection
@@ -909,7 +927,8 @@ export function ServiceDetailPage() {
                           'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-base font-medium transition-all duration-150',
                           isSelected
                             ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                            : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted'
+                            : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+                          'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-background'
                         )}
                       >
                         {group.type === 'multi' && isSelected && (
