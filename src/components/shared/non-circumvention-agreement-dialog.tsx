@@ -78,7 +78,18 @@ function SignMode({ open }: { open: boolean }) {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[NCA] Supabase write failed:', err)
-      toast.error('Agreement could not be saved — please try again.')
+      // PR-216 (TEMP diagnostic — planned revert after Rod-side repro):
+      // Rod hit this toast on prod 2026-05-12 but server-side repro
+      // using his REAL session JWT (admin generate_link → /auth/v1/verify
+      // → PATCH /rest/v1/profiles) returned HTTP 200. Bug is browser-
+      // side. Surface err.code / err.status in the toast so the next
+      // Rod screenshot disambiguates: PGRST116 (no rows / wrong
+      // profile.id), 401 (expired JWT), 42501 (RLS deny), etc.
+      // console.error above still logs the full err for any devtools-
+      // open repro.
+      const e = err as { code?: string; status?: number } | null | undefined
+      const code = e?.code ?? e?.status ?? 'unknown'
+      toast.error(`Agreement could not be saved — please try again. (code: ${code})`)
       setSubmitting(false)
       return
     }
