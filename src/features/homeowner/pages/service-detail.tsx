@@ -34,7 +34,14 @@ import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../compone
 import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
+import { ColorCircle } from '@/components/ui/color-circle'
 import { applyAreaWaste } from '@/lib/area-waste'
+
+// Polygon colors used to bind pergolas structure chips to map polygons.
+// POLYGON_COLORS[0] matches polygon-draw.tsx MAIN_COLOR; POLYGON_COLORS[1]
+// matches EXTRA_COLORS[0]. Pick-then-draw model: chip pick order = polygon
+// draw order; the ColorCircle on the chip is keyed to that order.
+const POLYGON_COLORS = ['#2563eb', '#d97706']
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
@@ -200,7 +207,17 @@ export function ServiceDetailPage() {
   // Reset on material-selection change so user re-acknowledges if they re-fall
   // into the gate state.
   const [flatOnlyAck, setFlatOnlyAck] = useState(false)
-  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; perimeterFt?: number; address: string; mapUrl?: string } | null>(null)
+  const [areaMeasurement, setAreaMeasurement] = useState<{
+    areaSqft: number
+    perimeterFt?: number
+    address: string
+    mapUrl?: string
+    // Per-polygon breakdown for multi-polygon flows (pergolas multi-structure).
+    // polygons[0] is the first-picked structure's polygon, polygons[1] the
+    // second. Driveways multi-area + single-polygon flows leave this
+    // undefined or single-entry — consumers fall back to areaSqft.
+    polygons?: Array<{ sqft: number; mapUrl?: string; color: string }>
+  } | null>(null)
   // areaMeasureKey: stable identity for SatelliteMeasure's mount. PR-220
   // moved re-measure inside the component (its own 'confirmed' phase
   // handles drop-back to drawing), so the parent no longer increments
@@ -595,6 +612,10 @@ export function ServiceDetailPage() {
       if (current.includes(optionId)) {
         return { ...prev, [group.id]: current.filter((id) => id !== optionId) }
       }
+      // Cap multi-select groups at maxSelect when set (pergolas.structure = 2).
+      if (group.maxSelect !== undefined && current.length >= group.maxSelect) {
+        return prev
+      }
       return { ...prev, [group.id]: [...current, optionId] }
     })
   }
@@ -789,11 +810,21 @@ export function ServiceDetailPage() {
                   serviceCategory={serviceId as ServiceCategory}
                   gmpEnabled={getFlag('googleMapsPlatform')}
                   initialAddress={selectedAddress?.full ?? ''}
+                  // Pergolas: cap polygons at the number of structure chips the
+                  // homeowner has picked. 1 structure = single-polygon flow
+                  // (Add another area button hidden); 2 = one extra prompt.
+                  // Other services leave maxPolygons undefined.
+                  maxPolygons={
+                    serviceId === 'pergolas'
+                      ? Math.max(1, (selections['structure'] ?? []).length || 1)
+                      : undefined
+                  }
                   onMeasure={(result) => setAreaMeasurement({
                     areaSqft: result.areaSqft,
                     perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined,
                     address: result.address,
                     mapUrl: result.mapUrl,
+                    polygons: result.polygons,
                   })}
                 />
               </div>
@@ -925,6 +956,9 @@ export function ServiceDetailPage() {
                     // PR-220 — dynamic label for pergolas measured chip:
                     // reads the live measured sqft once a polygon is drawn,
                     // falls back to a "measure first" prompt otherwise.
+                    // PR-222 — multi-structure: when 2 polygons are drawn,
+                    // the label shows the total only; per-structure breakdown
+                    // renders under the size group with ColorCircles below.
                     const optionLabel =
                       serviceId === 'pergolas' && group.id === 'size' && option.id === 'measured'
                         ? (areaMeasurement
@@ -1048,6 +1082,16 @@ export function ServiceDetailPage() {
                         {group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
+                        {/* Pergolas multi-structure: ColorCircle binds chip to
+                            its polygon on the satellite map. Pick-order index
+                            into POLYGON_COLORS so 1st-picked structure = blue,
+                            2nd-picked = orange (matches polygon-draw MAIN +
+                            EXTRA_COLORS[0]). */}
+                        {serviceId === 'pergolas' && group.id === 'structure' && isSelected && (() => {
+                          const idx = selected.indexOf(option.id)
+                          const color = POLYGON_COLORS[idx] ?? POLYGON_COLORS[0]
+                          return <ColorCircle color={color} size={8} />
+                        })()}
                         {optionLabel}
                         {serviceId === 'windows_doors' && option.id === 'windows' && windowTotal > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
@@ -1141,6 +1185,27 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
+                {/* Pergolas multi-structure — per-structure measurement breakdown
+                    shown under the Size group when 2 structures + 2 polygons are
+                    drawn. ColorCircles bind each line to the polygon on the
+                    satellite map (color order = chip pick order). */}
+                {serviceId === 'pergolas' && group.id === 'size' && areaMeasurement?.polygons && areaMeasurement.polygons.length > 1 && (
+                  <div className="mt-3 rounded-xl border bg-muted/30 p-3 space-y-1.5" data-pergolas-structure-breakdown="true">
+                    {areaMeasurement.polygons.map((poly, idx) => {
+                      const structureId = (selections['structure'] ?? [])[idx]
+                      const structureLabel = structureId
+                        ? service.optionGroups.find((g) => g.id === 'structure')?.options.find((o) => o.id === structureId)?.label ?? structureId
+                        : `Area ${idx + 1}`
+                      return (
+                        <div key={idx} className="flex items-center gap-2 text-sm" data-pergolas-structure-row={structureId ?? String(idx)}>
+                          <ColorCircle color={poly.color} size={10} />
+                          <span className="text-foreground font-medium">{structureLabel}</span>
+                          <span className="text-muted-foreground ml-auto">{poly.sqft.toLocaleString()} sqft</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
                 {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only.
                     Floors + drops chips render inline ONLY when gutters chip is active
                     (ported from wizard Step 7; cart payload shape gutterDropsConfig
@@ -1756,6 +1821,22 @@ export function ServiceDetailPage() {
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(areaMeasurement?.mapUrl && { measurementMapUrl: areaMeasurement.mapUrl }),
+                // PR-222 — pergolas multi-structure persistence. When 2+
+                // polygons are drawn (1 per picked structure), write per-
+                // polygon mapUrls + per-structure sqft breakdown so cart +
+                // vendor inbox can render one map per structure and pricing
+                // can sum sqft across structures at the same rate.
+                ...(serviceId === 'pergolas' && areaMeasurement?.polygons && areaMeasurement.polygons.length > 1 && {
+                  measurementMapUrls: areaMeasurement.polygons
+                    .filter((p): p is { sqft: number; mapUrl: string; color: string } => Boolean(p.mapUrl))
+                    .map((p) => ({ mapUrl: p.mapUrl, color: p.color, sqft: p.sqft })),
+                  structureMeasurements: Object.fromEntries(
+                    (selections['structure'] ?? []).map((sid, idx) => {
+                      const poly = areaMeasurement.polygons![idx]
+                      return poly ? [sid, { sqft: poly.sqft, color: poly.color }] : [sid, { sqft: 0, color: POLYGON_COLORS[idx] ?? POLYGON_COLORS[0] }]
+                    }),
+                  ),
+                }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {

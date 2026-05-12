@@ -94,6 +94,17 @@ export interface CartItem {
   // bytes/item) — picked over base64 to keep persisted-cart payload
   // clear of the PR-194/195/196 5MB LS-quota cliff.
   measurementMapUrl?: string
+  // Per-polygon static-map URLs for multi-polygon measurements (pergolas
+  // with 2 structures). Each entry is a single-polygon overlay so the
+  // consumer surface can render one map per structure with a color
+  // caption. Empty/undefined for single-polygon items — legacy
+  // measurementMapUrl above remains the SoT for those.
+  measurementMapUrls?: Array<{ mapUrl: string; color: string; sqft: number }>
+  // Per-structure measurement breakdown (pergolas multi-structure). Keyed
+  // by structure option_id (e.g. 'aluminum_terrace'). Pricing reads from
+  // here when present to sum same-rate sqft across structures; absence
+  // falls back to scalar areaSqft (legacy single-structure path).
+  structureMeasurements?: Record<string, { sqft: number; color: string }>
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string
@@ -188,7 +199,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 6,
+      version: 7,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -314,6 +325,15 @@ export const useCartStore = create<CartState>()(
               return { ...item, selections: cleaned }
             }),
           }
+        }
+        if (version < 7) {
+          // Rod 18:37Z directive: pergolas multi-structure (max 2). New
+          // optional fields measurementMapUrls + structureMeasurements
+          // require no data migration — legacy single-polygon items keep
+          // working via scalar areaSqft + measurementMapUrl reads. Bump
+          // exists to invalidate hydrated caches per
+          // feedback_persist_version_bump_with_constants_change (structure
+          // type single → multi shape change on SERVICE_CATALOG).
         }
         return state
       },

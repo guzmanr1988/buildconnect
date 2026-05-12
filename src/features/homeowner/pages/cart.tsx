@@ -953,7 +953,40 @@ export function CartPage() {
                         Measured Area
                       </p>
                       <p className="text-sm font-semibold text-foreground">{applyAreaWaste(viewItem.serviceId, viewItem.areaSqft).toLocaleString()} sqft</p>
-                      {viewItem.measurementMapUrl && (
+                      {/* PR-222 pergolas multi-structure: render one map per
+                          polygon with structure-keyed caption. Falls through
+                          to the single measurementMapUrl branch below for
+                          legacy items + single-structure pergolas + driveways. */}
+                      {viewItem.measurementMapUrls && viewItem.measurementMapUrls.length > 0 ? (
+                        <div className="mt-3 space-y-3" data-cart-item-multi-map="true">
+                          {viewItem.measurementMapUrls.map((entry, idx) => {
+                            const structureId = (viewItem.selections?.['structure'] ?? [])[idx]
+                            const structureLabel = structureId === 'aluminum_terrace'
+                              ? 'Aluminum Terrace'
+                              : structureId === 'aluminum_pergola'
+                              ? 'Aluminum Pergola'
+                              : `Area ${idx + 1}`
+                            return (
+                              <div key={idx} className="rounded-lg overflow-hidden border" data-cart-item-map-index={idx}>
+                                <div className="px-3 py-1.5 bg-muted/50 flex items-center gap-2 text-xs">
+                                  <span
+                                    aria-hidden="true"
+                                    style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.color }}
+                                  />
+                                  <span className="font-medium text-foreground">{structureLabel}</span>
+                                  <span className="text-muted-foreground ml-auto">{entry.sqft.toLocaleString()} sqft</span>
+                                </div>
+                                <img
+                                  src={entry.mapUrl}
+                                  alt={`${structureLabel} measured area`}
+                                  className="w-full h-auto block"
+                                  loading="lazy"
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : viewItem.measurementMapUrl ? (
                         <div className="mt-3 rounded-lg overflow-hidden border" data-cart-item-map="true">
                           <img
                             src={viewItem.measurementMapUrl}
@@ -962,7 +995,7 @@ export function CartPage() {
                             loading="lazy"
                           />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                   {/* Measured length — fencing items with satellite measurement */}

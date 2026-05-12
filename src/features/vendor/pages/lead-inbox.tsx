@@ -1001,7 +1001,40 @@ export default function LeadInbox() {
                                 <p className="text-xs text-foreground">{sp.item.itemNotes}</p>
                               </div>
                             )}
-                            {(sp.item as any).measurementMapUrl && (
+                            {/* PR-222 pergolas multi-structure: one map per
+                                polygon with structure-keyed caption. Falls
+                                through to single-map render below for legacy
+                                items + single-structure pergolas + driveways. */}
+                            {Array.isArray((sp.item as any).measurementMapUrls) && (sp.item as any).measurementMapUrls.length > 0 ? (
+                              <div data-vendor-measured-area="multi">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Measured area</p>
+                                <div className="space-y-3 max-w-[320px]">
+                                  {(sp.item as any).measurementMapUrls.map((entry: { mapUrl: string; color: string; sqft: number }, idx: number) => {
+                                    const structureId = (sp.item.selections?.['structure'] ?? [])[idx]
+                                    const structureLabel = structureId === 'aluminum_terrace'
+                                      ? 'Aluminum Terrace'
+                                      : structureId === 'aluminum_pergola'
+                                      ? 'Aluminum Pergola'
+                                      : `Area ${idx + 1}`
+                                    return (
+                                      <div key={idx} className="rounded-lg overflow-hidden border" data-vendor-map-index={idx}>
+                                        <div className="px-2 py-1 bg-muted/50 flex items-center gap-2 text-[11px]">
+                                          <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.color }} />
+                                          <span className="font-medium text-foreground">{structureLabel}</span>
+                                          <span className="text-muted-foreground ml-auto">{entry.sqft.toLocaleString()} sqft</span>
+                                        </div>
+                                        <img
+                                          src={entry.mapUrl}
+                                          alt={`${structureLabel} measured area`}
+                                          className="w-full h-auto block"
+                                          loading="lazy"
+                                        />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : (sp.item as any).measurementMapUrl ? (
                               <div data-vendor-measured-area="true">
                                 <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Measured area</p>
                                 <div className="rounded-lg overflow-hidden border max-w-[320px]">
@@ -1013,7 +1046,7 @@ export default function LeadInbox() {
                                   />
                                 </div>
                               </div>
-                            )}
+                            ) : null}
                             {sp.item.itemPhotos && sp.item.itemPhotos.length > 0 && (
                               <div>
                                 <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Project Photos</p>

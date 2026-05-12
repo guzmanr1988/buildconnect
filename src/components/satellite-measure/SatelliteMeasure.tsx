@@ -26,7 +26,8 @@ export function SatelliteMeasure({
   initialAddress = '',
   gmpEnabled = false,
   onFallback,
-}: SatelliteMeasureProps) {
+  maxPolygons,
+}: SatelliteMeasureProps & { maxPolygons?: number }) {
   const [address, setAddress] = useState(initialAddress)
   const [loading, setLoading] = useState(false)
   const [measured, setMeasured] = useState<MeasurementResult | null>(null)
@@ -52,6 +53,7 @@ export function SatelliteMeasure({
         onMeasure={onMeasure}
         onFallback={onFallback}
         onFail={() => setPolygonFailed(true)}
+        maxPolygons={maxPolygons}
       />
     )
   }
