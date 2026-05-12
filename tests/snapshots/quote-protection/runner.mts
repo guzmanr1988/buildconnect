@@ -37,6 +37,7 @@ import {
   buildSelections,
   resolveIncludeMaterialOrder,
   resolveIncludePerimeter,
+  resolveIncludeFlatArea,
   type UserAction,
 } from '../../../src/lib/wizard-action-replay.ts'
 
@@ -59,6 +60,7 @@ type Step2Expected = {
   squares?: number
   includeMaterialOrderDefault?: boolean
   includePerimeterDefault?: boolean
+  includeFlatAreaDefault?: boolean
 }
 
 type CartItemExpected = {
@@ -214,6 +216,7 @@ function runScenarioOutput(
   const { pitchedAreaSqft, flatAreaSqft } = classifyRoofSegments(segments)
   const includeMaterialOrder = resolveIncludeMaterialOrder(output.userActions)
   const includePerimeter = resolveIncludePerimeter(output.userActions)
+  const includeFlatArea = resolveIncludeFlatArea(output.userActions)
   const selections = buildSelections(output.userActions)
   const matSelections = selections.material ?? []
 
@@ -221,8 +224,12 @@ function runScenarioOutput(
     pitchedAreaSqft,
     flatAreaSqft,
     includeMaterialOrder,
+    includeFlatArea,
   })
-  const step2FlatSqft = includeMaterialOrder && flatAreaSqft > 0
+  // Flat-area sub-gate: when FA=OFF the flat slice contributes 0 to step2
+  // and cart even though the material-order section is ON. Pitched is
+  // unaffected by FA — MO is the only pitched gate.
+  const step2FlatSqft = includeMaterialOrder && includeFlatArea && flatAreaSqft > 0
     ? Math.round(flatAreaSqft * 1.02)
     : 0
   const step2PitchedSqft = includeMaterialOrder ? pitchedAreaSqft : 0
@@ -234,10 +241,11 @@ function runScenarioOutput(
     squares: totals.totalSquares,
     includeMaterialOrderDefault: includeMaterialOrder,
     includePerimeterDefault: includePerimeter,
+    includeFlatAreaDefault: includeFlatArea,
   }
 
   const cartPitched = includeMaterialOrder ? pitchedAreaSqft : 0
-  const cartFlat = includeMaterialOrder ? flatAreaSqft : 0
+  const cartFlat = includeMaterialOrder && includeFlatArea ? flatAreaSqft : 0
   const cartTotal = cartPitched + cartFlat
   const serviceIds = matSelections.length > 0 ? ['roofing'] : []
   const cart: CartExpected = {

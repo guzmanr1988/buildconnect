@@ -1,12 +1,12 @@
 {
   "__meta": {
     "snapshotSHA": "aa8c7257e25b70c4ddf72ec34e2f38a6bd5987da",
-    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. Re-keyed 2026-05-12 (PR-208 section-header toggle pivot). Re-keyed again 2026-05-12 for PR-209: chip-tap no longer gates area inclusion — Material Order is the single area gate. Pitched + flat are both raw satellite values, both written to cart unconditionally when Material Order toggle is ON. chip-tap drives material assignment only.",
+    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. Re-keyed 2026-05-12 (PR-208 section-header toggle pivot). Re-keyed again 2026-05-12 for PR-209: chip-tap no longer gates area inclusion — Material Order is the single area gate. Re-keyed again 2026-05-12 for PR-212: Flat Area sub-gate added. MO=OFF still zeroes all areas; MO=ON+FA=ON includes pitched+flat; MO=ON+FA=OFF includes pitched only and zeros flat. Default for both toggles is ON.",
     "recordedAt": "2026-05-08T21:48:00Z",
     "recordedBundle": "BUrV7oIT",
     "recordedBy": "apollo",
     "rekeyedAt": "2026-05-12T00:00:00Z",
-    "rekeyedBy": "helios (PR-209 chip-tap-area-decouple — Material Order is single area gate; pitched + flat both written unconditionally when M=ON)",
+    "rekeyedBy": "helios (PR-212 flat-area-sub-gate — MO single area gate at top; FA sub-gate zeros flat only when MO=ON+FA=OFF)",
     "surfaceDefinitions": {
       "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(pitchedAreaSqft, flatAreaSqft, includeMaterialOrder). Both raw satellite values feed in when Material Order toggle is ON; both zeroed when OFF. Chip-tap is no longer a gate.",
       "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw pitched + flat written unconditionally when includeMaterialOrder=true; both zeroed when toggle is OFF."
@@ -32,7 +32,8 @@
             "totalSqft": 2583,
             "squares": 26,
             "includeMaterialOrderDefault": true,
-            "includePerimeterDefault": true
+            "includePerimeterDefault": true,
+            "includeFlatAreaDefault": true
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
@@ -78,7 +79,8 @@
             "totalSqft": 2583,
             "squares": 26,
             "includeMaterialOrderDefault": true,
-            "includePerimeterDefault": true
+            "includePerimeterDefault": true,
+            "includeFlatAreaDefault": true
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
@@ -103,6 +105,71 @@
               "pitchedSqft": 2475,
               "flatSqft": 480,
               "totalSqft": 2955
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          }
+        }
+      }
+    },
+    "chip=metal+flat,FA-off": {
+      "userActions": [
+        { "step": 1, "type": "chip-tap", "value": "standing_seam_metal" },
+        { "step": 1, "type": "chip-tap", "value": "flat_roof" },
+        { "step": 2, "type": "include-flat-area-toggle", "value": false }
+      ],
+      "expected": {
+        "step2": {
+          "gateLogic": {
+            "pitchedSqft": 2053,
+            "flatSqft": 0,
+            "totalSqft": 2094,
+            "squares": 21,
+            "includeMaterialOrderDefault": true,
+            "includePerimeterDefault": true,
+            "includeFlatAreaDefault": false
+          }
+        },
+        "cart": {
+          "gateLogic": {
+            "roofMeasurement": {
+              "pitchedSqft": 2053,
+              "flatSqft": 0,
+              "totalSqft": 2053
+            },
+            "items": [
+              { "serviceId": "roofing", "subtotal": 0, "total": 0 }
+            ]
+          }
+        }
+      }
+    },
+    "chip=metal+flat,MO-off,FA-off": {
+      "userActions": [
+        { "step": 1, "type": "chip-tap", "value": "standing_seam_metal" },
+        { "step": 1, "type": "chip-tap", "value": "flat_roof" },
+        { "step": 2, "type": "include-material-order-toggle", "value": false },
+        { "step": 2, "type": "include-flat-area-toggle", "value": false }
+      ],
+      "expected": {
+        "step2": {
+          "gateLogic": {
+            "pitchedSqft": 0,
+            "flatSqft": 0,
+            "totalSqft": 0,
+            "squares": 0,
+            "includeMaterialOrderDefault": false,
+            "includePerimeterDefault": true,
+            "includeFlatAreaDefault": false
+          }
+        },
+        "cart": {
+          "gateLogic": {
+            "roofMeasurement": {
+              "pitchedSqft": 0,
+              "flatSqft": 0,
+              "totalSqft": 0
             },
             "items": [
               { "serviceId": "roofing", "subtotal": 0, "total": 0 }

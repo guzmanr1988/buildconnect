@@ -17,6 +17,7 @@ interface RoofMeasurement {
   flatAreaSqft?: number
   includeMaterialOrder?: boolean
   includePerimeter?: boolean
+  includeFlatArea?: boolean
 }
 
 interface MetalRoofSelection {

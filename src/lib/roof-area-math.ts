@@ -8,13 +8,17 @@ export function computeRoofTotal({
   pitchedAreaSqft,
   flatAreaSqft,
   includeMaterialOrder,
+  includeFlatArea = true,
 }: {
   pitchedAreaSqft: number
   flatAreaSqft: number
   includeMaterialOrder: boolean
+  includeFlatArea?: boolean
 }): { totalSqft: number; totalSquares: number; pitchedWaste: number; flatWaste: number } {
   const pitchedWaste = includeMaterialOrder ? Math.round((pitchedAreaSqft || 0) * 1.02) : 0
-  const flatWaste = includeMaterialOrder ? Math.round((flatAreaSqft || 0) * 1.02) : 0
+  const flatWaste = includeMaterialOrder && includeFlatArea
+    ? Math.round((flatAreaSqft || 0) * 1.02)
+    : 0
   const totalSqft = pitchedWaste + flatWaste
   const totalSquares = Math.ceil(totalSqft / 100)
   return { totalSqft, totalSquares, pitchedWaste, flatWaste }
