@@ -16,7 +16,7 @@
 
 export type UserAction = {
   step: 1 | 2 | 3
-  type: 'chip-tap' | 'addon-toggle' | 'include-material-order-toggle' | 'include-perimeter-toggle'
+  type: 'chip-tap' | 'addon-toggle' | 'include-material-order-toggle' | 'include-perimeter-toggle' | 'include-flat-area-toggle'
   value: string | boolean
 }
 
@@ -29,6 +29,8 @@ export type ReplayResult = {
   includeMaterialOrder: boolean
   /** Effective includePerimeter after explicit toggles (defaults true). */
   includePerimeter: boolean
+  /** Effective includeFlatArea after explicit toggles (defaults true). */
+  includeFlatArea: boolean
 }
 
 /**
@@ -57,6 +59,20 @@ export function resolveIncludePerimeter(actions: UserAction[]): boolean {
     }
   }
   return includePerimeter
+}
+
+/**
+ * Resolve includeFlatArea from the action stream. Defaults true; the
+ * last include-flat-area-toggle action with a boolean value wins.
+ */
+export function resolveIncludeFlatArea(actions: UserAction[]): boolean {
+  let includeFlatArea = true
+  for (const a of actions) {
+    if (a.type === 'include-flat-area-toggle' && typeof a.value === 'boolean') {
+      includeFlatArea = a.value
+    }
+  }
+  return includeFlatArea
 }
 
 /**
@@ -91,5 +107,6 @@ export function replayUserActions(actions: UserAction[]): ReplayResult {
     addons: sels.addons ?? [],
     includeMaterialOrder: resolveIncludeMaterialOrder(actions),
     includePerimeter: resolveIncludePerimeter(actions),
+    includeFlatArea: resolveIncludeFlatArea(actions),
   }
 }

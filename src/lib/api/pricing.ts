@@ -154,21 +154,23 @@ export function computeVendorTotal(
             return getOptionMetadata(id, item.serviceId, sib).priceUnit === 'square'
           })
           const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
+          const includeFlatAreaOpt = item.roofMeasurement?.includeFlatArea !== false
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
             && includeMaterialOrderOpt
           // Material-order opt-out: when the section toggle is OFF, no
           // roof-material line items reach the quote. Both pitched (square-
-          // priced, non-flat) and flat options read 0. When split data is
-          // available, each option prices against its own area; otherwise
-          // fall back to the option-specific area (pitched-only for non-flat
-          // options, flat-only for flat_roof) to avoid flat-priced-as-metal.
+          // priced, non-flat) and flat options read 0. Flat-area sub-gate:
+          // when MO=ON but FA=OFF, the flat_roof option drops to 0 while
+          // pitched options remain priced.
           const rawSqft = !includeMaterialOrderOpt
             ? 0
-            : useSplit
-              ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
-              : (isFlatOpt
-                  ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
-                  : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
+            : (isFlatOpt && !includeFlatAreaOpt)
+              ? 0
+              : useSplit
+                ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
+                : (isFlatOpt
+                    ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
+                    : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
           const wasteFactor = 1.02
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)

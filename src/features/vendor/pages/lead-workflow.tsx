@@ -1189,7 +1189,7 @@ export default function VendorLeadWorkflow() {
                               <span className="font-medium">{rm.pitchedAreaSqft.toLocaleString()} sq ft</span>
                             </div>
                           )}
-                          {(rm.includeMaterialOrder ?? true) && (rm.flatAreaSqft ?? 0) > 0 && (
+                          {(rm.includeMaterialOrder ?? true) && (rm.includeFlatArea ?? true) && (rm.flatAreaSqft ?? 0) > 0 && (
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">Flat area</span>
                               <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sq ft</span>

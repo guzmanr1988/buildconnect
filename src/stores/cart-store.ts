@@ -50,7 +50,7 @@ export interface CartItem {
   tileColor?: string
   // Roof measurement wizard output — area + pitch captured before manual config.
   // Stored regardless of material so pitch is preserved for all material types.
-  roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean }
+  roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean; includeFlatArea?: boolean }
   // Permit choice captured from roof wizard. 'yes' = permit pulled; 'no' = cash-only (no financing).
   // Optional for widen-reads: absent on legacy items; treat as 'yes' on read (no surprise downgrade).
   roofPermit?: 'yes' | 'no'
@@ -181,7 +181,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 2,
+      version: 3,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -229,6 +229,25 @@ export const useCartStore = create<CartState>()(
               ...item,
               itemPhotos: undefined,
             })),
+          }
+        }
+        if (version < 3) {
+          // PR-212: introduce roofMeasurement.includeFlatArea (default true).
+          // Existing persisted items predate the toggle; on first hydrate
+          // post-deploy default to true so behavior matches PR-211 (flat
+          // included whenever Material Order is ON).
+          state = {
+            ...state,
+            items: (state.items ?? []).map((item) => {
+              if (!item.roofMeasurement) return item
+              return {
+                ...item,
+                roofMeasurement: {
+                  ...item.roofMeasurement,
+                  includeFlatArea: item.roofMeasurement.includeFlatArea ?? true,
+                },
+              }
+            }),
           }
         }
         return state

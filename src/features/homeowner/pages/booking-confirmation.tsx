@@ -98,6 +98,7 @@ async function buildRoofingLineItems(
     return u === 'square' || u === 'sqft'
   })
   const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
+  const includeFlatAreaOpt = item.roofMeasurement?.includeFlatArea !== false
   const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
     && includeMaterialOrderOpt
@@ -147,7 +148,7 @@ async function buildRoofingLineItems(
         // pricing.ts gate.
         const isFlat = optionId === FLAT_ROOF_OPTION_ID
         const useSquares = meta.priceUnit === 'square'
-        const sliceZeroed = !includeMaterialOrderOpt
+        const sliceZeroed = !includeMaterialOrderOpt || (isFlat && !includeFlatAreaOpt)
         let rawSqft: number
         let note: string | undefined
         if (sliceZeroed) {

@@ -113,6 +113,10 @@ export interface RoofWizardResult {
   // When true (default), perimeter-priced add-ons (gutters, fascia, soffit)
   // are included. When false, those line items are skipped.
   includePerimeter?: boolean
+  // When true (default), the flat-area slice (membrane) is part of the
+  // Material Order bundle. When false, flat is excluded from totals + cost
+  // even though Material Order itself is ON.
+  includeFlatArea?: boolean
 }
 
 interface MeasurementData {
@@ -296,6 +300,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
   const [includeMaterialOrder, setIncludeMaterialOrder] = useState(true)
   const [includePerimeter, setIncludePerimeter] = useState(true)
+  const [includeFlatArea, setIncludeFlatArea] = useState(true)
   // Inline pencil-edit overrides for AREA BREAKDOWN. Override input is RAW;
   // display is POST-WASTE; cart payload is RAW (uniform with satellite path).
   const [editingFlat, setEditingFlat] = useState(false)
@@ -422,6 +427,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       flatAreaSqft: measurement ? flatSqftOut : undefined,
       includeMaterialOrder,
       includePerimeter,
+      includeFlatArea,
     })
   }
 
@@ -547,11 +553,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
                     includeMaterialOrder={includeMaterialOrder}
                     includePerimeter={includePerimeter}
+                    includeFlatArea={includeFlatArea}
                     pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                     flowPath={flowPath ?? null}
                     source="wizard-step2"
                     onToggleMaterialOrder={setIncludeMaterialOrder}
                     onTogglePerimeter={setIncludePerimeter}
+                    onToggleFlatArea={setIncludeFlatArea}
                     editing={{
                       pitched: {
                         active: editingPitched,

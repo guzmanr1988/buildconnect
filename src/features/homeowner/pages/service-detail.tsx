@@ -193,7 +193,7 @@ export function ServiceDetailPage() {
     (editItemForService?.id as string) || null
   )
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean } | null>(null)
+  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean; includeFlatArea?: boolean } | null>(null)
   // Under-quote guard: explicit acknowledgment that order is flat-add-on only
   // when chip-tap excludes pitched but satellite detected significant pitched area.
   // Reset on material-selection change so user re-acknowledges if they re-fall
@@ -293,7 +293,7 @@ export function ServiceDetailPage() {
       setFlatRoofSelection((prev) => ({ ...prev, roofSize: flatSquares }))
       setFlatRoofConfigOpen(true)
     }
-    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter })
+    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter, includeFlatArea: result.includeFlatArea })
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
   }
@@ -663,10 +663,12 @@ export function ServiceDetailPage() {
                 perimeterFt={roofMeasurement.perimeterFt ?? 0}
                 includeMaterialOrder={roofMeasurement.includeMaterialOrder ?? true}
                 includePerimeter={roofMeasurement.includePerimeter ?? true}
+                includeFlatArea={roofMeasurement.includeFlatArea ?? true}
                 pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                 source="service-detail"
                 onToggleMaterialOrder={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeMaterialOrder: on } : prev)}
                 onTogglePerimeter={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includePerimeter: on } : prev)}
+                onToggleFlatArea={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeFlatArea: on } : prev)}
               />
             )}
 
@@ -1586,15 +1588,15 @@ export function ServiceDetailPage() {
                   return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
                 }
                 // Material Order toggle is the single area gate (PR-209).
-                // Chip-tap drives material assignment (vendor SKU mapping),
-                // not whether the area belongs in the order. Both pitched
-                // and flat reach the cart whenever Material Order is ON.
+                // PR-212 adds a Flat Area sub-gate inside Material Order:
+                // when FA=OFF, flat slice is zeroed even though MO is ON.
                 const includeMaterialOrder = roofMeasurement.includeMaterialOrder ?? true
                 const includePerimeter = roofMeasurement.includePerimeter ?? true
+                const includeFlatArea = roofMeasurement.includeFlatArea ?? true
                 const pitchedRaw = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 const flatRaw = roofMeasurement.flatAreaSqft ?? 0
                 const pitchedOut = includeMaterialOrder ? pitchedRaw : 0
-                const flatOut = includeMaterialOrder ? flatRaw : 0
+                const flatOut = includeMaterialOrder && includeFlatArea ? flatRaw : 0
                 return {
                   ...roofMeasurement,
                   areaSqft: pitchedOut + flatOut,
@@ -1602,6 +1604,7 @@ export function ServiceDetailPage() {
                   flatAreaSqft: flatOut,
                   includeMaterialOrder,
                   includePerimeter,
+                  includeFlatArea,
                 }
               })()
               const itemData = {
