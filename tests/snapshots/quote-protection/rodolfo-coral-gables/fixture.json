@@ -1,15 +1,15 @@
 {
   "__meta": {
     "snapshotSHA": "aa8c7257e25b70c4ddf72ec34e2f38a6bd5987da",
-    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. Re-keyed 2026-05-12 for PR-208 section-header toggle pivot: replaced includeFlatDefault with includeMaterialOrderDefault + includePerimeterDefault. Flat area now gated by flat_roof chip-tap (not a per-area toggle); pitched gated by any non-flat chip. New shape mirrors live wizard: hasFlatChip drives whether flat shows in Material Order + reaches cart.",
+    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. Re-keyed 2026-05-12 (PR-208 section-header toggle pivot). Re-keyed again 2026-05-12 for PR-209: chip-tap no longer gates area inclusion — Material Order is the single area gate. Pitched + flat are both raw satellite values, both written to cart unconditionally when Material Order toggle is ON. chip-tap drives material assignment only.",
     "recordedAt": "2026-05-08T21:48:00Z",
     "recordedBundle": "BUrV7oIT",
     "recordedBy": "apollo",
     "rekeyedAt": "2026-05-12T00:00:00Z",
-    "rekeyedBy": "helios (PR-208 section-header toggle pivot — flat gated by flat_roof chip-tap; includeFlat -> includeMaterialOrder + includePerimeter)",
+    "rekeyedBy": "helios (PR-209 chip-tap-area-decouple — Material Order is single area gate; pitched + flat both written unconditionally when M=ON)",
     "surfaceDefinitions": {
-      "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(pitchedForOrder, flatForOrder, includeMaterialOrder). pitchedForOrder = hasPitchedChip ? pitched : 0; flatForOrder = hasFlatChip ? flat : 0.",
-      "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw values gated by chip-tap AND includeMaterialOrder section toggle (default true)."
+      "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(pitchedAreaSqft, flatAreaSqft, includeMaterialOrder). Both raw satellite values feed in when Material Order toggle is ON; both zeroed when OFF. Chip-tap is no longer a gate.",
+      "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw pitched + flat written unconditionally when includeMaterialOrder=true; both zeroed when toggle is OFF."
     }
   },
   "address": "1320 Granada Blvd, Coral Gables, FL 33134",
@@ -28,25 +28,25 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 0,
-            "totalSqft": 2094,
-            "squares": 21,
+            "flatSqft": 489,
+            "totalSqft": 2583,
+            "squares": 26,
             "includeMaterialOrderDefault": true,
             "includePerimeterDefault": true
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
-            "flatSqft": 0,
-            "totalSqft": 2525,
-            "squares": 26
+            "flatSqft": 490,
+            "totalSqft": 3015,
+            "squares": 31
           }
         },
         "cart": {
           "gateLogic": {
             "roofMeasurement": {
               "pitchedSqft": 2053,
-              "flatSqft": 0,
-              "totalSqft": 2053
+              "flatSqft": 479,
+              "totalSqft": 2532
             },
             "items": [
               { "serviceId": "roofing", "subtotal": 0, "total": 0 }
@@ -55,8 +55,8 @@
           "canonicalTruth": {
             "roofMeasurement": {
               "pitchedSqft": 2475,
-              "flatSqft": 0,
-              "totalSqft": 2475
+              "flatSqft": 480,
+              "totalSqft": 2955
             },
             "items": [
               { "serviceId": "roofing", "subtotal": 0, "total": 0 }

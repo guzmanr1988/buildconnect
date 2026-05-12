@@ -602,7 +602,6 @@ export function ServiceDetailPage() {
         // page level so the Add to Project gate (line ~1491) and warning
         // banner (line ~1441) still fire correctly until chip-tap is done.
         const noChipTapYet = dominantMaterial === null && !hasFlatSection
-        const previewMaterial = noChipTapYet ? 'shingle' : dominantMaterial
         const previewPitchedOmittedTriggered = noChipTapYet ? false : pitchedOmittedTriggered
         return (
           <motion.div
@@ -662,8 +661,6 @@ export function ServiceDetailPage() {
                 flatAreaSqft={roofMeasurement.flatAreaSqft ?? 0}
                 pitch={roofMeasurement.pitch}
                 perimeterFt={roofMeasurement.perimeterFt ?? 0}
-                material={previewMaterial}
-                hasFlatSection={hasFlatSection}
                 includeMaterialOrder={roofMeasurement.includeMaterialOrder ?? true}
                 includePerimeter={roofMeasurement.includePerimeter ?? true}
                 pitchedOmittedTriggered={previewPitchedOmittedTriggered}
@@ -1588,15 +1585,16 @@ export function ServiceDetailPage() {
                   const flatOnly = roofMeasurement.flatAreaSqft ?? 0
                   return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
                 }
+                // Material Order toggle is the single area gate (PR-209).
+                // Chip-tap drives material assignment (vendor SKU mapping),
+                // not whether the area belongs in the order. Both pitched
+                // and flat reach the cart whenever Material Order is ON.
                 const includeMaterialOrder = roofMeasurement.includeMaterialOrder ?? true
                 const includePerimeter = roofMeasurement.includePerimeter ?? true
-                const matSelections = selections['material'] ?? []
-                const hasPitchedChip = matSelections.some((m) => m !== 'flat_roof')
-                const hasFlatChip = matSelections.includes('flat_roof')
                 const pitchedRaw = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 const flatRaw = roofMeasurement.flatAreaSqft ?? 0
-                const pitchedOut = includeMaterialOrder && hasPitchedChip ? pitchedRaw : 0
-                const flatOut = includeMaterialOrder && hasFlatChip ? flatRaw : 0
+                const pitchedOut = includeMaterialOrder ? pitchedRaw : 0
+                const flatOut = includeMaterialOrder ? flatRaw : 0
                 return {
                   ...roofMeasurement,
                   areaSqft: pitchedOut + flatOut,

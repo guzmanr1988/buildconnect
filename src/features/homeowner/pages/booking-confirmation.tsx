@@ -160,8 +160,10 @@ async function buildRoofingLineItems(
             rawSqft = pitchedAreaSqft ?? 0
             if (rawSqft === 0) note = 'No pitched section detected by satellite imagery — confirm with vendor.'
           }
+        } else if (isFlat) {
+          rawSqft = flatAreaSqft ?? areaSqft
         } else {
-          rawSqft = areaSqft
+          rawSqft = pitchedAreaSqft ?? areaSqft
         }
         // For square pricing: apply 2% waste (top-of-real bias) then convert.
         // For legacy sqft pricing: bill directly against raw sqft.
