@@ -503,6 +503,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       Satellite data wasn't available for this address — measurements below are estimates. Tap <span className="font-semibold">Adjust manually</span> to correct them before continuing.
                     </div>
                   )}
+                  {/* TODO(refine): suppression-when-actually-overridden vs
+                      suppression-while-panel-open. Current gate is
+                      !showAdjust because adjArea pre-fills to pitched-base on
+                      measurement complete, making the adjArea===0 gate
+                      dead-code. Revisit post-launch if !showAdjust feels
+                      noisy (e.g. user opens panel to look but doesn't edit). */}
                   {!measurement.isMock
                     && measurement.wholeRoofDivergencePct !== undefined
                     && measurement.wholeRoofDivergencePct > DIVERGENCE_WARN_THRESHOLD
