@@ -27,10 +27,24 @@ type ActionBody =
   | { action: 'send-reset-link'; targetEmail: string }
   | { action: 'set-user-password'; targetEmail: string; newPassword: string }
 
+// PR-215 — browser admin path lives at https://buildc.net while the Edge
+// Function lives at https://<project>.supabase.co — cross-origin. The
+// admin UI uses raw fetch() (not supabase-js .functions.invoke()) with an
+// Authorization header, which makes the request non-simple and triggers a
+// CORS preflight (OPTIONS). Without this allow-list the browser blocks
+// the POST before it ever reaches our method-check. Apollo's V1 walker
+// uses Node-side fetch (no preflight) so the gap is browser-only.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Max-Age': '86400',
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   })
 }
 
@@ -54,6 +68,12 @@ function isValidEmail(s: string): boolean {
 }
 
 serve(async (req: Request) => {
+  // PR-215 — CORS preflight must answer before the method-check, otherwise
+  // browsers see 405 with no Allow-Origin and abort the actual POST. 204
+  // with the allow-list headers is the minimal compliant response.
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'method_not_allowed' })
   }
