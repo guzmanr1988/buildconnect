@@ -468,6 +468,16 @@ export function ServiceDetailPage() {
   })
   const allRequiredDone = completedRequired === requiredGroups.length
 
+  // Perimeter-only chip-tap mode: user keeps the satellite-measured perimeter
+  // but skips the material-order portion. Material question becomes info-only
+  // ("What is your existing roof?") and add-ons collapse to the linear-foot
+  // perimeter-attaching subset (gutters, soffit×2, fascia×2). Derived state;
+  // no new persisted field.
+  const isRoofingPerimeterOnly =
+    serviceId === 'roofing' &&
+    roofMeasurement?.includeMaterialOrder === false &&
+    roofMeasurement?.includePerimeter === true
+
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
 
   function handleSelect(group: OptionGroup, optionId: string) {
@@ -803,11 +813,19 @@ export function ServiceDetailPage() {
             return true
           }).map((group) => {
             const selected = selections[group.id] ?? []
+            const groupLabel =
+              isRoofingPerimeterOnly && group.id === 'material'
+                ? 'What is your existing roof?'
+                : group.label
+            const renderOptions =
+              isRoofingPerimeterOnly && group.id === 'addons'
+                ? group.options.filter((o) => ADDON_LINEAR_FT_IDS.includes(o.id))
+                : group.options
             return (
-              <div key={group.id}>
+              <div key={group.id} data-chip-group-id={group.id} data-mode={isRoofingPerimeterOnly ? 'perimeter-only' : 'standard'}>
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">
-                    {group.label}
+                  <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
+                    {groupLabel}
                   </span>
                   {group.required ? (
                     <span className="text-destructive text-xs">*</span>
@@ -818,7 +836,7 @@ export function ServiceDetailPage() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {group.options.map((option) => {
+                  {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
                     // PR — roofing material primary lock. Once a non-flat material is
                     // picked, every OTHER non-flat chip becomes unclickable. Flat Roof
@@ -859,6 +877,11 @@ export function ServiceDetailPage() {
                           if (serviceId === 'windows_doors' && option.id === 'storm_front') {
                             setStormFrontConfigOpen((prev) => selected.includes('storm_front') ? !prev : true)
                           }
+                          // Perimeter-only chip-tap mode: material chips answer the
+                          // "What is your existing roof?" question — info-only. Skip
+                          // the material configurators (color/size = pricing inputs)
+                          // to honor the no-pricing-table contract for this mode.
+                          if (isRoofingPerimeterOnly && group.id === 'material') return
                           // Ship #255 — multi-select material. `selected` is the
                           // pre-click state, so includes('metal') tells us whether
                           // THIS click de-selects metal (was in, now out) or adds
@@ -1848,7 +1871,10 @@ export function ServiceDetailPage() {
               const matIds = selections['material'] ?? []
               const hasFlatInSelection = matIds.includes('flat_roof')
               const hasPitchedInSelection = matIds.some(id => id !== 'flat_roof')
-              const showSplit = hasFlatInSelection && hasPitchedInSelection
+              // Perimeter-only mode: material is info-only — never overlay area
+              // sqft badges on the existing-roof choice (would imply pricing).
+              const showSplit = !isRoofingPerimeterOnly
+                && hasFlatInSelection && hasPitchedInSelection
                 && roofMeasurement?.pitchedAreaSqft !== undefined
                 && roofMeasurement?.flatAreaSqft !== undefined
               return (
