@@ -527,7 +527,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                       className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5 text-[12px] text-amber-800 dark:text-amber-300 space-y-2"
                     >
                       <p>
-                        Satellite read appears <span className="font-semibold">{Math.round(measurement.wholeRoofDivergencePct * 100)}% below</span> building footprint.
+                        Satellite read came in <span className="font-semibold">{Math.round(measurement.wholeRoofDivergencePct * 100)}% smaller</span> than your home's footprint.
                       </p>
                       <button
                         type="button"
