@@ -62,6 +62,14 @@ export interface MeasurementResult {
   measurements: ServiceMeasurements
   confidenceScore?: 'high' | 'medium' | 'low'
   isMock?: boolean
+  // Google Static Maps URL pinned to the drawn polygon (encoded path +
+  // satellite tile, ~600x400 PNG). Populated for polygon-draw results;
+  // undefined for ManualEntryForm + roofing Solar-API flow. Vendor's
+  // lead-inbox renders this above the regular itemPhotos grid with a
+  // "Measured area" caption. URL form (not base64) keeps persisted
+  // cart-item footprint <1KB per item — LS quota stays clear of the
+  // PR-194/195/196 5MB cliff.
+  mapUrl?: string
 }
 
 export interface SatelliteMeasureProps {

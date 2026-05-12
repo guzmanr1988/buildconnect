@@ -34,6 +34,7 @@ import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../compone
 import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
+import { applyAreaWaste } from '@/lib/area-waste'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
@@ -199,8 +200,13 @@ export function ServiceDetailPage() {
   // Reset on material-selection change so user re-acknowledges if they re-fall
   // into the gate state.
   const [flatOnlyAck, setFlatOnlyAck] = useState(false)
-  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; perimeterFt?: number; address: string } | null>(null)
-  const [areaMeasureKey, setAreaMeasureKey] = useState(0)
+  const [areaMeasurement, setAreaMeasurement] = useState<{ areaSqft: number; perimeterFt?: number; address: string; mapUrl?: string } | null>(null)
+  // areaMeasureKey: stable identity for SatelliteMeasure's mount. PR-220
+  // moved re-measure inside the component (its own 'confirmed' phase
+  // handles drop-back to drawing), so the parent no longer increments
+  // the key on Re-measure click. Kept as a `key=0` constant so future
+  // service-id flips can still force a remount if needed.
+  const areaMeasureKey = 0
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
     editItemForService?.roofAddonLinearFt
@@ -457,6 +463,25 @@ export function ServiceDetailPage() {
       setSelections((prev) => ({ ...prev, service_type: ['addons'] }))
     }
   }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
+
+  // PR-220 — pergolas size auto-select. When the user confirms a polygon
+  // measurement on a pergolas service, default the required Size group to
+  // the synthetic 'measured' chip (label reads the measured sqft live in
+  // the renderer). Custom Size remains a manual override fallback if the
+  // user explicitly picks it. Transitioning out (re-measure) is a no-op
+  // so the user can keep their override or re-pick via the chip; matches
+  // the PR-219 service_type useEffect contract.
+  useEffect(() => {
+    if (serviceId !== 'pergolas' || !areaMeasurement) return
+    setSelections((prev) => {
+      // Don't clobber an explicit Custom Size pick — single-select group
+      // already keeps one id; only auto-fill when nothing is selected yet
+      // or the prior value was a now-removed legacy id.
+      const current = prev['size']?.[0]
+      if (current === 'measured' || current === 'custom') return prev
+      return { ...prev, size: ['measured'] }
+    })
+  }, [serviceId, areaMeasurement])
 
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -735,7 +760,11 @@ export function ServiceDetailPage() {
         )
       })()}
 
-      {/* Area measurement CTA — driveways + pergolas + fencing, additive (CHAIN IS GOD) */}
+      {/* Area measurement CTA — driveways + pergolas + fencing, additive (CHAIN IS GOD).
+          PR-220: SatelliteMeasure stays mounted across both pre- and post-confirm
+          phases. The component's own 'confirmed' phase keeps the satellite map
+          visible read-only with the polygon overlay locked. No swap to a separate
+          summary card — the map IS the summary. */}
       {(serviceId === 'driveways' || serviceId === 'pergolas' || serviceId === 'fencing') && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -748,41 +777,25 @@ export function ServiceDetailPage() {
                 <Ruler className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                {areaMeasurement ? (
-                  <>
-                    <p className="text-sm font-semibold text-foreground">
-                      {serviceId === 'fencing' ? 'Fence line measured' : 'Area measured'}
-                    </p>
-                    <p className="text-[13px] text-muted-foreground mt-0.5">
-                      {serviceId === 'fencing' && areaMeasurement.perimeterFt != null
-                        ? `${areaMeasurement.perimeterFt.toLocaleString()} lin ft`
-                        : `${areaMeasurement.areaSqft.toLocaleString()} sq ft`} · {areaMeasurement.address}
-                    </p>
-                    <button
-                      className="mt-2 text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
-                      onClick={() => { setAreaMeasurement(null); setAreaMeasureKey((k) => k + 1) }}
-                    >
-                      Re-measure
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold text-foreground mb-1">
-                      {serviceId === 'driveways'
-                        ? 'Measure your driveway area'
-                        : serviceId === 'fencing'
-                        ? 'Measure your fence line'
-                        : 'Measure your outdoor space'}
-                    </p>
-                    <SatelliteMeasure
-                      key={areaMeasureKey}
-                      serviceCategory={serviceId as ServiceCategory}
-                      gmpEnabled={getFlag('googleMapsPlatform')}
-                      initialAddress={selectedAddress?.full ?? ''}
-                      onMeasure={(result) => setAreaMeasurement({ areaSqft: result.areaSqft, perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined, address: result.address })}
-                    />
-                  </>
-                )}
+                <p className="text-sm font-semibold text-foreground mb-2">
+                  {serviceId === 'driveways'
+                    ? 'Measure your driveway area'
+                    : serviceId === 'fencing'
+                    ? 'Measure your fence line'
+                    : 'Measure your outdoor space'}
+                </p>
+                <SatelliteMeasure
+                  key={areaMeasureKey}
+                  serviceCategory={serviceId as ServiceCategory}
+                  gmpEnabled={getFlag('googleMapsPlatform')}
+                  initialAddress={selectedAddress?.full ?? ''}
+                  onMeasure={(result) => setAreaMeasurement({
+                    areaSqft: result.areaSqft,
+                    perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined,
+                    address: result.address,
+                    mapUrl: result.mapUrl,
+                  })}
+                />
               </div>
             </div>
           </div>
@@ -897,11 +910,27 @@ export function ServiceDetailPage() {
                       group.id === 'material' &&
                       selected.some((s) => s !== 'flat_roof')
                     const isLocked =
-                      serviceId === 'roofing' &&
-                      group.id === 'material' &&
-                      option.id !== 'flat_roof' &&
-                      !isSelected &&
-                      hasNonFlatMaterialPicked
+                      (serviceId === 'roofing' &&
+                        group.id === 'material' &&
+                        option.id !== 'flat_roof' &&
+                        !isSelected &&
+                        hasNonFlatMaterialPicked) ||
+                      // PR-220 — pergolas auto-measured chip is gated on a
+                      // polygon being drawn. Without a measurement the chip
+                      // is unclickable + reads "Measure your space first".
+                      (serviceId === 'pergolas' &&
+                        group.id === 'size' &&
+                        option.id === 'measured' &&
+                        !areaMeasurement)
+                    // PR-220 — dynamic label for pergolas measured chip:
+                    // reads the live measured sqft once a polygon is drawn,
+                    // falls back to a "measure first" prompt otherwise.
+                    const optionLabel =
+                      serviceId === 'pergolas' && group.id === 'size' && option.id === 'measured'
+                        ? (areaMeasurement
+                            ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
+                            : 'Measure your space first')
+                        : option.label
                     return (
                       <button
                         key={option.id}
@@ -1019,7 +1048,7 @@ export function ServiceDetailPage() {
                         {group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
-                        {option.label}
+                        {optionLabel}
                         {serviceId === 'windows_doors' && option.id === 'windows' && windowTotal > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
                             {windowTotal}
@@ -1726,6 +1755,7 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && pitchedOmittedTriggered && flatOnlyAck && { pitchedExcludedAck: true }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
+                ...(areaMeasurement?.mapUrl && { measurementMapUrl: areaMeasurement.mapUrl }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
@@ -1868,7 +1898,7 @@ export function ServiceDetailPage() {
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                       {serviceId === 'fencing' && areaMeasurement.perimeterFt != null
                         ? `${areaMeasurement.perimeterFt.toLocaleString()} lin ft`
-                        : `${areaMeasurement.areaSqft.toLocaleString()} sq ft`}
+                        : `${applyAreaWaste(serviceId ?? '', areaMeasurement.areaSqft).toLocaleString()} sq ft`}
                     </span>
                   </div>
                 </div>

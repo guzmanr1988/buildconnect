@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { geocodeAddress } from '@/lib/satellite-measure/geocode'
 import { getParcelByLatLng, geometryToGoogleMapsPaths } from '@/lib/parcel'
+import { applyAreaWaste } from '@/lib/area-waste'
 import type { MeasurementResult, FallbackReason, SatelliteMeasureProps } from '@/lib/satellite-measure/types'
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
@@ -55,7 +56,11 @@ interface Props {
 export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFallback, onFail }: Props) {
   const [address, setAddress] = useState(initialAddress)
   const [loading, setLoading] = useState(false)
-  const [phase, setPhase] = useState<'input' | 'drawing' | 'done'>('input')
+  // 'confirmed' = post-Use button. Polygon stays on map, non-editable, no
+  // tool controls. User taps Re-measure to drop back into 'drawing'.
+  // Per Rod 2026-05-12 17:43Z directive — map persists as a visual
+  // anchor through the rest of the configurator flow.
+  const [phase, setPhase] = useState<'input' | 'drawing' | 'done' | 'confirmed'>('input')
   const [result, setResult] = useState<PolygonResult | null>(null)
   const [vertexCount, setVertexCount] = useState(0)
   const [editedSqft, setEditedSqft] = useState('')
@@ -457,6 +462,8 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     const extraTotal = extraPolygons.reduce((s, ep) => s + ep.areaSqft, 0)
     const totalSqft = mainSqft + extraTotal
 
+    const mapUrl = buildStaticMapUrl()
+
     onMeasure({
       address: geoRef.current.addr,
       areaSqft: isFencing ? 0 : totalSqft,
@@ -466,14 +473,93 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         ? { type: 'fencing', perimeterFt: result.perimeterFt }
         : { type: 'area_only', areaSqft: totalSqft, perimeterFt: result.perimeterFt },
       isMock: false,
+      mapUrl,
     })
+
+    // Lock down for read-only confirmed-phase view. Polygon stays drawn
+    // and visible; user can drop back to 'drawing' via Re-measure.
+    lockMapForConfirmedPhase()
+    setPhase('confirmed')
   }
 
-  const showMap = phase === 'drawing' || phase === 'done'
+  // Build a Google Static Maps URL pinned to the drawn polygon. Uses the
+  // same key as the JS SDK (referrer-restricted, safe to bake in the URL).
+  // Falls back to undefined if Maps JS hasn't loaded — caller treats that
+  // as "no map image to attach", which is fine because the visible map
+  // already proved the measurement to the user; the URL is only for
+  // downstream vendor render.
+  function buildStaticMapUrl(): string | undefined {
+    const geo = geoRef.current
+    const main = polygonRef.current
+    if (!geo || !main || !MAPS_KEY) return undefined
+
+    const sizeParam = '600x400'
+    const mainPath = encodePolygonPath(main, '0x2563ebff', '0x2563eb40')
+    const extraPaths: string[] = []
+    let extraIdx = 0
+    extraPolygonRefsRef.current.forEach((poly) => {
+      const color = EXTRA_COLORS[extraIdx % EXTRA_COLORS.length]
+      // Static Maps wants 0xRRGGBBAA — strip leading '#' and append alpha.
+      const stroke = `0x${color.slice(1)}ff`
+      const fill = `0x${color.slice(1)}40`
+      extraPaths.push(encodePolygonPath(poly, stroke, fill))
+      extraIdx++
+    })
+
+    const params = new URLSearchParams()
+    params.set('size', sizeParam)
+    params.set('maptype', 'satellite')
+    params.set('center', `${geo.lat},${geo.lng}`)
+    params.set('zoom', String(MAP_ZOOM))
+    params.set('scale', '2')
+    params.set('key', MAPS_KEY)
+
+    const all = [mainPath, ...extraPaths].filter(Boolean)
+    let url = `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`
+    for (const p of all) url += `&path=${p}`
+    return url
+  }
+
+  function encodePolygonPath(
+    poly: google.maps.Polygon,
+    strokeArgb: string,
+    fillArgb: string,
+  ): string {
+    const path = poly.getPath()
+    const parts: string[] = []
+    for (let i = 0; i < path.getLength(); i++) {
+      const p = path.getAt(i)
+      parts.push(`${p.lat().toFixed(6)},${p.lng().toFixed(6)}`)
+    }
+    // Close the loop by repeating the first point so the fill renders.
+    if (parts.length >= 3) parts.push(parts[0])
+    return `color:${strokeArgb}|weight:2|fillcolor:${fillArgb}|${parts.join('|')}`
+  }
+
+  function lockMapForConfirmedPhase() {
+    polygonRef.current?.setOptions({ editable: false, draggable: false, clickable: false })
+    extraPolygonRefsRef.current.forEach((p) => p.setOptions({ editable: false, draggable: false, clickable: false }))
+    hideCursorMarker()
+    if (mapRef.current) {
+      mapRef.current.setOptions({ gestureHandling: 'cooperative', zoomControl: false, mapTypeControl: false, rotateControl: false })
+    }
+  }
+
+  function handleRemeasure() {
+    if (!mapRef.current) return
+    mapRef.current.setOptions({ gestureHandling: 'greedy', zoomControl: true, mapTypeControl: true, rotateControl: true })
+    handleReset()
+  }
+
+  const showMap = phase === 'drawing' || phase === 'done' || phase === 'confirmed'
   const isDriveways = serviceCategory === 'driveways'
   const mainSqft = Math.max(1, Number(editedSqft) || result?.areaSqft || 0)
   const extraTotal = extraPolygons.reduce((s, ep) => s + ep.areaSqft, 0)
   const grandTotal = mainSqft + extraTotal
+  // Display layer applies the per-service waste factor (1.03 for
+  // driveways; pass-through everywhere else). Cost layer mirrors via
+  // pricing.ts:189. Single source of truth in lib/area-waste.ts.
+  const displayTotal = applyAreaWaste(serviceCategory, grandTotal)
 
   return (
     <div className="space-y-3" data-satellite-measure={serviceCategory} data-measure-mode="polygon-draw">
@@ -622,7 +708,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               <Check className="h-3.5 w-3.5 mr-1.5" />
               {serviceCategory === 'fencing'
                 ? `Use ${result.perimeterFt.toLocaleString()} linear ft`
-                : `Use ${grandTotal.toLocaleString()} sqft`}
+                : `Use ${displayTotal.toLocaleString()} sqft`}
             </Button>
 
             {isDriveways && (
@@ -641,6 +727,35 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               Undo
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Confirmed (read-only) — map stays visible above with polygon
+          locked. Single "Re-measure" link drops back to drawing phase. */}
+      {phase === 'confirmed' && result && (
+        <div
+          className="space-y-2 max-w-[580px] mx-auto"
+          data-measurement-phase="confirmed"
+          data-measurement-sqft={serviceCategory === 'fencing' ? 0 : displayTotal}
+          data-measurement-perimeter={result.perimeterFt}
+        >
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {serviceCategory === 'fencing'
+                ? `${result.perimeterFt.toLocaleString()} linear ft measured`
+                : `${displayTotal.toLocaleString()} sqft measured`}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {geoRef.current?.addr}
+            </p>
+          </div>
+          <button
+            data-measure-action="re-measure"
+            className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+            onClick={handleRemeasure}
+          >
+            Re-measure
+          </button>
         </div>
       )}
     </div>

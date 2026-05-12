@@ -87,6 +87,13 @@ export interface CartItem {
   areaSqft?: number
   // Satellite-measured perimeter for linear services (fencing). Primary value for fencing items.
   perimeterFt?: number
+  // Google Static Maps URL captured at polygon-confirm with the drawn
+  // overlay baked in (driveways, pergolas, fencing — anything that uses
+  // PolygonDraw). Rendered on vendor lead-inbox with "Measured area"
+  // caption above the regular itemPhotos grid. URL-storage (200-800
+  // bytes/item) — picked over base64 to keep persisted-cart payload
+  // clear of the PR-194/195/196 5MB LS-quota cliff.
+  measurementMapUrl?: string
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string
@@ -181,7 +188,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 4,
+      version: 5,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -259,6 +266,33 @@ export const useCartStore = create<CartState>()(
           // with_constants_change + feedback_pair_persist_bump_with_constants_-
           // change so any stale memoization keyed on SERVICE_CATALOG identity
           // re-evaluates.
+        }
+        if (version < 5) {
+          // PR-220: pergolas SERVICE_CATALOG reshape (Rod 17:58Z directive).
+          // - structure: 'aluminum'/'wood'/'louvered' -> 'aluminum_terrace' only
+          // - size: '10x12'/'12x16' removed; 'measured' added + 'custom' kept
+          // - addons: 'kitchen' + 'deck' removed; 'fans' + 'screen' kept
+          // Drop persisted selections referencing removed option ids so a
+          // stale cart item doesn't render an invisible chip selection that
+          // blocks the required-group gate (allRequiredDone stays satisfied
+          // only when the chip is still in the catalog). Selections that
+          // hold valid ids pass through untouched.
+          const PERGOLAS_REMOVED = new Set([
+            'aluminum', 'wood', 'louvered',
+            '10x12', '12x16',
+            'kitchen', 'deck',
+          ])
+          state = {
+            ...state,
+            items: (state.items ?? []).map((item) => {
+              if (item.serviceId !== 'pergolas' || !item.selections) return item
+              const cleaned: Record<string, string[]> = {}
+              for (const [groupId, optionIds] of Object.entries(item.selections)) {
+                cleaned[groupId] = (optionIds ?? []).filter((id) => !PERGOLAS_REMOVED.has(id))
+              }
+              return { ...item, selections: cleaned }
+            }),
+          }
         }
         return state
       },

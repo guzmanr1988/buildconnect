@@ -212,7 +212,7 @@ export const TUTORIAL_SERVICE_LABELS: Record<string, string> = {
   bathroom: 'Bathroom',
   kitchen: 'Kitchen',
   driveways: 'Driveways',
-  pergolas: 'Pergolas',
+  pergolas: 'Pergolas & Terraces',
   air_conditioning: 'Air Conditioning',
   general: 'General',
 }

@@ -63,7 +63,7 @@ const CUSTOMER_PROJECTS: CustomerProject[] = [
   // dropdown visibility per kratos msg 1776743704759).
   { id: 'cp-1', homeowner_id: 'ho-1', project_name: 'Full Roof Replacement - Barrel Tile', service_type: 'Roofing', status: 'confirmed', date_submitted: '2026-04-07T14:22:00Z', contractor_assigned: 'Apex Roofing & Solar' },
   { id: 'cp-2', homeowner_id: 'ho-1', project_name: 'Paver Driveway - Full Install', service_type: 'Driveways', status: 'rescheduled', date_submitted: '2026-04-05T11:30:00Z', contractor_assigned: 'Elite Paving Co' },
-  { id: 'cp-3', homeowner_id: 'ho-1', project_name: 'Louvered Pergola 12x16', service_type: 'Pergolas', status: 'rejected', date_submitted: '2026-04-04T15:45:00Z', contractor_assigned: 'Paradise Pools FL' },
+  { id: 'cp-3', homeowner_id: 'ho-1', project_name: 'Aluminum Terrace', service_type: 'Pergolas & Terraces', status: 'rejected', date_submitted: '2026-04-04T15:45:00Z', contractor_assigned: 'Paradise Pools FL' },
   { id: 'cp-1b', homeowner_id: 'ho-1', project_name: 'Pool & Spa - Key Largo Beach House', service_type: 'Pool & Oasis', status: 'pending', date_submitted: '2026-04-10T10:00:00Z', contractor_assigned: 'Paradise Pools FL', address_label: 'Beach House' },
   // James
   { id: 'cp-4', homeowner_id: 'ho-2', project_name: 'Impact Windows - Full Home', service_type: 'Windows & Doors', status: 'pending', date_submitted: '2026-04-08T09:45:00Z', contractor_assigned: 'Shield Impact Windows' },

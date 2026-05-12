@@ -17,6 +17,7 @@ import { RoofSpecCard } from '@/components/shared/roof-spec-card'
 import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
 import { shouldAskProjectPermit } from '@/lib/permit-rules'
 import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
+import { applyAreaWaste } from '@/lib/area-waste'
 import { toast } from 'sonner'
 
 const SERVICE_ICONS: Record<string, React.ElementType> = {
@@ -186,7 +187,7 @@ export function CartPage() {
   // Auto-generate project name: "Customer Name - Service Abbreviations"
   const serviceAbbrev: Record<string, string> = {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
-    pergolas: 'Pergolas', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
+    pergolas: 'Pergolas & Terraces', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
     wall_paneling: 'Wall Paneling', garage: 'Interior Remodel', house_painting: 'Painting',
   }
   const autoProjectName = profile
@@ -942,13 +943,26 @@ export function CartPage() {
                   )}
                   {/* Permit — project-level (cart-store), legacy per-item fallback. */}
                   <PermitDisplayRow permit={projectPermit ?? viewItem.roofPermit} />
-                  {/* Measured area — driveways + pergolas items with satellite measurement */}
+                  {/* Measured area — driveways + pergolas items with satellite measurement.
+                      Display routes through applyAreaWaste so driveway shows raw × 1.03
+                      while pergolas passes raw through unchanged. Cost layer mirrors
+                      via pricing.ts. */}
                   {viewItem.areaSqft != null && (
-                    <div className="rounded-xl border bg-muted/30 p-4" data-cart-item-sqft={viewItem.areaSqft}>
+                    <div className="rounded-xl border bg-muted/30 p-4" data-cart-item-sqft={applyAreaWaste(viewItem.serviceId, viewItem.areaSqft)}>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
                         Measured Area
                       </p>
-                      <p className="text-sm font-semibold text-foreground">{viewItem.areaSqft.toLocaleString()} sqft</p>
+                      <p className="text-sm font-semibold text-foreground">{applyAreaWaste(viewItem.serviceId, viewItem.areaSqft).toLocaleString()} sqft</p>
+                      {viewItem.measurementMapUrl && (
+                        <div className="mt-3 rounded-lg overflow-hidden border" data-cart-item-map="true">
+                          <img
+                            src={viewItem.measurementMapUrl}
+                            alt="Measured area satellite view"
+                            className="w-full h-auto block"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Measured length — fencing items with satellite measurement */}

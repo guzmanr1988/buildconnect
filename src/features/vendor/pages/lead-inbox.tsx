@@ -1001,6 +1001,19 @@ export default function LeadInbox() {
                                 <p className="text-xs text-foreground">{sp.item.itemNotes}</p>
                               </div>
                             )}
+                            {(sp.item as any).measurementMapUrl && (
+                              <div data-vendor-measured-area="true">
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Measured area</p>
+                                <div className="rounded-lg overflow-hidden border max-w-[320px]">
+                                  <img
+                                    src={(sp.item as any).measurementMapUrl}
+                                    alt="Measured area satellite view"
+                                    className="w-full h-auto block"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              </div>
+                            )}
                             {sp.item.itemPhotos && sp.item.itemPhotos.length > 0 && (
                               <div>
                                 <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Project Photos</p>
