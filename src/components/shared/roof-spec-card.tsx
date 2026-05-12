@@ -15,8 +15,8 @@ interface RoofMeasurement {
   perimeterFt?: number
   pitchedAreaSqft?: number
   flatAreaSqft?: number
-  includeFlat?: boolean
-  includePitched?: boolean
+  includeMaterialOrder?: boolean
+  includePerimeter?: boolean
 }
 
 interface MetalRoofSelection {
@@ -53,11 +53,12 @@ export function RoofSpecCard({
   if (!rm && !mrs && addonEntries.length === 0) return null
 
   const isAddonsOnly = flowPath === 'addons_only'
+  const includeMaterialOrder = rm?.includeMaterialOrder ?? true
+  const includePerimeter = rm?.includePerimeter ?? true
   const hasSplit = rm
     && (rm.pitchedAreaSqft ?? 0) > 0
     && (rm.flatAreaSqft ?? 0) > 0
-    && rm.includeFlat !== false
-    && (rm.includePitched ?? true) !== false
+    && includeMaterialOrder
   const metalColorLabel = mrs?.color
     ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : undefined
@@ -79,18 +80,17 @@ export function RoofSpecCard({
                 <span className="font-medium text-xs leading-snug">{rm.address}</span>
               </div>
             )}
-            {!isAddonsOnly && (
+            {!isAddonsOnly && includeMaterialOrder && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground min-w-[72px]">Area</span>
                 <span className="font-medium">
                   {rm.areaSqft.toLocaleString()} sqft · {(() => {
-                    const { pitchedAreaSqft, flatAreaSqft, includeFlat, includePitched } = rm
+                    const { pitchedAreaSqft, flatAreaSqft } = rm
                     if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
                       return computeRoofTotal({
                         pitchedAreaSqft,
                         flatAreaSqft,
-                        includeFlat: includeFlat ?? (flatAreaSqft > 0),
-                        includePitched: includePitched ?? true,
+                        includeMaterialOrder,
                       }).totalSquares
                     }
                     return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
@@ -98,13 +98,13 @@ export function RoofSpecCard({
                 </span>
               </div>
             )}
-            {!isAddonsOnly && rm.pitch && (
+            {!isAddonsOnly && includeMaterialOrder && rm.pitch && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground min-w-[72px]">Pitch</span>
                 <span className="font-medium">{rm.pitch}</span>
               </div>
             )}
-            {rm.perimeterFt && (
+            {rm.perimeterFt && includePerimeter && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground min-w-[72px]">Perimeter</span>
                 <span className="font-medium">~{rm.perimeterFt.toLocaleString()} lin ft</span>
@@ -140,7 +140,7 @@ export function RoofSpecCard({
             <span className="font-medium">{metalSquares} squares</span>
           </div>
         )}
-        {addonEntries.map(([id, ft]) => {
+        {includePerimeter && addonEntries.map(([id, ft]) => {
           const isGutters = id === 'gutters'
           const totalFt = isGutters ? computeGutterTotalLinFt(ft, gutterDropsConfig) : ft
           const showBreakdown = isGutters && !!gutterDropsConfig

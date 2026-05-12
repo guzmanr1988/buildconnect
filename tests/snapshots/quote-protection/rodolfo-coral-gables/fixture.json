@@ -1,15 +1,15 @@
 {
   "__meta": {
     "snapshotSHA": "aa8c7257e25b70c4ddf72ec34e2f38a6bd5987da",
-    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. v1 ships with chip=metal-only + chip=metal+flat (both runner-GREEN against pure-fn pipeline). chip=flat-only deferred to v1.1 pending apollo walker disposition (option-A/B/C call). Re-keyed 2026-05-08 per source-trace: step2 surfaces and cart payload diverge because (a) step2 'Total Used for pricing' label inside measurement modal applies asymmetric waste via computeRoofTotal (pitched 2% + flat 1% post-waste) while cart writes RAW; (b) step2 'Flat Area' label STILL renders even when includeFlat=false toggle is off. Encoded as expected.step2 + expected.cart so runner asserts modal-Total-label and cart-payload independently. Asymmetric-waste step2 display + flat-renders-when-toggle-off + wasteFactor useSplit-gate edge in pricing.ts are post-v1 bugs filed for fix.",
+    "reason": "Fixture-1 v1 — Rodolfo Coral Gables tape-truth + recorded Solar response after PR #169 (def4a55) shipped chip-tap-driven includeFlat default. Re-keyed 2026-05-12 for PR-208 section-header toggle pivot: replaced includeFlatDefault with includeMaterialOrderDefault + includePerimeterDefault. Flat area now gated by flat_roof chip-tap (not a per-area toggle); pitched gated by any non-flat chip. New shape mirrors live wizard: hasFlatChip drives whether flat shows in Material Order + reaches cart.",
     "recordedAt": "2026-05-08T21:48:00Z",
     "recordedBundle": "BUrV7oIT",
     "recordedBy": "apollo",
-    "rekeyedAt": "2026-05-09T00:55:00Z",
-    "rekeyedBy": "hephaestus (post-#174 close — flat waste 1.01 -> 1.02 to match main; rebased on 164904b)",
+    "rekeyedAt": "2026-05-12T00:00:00Z",
+    "rekeyedBy": "helios (PR-208 section-header toggle pivot — flat gated by flat_roof chip-tap; includeFlat -> includeMaterialOrder + includePerimeter)",
     "surfaceDefinitions": {
-      "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(...).totalSqft. Note: 'Flat Area' label still renders when measurement.flatAreaSqft>0 even if includeFlat toggle is OFF — flat number is shown but excluded from Total.",
-      "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw values, with flatAreaSqft zeroed when includeFlat=false."
+      "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(pitchedForOrder, flatForOrder, includeMaterialOrder). pitchedForOrder = hasPitchedChip ? pitched : 0; flatForOrder = hasFlatChip ? flat : 0.",
+      "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw values gated by chip-tap AND includeMaterialOrder section toggle (default true)."
     }
   },
   "address": "1320 Granada Blvd, Coral Gables, FL 33134",
@@ -28,14 +28,15 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 489,
+            "flatSqft": 0,
             "totalSqft": 2094,
             "squares": 21,
-            "includeFlatDefault": false
+            "includeMaterialOrderDefault": true,
+            "includePerimeterDefault": true
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
-            "flatSqft": 480,
+            "flatSqft": 0,
             "totalSqft": 2525,
             "squares": 26
           }
@@ -76,13 +77,14 @@
             "flatSqft": 489,
             "totalSqft": 2583,
             "squares": 26,
-            "includeFlatDefault": true
+            "includeMaterialOrderDefault": true,
+            "includePerimeterDefault": true
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
-            "flatSqft": 480,
-            "totalSqft": 2955,
-            "squares": 30
+            "flatSqft": 490,
+            "totalSqft": 3015,
+            "squares": 31
           }
         },
         "cart": {

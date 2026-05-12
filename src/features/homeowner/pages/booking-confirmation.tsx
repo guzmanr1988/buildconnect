@@ -97,10 +97,10 @@ async function buildRoofingLineItems(
     const u = getOptionMetadata(id, 'roofing', sib).priceUnit
     return u === 'square' || u === 'sqft'
   })
-  const includeFlatOpt = item.roofMeasurement?.includeFlat !== false
-  const includePitchedOpt = item.roofMeasurement?.includePitched !== false
+  const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
+  const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
-    && includeFlatOpt && includePitchedOpt
+    && includeMaterialOrderOpt
 
   const lines: PriceLineItem[] = []
   let anyComputed = false
@@ -142,11 +142,12 @@ async function buildRoofingLineItems(
         }
         // Split mode: flat_roof material uses its own area slice; pitched uses the other.
         // Non-split mode (single material): use full area.
-        // Per-area opt-out: when a slice is toggled off the matching material bills 0
-        // regardless of split mode (mirrors pricing.ts sliceZeroed gate).
+        // Material-order opt-out: when the section toggle is OFF both pitched
+        // and flat slices read 0 (no material lines on the quote). Mirrors
+        // pricing.ts gate.
         const isFlat = optionId === FLAT_ROOF_OPTION_ID
         const useSquares = meta.priceUnit === 'square'
-        const sliceZeroed = isFlat ? !includeFlatOpt : !includePitchedOpt
+        const sliceZeroed = !includeMaterialOrderOpt
         let rawSqft: number
         let note: string | undefined
         if (sliceZeroed) {
@@ -182,6 +183,9 @@ async function buildRoofingLineItems(
         } as PriceLineItem & { note?: string })
         anyComputed = true
       } else if (meta.priceUnit === 'linear_ft') {
+        // Perimeter section toggle gates gutter/fascia/soffit add-ons. When
+        // OFF the line item drops out of the breakdown entirely.
+        if (!includePerimeterOpt) continue
         const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
         const effectiveLinFt = optionId === 'gutters'
           ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)

@@ -35,7 +35,8 @@ import { classifyRoofSegments, type RoofSegmentStat } from '../../../src/lib/roo
 import { computeRoofTotal } from '../../../src/lib/roof-area-math.ts'
 import {
   buildSelections,
-  resolveIncludeFlat,
+  resolveIncludeMaterialOrder,
+  resolveIncludePerimeter,
   type UserAction,
 } from '../../../src/lib/wizard-action-replay.ts'
 
@@ -56,7 +57,8 @@ type Step2Expected = {
   flatSqft: number
   totalSqft: number
   squares?: number
-  includeFlatDefault?: boolean
+  includeMaterialOrderDefault?: boolean
+  includePerimeterDefault?: boolean
 }
 
 type CartItemExpected = {
@@ -195,11 +197,14 @@ function getRoofSegments(solar: SolarRecording): RoofSegmentStat[] {
  *
  * Mirrors roof-measurement-wizard.tsx surfaces:
  *  - step2: what the user sees on the Step-2 panel inside the modal
- *           (Total label uses computeRoofTotal post-waste; Flat label
- *            shows round(rawFlat*1.02) regardless of includeFlat toggle;
- *            Pitched label shows raw pre-waste).
+ *           (Total label uses computeRoofTotal post-waste; pitched/flat
+ *            labels gated by chip-tap — pitched shows raw pre-waste when
+ *            any non-flat material chip is tapped; flat label renders
+ *            round(rawFlat*1.02) only when flat_roof chip is tapped).
  *  - cart : what handleComplete writes to cart-store.roofMeasurement
- *           (raw pre-waste values; flatAreaSqft zeroed when !includeFlat).
+ *           (raw pre-waste values gated by chip-tap AND the section-level
+ *            includeMaterialOrder toggle; flatAreaSqft zeroed when chip
+ *            unselected or when section toggle off).
  */
 function runScenarioOutput(
   fixture: Fixture,
@@ -208,30 +213,39 @@ function runScenarioOutput(
 ): { step2: Step2Expected; cart: CartExpected } {
   const segments = getRoofSegments(solar)
   const { pitchedAreaSqft, flatAreaSqft } = classifyRoofSegments(segments)
-  const includeFlat = resolveIncludeFlat(output.userActions)
+  const includeMaterialOrder = resolveIncludeMaterialOrder(output.userActions)
+  const includePerimeter = resolveIncludePerimeter(output.userActions)
   const selections = buildSelections(output.userActions)
+  const matSelections = selections.material ?? []
+  const hasPitchedChip = matSelections.some((m) => m !== 'flat_roof')
+  const hasFlatChip = matSelections.includes('flat_roof')
+
+  const pitchedForOrder = hasPitchedChip ? pitchedAreaSqft : 0
+  const flatForOrder = hasFlatChip ? flatAreaSqft : 0
 
   const totals = computeRoofTotal({
-    pitchedAreaSqft,
-    flatAreaSqft,
-    includeFlat,
+    pitchedAreaSqft: pitchedForOrder,
+    flatAreaSqft: flatForOrder,
+    includeMaterialOrder,
   })
-  const step2FlatSqft = flatAreaSqft > 0 ? Math.round(flatAreaSqft * 1.02) : 0
+  const step2FlatSqft = flatForOrder > 0 ? Math.round(flatForOrder * 1.02) : 0
 
   const step2: Step2Expected = {
-    pitchedSqft: pitchedAreaSqft,
+    pitchedSqft: pitchedForOrder,
     flatSqft: step2FlatSqft,
     totalSqft: totals.totalSqft,
     squares: totals.totalSquares,
-    includeFlatDefault: includeFlat,
+    includeMaterialOrderDefault: includeMaterialOrder,
+    includePerimeterDefault: includePerimeter,
   }
 
-  const cartFlat = includeFlat ? flatAreaSqft : 0
-  const cartTotal = pitchedAreaSqft + cartFlat
-  const serviceIds = (selections.material ?? []).length > 0 ? ['roofing'] : []
+  const cartPitched = includeMaterialOrder && hasPitchedChip ? pitchedAreaSqft : 0
+  const cartFlat = includeMaterialOrder && hasFlatChip ? flatAreaSqft : 0
+  const cartTotal = cartPitched + cartFlat
+  const serviceIds = matSelections.length > 0 ? ['roofing'] : []
   const cart: CartExpected = {
     roofMeasurement: {
-      pitchedSqft: pitchedAreaSqft,
+      pitchedSqft: cartPitched,
       flatSqft: cartFlat,
       totalSqft: cartTotal,
     },
@@ -262,7 +276,8 @@ function compareStep2(
   failures: AssertionFailure[],
 ): void {
   const fields: Array<keyof Step2Expected> = [
-    'pitchedSqft', 'flatSqft', 'totalSqft', 'squares', 'includeFlatDefault',
+    'pitchedSqft', 'flatSqft', 'totalSqft', 'squares',
+    'includeMaterialOrderDefault', 'includePerimeterDefault',
   ]
   for (const f of fields) {
     if (expected[f] === undefined) continue

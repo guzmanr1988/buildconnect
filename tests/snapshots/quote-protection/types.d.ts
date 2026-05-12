@@ -30,7 +30,11 @@ export type WizardInputs = {
   mode: WizardMode;
 };
 
-export type UserActionType = 'chip-tap' | 'addon-toggle' | 'include-flat-toggle';
+export type UserActionType =
+  | 'chip-tap'
+  | 'addon-toggle'
+  | 'include-material-order-toggle'
+  | 'include-perimeter-toggle';
 
 export type UserAction = {
   step: 1 | 2 | 3;
@@ -43,7 +47,8 @@ export type Step2Totals = {
   flatSqft: number;
   totalSqft: number;
   squares?: number;
-  includeFlatDefault?: boolean;
+  includeMaterialOrderDefault?: boolean;
+  includePerimeterDefault?: boolean;
 };
 
 export type CartRoofMeasurement = {

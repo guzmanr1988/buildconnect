@@ -193,7 +193,7 @@ export function ServiceDetailPage() {
     (editItemForService?.id as string) || null
   )
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean; includePitched?: boolean } | null>(null)
+  const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean } | null>(null)
   // Under-quote guard: explicit acknowledgment that order is flat-add-on only
   // when chip-tap excludes pitched but satellite detected significant pitched area.
   // Reset on material-selection change so user re-acknowledges if they re-fall
@@ -293,7 +293,7 @@ export function ServiceDetailPage() {
       setFlatRoofSelection((prev) => ({ ...prev, roofSize: flatSquares }))
       setFlatRoofConfigOpen(true)
     }
-    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat, includePitched: result.includePitched })
+    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter })
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
   }
@@ -663,13 +663,13 @@ export function ServiceDetailPage() {
                 pitch={roofMeasurement.pitch}
                 perimeterFt={roofMeasurement.perimeterFt ?? 0}
                 material={previewMaterial}
-                includeFlat={roofMeasurement.includeFlat ?? hasFlatSection}
-                includePitched={roofMeasurement.includePitched ?? true}
                 hasFlatSection={hasFlatSection}
+                includeMaterialOrder={roofMeasurement.includeMaterialOrder ?? true}
+                includePerimeter={roofMeasurement.includePerimeter ?? true}
                 pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                 source="service-detail"
-                onToggleFlat={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeFlat: on } : prev)}
-                onTogglePitched={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includePitched: on } : prev)}
+                onToggleMaterialOrder={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeMaterialOrder: on } : prev)}
+                onTogglePerimeter={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includePerimeter: on } : prev)}
               />
             )}
 
@@ -1564,7 +1564,8 @@ export function ServiceDetailPage() {
               }
 
               const roofAddonLinearFt: Record<string, number> = {}
-              if (serviceId === 'roofing') {
+              const includePerimeterForCart = roofMeasurement?.includePerimeter ?? true
+              if (serviceId === 'roofing' && includePerimeterForCart) {
                 for (const { id } of ADDON_LINEAR_FT_CONFIG) {
                   const val = addonLinearFt[id]
                   if (val && (selections['addons'] ?? []).includes(id)) {
@@ -1573,13 +1574,11 @@ export function ServiceDetailPage() {
                   }
                 }
               }
-              // Defense-in-depth cart-side gate: trust roofMeasurement.includeFlat
-              // and includePitched (the wizard's user-intent SoT, seeded from chip-tap
-              // and toggle-overridable) as the predicates for what reaches cart. Aligns
-              // with handleComplete write-side gating: when a toggle is ON the slice
-              // lands in the cart, when OFF (or undefined for includeFlat — legacy
-              // payload default) the slice is stripped. includePitched default-true
-              // for backward-compat with pre-split cart items.
+              // Defense-in-depth cart-side gate: trust roofMeasurement.includeMaterialOrder
+              // (top-section toggle) as the predicate for whether pitched + flat material
+              // reach the cart. When OFF the material slice zeroes out — cart still carries
+              // perimeter add-ons gated separately by includePerimeter via roofAddonLinearFt
+              // below. Default-true on legacy payloads.
               const cartRoofMeasurement = (() => {
                 if (serviceId !== 'roofing' || !roofMeasurement) return null
                 // Chip=flat-only with explicit ack: strip pitched (user opted-out via ack toggle).
@@ -1589,19 +1588,22 @@ export function ServiceDetailPage() {
                   const flatOnly = roofMeasurement.flatAreaSqft ?? 0
                   return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
                 }
-                const includePitched = roofMeasurement.includePitched ?? true
-                const includeFlat = roofMeasurement.includeFlat === true
+                const includeMaterialOrder = roofMeasurement.includeMaterialOrder ?? true
+                const includePerimeter = roofMeasurement.includePerimeter ?? true
+                const matSelections = selections['material'] ?? []
+                const hasPitchedChip = matSelections.some((m) => m !== 'flat_roof')
+                const hasFlatChip = matSelections.includes('flat_roof')
                 const pitchedRaw = roofMeasurement.pitchedAreaSqft ?? Math.max(0, roofMeasurement.areaSqft - (roofMeasurement.flatAreaSqft ?? 0))
                 const flatRaw = roofMeasurement.flatAreaSqft ?? 0
-                const pitchedOut = includePitched ? pitchedRaw : 0
-                const flatOut = includeFlat ? flatRaw : 0
+                const pitchedOut = includeMaterialOrder && hasPitchedChip ? pitchedRaw : 0
+                const flatOut = includeMaterialOrder && hasFlatChip ? flatRaw : 0
                 return {
                   ...roofMeasurement,
                   areaSqft: pitchedOut + flatOut,
                   pitchedAreaSqft: pitchedOut,
                   flatAreaSqft: flatOut,
-                  includeFlat,
-                  includePitched,
+                  includeMaterialOrder,
+                  includePerimeter,
                 }
               })()
               const itemData = {
@@ -1799,24 +1801,27 @@ export function ServiceDetailPage() {
                     <span className="text-[11px] bg-background rounded px-2 py-0.5 border w-full truncate">
                       {roofMeasurement.address}
                     </span>
-                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      {roofMeasurement.areaSqft.toLocaleString()} sqft · {(() => {
-                        const { pitchedAreaSqft, flatAreaSqft, includeFlat, includePitched } = roofMeasurement
-                        if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                          return computeRoofTotal({
-                            pitchedAreaSqft,
-                            flatAreaSqft,
-                            includeFlat: includeFlat ?? (flatAreaSqft > 0),
-                            includePitched: includePitched ?? true,
-                          }).totalSquares
-                        }
-                        return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
-                      })()} squares w/waste
-                    </span>
-                    <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
-                      Pitch {roofMeasurement.pitch}
-                    </span>
-                    {roofMeasurement.perimeterFt && (
+                    {(roofMeasurement.includeMaterialOrder ?? true) && (
+                      <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                        {roofMeasurement.areaSqft.toLocaleString()} sqft · {(() => {
+                          const { pitchedAreaSqft, flatAreaSqft, includeMaterialOrder } = roofMeasurement
+                          if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                            return computeRoofTotal({
+                              pitchedAreaSqft,
+                              flatAreaSqft,
+                              includeMaterialOrder: includeMaterialOrder ?? true,
+                            }).totalSquares
+                          }
+                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                        })()} squares w/waste
+                      </span>
+                    )}
+                    {(roofMeasurement.includeMaterialOrder ?? true) && (
+                      <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                        Pitch {roofMeasurement.pitch}
+                      </span>
+                    )}
+                    {roofMeasurement.perimeterFt && (roofMeasurement.includePerimeter ?? true) && (
                       <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
                         ~{roofMeasurement.perimeterFt.toLocaleString()} lin ft perimeter
                       </span>

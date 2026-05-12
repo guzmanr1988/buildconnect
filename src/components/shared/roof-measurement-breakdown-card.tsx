@@ -21,14 +21,14 @@ export type RoofMeasurementBreakdownCardProps = {
   pitch: string
   perimeterFt: number
   material: string | null
-  includeFlat: boolean
-  includePitched: boolean
   hasFlatSection: boolean
+  includeMaterialOrder: boolean
+  includePerimeter: boolean
   pitchedOmittedTriggered?: boolean
   flowPath?: FlowPath
   source: 'wizard-step2' | 'wizard-step3' | 'service-detail'
-  onToggleFlat?: (on: boolean) => void
-  onTogglePitched?: (on: boolean) => void
+  onToggleMaterialOrder?: (on: boolean) => void
+  onTogglePerimeter?: (on: boolean) => void
   editing?: { pitched: EditingControls; flat: EditingControls }
 }
 
@@ -38,20 +38,20 @@ export function RoofMeasurementBreakdownCard({
   pitch,
   perimeterFt,
   material,
-  includeFlat,
-  includePitched,
   hasFlatSection,
+  includeMaterialOrder,
+  includePerimeter,
   pitchedOmittedTriggered = false,
   flowPath = null,
   source,
-  onToggleFlat,
-  onTogglePitched,
+  onToggleMaterialOrder,
+  onTogglePerimeter,
   editing,
 }: RoofMeasurementBreakdownCardProps) {
   const isAddonsOnly = flowPath === 'addons_only'
-  const showAreaBreakdown = !isAddonsOnly && (pitchedAreaSqft > 0 || flatAreaSqft > 0)
   const isPitchedSelected = material !== null
-  const nothingSelected = !includePitched && !includeFlat
+  const flatForOrder = hasFlatSection ? flatAreaSqft : 0
+  const showAreaBreakdown = !isAddonsOnly && includeMaterialOrder && (pitchedAreaSqft > 0 || flatForOrder > 0)
 
   return (
     <div
@@ -60,37 +60,53 @@ export function RoofMeasurementBreakdownCard({
       data-roof-breakdown-source={source}
     >
       {!isAddonsOnly && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className={cn('grid grid-cols-2 gap-4', !includeMaterialOrder && 'opacity-60')}>
           <div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <Layers className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Material Order{' '}
-                <span className="text-muted-foreground/70 normal-case font-medium">
-                  ({(() => {
-                    const parts: string[] = []
-                    if (isPitchedSelected && includePitched) parts.push('pitched')
-                    if (includeFlat) parts.push('flat')
-                    if (parts.length === 0) return 'nothing selected'
-                    return parts.join(' + ')
-                  })()})
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <div className="flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-primary" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Material Order{includeMaterialOrder && (
+                    <>
+                      {' '}
+                      <span className="text-muted-foreground/70 normal-case font-medium">
+                        ({(() => {
+                          const parts: string[] = []
+                          if (isPitchedSelected) parts.push('pitched')
+                          if (hasFlatSection && flatAreaSqft > 0) parts.push('flat')
+                          if (parts.length === 0) return 'nothing selected'
+                          return parts.join(' + ')
+                        })()})
+                      </span>
+                    </>
+                  )}
                 </span>
-              </span>
+              </div>
+              {onToggleMaterialOrder && (
+                <>
+                  <Label htmlFor="include-material-order-toggle" className="sr-only">Include material order</Label>
+                  <Switch
+                    id="include-material-order-toggle"
+                    data-toggle="material-order"
+                    checked={includeMaterialOrder}
+                    onCheckedChange={onToggleMaterialOrder}
+                  />
+                </>
+              )}
             </div>
-            {(() => {
+            {includeMaterialOrder ? (() => {
               const { pitchedWaste, flatWaste, totalSqft } = computeRoofTotal({
-                pitchedAreaSqft: Math.round(pitchedAreaSqft),
-                flatAreaSqft: Math.round(flatAreaSqft),
-                includeFlat,
-                includePitched: isPitchedSelected && includePitched,
+                pitchedAreaSqft: isPitchedSelected ? Math.round(pitchedAreaSqft) : 0,
+                flatAreaSqft: hasFlatSection ? Math.round(flatAreaSqft) : 0,
+                includeMaterialOrder: true,
               })
               const orderSqft = totalSqft
               const orderSquares = Math.ceil(orderSqft / 100)
               const sublabelParts: string[] = []
-              if (isPitchedSelected && includePitched && pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
-              if (includeFlat && flatWaste > 0) sublabelParts.push(`Flat ${Math.round(flatAreaSqft).toLocaleString()}`)
+              if (isPitchedSelected && pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
+              if (flatWaste > 0) sublabelParts.push(`Flat ${Math.round(flatAreaSqft).toLocaleString()}`)
               const sublabel = sublabelParts.length === 0
-                ? 'Toggle a section on below to start an order.'
+                ? 'Tap a material chip on the page to start an order.'
                 : `${sublabelParts.join(' + ')} sqft + 2% waste`
               return (
                 <>
@@ -101,7 +117,14 @@ export function RoofMeasurementBreakdownCard({
                   <p className="text-[11px] text-muted-foreground mt-0.5">{sublabel}</p>
                 </>
               )
-            })()}
+            })() : (
+              <>
+                <p className="text-xl font-bold text-foreground">Excluded</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Flip the toggle to include shingles or membrane in the order.
+                </p>
+              </>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -115,20 +138,44 @@ export function RoofMeasurementBreakdownCard({
         </div>
       )}
 
-      <div className={isAddonsOnly ? '' : 'border-t pt-3'}>
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <Ruler className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Roof Perimeter
-          </span>
+      <div className={cn(isAddonsOnly ? '' : 'border-t pt-3', !includePerimeter && 'opacity-60')}>
+        <div className="flex items-center justify-between gap-2 mb-0.5">
+          <div className="flex items-center gap-1.5">
+            <Ruler className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Roof Perimeter
+            </span>
+          </div>
+          {onTogglePerimeter && (
+            <>
+              <Label htmlFor="include-perimeter-toggle" className="sr-only">Include perimeter add-ons</Label>
+              <Switch
+                id="include-perimeter-toggle"
+                data-toggle="roof-perimeter"
+                checked={includePerimeter}
+                onCheckedChange={onTogglePerimeter}
+              />
+            </>
+          )}
         </div>
-        <p className="text-xl font-bold text-foreground">
-          ~{perimeterFt.toLocaleString()}{' '}
-          <span className="text-sm font-normal text-muted-foreground">lin ft</span>
-        </p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
-          Used for gutter, fascia, and soffit estimates
-        </p>
+        {includePerimeter ? (
+          <>
+            <p className="text-xl font-bold text-foreground">
+              ~{perimeterFt.toLocaleString()}{' '}
+              <span className="text-sm font-normal text-muted-foreground">lin ft</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Used for gutter, fascia, and soffit estimates
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-xl font-bold text-foreground">Excluded</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Flip the toggle to include gutters, fascia, or soffit in the order.
+            </p>
+          </>
+        )}
       </div>
 
       {showAreaBreakdown && (
@@ -139,32 +186,9 @@ export function RoofMeasurementBreakdownCard({
             </span>
           </div>
 
-          {nothingSelected && (
-            <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-3 text-center">
-              <p className="text-sm font-semibold text-foreground">Nothing selected</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Turn on a section below to include it in your order.
-              </p>
-            </div>
-          )}
-
-          <div className={cn('relative', !includeFlat && flatAreaSqft > 0 && 'opacity-60')}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-              <div className="flex items-center gap-2">
-                {flatAreaSqft > 0 && !includeFlat && (
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
-                    Not included
-                  </span>
-                )}
-                {onToggleFlat && flatAreaSqft > 0 && (
-                  <>
-                    <Label htmlFor="include-flat-toggle" className="sr-only">Include flat area</Label>
-                    <Switch id="include-flat-toggle" checked={includeFlat} onCheckedChange={onToggleFlat} />
-                  </>
-                )}
-              </div>
-            </div>
+          {hasFlatSection && (
+          <div className="relative">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
             {editing?.flat.active ? (
               <div className="flex items-center gap-2 mt-0.5">
                 <Input
@@ -215,34 +239,21 @@ export function RoofMeasurementBreakdownCard({
               Flat: {Math.round(flatAreaSqft).toLocaleString()} sqft + 2% waste
             </p>
           </div>
+          )}
 
           <div
             {...(pitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
             className={cn(
               pitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : '',
-              !pitchedOmittedTriggered && !includePitched && pitchedAreaSqft > 0 && 'opacity-60',
             )}
           >
             <div className="flex items-center justify-between gap-2 mb-0.5">
               <p className="text-xs text-muted-foreground">Pitched</p>
-              <div className="flex items-center gap-2">
-                {pitchedOmittedTriggered && (
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
-                    Not included
-                  </span>
-                )}
-                {!pitchedOmittedTriggered && !includePitched && pitchedAreaSqft > 0 && (
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
-                    Not included
-                  </span>
-                )}
-                {onTogglePitched && !pitchedOmittedTriggered && pitchedAreaSqft > 0 && (
-                  <>
-                    <Label htmlFor="include-pitched-toggle" className="sr-only">Include pitched area</Label>
-                    <Switch id="include-pitched-toggle" checked={includePitched} onCheckedChange={onTogglePitched} />
-                  </>
-                )}
-              </div>
+              {pitchedOmittedTriggered && (
+                <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+                  Not included
+                </span>
+              )}
             </div>
             {editing?.pitched.active ? (
               <div className="flex items-center gap-2">
@@ -302,21 +313,14 @@ export function RoofMeasurementBreakdownCard({
               Tap the pencil to enter your real measurement when the satellite is off.
             </p>
           )}
-
-          {flatAreaSqft > 0 && !hasFlatSection && !includeFlat && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2.5 py-1.5">
-              + Add flat section to order — tap the Flat Roof chip on the page, or flip the toggle above.
-            </p>
-          )}
         </div>
       )}
 
       {!isAddonsOnly && (() => {
         const { totalSqft, totalSquares } = computeRoofTotal({
-          pitchedAreaSqft: Math.round(pitchedAreaSqft),
-          flatAreaSqft: Math.round(flatAreaSqft),
-          includeFlat,
-          includePitched: isPitchedSelected && includePitched,
+          pitchedAreaSqft: isPitchedSelected ? Math.round(pitchedAreaSqft) : 0,
+          flatAreaSqft: hasFlatSection ? Math.round(flatAreaSqft) : 0,
+          includeMaterialOrder,
         })
         return (
           <div className="border-t pt-3">
