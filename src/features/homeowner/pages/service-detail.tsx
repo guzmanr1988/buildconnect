@@ -439,6 +439,25 @@ export function ServiceDetailPage() {
     }
   }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
 
+  // PR-219 — auto-select service_type=['addons'] when entering perimeter-only
+  // mode. The Service Type chooser shows all 3 chips (Full Replacement /
+  // Repair / Add-ons) in every mode; perimeter-only mode pre-selects Add-ons
+  // because the user has explicitly opted out of the material-order portion
+  // (Material Order OFF + Perimeter ON), so add-on work is the canonical
+  // context. Same dep array as the configurator-close effect above so the
+  // two corrective layers fire on the same transition. Transitioning OUT of
+  // perimeter mode is intentionally a no-op — user keeps the addons selection
+  // or re-picks via the chip; no forced reset.
+  useEffect(() => {
+    const inPerimeterOnly =
+      serviceId === 'roofing' &&
+      roofMeasurement?.includeMaterialOrder === false &&
+      roofMeasurement?.includePerimeter === true
+    if (inPerimeterOnly) {
+      setSelections((prev) => ({ ...prev, service_type: ['addons'] }))
+    }
+  }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
+
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)
@@ -844,7 +863,14 @@ export function ServiceDetailPage() {
                 ? group.options.filter((o) => ADDON_LINEAR_FT_IDS.includes(o.id))
                 : group.options
             return (
-              <div key={group.id} data-chip-group-id={group.id} data-mode={isRoofingPerimeterOnly ? 'perimeter-only' : 'standard'}>
+              <div
+                key={group.id}
+                data-chip-group-id={group.id}
+                data-mode={isRoofingPerimeterOnly ? 'perimeter-only' : 'standard'}
+                data-service-type-selected={
+                  group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
+                }
+              >
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
                     {groupLabel}
@@ -884,6 +910,7 @@ export function ServiceDetailPage() {
                         data-chip-group={group.id}
                         data-chip-state={isSelected ? 'active' : 'inactive'}
                         data-chip-locked={isLocked ? 'true' : 'false'}
+                        data-service-type-option={group.id === 'service_type' ? option.id : undefined}
                         disabled={isLocked}
                         onClick={() => {
                           handleSelect(group, option.id)
