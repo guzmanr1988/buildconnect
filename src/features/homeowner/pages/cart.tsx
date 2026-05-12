@@ -244,6 +244,14 @@ export function CartPage() {
   }
 
   const handleSendToContractor = (item: typeof items[0]) => {
+    // Defense-in-depth: the button is already disabled when no Photo ID is on
+    // file (see render below), but a devtools-enable / programmatic-click
+    // bypass would otherwise reach the submit flow. Guard here so the gate
+    // holds regardless of how the handler is invoked.
+    if (!profile?.id_document_url) {
+      toast.error('Photo ID required. Go to Documents to upload.')
+      return
+    }
     if (!projectPermit && shouldAskProjectPermit(items)) {
       setPendingPermitItem(item)
       setPermitDialogOpen(true)
@@ -700,6 +708,7 @@ export function CartPage() {
                   size="default"
                   className="flex-1 h-10 gap-2 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-700"
                   disabled={!profile?.id_document_url}
+                  data-submit-gate={!profile?.id_document_url ? 'photo-id-required' : undefined}
                   onClick={() => handleSendToContractor(item)}
                 >
                   <Send className="h-4 w-4" />
