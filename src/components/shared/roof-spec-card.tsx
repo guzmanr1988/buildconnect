@@ -16,6 +16,7 @@ interface RoofMeasurement {
   pitchedAreaSqft?: number
   flatAreaSqft?: number
   includeFlat?: boolean
+  includePitched?: boolean
 }
 
 interface MetalRoofSelection {
@@ -52,7 +53,11 @@ export function RoofSpecCard({
   if (!rm && !mrs && addonEntries.length === 0) return null
 
   const isAddonsOnly = flowPath === 'addons_only'
-  const hasSplit = rm && (rm.pitchedAreaSqft ?? 0) > 0 && (rm.flatAreaSqft ?? 0) > 0 && rm.includeFlat !== false
+  const hasSplit = rm
+    && (rm.pitchedAreaSqft ?? 0) > 0
+    && (rm.flatAreaSqft ?? 0) > 0
+    && rm.includeFlat !== false
+    && (rm.includePitched ?? true) !== false
   const metalColorLabel = mrs?.color
     ? mrs.color.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : undefined
@@ -79,9 +84,14 @@ export function RoofSpecCard({
                 <span className="text-muted-foreground min-w-[72px]">Area</span>
                 <span className="font-medium">
                   {rm.areaSqft.toLocaleString()} sqft · {(() => {
-                    const { pitchedAreaSqft, flatAreaSqft, includeFlat } = rm
+                    const { pitchedAreaSqft, flatAreaSqft, includeFlat, includePitched } = rm
                     if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                      return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                      return computeRoofTotal({
+                        pitchedAreaSqft,
+                        flatAreaSqft,
+                        includeFlat: includeFlat ?? (flatAreaSqft > 0),
+                        includePitched: includePitched ?? true,
+                      }).totalSquares
                     }
                     return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
                   })()} squares w/waste

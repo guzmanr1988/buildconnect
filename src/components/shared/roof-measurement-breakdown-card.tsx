@@ -22,11 +22,13 @@ export type RoofMeasurementBreakdownCardProps = {
   perimeterFt: number
   material: string | null
   includeFlat: boolean
+  includePitched: boolean
   hasFlatSection: boolean
   pitchedOmittedTriggered?: boolean
   flowPath?: FlowPath
   source: 'wizard-step2' | 'wizard-step3' | 'service-detail'
   onToggleFlat?: (on: boolean) => void
+  onTogglePitched?: (on: boolean) => void
   editing?: { pitched: EditingControls; flat: EditingControls }
 }
 
@@ -37,16 +39,19 @@ export function RoofMeasurementBreakdownCard({
   perimeterFt,
   material,
   includeFlat,
+  includePitched,
   hasFlatSection,
   pitchedOmittedTriggered = false,
   flowPath = null,
   source,
   onToggleFlat,
+  onTogglePitched,
   editing,
 }: RoofMeasurementBreakdownCardProps) {
   const isAddonsOnly = flowPath === 'addons_only'
   const showAreaBreakdown = !isAddonsOnly && (pitchedAreaSqft > 0 || flatAreaSqft > 0)
   const isPitchedSelected = material !== null
+  const nothingSelected = !includePitched && !includeFlat
 
   return (
     <div
@@ -62,7 +67,13 @@ export function RoofMeasurementBreakdownCard({
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Material Order{' '}
                 <span className="text-muted-foreground/70 normal-case font-medium">
-                  ({isPitchedSelected ? (includeFlat ? 'pitched + flat' : 'pitched') : 'flat'})
+                  ({(() => {
+                    const parts: string[] = []
+                    if (isPitchedSelected && includePitched) parts.push('pitched')
+                    if (includeFlat) parts.push('flat')
+                    if (parts.length === 0) return 'nothing selected'
+                    return parts.join(' + ')
+                  })()})
                 </span>
               </span>
             </div>
@@ -71,16 +82,16 @@ export function RoofMeasurementBreakdownCard({
                 pitchedAreaSqft: Math.round(pitchedAreaSqft),
                 flatAreaSqft: Math.round(flatAreaSqft),
                 includeFlat,
+                includePitched: isPitchedSelected && includePitched,
               })
-              const orderSqft = isPitchedSelected
-                ? (includeFlat ? totalSqft : pitchedWaste)
-                : flatWaste
+              const orderSqft = totalSqft
               const orderSquares = Math.ceil(orderSqft / 100)
-              const sublabel = isPitchedSelected
-                ? (includeFlat
-                    ? `Pitched ${Math.round(pitchedAreaSqft).toLocaleString()} + Flat ${Math.round(flatAreaSqft).toLocaleString()} sqft + 2% waste`
-                    : `Pitched: ${Math.round(pitchedAreaSqft).toLocaleString()} sqft + 2% waste`)
-                : `Flat: ${Math.round(flatAreaSqft).toLocaleString()} sqft + 2% waste`
+              const sublabelParts: string[] = []
+              if (isPitchedSelected && includePitched && pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
+              if (includeFlat && flatWaste > 0) sublabelParts.push(`Flat ${Math.round(flatAreaSqft).toLocaleString()}`)
+              const sublabel = sublabelParts.length === 0
+                ? 'Toggle a section on below to start an order.'
+                : `${sublabelParts.join(' + ')} sqft + 2% waste`
               return (
                 <>
                   <p className="text-xl font-bold text-foreground">
@@ -126,24 +137,33 @@ export function RoofMeasurementBreakdownCard({
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Area Breakdown
             </span>
-            {onToggleFlat && flatAreaSqft > 0 && (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="include-flat-toggle" className="text-[11px] text-muted-foreground cursor-pointer m-0">
-                  Include flat area
-                </Label>
-                <Switch id="include-flat-toggle" checked={includeFlat} onCheckedChange={onToggleFlat} />
-              </div>
-            )}
           </div>
 
-          <div className={cn('relative', !includeFlat && !hasFlatSection && flatAreaSqft > 0 && 'opacity-60')}>
-            <div className="flex items-center justify-between">
+          {nothingSelected && (
+            <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-3 text-center">
+              <p className="text-sm font-semibold text-foreground">Nothing selected</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Turn on a section below to include it in your order.
+              </p>
+            </div>
+          )}
+
+          <div className={cn('relative', !includeFlat && flatAreaSqft > 0 && 'opacity-60')}>
+            <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
-              {flatAreaSqft > 0 && !includeFlat && (
-                <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
-                  Not included
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {flatAreaSqft > 0 && !includeFlat && (
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
+                    Not included
+                  </span>
+                )}
+                {onToggleFlat && flatAreaSqft > 0 && (
+                  <>
+                    <Label htmlFor="include-flat-toggle" className="sr-only">Include flat area</Label>
+                    <Switch id="include-flat-toggle" checked={includeFlat} onCheckedChange={onToggleFlat} />
+                  </>
+                )}
+              </div>
             </div>
             {editing?.flat.active ? (
               <div className="flex items-center gap-2 mt-0.5">
@@ -198,15 +218,31 @@ export function RoofMeasurementBreakdownCard({
 
           <div
             {...(pitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
-            className={pitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : ''}
+            className={cn(
+              pitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : '',
+              !pitchedOmittedTriggered && !includePitched && pitchedAreaSqft > 0 && 'opacity-60',
+            )}
           >
             <div className="flex items-center justify-between gap-2 mb-0.5">
               <p className="text-xs text-muted-foreground">Pitched</p>
-              {pitchedOmittedTriggered && (
-                <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
-                  Not included
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {pitchedOmittedTriggered && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+                    Not included
+                  </span>
+                )}
+                {!pitchedOmittedTriggered && !includePitched && pitchedAreaSqft > 0 && (
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5 font-semibold">
+                    Not included
+                  </span>
+                )}
+                {onTogglePitched && !pitchedOmittedTriggered && pitchedAreaSqft > 0 && (
+                  <>
+                    <Label htmlFor="include-pitched-toggle" className="sr-only">Include pitched area</Label>
+                    <Switch id="include-pitched-toggle" checked={includePitched} onCheckedChange={onTogglePitched} />
+                  </>
+                )}
+              </div>
             </div>
             {editing?.pitched.active ? (
               <div className="flex items-center gap-2">
@@ -277,9 +313,10 @@ export function RoofMeasurementBreakdownCard({
 
       {!isAddonsOnly && (() => {
         const { totalSqft, totalSquares } = computeRoofTotal({
-          pitchedAreaSqft: isPitchedSelected ? Math.round(pitchedAreaSqft) : 0,
-          flatAreaSqft: includeFlat ? Math.round(flatAreaSqft) : 0,
+          pitchedAreaSqft: Math.round(pitchedAreaSqft),
+          flatAreaSqft: Math.round(flatAreaSqft),
           includeFlat,
+          includePitched: isPitchedSelected && includePitched,
         })
         return (
           <div className="border-t pt-3">

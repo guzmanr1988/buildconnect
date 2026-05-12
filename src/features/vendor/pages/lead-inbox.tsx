@@ -778,7 +778,7 @@ export default function LeadInbox() {
                               <div className="rounded-xl border bg-background p-4 space-y-3">
                                 <h4 className="text-sm font-semibold text-foreground">Roof Measurements</h4>
                                 <div className="flex flex-col gap-1.5">
-                                  {sp.item.roofMeasurement.pitchedAreaSqft != null && (
+                                  {(sp.item.roofMeasurement.includePitched ?? true) && sp.item.roofMeasurement.pitchedAreaSqft != null && (sp.item.roofMeasurement.pitchedAreaSqft ?? 0) > 0 && (
                                     <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
                                       <span className="text-sm text-foreground">Pitched area</span>
                                       <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.pitchedAreaSqft.toLocaleString()} sq ft</span>

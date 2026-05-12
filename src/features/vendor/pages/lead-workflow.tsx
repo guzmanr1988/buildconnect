@@ -1183,7 +1183,7 @@ export default function VendorLeadWorkflow() {
                       <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Measurements</p>
                         <div className="space-y-1 text-sm">
-                          {rm.pitchedAreaSqft != null && (
+                          {(rm.includePitched ?? true) && rm.pitchedAreaSqft != null && (rm.pitchedAreaSqft ?? 0) > 0 && (
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">Pitched area</span>
                               <span className="font-medium">{rm.pitchedAreaSqft.toLocaleString()} sq ft</span>
