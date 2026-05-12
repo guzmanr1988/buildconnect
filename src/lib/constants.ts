@@ -433,9 +433,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         required: true,
         type: 'single',
         options: [
-          { id: 'aluminum', label: 'Aluminum Pergola' },
-          { id: 'wood', label: 'Wood Beam Pergola' },
-          { id: 'louvered', label: 'Louvered Roof' },
+          { id: 'aluminum_terrace', label: 'Aluminum Terrace' },
         ],
       },
       {
@@ -444,8 +442,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         required: true,
         type: 'single',
         options: [
-          { id: '10x12', label: '10×12 ft' },
-          { id: '12x16', label: '12×16 ft' },
+          { id: 'measured', label: 'Auto-measured' },
           { id: 'custom', label: 'Custom Size' },
         ],
       },
@@ -456,8 +453,6 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         type: 'multi',
         options: [
           { id: 'fans', label: 'Ceiling Fans' },
-          { id: 'kitchen', label: 'Outdoor Kitchen' },
-          { id: 'deck', label: 'Composite Deck' },
           { id: 'screen', label: 'Screen Enclosure' },
         ],
       },

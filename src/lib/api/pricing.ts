@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
+import { applyAreaWaste } from '@/lib/area-waste'
 import type { CartItem } from '@/stores/cart-store'
 import type { ServiceConfig } from '@/types'
 
@@ -185,12 +186,19 @@ export function computeVendorTotal(
           // 2. item.areaSqft — single satellite-measured area (driveways +
           //    pergolas; whichever option is sqft-priced for that service).
           // 3. roofMeasurement.areaSqft — insulation + legacy roof items.
-          const sqft = isRepairOption(optionId)
+          const rawSqft = isRepairOption(optionId)
             ? resolveRepairAreaSqft(item, optionId)
             : (item.customSizeSqft?.[optionId]
                 ?? item.areaSqft
                 ?? item.roofMeasurement?.areaSqft
                 ?? 0)
+          // Per-service waste applied at the cost layer to mirror display.
+          // Driveway = ×1.03, pergolas/fencing/roofing = pass-through.
+          // Repair lines pre-resolve via roof-pricing helper which already
+          // bakes the roof waste factor, so they bypass area-waste here.
+          const sqft = isRepairOption(optionId)
+            ? rawSqft
+            : applyAreaWaste(item.serviceId, rawSqft)
           totalCents += basePrice * sqft
         } else if (meta.priceUnit === 'linear_ft') {
           // Resolve linear ft source: roofAddonLinearFt (existing roofing
