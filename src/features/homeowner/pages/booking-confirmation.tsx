@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, FileText, ArrowRight, Home, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useCartStore } from '@/stores/cart-store'
@@ -291,6 +292,19 @@ export function BookingConfirmationPage() {
     logDiag('MOUNT')
 
     if (pendingItemStr && contractorStr && bookingStr) {
+      // Final-step Photo ID gate. The cart button and handleSendToContractor
+      // are gated upstream, but a deep-link / state-rehydrate path that
+      // arrives here with all LS preconditions yet no Photo ID on the
+      // profile must not fire sendProject. Read via getState so we don't
+      // close over an in-flight profile load. Aborting redirects to the
+      // documents page with an explicit reason — Rod directive is that the
+      // customer must know why they cannot submit.
+      if (!useAuthStore.getState().profile?.id_document_url) {
+        logDiag('BRANCH=blocked-no-photo-id')
+        toast.error('Photo ID required. Go to Documents to upload.')
+        navigate('/home/documents')
+        return
+      }
       // async IIFE so we can await buildRoofingLineItems without restructuring
       // the outer useEffect (which must stay sync for the cleanup return).
       // On parse failure the IIFE falls through to the refresh-window
