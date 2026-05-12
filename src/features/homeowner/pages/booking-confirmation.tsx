@@ -97,8 +97,10 @@ async function buildRoofingLineItems(
     const u = getOptionMetadata(id, 'roofing', sib).priceUnit
     return u === 'square' || u === 'sqft'
   })
+  const includeFlatOpt = item.roofMeasurement?.includeFlat !== false
+  const includePitchedOpt = item.roofMeasurement?.includePitched !== false
   const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
-    && (item.roofMeasurement?.includeFlat !== false)
+    && includeFlatOpt && includePitchedOpt
 
   const lines: PriceLineItem[] = []
   let anyComputed = false
@@ -140,11 +142,16 @@ async function buildRoofingLineItems(
         }
         // Split mode: flat_roof material uses its own area slice; pitched uses the other.
         // Non-split mode (single material): use full area.
+        // Per-area opt-out: when a slice is toggled off the matching material bills 0
+        // regardless of split mode (mirrors pricing.ts sliceZeroed gate).
         const isFlat = optionId === FLAT_ROOF_OPTION_ID
         const useSquares = meta.priceUnit === 'square'
+        const sliceZeroed = isFlat ? !includeFlatOpt : !includePitchedOpt
         let rawSqft: number
         let note: string | undefined
-        if (useSplit) {
+        if (sliceZeroed) {
+          rawSqft = 0
+        } else if (useSplit) {
           if (isFlat) {
             rawSqft = flatAreaSqft ?? 0
             if (rawSqft === 0) note = 'No flat section detected by satellite imagery — confirm with vendor.'

@@ -16,7 +16,7 @@
 
 export type UserAction = {
   step: 1 | 2 | 3
-  type: 'chip-tap' | 'addon-toggle' | 'include-flat-toggle'
+  type: 'chip-tap' | 'addon-toggle' | 'include-flat-toggle' | 'include-pitched-toggle'
   value: string | boolean
 }
 
@@ -27,6 +27,8 @@ export type ReplayResult = {
   addons: string[]
   /** Effective includeFlat after chip-tap derivation + explicit toggles. */
   includeFlat: boolean
+  /** Effective includePitched after explicit toggles. Default true (mount). */
+  includePitched: boolean
 }
 
 /**
@@ -76,13 +78,30 @@ export function buildSelections(actions: UserAction[]): Record<string, string[]>
   return out
 }
 
+/**
+ * Resolve the includePitched default from a toggle sequence. Defaults true
+ * on wizard mount (pitched is the dominant case). Explicit
+ * include-pitched-toggle actions override.
+ */
+export function resolveIncludePitched(actions: UserAction[]): boolean {
+  let includePitched = true
+  for (const a of actions) {
+    if (a.type === 'include-pitched-toggle' && typeof a.value === 'boolean') {
+      includePitched = a.value
+    }
+  }
+  return includePitched
+}
+
 /** Convenience: replay actions to a single result struct. */
 export function replayUserActions(actions: UserAction[]): ReplayResult {
   const sels = buildSelections(actions)
   const includeFlat = resolveIncludeFlat(actions)
+  const includePitched = resolveIncludePitched(actions)
   return {
     materials: sels.material ?? [],
     addons: sels.addons ?? [],
     includeFlat,
+    includePitched,
   }
 }

@@ -3,17 +3,22 @@
  * Both pitched and flat use 2% waste (top-of-real bias to preserve cushion when
  * satellite under-detects flat sections by 50-100 sqft).
  * squares = ceil(totalWasteSqft / 100) — rounds up to next whole square.
+ *
+ * includePitched is widen-reads-undefined-as-true for legacy cart payloads
+ * (pre per-area-toggles split). includeFlat default stays opt-in.
  */
 export function computeRoofTotal({
   pitchedAreaSqft,
   flatAreaSqft,
   includeFlat,
+  includePitched = true,
 }: {
   pitchedAreaSqft: number
   flatAreaSqft: number
   includeFlat: boolean
+  includePitched?: boolean
 }): { totalSqft: number; totalSquares: number; pitchedWaste: number; flatWaste: number } {
-  const pitchedWaste = Math.round((pitchedAreaSqft || 0) * 1.02)
+  const pitchedWaste = includePitched ? Math.round((pitchedAreaSqft || 0) * 1.02) : 0
   const flatWaste = includeFlat ? Math.round((flatAreaSqft || 0) * 1.02) : 0
   const totalSqft = pitchedWaste + flatWaste
   const totalSquares = Math.ceil(totalSqft / 100)

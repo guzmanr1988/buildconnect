@@ -50,7 +50,7 @@ export interface CartItem {
   tileColor?: string
   // Roof measurement wizard output — area + pitch captured before manual config.
   // Stored regardless of material so pitch is preserved for all material types.
-  roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean }
+  roofMeasurement?: { areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean; includePitched?: boolean }
   // Permit choice captured from roof wizard. 'yes' = permit pulled; 'no' = cash-only (no financing).
   // Optional for widen-reads: absent on legacy items; treat as 'yes' on read (no surprise downgrade).
   roofPermit?: 'yes' | 'no'

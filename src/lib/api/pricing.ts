@@ -153,11 +153,21 @@ export function computeVendorTotal(
             const sib = services ? findCatalogOption(services, item.serviceId, id) : undefined
             return getOptionMetadata(id, item.serviceId, sib).priceUnit === 'square'
           })
+          const includeFlatOpt = item.roofMeasurement?.includeFlat !== false
+          const includePitchedOpt = item.roofMeasurement?.includePitched !== false
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
-            && (item.roofMeasurement?.includeFlat !== false)
-          const rawSqft = useSplit
-            ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
-            : (item.roofMeasurement?.areaSqft ?? 0)
+            && includeFlatOpt && includePitchedOpt
+          // Per-area opt-out: when a slice is toggled off, zero the billable
+          // area for the material(s) that bill against it. Pitched options
+          // (square-priced, non-flat) read 0 when !includePitchedOpt; flat
+          // option reads 0 when !includeFlatOpt. Single-material non-split
+          // payloads fall through to the legacy areaSqft path.
+          const sliceZeroed = isFlatOpt ? !includeFlatOpt : !includePitchedOpt
+          const rawSqft = sliceZeroed
+            ? 0
+            : useSplit
+              ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
+              : (item.roofMeasurement?.areaSqft ?? 0)
           const wasteFactor = 1.02
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)

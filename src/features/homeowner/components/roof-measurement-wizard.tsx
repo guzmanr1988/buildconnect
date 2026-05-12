@@ -109,6 +109,10 @@ export interface RoofWizardResult {
   // When true, flat area is included in cart (pitched 2% + flat 1% waste).
   // When false, areaSqft = pitched only, flatAreaSqft = 0.
   includeFlat?: boolean
+  // When false, pitched section is opted out at cart-add time. Symmetric to
+  // includeFlat — split into per-area toggles so homeowners with a flat-only
+  // structure or no-pitched intent can land that signal cleanly.
+  includePitched?: boolean
 }
 
 interface MeasurementData {
@@ -292,6 +296,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
   const [includeFlat, setIncludeFlat] = useState(false)
+  const [includePitched, setIncludePitched] = useState(true)
   // Inline pencil-edit overrides for AREA BREAKDOWN. Override input is RAW;
   // display is POST-WASTE; cart payload is RAW (uniform with satellite path).
   const [editingFlat, setEditingFlat] = useState(false)
@@ -359,6 +364,10 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     // breakdown-card toggle when they want flat priced — covers regular pitched
     // jobs (the common case) where flat detection shouldn't inflate totals.
     setIncludeFlat(false)
+    // Include-pitched defaults ON: pitched is the dominant material for most
+    // jobs. Opt-out is the rare path (e.g. flat-only structure or user-driven
+    // exclusion) — surfaced via the per-row toggle on the breakdown card.
+    setIncludePitched(true)
     setStep(1)
   }, [open, defaultAddress])
 
@@ -419,6 +428,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       pitchedAreaSqft: measurement ? pitchedSqftOut : undefined,
       flatAreaSqft: measurement ? flatSqftOut : undefined,
       includeFlat,
+      includePitched,
     })
   }
 
@@ -544,11 +554,13 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
                     material={previewMaterial}
                     includeFlat={includeFlat}
+                    includePitched={includePitched}
                     hasFlatSection={hasFlatSection}
                     pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                     flowPath={flowPath ?? null}
                     source="wizard-step2"
                     onToggleFlat={setIncludeFlat}
+                    onTogglePitched={setIncludePitched}
                     editing={{
                       pitched: {
                         active: editingPitched,
