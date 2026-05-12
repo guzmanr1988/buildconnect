@@ -19,6 +19,13 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         options: [
           { id: 'replace', label: 'Full Replacement' },
           { id: 'repair', label: 'Repair' },
+          // PR-219 — third service-type option for perimeter-only mode (gutter
+          // / soffit / fascia add-on work without touching the main roof).
+          // Auto-selected in service-detail.tsx when isRoofingPerimeterOnly,
+          // but visible+clickable in all modes so users can pick it manually
+          // in standard mode too. Cost-neutral: pricing.ts:127 already skips
+          // service_type entirely for roofing (vendor-internal context only).
+          { id: 'addons', label: 'Add-ons' },
         ],
       },
       {

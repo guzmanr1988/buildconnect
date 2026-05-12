@@ -181,7 +181,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 3,
+      version: 4,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -249,6 +249,16 @@ export const useCartStore = create<CartState>()(
               }
             }),
           }
+        }
+        if (version < 4) {
+          // PR-219: roofing SERVICE_CATALOG.service_type adds a third option
+          // ('addons'). Existing persisted carts hold service_type ='replace'
+          // or 'repair' values which remain valid (the add does not remove or
+          // rename any existing id). No data transform required — bump exists
+          // to invalidate hydrated caches per feedback_persist_version_bump_-
+          // with_constants_change + feedback_pair_persist_bump_with_constants_-
+          // change so any stale memoization keyed on SERVICE_CATALOG identity
+          // re-evaluates.
         }
         return state
       },
