@@ -35,3 +35,19 @@ export function classifyRoofSegments(segments: RoofSegmentStat[]): ClassifiedRoo
     flatAreaSqft: Math.round(flatSqm * SQM_TO_SQFT),
   }
 }
+
+// Solar's roofSegmentStats sometimes under-covers wholeRoofStats (sub-threshold
+// facets dropped). Scale raw pitched/flat to sum to targetSqft while preserving
+// Solar's pitched:flat ratio. flatAreaSqft is rounded; pitchedAreaSqft is the
+// remainder so the two fields sum to exactly targetSqft (no rounding drift).
+// Edge: rawSum <= 0 → all-pitched (residential roofs are pitched-dominant;
+// homeowner can override via the Adjust roof area panel).
+export function reconcileSplit(
+  raw: ClassifiedRoofAreas,
+  targetSqft: number,
+): ClassifiedRoofAreas {
+  const rawSum = raw.pitchedAreaSqft + raw.flatAreaSqft
+  if (rawSum <= 0) return { pitchedAreaSqft: targetSqft, flatAreaSqft: 0 }
+  const flatAreaSqft = Math.round((raw.flatAreaSqft / rawSum) * targetSqft)
+  return { pitchedAreaSqft: targetSqft - flatAreaSqft, flatAreaSqft }
+}

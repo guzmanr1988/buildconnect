@@ -3,7 +3,7 @@ import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
 import { evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
-import { classifyRoofSegments, SQM_TO_SQFT } from '@/lib/roof-segment-classify'
+import { classifyRoofSegments, reconcileSplit, SQM_TO_SQFT } from '@/lib/roof-segment-classify'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -128,7 +128,8 @@ const DIVERGENCE_WARN_THRESHOLD = 0.02
 
 // TODO(consolidate): same divergence calc lives in
 // src/lib/satellite-measure/roofing.ts as computeDivergencePct. Cleanup arc
-// owned by kratos — do NOT consolidate as part of T4/PR-181.
+// owned by kratos — pure-math helper, low-risk to fold into
+// roof-segment-classify alongside reconcileSplit when a follow-up has space.
 function computeDivergencePct(wholeSqft: number, segSumSqft: number): number {
   if (!Number.isFinite(wholeSqft) || wholeSqft <= 0) return 0
   if (!Number.isFinite(segSumSqft)) return 0
@@ -222,8 +223,15 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
     const footprintM2 = buildingStats?.areaMeters2 ?? (areaM2 / 1.3)  // fallback: deflate roof area
     const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
 
-    const { pitchedAreaSqft, flatAreaSqft } = classifyRoofSegments(roofSegmentStats)
-    const wholeRoofDivergencePct = computeDivergencePct(areaSqft, pitchedAreaSqft + flatAreaSqft)
+    // Raw classify → divergence on raw (so the warning surface still fires
+    // when Solar under-covered) → reconcile to wholeRoofStats so the values
+    // consumed by RoofMeasurementBreakdownCard + chip-tap material seed +
+    // service-detail handleWizardComplete sum to areaSqft. Mirrors the
+    // library measureRoofFromCoords path; primitive is shared via
+    // @/lib/roof-segment-classify per PR-181 follow-up.
+    const rawSplit = classifyRoofSegments(roofSegmentStats)
+    const wholeRoofDivergencePct = computeDivergencePct(areaSqft, rawSplit.pitchedAreaSqft + rawSplit.flatAreaSqft)
+    const { pitchedAreaSqft, flatAreaSqft } = reconcileSplit(rawSplit, areaSqft)
 
     return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, wholeRoofDivergencePct, canonicalAddress }
   } catch {
