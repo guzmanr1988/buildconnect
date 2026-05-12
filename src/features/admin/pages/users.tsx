@@ -394,6 +394,8 @@ export default function UsersPage() {
                               onClick={() => openResetPassword(user)}
                               title="Reset password"
                               aria-label={`Reset password for ${user.name}`}
+                              data-testid="admin-reset-row-trigger"
+                              data-target-email={user.email}
                             >
                               <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
@@ -555,7 +557,7 @@ export default function UsersPage() {
 
       {/* ---- Reset Password Dialog (ship #136) ---- */}
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" data-testid="admin-reset-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-amber-600" />
@@ -569,11 +571,11 @@ export default function UsersPage() {
           </DialogHeader>
           <Tabs value={resetTab} onValueChange={(v) => setResetTab(v as 'link' | 'password')} className="mt-2">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="link" className="gap-1.5">
+              <TabsTrigger value="link" className="gap-1.5" data-testid="admin-reset-tab-link">
                 <Mail className="h-3.5 w-3.5" />
                 Send Reset Link
               </TabsTrigger>
-              <TabsTrigger value="password" className="gap-1.5">
+              <TabsTrigger value="password" className="gap-1.5" data-testid="admin-reset-tab-password">
                 <KeyRound className="h-3.5 w-3.5" />
                 Set New Password
               </TabsTrigger>
@@ -586,6 +588,7 @@ export default function UsersPage() {
                 onClick={submitResetLink}
                 disabled={resetSubmitting}
                 className="w-full gap-2"
+                data-testid="admin-reset-submit-link"
               >
                 <Mail className="h-4 w-4" />
                 {resetSubmitting ? 'Sending...' : 'Send Reset Link'}
@@ -596,6 +599,7 @@ export default function UsersPage() {
                 <Label htmlFor="reset-new-password">New password</Label>
                 <Input
                   id="reset-new-password"
+                  data-testid="admin-reset-new-password"
                   type="password"
                   value={resetNewPassword}
                   onChange={(e) => setResetNewPassword(e.target.value)}
@@ -607,6 +611,7 @@ export default function UsersPage() {
                 <Label htmlFor="reset-confirm-password">Confirm password</Label>
                 <Input
                   id="reset-confirm-password"
+                  data-testid="admin-reset-confirm-password-input"
                   type="password"
                   value={resetConfirmPassword}
                   onChange={(e) => setResetConfirmPassword(e.target.value)}
@@ -619,6 +624,7 @@ export default function UsersPage() {
                 disabled={resetSubmitting}
                 variant="destructive"
                 className="w-full gap-2"
+                data-testid="admin-reset-submit-password"
               >
                 <KeyRound className="h-4 w-4" />
                 Set Password Manually
@@ -640,14 +646,19 @@ export default function UsersPage() {
                  cancel button reverses the same verb the user is about to
                  commit (set password). */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" data-testid="admin-reset-confirm-dialog">
           <DialogHeader>
             <DialogTitle className="text-red-600 dark:text-red-400">
               Set password for {resetTarget?.name}?
             </DialogTitle>
             <DialogDescription>
               This will overwrite the current password for{' '}
-              <span className="font-medium text-foreground">{resetTarget?.email}</span>{' '}
+              <span
+                className="font-medium text-foreground"
+                data-testid="admin-reset-confirm-target-email"
+              >
+                {resetTarget?.email}
+              </span>{' '}
               immediately. The user will not be notified by email. Prefer
               "Send Reset Link" unless you have a direct out-of-band way to
               tell them the new password.
@@ -659,6 +670,7 @@ export default function UsersPage() {
             </Label>
             <Input
               id="confirm-typed-email"
+              data-testid="admin-reset-confirm-typed-email"
               value={confirmTypedEmail}
               onChange={(e) => setConfirmTypedEmail(e.target.value)}
               placeholder={resetTarget?.email}
@@ -666,12 +678,17 @@ export default function UsersPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              data-testid="admin-reset-confirm-cancel"
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={confirmAndSetPassword}
+              data-testid="admin-reset-confirm-submit"
               disabled={
                 resetSubmitting ||
                 confirmTypedEmail.trim().toLowerCase() !==
