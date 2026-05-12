@@ -3,6 +3,7 @@ import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
 import { evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
+import { classifyRoofSegments, SQM_TO_SQFT } from '@/lib/roof-segment-classify'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -126,37 +127,6 @@ interface MeasurementData {
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 
-// Segments with pitchDegrees < 5° are classified as flat deck (industry
-// "low slope" is <2:12 ≈ 9.46°; 5° is conservative so gray-zone low-pitch
-// shingle areas stay in the pitched bucket). 5°–9° goes to pitched.
-const FLAT_PITCH_THRESHOLD_DEG = 5
-const SQM_TO_SQFT = 10.7639
-
-interface RoofSegmentStat { pitchDegrees: number; stats: { areaMeters2: number } }
-
-function classifyAndSumSegments(segments: RoofSegmentStat[]) {
-  let pitchedSqm = 0
-  let flatSqm = 0
-  for (const seg of segments) {
-    if (seg.pitchDegrees < FLAT_PITCH_THRESHOLD_DEG) flatSqm += seg.stats.areaMeters2
-    else pitchedSqm += seg.stats.areaMeters2
-  }
-  // Dev-mode math sanity: pitchedSqft + flatSqft should equal total within 1 sqft
-  if (import.meta.env.DEV) {
-    const totalSqft = Math.round((pitchedSqm + flatSqm) * SQM_TO_SQFT)
-    const pitchedSqft = Math.round(pitchedSqm * SQM_TO_SQFT)
-    const flatSqft = Math.round(flatSqm * SQM_TO_SQFT)
-    console.assert(
-      Math.abs(pitchedSqft + flatSqft - totalSqft) <= 1,
-      `[roof-split] sum mismatch: ${pitchedSqft} + ${flatSqft} ≠ ${totalSqft}`,
-    )
-  }
-  return {
-    pitchedAreaSqft: Math.round(pitchedSqm * SQM_TO_SQFT),
-    flatAreaSqft: Math.round(flatSqm * SQM_TO_SQFT),
-  }
-}
-
 function degreesToPitch(deg: number): string {
   const rise = 12 * Math.tan((deg * Math.PI) / 180)
   const rounded = Math.round(rise * 2) / 2  // nearest 0.5
@@ -237,7 +207,7 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
     const footprintM2 = buildingStats?.areaMeters2 ?? (areaM2 / 1.3)  // fallback: deflate roof area
     const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
 
-    const { pitchedAreaSqft, flatAreaSqft } = classifyAndSumSegments(roofSegmentStats)
+    const { pitchedAreaSqft, flatAreaSqft } = classifyRoofSegments(roofSegmentStats)
 
     return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, canonicalAddress }
   } catch {
