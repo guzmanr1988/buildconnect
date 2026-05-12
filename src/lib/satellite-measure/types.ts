@@ -70,6 +70,14 @@ export interface MeasurementResult {
   // cart-item footprint <1KB per item — LS quota stays clear of the
   // PR-194/195/196 5MB cliff.
   mapUrl?: string
+  // Per-polygon metadata for multi-polygon measurements (pergolas with
+  // 2 structures, driveways with multiple areas). polygons[0] is always
+  // the primary; subsequent entries are extras in draw order. Each
+  // carries its own static-map URL (single-polygon overlay) so consumer
+  // surfaces can render one map per structure. color matches the
+  // EXTRA_COLORS palette in polygon-draw + the ColorCircle indicator
+  // next to the structure chip.
+  polygons?: Array<{ sqft: number; mapUrl?: string; color: string }>
 }
 
 export interface SatelliteMeasureProps {

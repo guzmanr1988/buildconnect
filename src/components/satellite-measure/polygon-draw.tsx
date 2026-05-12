@@ -17,7 +17,11 @@ const MAP_ZOOM = 20
 // Don't let users zoom out past property scale — keeps the address as the focus.
 // 17 = neighborhood-block view; below this the address is a dot in a sea of streets.
 const MIN_ZOOM = 17
-// Colors for extra polygons (cycled as user adds more areas)
+// Color for the primary polygon (matches ColorCircle on the first-picked
+// structure chip in service-detail.tsx via POLYGON_COLORS[0]).
+const MAIN_COLOR = '#2563eb'
+// Colors for extra polygons (cycled as user adds more areas). EXTRA_COLORS[0]
+// matches ColorCircle for the second-picked structure on pergolas.
 const EXTRA_COLORS = ['#d97706', '#16a34a', '#9333ea', '#dc2626', '#0891b2']
 
 // Singleton load — avoids duplicate script tags on remount
@@ -51,9 +55,15 @@ interface Props {
   onMeasure: (r: MeasurementResult) => void
   onFallback?: (reason: FallbackReason, address: string) => void
   onFail: () => void
+  // Hard cap on total polygons (main + extras). Undefined = single polygon
+  // (current default for fencing/pool/etc.). Driveways legacy = unbounded.
+  // Pergolas passes selections.structure.length so the cap mirrors the
+  // number of structures the homeowner picked (1 = no extras shown,
+  // 2 = one "Add another area" prompt).
+  maxPolygons?: number
 }
 
-export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFallback, onFail }: Props) {
+export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFallback, onFail, maxPolygons }: Props) {
   const [address, setAddress] = useState(initialAddress)
   const [loading, setLoading] = useState(false)
   // 'confirmed' = post-Use button. Polygon stays on map, non-editable, no
@@ -463,6 +473,16 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     const totalSqft = mainSqft + extraTotal
 
     const mapUrl = buildStaticMapUrl()
+    // Per-polygon static-map URLs for multi-polygon consumers (pergolas
+    // multi-structure cart/vendor render — one map per structure).
+    const polygons: Array<{ sqft: number; mapUrl?: string; color: string }> = [
+      { sqft: mainSqft, mapUrl: buildSinglePolygonStaticMapUrl(polygonRef.current, MAIN_COLOR), color: MAIN_COLOR },
+      ...Array.from(extraPolygonRefsRef.current.entries()).map(([id, poly], idx) => {
+        const color = EXTRA_COLORS[idx % EXTRA_COLORS.length]
+        const ep = extraPolygons.find((e) => e.id === id)
+        return { sqft: ep?.areaSqft ?? 0, mapUrl: buildSinglePolygonStaticMapUrl(poly, color), color }
+      }),
+    ]
 
     onMeasure({
       address: geoRef.current.addr,
@@ -474,6 +494,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         : { type: 'area_only', areaSqft: totalSqft, perimeterFt: result.perimeterFt },
       isMock: false,
       mapUrl,
+      polygons,
     })
 
     // Lock down for read-only confirmed-phase view. Polygon stays drawn
@@ -520,6 +541,28 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     return url
   }
 
+  // Build a static-map URL with ONLY the supplied polygon drawn. Used for
+  // per-structure map render (one map per polygon) on cart + vendor inbox.
+  function buildSinglePolygonStaticMapUrl(
+    poly: google.maps.Polygon | null,
+    color: string,
+  ): string | undefined {
+    const geo = geoRef.current
+    if (!geo || !poly || !MAPS_KEY) return undefined
+    const stroke = `0x${color.slice(1)}ff`
+    const fill = `0x${color.slice(1)}40`
+    const path = encodePolygonPath(poly, stroke, fill)
+    if (!path) return undefined
+    const params = new URLSearchParams()
+    params.set('size', '600x400')
+    params.set('maptype', 'satellite')
+    params.set('center', `${geo.lat},${geo.lng}`)
+    params.set('zoom', String(MAP_ZOOM))
+    params.set('scale', '2')
+    params.set('key', MAPS_KEY)
+    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}&path=${path}`
+  }
+
   function encodePolygonPath(
     poly: google.maps.Polygon,
     strokeArgb: string,
@@ -553,6 +596,14 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
   const showMap = phase === 'drawing' || phase === 'done' || phase === 'confirmed'
   const isDriveways = serviceCategory === 'driveways'
+  const isPergolas = serviceCategory === 'pergolas'
+  const totalPolygonCount = 1 + extraPolygons.length
+  // Driveways: unbounded extras (legacy). Pergolas: capped by maxPolygons
+  // (passed from service-detail = number of structures picked). Others: no
+  // extras (single-polygon flow unchanged).
+  const canAddAnotherArea =
+    (isDriveways && (maxPolygons === undefined || totalPolygonCount < maxPolygons)) ||
+    (isPergolas && maxPolygons !== undefined && maxPolygons > 1 && totalPolygonCount < maxPolygons)
   const mainSqft = Math.max(1, Number(editedSqft) || result?.areaSqft || 0)
   const extraTotal = extraPolygons.reduce((s, ep) => s + ep.areaSqft, 0)
   const grandTotal = mainSqft + extraTotal
@@ -711,7 +762,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
                 : `Use ${displayTotal.toLocaleString()} sqft`}
             </Button>
 
-            {isDriveways && (
+            {canAddAnotherArea && (
               <Button variant="outline" size="sm" onClick={startAddingExtra} data-measure-action="add-area">
                 <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
                 Add another area

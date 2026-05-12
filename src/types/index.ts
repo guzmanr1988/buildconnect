@@ -324,6 +324,11 @@ export interface OptionGroup {
   label: string
   required: boolean
   type: 'single' | 'multi'
+  // Cap for type:'multi' groups. When the user has maxSelect items picked,
+  // further chip taps no-op (existing selections still toggle off normally).
+  // Undefined = unlimited. Used by pergolas.structure (cap=2) so the
+  // homeowner can pick at most 2 structure types in one project.
+  maxSelect?: number
   options: ServiceOption[]
   // Only render + count-toward-progress once the referenced group has a matching
   // selection. With `equals`, reveal only when the referenced group contains that

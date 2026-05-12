@@ -429,9 +429,11 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         id: 'structure',
         label: 'Structure Type',
         required: true,
-        type: 'single',
+        type: 'multi',
+        maxSelect: 2,
         options: [
           { id: 'aluminum_terrace', label: 'Aluminum Terrace' },
+          { id: 'aluminum_pergola', label: 'Aluminum Pergola' },
         ],
       },
       {
