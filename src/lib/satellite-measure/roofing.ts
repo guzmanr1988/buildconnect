@@ -1,22 +1,11 @@
 import type { RoofingMeasurements } from './types'
 import { reconcileSplit, SQM_TO_SQFT } from '@/lib/roof-segment-classify'
+import { computePerimeterFt, type BoundingBox } from '@/lib/roof-perimeter'
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 const FLAT_PITCH_THRESHOLD_DEG = 5
-const M_TO_FT = 3.28084
-const EARTH_RADIUS_M = 6371000
-
-// Calibrated against a 5-address Miami-Dade / Broward sample (see
-// scripts/perimeter-calibration.md). Bbox-haversine gives the building
-// footprint perimeter; real drip-edge linear-ft on multi-plane roofs
-// runs along every pitched plane and can exceed footprint. The 1.15
-// floor covers that gap and keeps quotes top-of-real per launch
-// directive (Rod 2026-05-12: numbers must be 100% correct, err high).
-export const PERIMETER_MULTI_PLANE_BIAS = 1.15
 
 interface RoofSegmentStat { pitchDegrees: number; stats: { areaMeters2: number } }
-interface LatLng { latitude: number; longitude: number }
-interface BoundingBox { sw: LatLng; ne: LatLng }
 
 function classifySegments(segments: RoofSegmentStat[]) {
   let pitchedSqm = 0
@@ -45,26 +34,6 @@ export function computeDivergencePct(wholeSqft: number, segSumSqft: number): num
   return Math.min(1, Math.abs(wholeSqft - segSumSqft) / wholeSqft)
 }
 
-function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(b.lat - a.lat)
-  const dLng = toRad(b.lng - a.lng)
-  const lat1 = toRad(a.lat)
-  const lat2 = toRad(b.lat)
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(x))
-}
-
-function bboxPerimeterFt(bb: BoundingBox): number {
-  const sw = { lat: bb.sw.latitude, lng: bb.sw.longitude }
-  const ne = { lat: bb.ne.latitude, lng: bb.ne.longitude }
-  const nw = { lat: ne.lat, lng: sw.lng }
-  const se = { lat: sw.lat, lng: ne.lng }
-  const widthM = haversineMeters(sw, se)
-  const heightM = haversineMeters(sw, nw)
-  return (2 * widthM + 2 * heightM) * M_TO_FT
-}
-
 // Calls Google Solar API at lat/lng. Returns null on any failure — caller falls back.
 export async function measureRoofFromCoords(
   lat: number,
@@ -90,14 +59,7 @@ export async function measureRoofFromCoords(
     const rawSplit = classifySegments(roofSegmentStats)
     const areaSqft = Math.round(wholeRoofStats.areaMeters2 * SQM_TO_SQFT)
     const avgPitchDeg = roofSegmentStats.reduce((s, r) => s + r.pitchDegrees, 0) / (roofSegmentStats.length || 1)
-    // Base perimeter: bbox-haversine when the API returns a boundingBox;
-    // fall back to the legacy 4·sqrt(area) approximation if the field is
-    // absent (older / edge-case responses). Either path is multiplied by
-    // PERIMETER_MULTI_PLANE_BIAS for multi-plane drip-edge safety.
-    const basePerimeterFt = json.boundingBox
-      ? bboxPerimeterFt(json.boundingBox)
-      : Math.sqrt(areaSqft) * 4
-    const perimeterFt = Math.round(basePerimeterFt * PERIMETER_MULTI_PLANE_BIAS)
+    const perimeterFt = computePerimeterFt(json.boundingBox, areaSqft)
     // Raw divergence is preserved on the returned object so the wizard's
     // warning surface still fires when Solar under-covered the footprint;
     // pitched/flat below are reconciled to wholeRoofStats so downstream

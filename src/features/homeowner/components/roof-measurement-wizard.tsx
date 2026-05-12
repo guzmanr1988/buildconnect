@@ -4,6 +4,7 @@ import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
 import { evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { classifyRoofSegments, reconcileSplit, SQM_TO_SQFT } from '@/lib/roof-segment-classify'
+import { computePerimeterFt } from '@/lib/roof-perimeter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -192,15 +193,15 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
       return { ...mockMeasurement(address), canonicalAddress }
     }
     const solarJson = await solarRes.json() as {
+      boundingBox?: { sw: { latitude: number; longitude: number }; ne: { latitude: number; longitude: number } }
       solarPotential: {
         wholeRoofStats: { areaMeters2: number }
         roofSegmentStats: Array<{ pitchDegrees: number; stats: { areaMeters2: number } }>
         imageryQuality: 'HIGH' | 'MEDIUM' | 'LOW'
-        buildingStats?: { areaMeters2: number }
       }
     }
 
-    const { imageryQuality, wholeRoofStats, roofSegmentStats, buildingStats } = solarJson.solarPotential
+    const { imageryQuality, wholeRoofStats, roofSegmentStats } = solarJson.solarPotential
     console.debug('[Solar]', canonicalAddress, { imageryQuality, areaM2: wholeRoofStats.areaMeters2 })
 
     if (imageryQuality === 'LOW') {
@@ -219,9 +220,7 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
     )
     const pitch = degreesToPitch(weightedDeg)
 
-    // Rectangular approximation: perim = 5 * sqrt(footprint / 1.5), typical 3:2 aspect ratio
-    const footprintM2 = buildingStats?.areaMeters2 ?? (areaM2 / 1.3)  // fallback: deflate roof area
-    const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
+    const perimeterFt = computePerimeterFt(solarJson.boundingBox, areaSqft)
 
     // Raw classify → divergence on raw (so the warning surface still fires
     // when Solar under-covered) → reconcile to wholeRoofStats so the values
