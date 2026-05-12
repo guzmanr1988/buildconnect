@@ -118,6 +118,21 @@ interface MeasurementData {
   pitchedAreaSqft: number
   flatAreaSqft: number
   isMock?: boolean
+  wholeRoofDivergencePct?: number
+}
+
+// Threshold for the segment-sum vs whole-roof divergence catch. Tripping this
+// surfaces a warning that routes the homeowner to "Adjust roof area" so the
+// downstream price math doesn't silently undercount.
+const DIVERGENCE_WARN_THRESHOLD = 0.02
+
+// TODO(consolidate): same divergence calc lives in
+// src/lib/satellite-measure/roofing.ts as computeDivergencePct. Cleanup arc
+// owned by kratos — do NOT consolidate as part of T4/PR-181.
+function computeDivergencePct(wholeSqft: number, segSumSqft: number): number {
+  if (!Number.isFinite(wholeSqft) || wholeSqft <= 0) return 0
+  if (!Number.isFinite(segSumSqft)) return 0
+  return Math.min(1, Math.abs(wholeSqft - segSumSqft) / wholeSqft)
 }
 
 // ─── Measurement helper ───────────────────────────────────────────────────────
@@ -208,8 +223,9 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
     const perimeterFt = Math.round(5 * Math.sqrt(footprintM2 / 1.5) * 3.28084)
 
     const { pitchedAreaSqft, flatAreaSqft } = classifyRoofSegments(roofSegmentStats)
+    const wholeRoofDivergencePct = computeDivergencePct(areaSqft, pitchedAreaSqft + flatAreaSqft)
 
-    return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, canonicalAddress }
+    return { areaSqft, wasteSqft, pitch, perimeterFt, pitchedAreaSqft, flatAreaSqft, wholeRoofDivergencePct, canonicalAddress }
   } catch {
     return { ...mockMeasurement(address), canonicalAddress }
   }
@@ -293,7 +309,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     try {
       const result = await measureRoofFromAddress(addr.trim())
       if (result.canonicalAddress) setAddress(result.canonicalAddress)
-      setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft })
+      setMeasurement({ areaSqft: result.areaSqft, wasteSqft: result.wasteSqft, pitch: result.pitch, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, wholeRoofDivergencePct: result.wholeRoofDivergencePct })
       setAdjArea(String(Math.max(0, result.areaSqft - (result.flatAreaSqft || 0))))
       setAdjPitch(result.pitch)
       setAdjFlatArea(String(result.flatAreaSqft))
@@ -485,6 +501,27 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                   {measurement.isMock && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5 text-[12px] text-amber-800 dark:text-amber-300">
                       Satellite data wasn't available for this address — measurements below are estimates. Tap <span className="font-semibold">Adjust manually</span> to correct them before continuing.
+                    </div>
+                  )}
+                  {!measurement.isMock
+                    && measurement.wholeRoofDivergencePct !== undefined
+                    && measurement.wholeRoofDivergencePct > DIVERGENCE_WARN_THRESHOLD
+                    && !showAdjust && (
+                    <div
+                      role="alert"
+                      data-testid="solar-divergence-warning"
+                      className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5 text-[12px] text-amber-800 dark:text-amber-300 space-y-2"
+                    >
+                      <p>
+                        Satellite read appears <span className="font-semibold">{Math.round(measurement.wholeRoofDivergencePct * 100)}% below</span> building footprint.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdjust(true)}
+                        className="text-[12px] font-semibold underline underline-offset-2 hover:no-underline"
+                      >
+                        Adjust roof area
+                      </button>
                     </div>
                   )}
                   <RoofMeasurementBreakdownCard
