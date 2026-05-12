@@ -50,8 +50,8 @@ tests/snapshots/quote-protection/
     "chip=metal-only": {
       "userActions": [{ "step": 1, "type": "chip-tap", "value": "standing_seam_metal" }],
       "expectedStep2Totals": {
-        "gateLogic":      { "pitchedSqft": 2053, "flatSqft": 0, "totalSqft": 2053, "includeFlatDefault": false },
-        "canonicalTruth": { "pitchedSqft": 2475, "flatSqft": 0, "totalSqft": 2475 }
+        "gateLogic":      { "pitchedSqft": 2053, "flatSqft": 0, "totalSqft": 2094, "includeMaterialOrderDefault": true, "includePerimeterDefault": true },
+        "canonicalTruth": { "pitchedSqft": 2475, "flatSqft": 0, "totalSqft": 2525 }
       },
       "expectedCart": {
         "gateLogic":      { "roofMeasurement": { "pitchedSqft": 2053, "totalSqft": 2053 }, "items": [/* ... */] },
@@ -101,8 +101,10 @@ functions from `src/lib/`:
 - `classifyRoofSegments(solarResponse)` — Solar JSON to pitched/flat split
   (extracted from `roof-measurement-wizard.tsx` segment-classification
   loop into `src/lib/roof-segment-classify.ts`).
-- `resolveIncludeFlatDefault(userActions)` — chip-tap to includeFlat
-  derivation (extracted from `roofing-wizard.tsx`).
+- `resolveIncludeMaterialOrder(userActions)` — section-header toggle
+  resolution (defaults true; last explicit toggle wins).
+- `resolveIncludePerimeter(userActions)` — perimeter section-header
+  toggle resolution (defaults true; last explicit toggle wins).
 - `buildSelections(userActions)` — userActions to selections record.
 - `computeRoofTotal(...)` — already pure in `src/lib/roof-area-math.ts`.
 - `computeVendorTotal(...)` — already pure in `src/lib/api/pricing.ts`.

@@ -178,7 +178,7 @@ export function RoofingWizard({
   })
   const [roofMeasurement, setRoofMeasurement] = useState<{
     areaSqft: number; pitch: string; address: string
-    perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeFlat?: boolean
+    perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean
   } | null>(null)
   const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(() => {
     const raw = editItem?.roofAddonLinearFt as Record<string, number> | undefined
@@ -213,17 +213,17 @@ export function RoofingWizard({
     }
   }, [editItem, projectPermit, setProjectPermit, setProjectPermitWaiver])
 
-  // If the user re-measures and toggles includeFlat from true → false, prune
+  // If the user re-measures and toggles includeMaterialOrder from true → false, prune
   // selections.material to a single pitched entry so single-pitched mode on
   // Step 4 doesn't render with multiple radio-shaped selections.
   useEffect(() => {
-    if (roofMeasurement?.includeFlat !== false) return
+    if (roofMeasurement?.includeMaterialOrder !== false) return
     const mats = selections['material'] ?? []
     const hasFlat = mats.includes('flat_roof')
     const pitched = mats.filter((m) => m !== 'flat_roof')
     if (!hasFlat && pitched.length <= 1) return
     setSelections((prev) => ({ ...prev, material: pitched.slice(0, 1) }))
-  }, [roofMeasurement?.includeFlat])
+  }, [roofMeasurement?.includeMaterialOrder])
 
   const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
 
@@ -256,7 +256,7 @@ export function RoofingWizard({
   function handleWizardComplete(result: RoofWizardResult) {
     if (flowPath !== 'addons_only') {
       const materials = [result.material]
-      if (result.includeFlat && result.material !== 'flat_roof') materials.push('flat_roof')
+      if (result.includeMaterialOrder && result.material !== 'flat_roof') materials.push('flat_roof')
       setSelections((prev) => ({ ...prev, material: materials }))
       if (result.material === 'metal') {
         const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
@@ -266,7 +266,7 @@ export function RoofingWizard({
     setRoofMeasurement({
       areaSqft: result.areaSqft, pitch: result.pitch, address: result.address,
       perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft,
-      flatAreaSqft: result.flatAreaSqft, includeFlat: result.includeFlat,
+      flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder,
     })
     setWizardOpen(false)
     toast.success('Roof measured — config pre-filled!')
@@ -352,9 +352,9 @@ export function RoofingWizard({
   const shingleSelected = selectedMaterials.includes('shingle')
   const tileSelected = selectedMaterials.includes('barrel_tile') || selectedMaterials.includes('terracotta')
   // Step 4 is single-select when the home has no flat section (RoofMeasurementWizard
-  // captured includeFlat=false). Multi-select stays when the home has both flat
+  // captured includeMaterialOrder=false). Multi-select stays when the home has both flat
   // + sloped sections so the user can pair a pitched material with flat_roof.
-  const isSinglePitchedMode = roofMeasurement?.includeFlat === false
+  const isSinglePitchedMode = roofMeasurement?.includeMaterialOrder === false
   const linearFtAddonIds = ADDON_LINEAR_FT_IDS.filter((id) => selectedAddons.includes(id))
 
   const visibleAddonOptions = addonsGroup.options.filter((opt) =>
@@ -595,7 +595,7 @@ export function RoofingWizard({
           <div className="flex flex-col gap-3" data-roofing-material-mode={isSinglePitchedMode ? 'single' : 'multi'}>
             {materialGroup.options.map((opt) => {
               const isSelected = selectedMaterials.includes(opt.id)
-              const isFlatGated = opt.id === 'flat_roof' && roofMeasurement?.includeFlat === false
+              const isFlatGated = opt.id === 'flat_roof' && roofMeasurement?.includeMaterialOrder === false
               return (
                 <button
                   key={opt.id}
@@ -915,9 +915,9 @@ export function RoofingWizard({
                     <>
                       <p className="text-sm text-foreground">
                         {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
-                          const { pitchedAreaSqft, flatAreaSqft, includeFlat } = roofMeasurement
+                          const { pitchedAreaSqft, flatAreaSqft } = roofMeasurement
                           if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                            return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeFlat: includeFlat ?? (flatAreaSqft > 0) }).totalSquares
+                            return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeMaterialOrder: true }).totalSquares
                           }
                           return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
                         })()} squares w/waste

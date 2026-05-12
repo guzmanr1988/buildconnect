@@ -153,17 +153,14 @@ export function computeVendorTotal(
             const sib = services ? findCatalogOption(services, item.serviceId, id) : undefined
             return getOptionMetadata(id, item.serviceId, sib).priceUnit === 'square'
           })
-          const includeFlatOpt = item.roofMeasurement?.includeFlat !== false
-          const includePitchedOpt = item.roofMeasurement?.includePitched !== false
+          const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
-            && includeFlatOpt && includePitchedOpt
-          // Per-area opt-out: when a slice is toggled off, zero the billable
-          // area for the material(s) that bill against it. Pitched options
-          // (square-priced, non-flat) read 0 when !includePitchedOpt; flat
-          // option reads 0 when !includeFlatOpt. Single-material non-split
-          // payloads fall through to the legacy areaSqft path.
-          const sliceZeroed = isFlatOpt ? !includeFlatOpt : !includePitchedOpt
-          const rawSqft = sliceZeroed
+            && includeMaterialOrderOpt
+          // Material-order opt-out: when the section toggle is OFF, no
+          // roof-material line items reach the quote. Both pitched (square-
+          // priced, non-flat) and flat options read 0. Single-material non-
+          // split payloads fall through to the legacy areaSqft path.
+          const rawSqft = !includeMaterialOrderOpt
             ? 0
             : useSplit
               ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
@@ -192,13 +189,21 @@ export function computeVendorTotal(
         } else if (meta.priceUnit === 'linear_ft') {
           // Resolve linear ft source: roofAddonLinearFt (existing roofing
           // addons, with gutter drops math) OR addonLinearFt (generic
-          // non-roofing addons like pool_fence).
+          // non-roofing addons like pool_fence). Roof perimeter add-ons gate
+          // on includePerimeter — when the section toggle is OFF, no
+          // gutter/fascia/soffit line items reach the quote.
           const roofLinFt = item.roofAddonLinearFt?.[optionId]
-          const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
-          const effectiveLinFt = optionId === 'gutters'
-            ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
-            : linFt
-          totalCents += basePrice * effectiveLinFt
+          const isRoofPerimeterAddon = roofLinFt !== undefined
+          const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
+          if (isRoofPerimeterAddon && !includePerimeterOpt) {
+            // Zero contribution — perimeter toggle excluded this line item.
+          } else {
+            const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
+            const effectiveLinFt = optionId === 'gutters'
+              ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
+              : linFt
+            totalCents += basePrice * effectiveLinFt
+          }
         } else {
           totalCents += basePrice
         }
