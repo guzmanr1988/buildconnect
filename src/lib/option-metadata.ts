@@ -82,7 +82,6 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   repair_barrel_tile: { priceUnit: 'sqft' },
   repair_metal: { priceUnit: 'sqft' },
   repair_aluminum: { priceUnit: 'sqft' },
-  repair_terracotta: { priceUnit: 'sqft' },
   repair_flat_roof: { priceUnit: 'sqft' },
 }
 

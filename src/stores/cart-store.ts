@@ -188,7 +188,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 5,
+      version: 6,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -289,6 +289,27 @@ export const useCartStore = create<CartState>()(
               const cleaned: Record<string, string[]> = {}
               for (const [groupId, optionIds] of Object.entries(item.selections)) {
                 cleaned[groupId] = (optionIds ?? []).filter((id) => !PERGOLAS_REMOVED.has(id))
+              }
+              return { ...item, selections: cleaned }
+            }),
+          }
+        }
+        if (version < 6) {
+          // Rod 22:38Z directive: remove 'Terracotta Clay' from roofing
+          // material + repair_materials (Barrel Tile covers the Mediterranean
+          // tile-roof flow; terracotta is a duplicate). Strip 'terracotta'
+          // from selections.material and 'repair_terracotta' from
+          // selections.repair_materials so stale carts don't render invisible
+          // chip selections blocking the required-group gate. Mirrors v4->v5
+          // PERGOLAS_REMOVED strip pattern.
+          const ROOFING_REMOVED = new Set(['terracotta', 'repair_terracotta'])
+          state = {
+            ...state,
+            items: (state.items ?? []).map((item) => {
+              if (item.serviceId !== 'roofing' || !item.selections) return item
+              const cleaned: Record<string, string[]> = {}
+              for (const [groupId, optionIds] of Object.entries(item.selections)) {
+                cleaned[groupId] = (optionIds ?? []).filter((id) => !ROOFING_REMOVED.has(id))
               }
               return { ...item, selections: cleaned }
             }),
