@@ -417,6 +417,28 @@ export function ServiceDetailPage() {
     }
   }, [roofMeasurement?.pitchedAreaSqft, roofMeasurement?.flatAreaSqft, roofMeasurement?.areaSqft, (selections['material'] ?? []).join(',')])
 
+  // PR-216 follow-up — corrective layer pairing with the click-time defensive
+  // close (handleSelect early-return). When roofMeasurement flips into
+  // perimeter-only mode (includeMaterialOrder=false AND includePerimeter=true),
+  // any previously-open material configurator must close. Otherwise the
+  // configurator stays sticky across the mode transition (selected.includes('X')
+  // && XConfigOpen both true), defeating the info-only contract for the
+  // perimeter-only chip-tap. Defensive + corrective pairing per
+  // feedback_defensive_plus_corrective_pairing.
+  useEffect(() => {
+    const inPerimeterOnly =
+      serviceId === 'roofing' &&
+      roofMeasurement?.includeMaterialOrder === false &&
+      roofMeasurement?.includePerimeter === true
+    if (inPerimeterOnly) {
+      setMetalRoofConfigOpen(false)
+      setShingleConfigOpen(false)
+      setTileConfigOpen(false)
+      setAluminumConfigOpen(false)
+      setFlatRoofConfigOpen(false)
+    }
+  }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
+
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)
@@ -881,7 +903,19 @@ export function ServiceDetailPage() {
                           // "What is your existing roof?" question — info-only. Skip
                           // the material configurators (color/size = pricing inputs)
                           // to honor the no-pricing-table contract for this mode.
-                          if (isRoofingPerimeterOnly && group.id === 'material') return
+                          // PR-216 follow-up: explicit setX(false) before return —
+                          // the early-return alone left sticky-open state when the
+                          // useState initializer had defaulted to true (color empty).
+                          // Pair with the [isRoofingPerimeterOnly] transition useEffect
+                          // above; defensive+corrective per memory.
+                          if (isRoofingPerimeterOnly && group.id === 'material') {
+                            setMetalRoofConfigOpen(false)
+                            setShingleConfigOpen(false)
+                            setTileConfigOpen(false)
+                            setAluminumConfigOpen(false)
+                            setFlatRoofConfigOpen(false)
+                            return
+                          }
                           // Ship #255 — multi-select material. `selected` is the
                           // pre-click state, so includes('metal') tells us whether
                           // THIS click de-selects metal (was in, now out) or adds
