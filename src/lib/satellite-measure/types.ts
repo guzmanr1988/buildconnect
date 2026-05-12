@@ -17,6 +17,10 @@ export interface RoofingMeasurements {
   flatAreaSqft?: number
   perimeterFt: number
   includeFlat?: boolean
+  // |wholeRoofStats - (pitched + flat)| / wholeRoofStats. Solar's segment
+  // list sometimes drops sub-threshold facets; the warning surface uses
+  // this to route the homeowner to Adjust roof area before continuing.
+  wholeRoofDivergencePct?: number
 }
 
 export interface AreaOnlyMeasurements {
