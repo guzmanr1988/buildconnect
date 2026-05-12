@@ -23,12 +23,20 @@ export async function getVendorProfile(id: string) {
 }
 
 export async function updateVendor(id: string, updates: Partial<Vendor>) {
-  const { data, error } = await supabase
+  // PR-218 — drop .select().single() (n=3 same-class with Q1 #275 NCA
+  // persistence + Ship #322 register signup-partial-fail). .single() throws
+  // PGRST116 when SELECT-after-UPDATE returns 0 rows — most commonly when
+  // profile.id (zustand-persist cache) is stale vs auth.uid() at write time,
+  // so .eq('id', staleId) matches 0 rows under RLS. The throw fires a false
+  // error toast even when the user's session is healthy. Callers
+  // (register.tsx, non-circumvention-agreement-dialog.tsx) await-and-discard
+  // — return value was unused. True errors (401, RLS deny, network) still
+  // populate `error` and throw; only the brittle 0-row .single() throw
+  // path is closed.
+  const { error } = await supabase
     .from('profiles')
     .update(updates)
     .eq('id', id)
-    .select()
-    .single()
   if (error) throw error
   // Phase 2 real geocoding: fire-and-forget Edge Fn call when address changed
   // so latitude/longitude get populated asynchronously. Failures don't block
@@ -36,5 +44,4 @@ export async function updateVendor(id: string, updates: Partial<Vendor>) {
   if (typeof updates.address === 'string' && updates.address.trim()) {
     void geocodeVendorAddress(id, updates.address)
   }
-  return data as Vendor
 }
