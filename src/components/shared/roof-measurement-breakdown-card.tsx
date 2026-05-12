@@ -186,7 +186,7 @@ export function RoofMeasurementBreakdownCard({
           </div>
 
           {hasFlatArea && (
-          <div className="relative" data-row="flat">
+          <div className="relative">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
             {editing?.flat.active ? (
               <div className="flex items-center gap-2 mt-0.5">
@@ -235,7 +235,7 @@ export function RoofMeasurementBreakdownCard({
               </div>
             )}
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Flat: {Math.round(flatAreaSqft).toLocaleString()} sqft + 2% waste
+              Flat: <span data-row="flat">{Math.round(flatAreaSqft).toLocaleString()}</span> sqft + 2% waste
             </p>
           </div>
           )}
