@@ -7,7 +7,6 @@ export const ROOFING_PITCHED_MATERIALS: ReadonlySet<string> = new Set([
   'barrel_tile',
   'metal',
   'aluminum',
-  'terracotta',
 ])
 
 export function applyRoofingMaterialPitchedSingleton(current: string[], tappedId: string): string[] {
