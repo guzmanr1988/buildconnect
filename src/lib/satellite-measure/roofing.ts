@@ -65,6 +65,22 @@ function bboxPerimeterFt(bb: BoundingBox): number {
   return (2 * widthM + 2 * heightM) * M_TO_FT
 }
 
+// Solar's roofSegmentStats sometimes under-covers wholeRoofStats (sub-threshold
+// facets dropped). Scale raw pitched/flat to sum to targetSqft while preserving
+// Solar's pitched:flat ratio. flatAreaSqft is rounded; pitchedAreaSqft is the
+// remainder so the two fields sum to exactly targetSqft (no rounding drift).
+// Edge: rawSum <= 0 → all-pitched (residential roofs are pitched-dominant;
+// homeowner can override via the Adjust roof area panel).
+function reconcileSplit(
+  raw: { pitchedAreaSqft: number; flatAreaSqft: number },
+  targetSqft: number,
+): { pitchedAreaSqft: number; flatAreaSqft: number } {
+  const rawSum = raw.pitchedAreaSqft + raw.flatAreaSqft
+  if (rawSum <= 0) return { pitchedAreaSqft: targetSqft, flatAreaSqft: 0 }
+  const flatAreaSqft = Math.round((raw.flatAreaSqft / rawSum) * targetSqft)
+  return { pitchedAreaSqft: targetSqft - flatAreaSqft, flatAreaSqft }
+}
+
 // Calls Google Solar API at lat/lng. Returns null on any failure — caller falls back.
 export async function measureRoofFromCoords(
   lat: number,
@@ -87,7 +103,7 @@ export async function measureRoofFromCoords(
     const { imageryQuality, wholeRoofStats, roofSegmentStats } = json.solarPotential
     if (imageryQuality === 'LOW') return null
 
-    const { pitchedAreaSqft, flatAreaSqft } = classifySegments(roofSegmentStats)
+    const rawSplit = classifySegments(roofSegmentStats)
     const areaSqft = Math.round(wholeRoofStats.areaMeters2 * SQM_TO_SQFT)
     const avgPitchDeg = roofSegmentStats.reduce((s, r) => s + r.pitchDegrees, 0) / (roofSegmentStats.length || 1)
     // Base perimeter: bbox-haversine when the API returns a boundingBox;
@@ -98,10 +114,16 @@ export async function measureRoofFromCoords(
       ? bboxPerimeterFt(json.boundingBox)
       : Math.sqrt(areaSqft) * 4
     const perimeterFt = Math.round(basePerimeterFt * PERIMETER_MULTI_PLANE_BIAS)
-    // TODO(consolidate): same divergence calc mirrored in
-    // src/features/homeowner/components/roof-measurement-wizard.tsx where the
-    // wizard has its own inline Solar caller. Cleanup arc owned by kratos.
-    const wholeRoofDivergencePct = computeDivergencePct(areaSqft, pitchedAreaSqft + flatAreaSqft)
+    // Raw divergence is preserved on the returned object so the wizard's
+    // warning surface still fires when Solar under-covered the footprint;
+    // pitched/flat below are reconciled to wholeRoofStats so downstream
+    // cost-math (pricing.ts useSplit, booking-confirmation per-material
+    // rawSqft, service-detail chip-tap) reads numbers that sum to areaSqft.
+    // TODO(polish-wrap): the wizard's inline measureRoofFromAddress mirrors
+    // this classifySegments→pitched+flat path and will need the same
+    // reconciliation when the wizard wakes from dormant pre-launch.
+    const wholeRoofDivergencePct = computeDivergencePct(areaSqft, rawSplit.pitchedAreaSqft + rawSplit.flatAreaSqft)
+    const { pitchedAreaSqft, flatAreaSqft } = reconcileSplit(rawSplit, areaSqft)
 
     return {
       type: 'roofing',
