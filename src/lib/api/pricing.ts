@@ -158,13 +158,17 @@ export function computeVendorTotal(
             && includeMaterialOrderOpt
           // Material-order opt-out: when the section toggle is OFF, no
           // roof-material line items reach the quote. Both pitched (square-
-          // priced, non-flat) and flat options read 0. Single-material non-
-          // split payloads fall through to the legacy areaSqft path.
+          // priced, non-flat) and flat options read 0. When split data is
+          // available, each option prices against its own area; otherwise
+          // fall back to the option-specific area (pitched-only for non-flat
+          // options, flat-only for flat_roof) to avoid flat-priced-as-metal.
           const rawSqft = !includeMaterialOrderOpt
             ? 0
             : useSplit
               ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
-              : (item.roofMeasurement?.areaSqft ?? 0)
+              : (isFlatOpt
+                  ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
+                  : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
           const wasteFactor = 1.02
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)

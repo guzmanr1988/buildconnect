@@ -198,13 +198,12 @@ function getRoofSegments(solar: SolarRecording): RoofSegmentStat[] {
  * Mirrors roof-measurement-wizard.tsx surfaces:
  *  - step2: what the user sees on the Step-2 panel inside the modal
  *           (Total label uses computeRoofTotal post-waste; pitched/flat
- *            labels gated by chip-tap — pitched shows raw pre-waste when
- *            any non-flat material chip is tapped; flat label renders
- *            round(rawFlat*1.02) only when flat_roof chip is tapped).
+ *            labels are raw pre-waste from satellite, NOT gated by chip-tap
+ *            — Material Order is the single area gate, chip-tap drives
+ *            material assignment only).
  *  - cart : what handleComplete writes to cart-store.roofMeasurement
- *           (raw pre-waste values gated by chip-tap AND the section-level
- *            includeMaterialOrder toggle; flatAreaSqft zeroed when chip
- *            unselected or when section toggle off).
+ *           (raw pre-waste pitched + flat written unconditionally when
+ *            Material Order toggle is ON; both zeroed when toggle is OFF).
  */
 function runScenarioOutput(
   fixture: Fixture,
@@ -217,21 +216,19 @@ function runScenarioOutput(
   const includePerimeter = resolveIncludePerimeter(output.userActions)
   const selections = buildSelections(output.userActions)
   const matSelections = selections.material ?? []
-  const hasPitchedChip = matSelections.some((m) => m !== 'flat_roof')
-  const hasFlatChip = matSelections.includes('flat_roof')
-
-  const pitchedForOrder = hasPitchedChip ? pitchedAreaSqft : 0
-  const flatForOrder = hasFlatChip ? flatAreaSqft : 0
 
   const totals = computeRoofTotal({
-    pitchedAreaSqft: pitchedForOrder,
-    flatAreaSqft: flatForOrder,
+    pitchedAreaSqft,
+    flatAreaSqft,
     includeMaterialOrder,
   })
-  const step2FlatSqft = flatForOrder > 0 ? Math.round(flatForOrder * 1.02) : 0
+  const step2FlatSqft = includeMaterialOrder && flatAreaSqft > 0
+    ? Math.round(flatAreaSqft * 1.02)
+    : 0
+  const step2PitchedSqft = includeMaterialOrder ? pitchedAreaSqft : 0
 
   const step2: Step2Expected = {
-    pitchedSqft: pitchedForOrder,
+    pitchedSqft: step2PitchedSqft,
     flatSqft: step2FlatSqft,
     totalSqft: totals.totalSqft,
     squares: totals.totalSquares,
@@ -239,8 +236,8 @@ function runScenarioOutput(
     includePerimeterDefault: includePerimeter,
   }
 
-  const cartPitched = includeMaterialOrder && hasPitchedChip ? pitchedAreaSqft : 0
-  const cartFlat = includeMaterialOrder && hasFlatChip ? flatAreaSqft : 0
+  const cartPitched = includeMaterialOrder ? pitchedAreaSqft : 0
+  const cartFlat = includeMaterialOrder ? flatAreaSqft : 0
   const cartTotal = cartPitched + cartFlat
   const serviceIds = matSelections.length > 0 ? ['roofing'] : []
   const cart: CartExpected = {

@@ -20,8 +20,6 @@ export type RoofMeasurementBreakdownCardProps = {
   flatAreaSqft: number
   pitch: string
   perimeterFt: number
-  material: string | null
-  hasFlatSection: boolean
   includeMaterialOrder: boolean
   includePerimeter: boolean
   pitchedOmittedTriggered?: boolean
@@ -32,13 +30,15 @@ export type RoofMeasurementBreakdownCardProps = {
   editing?: { pitched: EditingControls; flat: EditingControls }
 }
 
+// Material Order toggle is the single area gate. Chip-tap drives material
+// selection (vendor SKU mapping), not whether the area belongs in the
+// order — both pitched and flat are part of the Material Order bundle
+// whenever the satellite measured them.
 export function RoofMeasurementBreakdownCard({
   pitchedAreaSqft,
   flatAreaSqft,
   pitch,
   perimeterFt,
-  material,
-  hasFlatSection,
   includeMaterialOrder,
   includePerimeter,
   pitchedOmittedTriggered = false,
@@ -49,9 +49,8 @@ export function RoofMeasurementBreakdownCard({
   editing,
 }: RoofMeasurementBreakdownCardProps) {
   const isAddonsOnly = flowPath === 'addons_only'
-  const isPitchedSelected = material !== null
-  const flatForOrder = hasFlatSection ? flatAreaSqft : 0
-  const showAreaBreakdown = !isAddonsOnly && includeMaterialOrder && (pitchedAreaSqft > 0 || flatForOrder > 0)
+  const hasFlatArea = flatAreaSqft > 0
+  const showAreaBreakdown = !isAddonsOnly && includeMaterialOrder && (pitchedAreaSqft > 0 || hasFlatArea)
 
   return (
     <div
@@ -66,20 +65,20 @@ export function RoofMeasurementBreakdownCard({
               <div className="flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 text-primary" />
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Material Order{includeMaterialOrder && (
-                    <>
-                      {' '}
-                      <span className="text-muted-foreground/70 normal-case font-medium">
-                        ({(() => {
-                          const parts: string[] = []
-                          if (isPitchedSelected) parts.push('pitched')
-                          if (hasFlatSection && flatAreaSqft > 0) parts.push('flat')
-                          if (parts.length === 0) return 'nothing selected'
-                          return parts.join(' + ')
-                        })()})
-                      </span>
-                    </>
-                  )}
+                  Material Order{includeMaterialOrder && (() => {
+                    const parts: string[] = []
+                    if (pitchedAreaSqft > 0) parts.push('pitched')
+                    if (hasFlatArea) parts.push('flat')
+                    if (parts.length === 0) return null
+                    return (
+                      <>
+                        {' '}
+                        <span className="text-muted-foreground/70 normal-case font-medium">
+                          ({parts.join(' + ')})
+                        </span>
+                      </>
+                    )
+                  })()}
                 </span>
               </div>
               {onToggleMaterialOrder && (
@@ -96,21 +95,21 @@ export function RoofMeasurementBreakdownCard({
             </div>
             {includeMaterialOrder ? (() => {
               const { pitchedWaste, flatWaste, totalSqft } = computeRoofTotal({
-                pitchedAreaSqft: isPitchedSelected ? Math.round(pitchedAreaSqft) : 0,
-                flatAreaSqft: hasFlatSection ? Math.round(flatAreaSqft) : 0,
+                pitchedAreaSqft: Math.round(pitchedAreaSqft),
+                flatAreaSqft: Math.round(flatAreaSqft),
                 includeMaterialOrder: true,
               })
               const orderSqft = totalSqft
               const orderSquares = Math.ceil(orderSqft / 100)
               const sublabelParts: string[] = []
-              if (isPitchedSelected && pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
+              if (pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
               if (flatWaste > 0) sublabelParts.push(`Flat ${Math.round(flatAreaSqft).toLocaleString()}`)
               const sublabel = sublabelParts.length === 0
-                ? 'Tap a material chip on the page to start an order.'
+                ? 'Roof measurement pending — re-measure or adjust to start an order.'
                 : `${sublabelParts.join(' + ')} sqft + 2% waste`
               return (
                 <>
-                  <p className="text-xl font-bold text-foreground">
+                  <p className="text-xl font-bold text-foreground" data-row="material-order-headline">
                     {orderSqft.toLocaleString()}{' '}
                     <span className="text-sm font-normal text-muted-foreground">sqft ({orderSquares} squares)</span>
                   </p>
@@ -186,8 +185,8 @@ export function RoofMeasurementBreakdownCard({
             </span>
           </div>
 
-          {hasFlatSection && (
-          <div className="relative">
+          {hasFlatArea && (
+          <div className="relative" data-row="flat">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flat Area</span>
             {editing?.flat.active ? (
               <div className="flex items-center gap-2 mt-0.5">
@@ -242,6 +241,7 @@ export function RoofMeasurementBreakdownCard({
           )}
 
           <div
+            data-row="pitched"
             {...(pitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
             className={cn(
               pitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : '',
@@ -318,12 +318,12 @@ export function RoofMeasurementBreakdownCard({
 
       {!isAddonsOnly && (() => {
         const { totalSqft, totalSquares } = computeRoofTotal({
-          pitchedAreaSqft: isPitchedSelected ? Math.round(pitchedAreaSqft) : 0,
-          flatAreaSqft: hasFlatSection ? Math.round(flatAreaSqft) : 0,
+          pitchedAreaSqft: Math.round(pitchedAreaSqft),
+          flatAreaSqft: Math.round(flatAreaSqft),
           includeMaterialOrder,
         })
         return (
-          <div className="border-t pt-3">
+          <div className="border-t pt-3" data-row-total="material-order">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
             <p className="text-xl font-bold text-foreground mt-0.5">
               {totalSqft.toLocaleString()}{' '}
