@@ -15,6 +15,7 @@ import {
   Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -127,15 +128,23 @@ export default function UsersPage() {
     status: 'active',
   })
 
-  // Reset-password dialog (ship #136 per kratos msg 1776743142043).
-  // Service-role-key is server-only so both paths are mock-stubbed client-
-  // side until a Supabase Edge Function lands (Tranche-2). UX shape is real;
-  // wiring is not.
+  // Reset-password dialog (ship #136 + task_1776743274579_661 Tranche-2).
+  // Both paths now call the admin-reset-password Edge Function which holds
+  // the service-role key server-side. Bearer token is the admin's session
+  // JWT; Edge Function re-verifies it + checks profiles.role='admin' before
+  // doing anything privileged.
   const [resetTarget, setResetTarget] = useState<MockUser | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetTab, setResetTab] = useState<'link' | 'password'>('link')
   const [resetNewPassword, setResetNewPassword] = useState('')
   const [resetConfirmPassword, setResetConfirmPassword] = useState('')
+  const [resetSubmitting, setResetSubmitting] = useState(false)
+
+  // Four-refinement confirm dialog state for the destructive
+  // set-password-manually path (per feedback_destructive_confirm_four_refinements):
+  // named-target + earned-by-typing + steer-to-cancel + verb-matched-cancel.
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTypedEmail, setConfirmTypedEmail] = useState('')
 
   function openResetPassword(user: MockUser) {
     setResetTarget(user)
@@ -145,16 +154,58 @@ export default function UsersPage() {
     setResetOpen(true)
   }
 
-  function submitResetLink() {
-    if (!resetTarget) return
-    // Mock stub: in Tranche-2, call a Supabase Edge Function that uses the
-    // service-role key to fire supabase.auth.admin.resetPasswordForEmail.
-    toast.success(`Reset link sent to ${resetTarget.email} (mock)`, {
-      description: 'Tranche-2: wire to Supabase Edge Function with service-role.',
+  // Calls the admin-reset-password Edge Function. Returns the parsed JSON
+  // response and HTTP status — callers map status to toast shape so error
+  // codes from the function (e.g. rate_limit_exceeded) surface to the
+  // operator instead of being swallowed as a generic 'failed' toast.
+  async function callAdminResetFn(
+    body: Record<string, unknown>,
+  ): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      return { ok: false, status: 401, data: { error: 'no_admin_session' } }
+    }
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
     })
-    setResetOpen(false)
+    let data: Record<string, unknown> = {}
+    try {
+      data = await resp.json()
+    } catch {
+      data = { error: 'invalid_response' }
+    }
+    return { ok: resp.ok, status: resp.status, data }
   }
 
+  async function submitResetLink() {
+    if (!resetTarget || resetSubmitting) return
+    setResetSubmitting(true)
+    try {
+      const { ok, data } = await callAdminResetFn({
+        action: 'send-reset-link',
+        targetEmail: resetTarget.email,
+      })
+      if (!ok) {
+        toast.error(`Reset link failed: ${data.error ?? 'unknown_error'}`)
+        return
+      }
+      toast.success(`Reset link sent to ${resetTarget.email}`)
+      setResetOpen(false)
+    } finally {
+      setResetSubmitting(false)
+    }
+  }
+
+  // Step 1 of set-password flow — validates inputs then opens the
+  // four-refinement confirm dialog. The actual privileged call happens in
+  // confirmAndSetPassword(), gated on the operator typing the target email.
   function submitResetPassword() {
     if (!resetTarget) return
     if (resetNewPassword.length < 8) {
@@ -165,12 +216,33 @@ export default function UsersPage() {
       toast.error('Passwords do not match')
       return
     }
-    // Mock stub: in Tranche-2, call Supabase Edge Function that fires
-    // supabase.auth.admin.updateUserById({ password }) with service-role key.
-    toast.success(`Password reset for ${resetTarget.email} (mock)`, {
-      description: 'Tranche-2: wire to Supabase Edge Function with service-role.',
-    })
-    setResetOpen(false)
+    setConfirmTypedEmail('')
+    setConfirmOpen(true)
+  }
+
+  async function confirmAndSetPassword() {
+    if (!resetTarget || resetSubmitting) return
+    if (confirmTypedEmail.trim().toLowerCase() !== resetTarget.email.toLowerCase()) {
+      toast.error('Typed email does not match target')
+      return
+    }
+    setResetSubmitting(true)
+    try {
+      const { ok, data } = await callAdminResetFn({
+        action: 'set-user-password',
+        targetEmail: resetTarget.email,
+        newPassword: resetNewPassword,
+      })
+      if (!ok) {
+        toast.error(`Set password failed: ${data.error ?? 'unknown_error'}`)
+        return
+      }
+      toast.success(`Password set for ${resetTarget.email}`)
+      setConfirmOpen(false)
+      setResetOpen(false)
+    } finally {
+      setResetSubmitting(false)
+    }
   }
 
   /* ---- Filtered list ---- */
@@ -322,6 +394,8 @@ export default function UsersPage() {
                               onClick={() => openResetPassword(user)}
                               title="Reset password"
                               aria-label={`Reset password for ${user.name}`}
+                              data-testid="admin-reset-row-trigger"
+                              data-target-email={user.email}
                             >
                               <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
@@ -483,7 +557,7 @@ export default function UsersPage() {
 
       {/* ---- Reset Password Dialog (ship #136) ---- */}
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" data-testid="admin-reset-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-amber-600" />
@@ -497,11 +571,11 @@ export default function UsersPage() {
           </DialogHeader>
           <Tabs value={resetTab} onValueChange={(v) => setResetTab(v as 'link' | 'password')} className="mt-2">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="link" className="gap-1.5">
+              <TabsTrigger value="link" className="gap-1.5" data-testid="admin-reset-tab-link">
                 <Mail className="h-3.5 w-3.5" />
                 Send Reset Link
               </TabsTrigger>
-              <TabsTrigger value="password" className="gap-1.5">
+              <TabsTrigger value="password" className="gap-1.5" data-testid="admin-reset-tab-password">
                 <KeyRound className="h-3.5 w-3.5" />
                 Set New Password
               </TabsTrigger>
@@ -510,12 +584,14 @@ export default function UsersPage() {
               <p className="text-sm text-muted-foreground">
                 An email with a password-reset link will be sent to the user. They can set their own new password from the link.
               </p>
-              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <span className="font-semibold">Demo note:</span> v1 stubs this with a toast. Production wiring (Supabase Edge Function + service-role key) is a Tranche-2 task.
-              </div>
-              <Button onClick={submitResetLink} className="w-full gap-2">
+              <Button
+                onClick={submitResetLink}
+                disabled={resetSubmitting}
+                className="w-full gap-2"
+                data-testid="admin-reset-submit-link"
+              >
                 <Mail className="h-4 w-4" />
-                Send Reset Link
+                {resetSubmitting ? 'Sending...' : 'Send Reset Link'}
               </Button>
             </TabsContent>
             <TabsContent value="password" className="space-y-3 py-4">
@@ -523,6 +599,7 @@ export default function UsersPage() {
                 <Label htmlFor="reset-new-password">New password</Label>
                 <Input
                   id="reset-new-password"
+                  data-testid="admin-reset-new-password"
                   type="password"
                   value={resetNewPassword}
                   onChange={(e) => setResetNewPassword(e.target.value)}
@@ -534,6 +611,7 @@ export default function UsersPage() {
                 <Label htmlFor="reset-confirm-password">Confirm password</Label>
                 <Input
                   id="reset-confirm-password"
+                  data-testid="admin-reset-confirm-password-input"
                   type="password"
                   value={resetConfirmPassword}
                   onChange={(e) => setResetConfirmPassword(e.target.value)}
@@ -541,17 +619,84 @@ export default function UsersPage() {
                   autoComplete="new-password"
                 />
               </div>
-              <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <span className="font-semibold">Demo note:</span> v1 stubs this with a toast. Production wiring (Supabase Edge Function + service-role key) is a Tranche-2 task.
-              </div>
-              <Button onClick={submitResetPassword} className="w-full gap-2">
+              <Button
+                onClick={submitResetPassword}
+                disabled={resetSubmitting}
+                variant="destructive"
+                className="w-full gap-2"
+                data-testid="admin-reset-submit-password"
+              >
                 <KeyRound className="h-4 w-4" />
-                Set New Password
+                Set Password Manually
               </Button>
             </TabsContent>
           </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- Four-refinement confirm for destructive set-password path ----
+         Named-target: dialog quotes the exact target user + email.
+         Earned: confirm button stays disabled until operator types the
+                 target email back verbatim (case-insensitive).
+         Steer:   Cancel is the default-styled action; destructive is red.
+         Verb-matched-cancel: cancel verb is "Cancel" not "Close" — the
+                 cancel button reverses the same verb the user is about to
+                 commit (set password). */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="admin-reset-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 dark:text-red-400">
+              Set password for {resetTarget?.name}?
+            </DialogTitle>
+            <DialogDescription>
+              This will overwrite the current password for{' '}
+              <span
+                className="font-medium text-foreground"
+                data-testid="admin-reset-confirm-target-email"
+              >
+                {resetTarget?.email}
+              </span>{' '}
+              immediately. The user will not be notified by email. Prefer
+              "Send Reset Link" unless you have a direct out-of-band way to
+              tell them the new password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="confirm-typed-email">
+              Type <span className="font-mono text-foreground">{resetTarget?.email}</span> to confirm
+            </Label>
+            <Input
+              id="confirm-typed-email"
+              data-testid="admin-reset-confirm-typed-email"
+              value={confirmTypedEmail}
+              onChange={(e) => setConfirmTypedEmail(e.target.value)}
+              placeholder={resetTarget?.email}
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              data-testid="admin-reset-confirm-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmAndSetPassword}
+              data-testid="admin-reset-confirm-submit"
+              disabled={
+                resetSubmitting ||
+                confirmTypedEmail.trim().toLowerCase() !==
+                  (resetTarget?.email.toLowerCase() ?? '')
+              }
+            >
+              {resetSubmitting ? 'Setting...' : 'Set password now'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
