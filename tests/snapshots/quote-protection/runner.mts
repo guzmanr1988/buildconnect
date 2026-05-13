@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url'
 
 import { classifyRoofSegments, type RoofSegmentStat } from '../../../src/lib/roof-segment-classify.ts'
 import { computeRoofTotal } from '../../../src/lib/roof-area-math.ts'
+import { FLAT_WASTE_FACTOR } from '../../../src/lib/roof-pricing.ts'
 import {
   buildSelections,
   resolveIncludeMaterialOrder,
@@ -229,8 +230,10 @@ function runScenarioOutput(
   // Flat-area sub-gate: when FA=OFF the flat slice contributes 0 to step2
   // and cart even though the material-order section is ON. Pitched is
   // unaffected by FA — MO is the only pitched gate.
+  // Flat waste constant: 1% (FLAT_WASTE_FACTOR); pitched is 2% (handled
+  // inside computeRoofTotal for the totalSqft assertion below).
   const step2FlatSqft = includeMaterialOrder && includeFlatArea && flatAreaSqft > 0
-    ? Math.round(flatAreaSqft * 1.02)
+    ? Math.round(flatAreaSqft * FLAT_WASTE_FACTOR)
     : 0
   const step2PitchedSqft = includeMaterialOrder ? pitchedAreaSqft : 0
 

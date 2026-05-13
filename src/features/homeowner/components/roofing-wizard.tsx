@@ -16,7 +16,7 @@ import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { sqftToSquares } from '@/lib/option-metadata'
-import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
+import { PITCHED_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
@@ -37,7 +37,7 @@ type FlowPath = 'full_replacement' | 'addons_only'
 
 function metalRoofDisplaySquares(roofSize: string): number {
   const n = Number(roofSize)
-  return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n
+  return n > 200 ? sqftToSquares(Math.round(n * PITCHED_WASTE_FACTOR)) : n
 }
 
 function materialCardLabel(id: string, fallback: string): { primary: string; qualifier?: string } {
@@ -259,7 +259,7 @@ export function RoofingWizard({
       if (result.includeMaterialOrder && result.material !== 'flat_roof') materials.push('flat_roof')
       setSelections((prev) => ({ ...prev, material: materials }))
       if (result.material === 'metal') {
-        const wasteSqft = Math.round(result.areaSqft * ROOF_WASTE_FACTOR)
+        const wasteSqft = Math.round(result.areaSqft * PITCHED_WASTE_FACTOR)
         setMetalRoofSelection((prev) => ({ ...prev, roofSize: String(sqftToSquares(wasteSqft)) }))
       }
     }
@@ -913,15 +913,35 @@ export function RoofingWizard({
                     ) : null
                   ) : (
                     <>
-                      <p className="text-sm text-foreground">
-                        {roofMeasurement.areaSqft.toLocaleString()} sq ft · {(() => {
-                          const { pitchedAreaSqft, flatAreaSqft } = roofMeasurement
-                          if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                            return computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeMaterialOrder: true }).totalSquares
-                          }
-                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
-                        })()} squares w/waste
-                      </p>
+                      {(() => {
+                        const { pitchedAreaSqft, flatAreaSqft } = roofMeasurement
+                        if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
+                          const { pitchedSquares, flatSquares } = computeRoofTotal({
+                            pitchedAreaSqft,
+                            flatAreaSqft,
+                            includeMaterialOrder: true,
+                          })
+                          return (
+                            <>
+                              {pitchedAreaSqft > 0 && (
+                                <p className="text-sm text-foreground">
+                                  Pitched: {Math.round(pitchedAreaSqft).toLocaleString()} sqft · {pitchedSquares} sq w/2% waste
+                                </p>
+                              )}
+                              {flatAreaSqft > 0 && (
+                                <p className="text-sm text-foreground">
+                                  Flat: {Math.round(flatAreaSqft).toLocaleString()} sqft · {flatSquares} sq w/1% waste
+                                </p>
+                              )}
+                            </>
+                          )
+                        }
+                        return (
+                          <p className="text-sm text-foreground">
+                            {roofMeasurement.areaSqft.toLocaleString()} sqft · {sqftToSquares(Math.round(roofMeasurement.areaSqft * PITCHED_WASTE_FACTOR))} sq w/2% waste
+                          </p>
+                        )
+                      })()}
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Pitch {roofMeasurement.pitch}{roofMeasurement.perimeterFt ? ` · ~${roofMeasurement.perimeterFt} lin ft perimeter` : ''}
                       </p>

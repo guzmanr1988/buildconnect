@@ -1,4 +1,4 @@
-import { ROOF_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
+import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
@@ -95,7 +95,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
 // Post-ship values are squares (e.g. "29"). Detect by magnitude: >200 = sqft, ≤200 = squares.
 function metalRoofDisplaySquares(roofSize: string): number {
   const n = Number(roofSize)
-  return n > 200 ? sqftToSquares(Math.round(n * ROOF_WASTE_FACTOR)) : n
+  return n > 200 ? sqftToSquares(Math.round(n * PITCHED_WASTE_FACTOR)) : n
 }
 
 export function ServiceDetailPage() {
@@ -291,10 +291,10 @@ export function ServiceDetailPage() {
     // rule: measurements/quotes err HIGH not LOW. Math.round at 2,042 sqft yields
     // 20 (under-quote) while Math.ceil yields 21 (matches modal "21 squares").
     const pitchedSquares = pitchedBase > 0
-      ? String(Math.max(1, Math.ceil((pitchedBase * ROOF_WASTE_FACTOR) / 100)))
+      ? String(Math.max(1, Math.ceil((pitchedBase * PITCHED_WASTE_FACTOR) / 100)))
       : ''
     const flatSquares = flatSqft > 0
-      ? String(Math.max(1, Math.ceil((flatSqft * ROOF_WASTE_FACTOR) / 100)))
+      ? String(Math.max(1, Math.ceil((flatSqft * FLAT_WASTE_FACTOR) / 100)))
       : ''
     if (result.material === 'metal') {
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
@@ -421,10 +421,10 @@ export function ServiceDetailPage() {
     const pitchedBase = pitchedSqft || (roofMeasurement.areaSqft ?? 0)
     // ceil-rounding (quote-top-of-real): matches modal breakdown display.
     const pitchedSquares = pitchedBase > 0
-      ? String(Math.max(1, Math.ceil((pitchedBase * ROOF_WASTE_FACTOR) / 100)))
+      ? String(Math.max(1, Math.ceil((pitchedBase * PITCHED_WASTE_FACTOR) / 100)))
       : ''
     const flatSquares = flatSqft > 0
-      ? String(Math.max(1, Math.ceil((flatSqft * ROOF_WASTE_FACTOR) / 100)))
+      ? String(Math.max(1, Math.ceil((flatSqft * FLAT_WASTE_FACTOR) / 100)))
       : ''
     const mats = selections['material'] ?? []
     if (pitchedSquares) {
@@ -2078,7 +2078,7 @@ export function ServiceDetailPage() {
                               includeMaterialOrder: includeMaterialOrder ?? true,
                             }).totalSquares
                           }
-                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * ROOF_WASTE_FACTOR))
+                          return sqftToSquares(Math.round(roofMeasurement.areaSqft * PITCHED_WASTE_FACTOR))
                         })()} squares w/waste
                       </span>
                     )}
@@ -2129,8 +2129,8 @@ export function ServiceDetailPage() {
                       const label = matOpts.find(o => o.id === matId)?.label ?? matId
                       const areaLabel = showSplit
                         ? matId === 'flat_roof'
-                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${Math.ceil((roofMeasurement!.flatAreaSqft! * 1.02) / 100)} sq)`
-                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${Math.ceil((roofMeasurement!.pitchedAreaSqft! * 1.02) / 100)} sq)`
+                          ? `${roofMeasurement!.flatAreaSqft!.toLocaleString()} sqft flat (${Math.ceil((roofMeasurement!.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)`
+                          : `${roofMeasurement!.pitchedAreaSqft!.toLocaleString()} sqft pitched (${Math.ceil((roofMeasurement!.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)`
                         : undefined
                       return (
                         <div key={matId} className="rounded-lg bg-muted/50 p-3">

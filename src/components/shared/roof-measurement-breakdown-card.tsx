@@ -100,28 +100,38 @@ export function RoofMeasurementBreakdownCard({
           <div className="grid grid-cols-2 gap-4">
             <div>
               {includeMaterialOrder ? (() => {
-                const { pitchedWaste, flatWaste, totalSqft } = computeRoofTotal({
+                const { pitchedWaste, flatWaste, pitchedSquares, flatSquares } = computeRoofTotal({
                   pitchedAreaSqft: Math.round(pitchedAreaSqft),
                   flatAreaSqft: Math.round(flatAreaSqft),
                   includeMaterialOrder: true,
                   includeFlatArea,
                 })
-                const orderSqft = totalSqft
-                const orderSquares = Math.ceil(orderSqft / 100)
-                const sublabelParts: string[] = []
-                if (pitchedWaste > 0) sublabelParts.push(`Pitched ${Math.round(pitchedAreaSqft).toLocaleString()}`)
-                if (flatWaste > 0) sublabelParts.push(`Flat ${Math.round(flatAreaSqft).toLocaleString()}`)
-                const sublabel = sublabelParts.length === 0
-                  ? 'Roof measurement pending — re-measure or adjust to start an order.'
-                  : `${sublabelParts.join(' + ')} sqft + 2% waste`
-                return (
-                  <>
-                    <p className="text-xl font-bold text-foreground" data-row="material-order-headline">
-                      {orderSqft.toLocaleString()}{' '}
-                      <span className="text-sm font-normal text-muted-foreground">sqft ({orderSquares} squares)</span>
+                if (pitchedWaste === 0 && flatWaste === 0) {
+                  return (
+                    <p className="text-[11px] text-muted-foreground">
+                      Roof measurement pending — re-measure or adjust to start an order.
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{sublabel}</p>
-                  </>
+                  )
+                }
+                return (
+                  <div className="space-y-1" data-row="material-order-stack">
+                    {pitchedWaste > 0 && (
+                      <p className="text-base font-semibold text-foreground" data-row="material-order-pitched">
+                        Pitched: {Math.round(pitchedAreaSqft).toLocaleString()}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          sqft ({pitchedSquares} sq w/2% waste)
+                        </span>
+                      </p>
+                    )}
+                    {flatWaste > 0 && (
+                      <p className="text-base font-semibold text-foreground" data-row="material-order-flat">
+                        Flat: {Math.round(flatAreaSqft).toLocaleString()}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          sqft ({flatSquares} sq w/1% waste)
+                        </span>
+                      </p>
+                    )}
+                  </div>
                 )
               })() : (
                 <>
@@ -243,11 +253,9 @@ export function RoofMeasurementBreakdownCard({
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xl font-bold text-foreground">
-                      {Math.round(flatAreaSqft * 1.02).toLocaleString()}{' '}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        sqft ({Math.ceil((flatAreaSqft * 1.02) / 100)} squares)
-                      </span>
+                    <p className="text-sm font-semibold text-foreground">
+                      <span data-row="flat">{Math.round(flatAreaSqft).toLocaleString()}</span>{' '}
+                      <span className="text-xs font-normal text-muted-foreground">sqft</span>
                     </p>
                     {editing && (
                       <button
@@ -261,9 +269,6 @@ export function RoofMeasurementBreakdownCard({
                     )}
                   </div>
                 )}
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Flat: <span data-row="flat">{Math.round(flatAreaSqft).toLocaleString()}</span> sqft + 2% waste
-                </p>
               </>
             ) : (
               <>
@@ -355,20 +360,47 @@ export function RoofMeasurementBreakdownCard({
       )}
 
       {!isAddonsOnly && (() => {
-        const { totalSqft, totalSquares } = computeRoofTotal({
+        const { pitchedWaste, flatWaste, pitchedSquares, flatSquares } = computeRoofTotal({
           pitchedAreaSqft: Math.round(pitchedAreaSqft),
           flatAreaSqft: Math.round(flatAreaSqft),
           includeMaterialOrder,
           includeFlatArea,
         })
+        const showPitched = pitchedWaste > 0
+        const showFlat = flatWaste > 0
+        if (!showPitched && !showFlat) return null
         return (
           <div className="border-t pt-3" data-row-total="material-order">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
-            <p className="text-xl font-bold text-foreground mt-0.5">
-              {totalSqft.toLocaleString()}{' '}
-              <span className="text-sm font-normal text-muted-foreground">sqft ({totalSquares} squares)</span>
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Used for pricing</p>
+            <div className="flex items-stretch gap-3">
+              {showPitched && (
+                <div className="flex-1" data-total="main-roof">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Main Roof Total
+                  </span>
+                  <p className="text-xl font-bold text-foreground mt-0.5">
+                    ~{pitchedWaste.toLocaleString()}{' '}
+                    <span className="text-sm font-normal text-muted-foreground">sqft ({pitchedSquares} sq)</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Pitched + 2% waste</p>
+                </div>
+              )}
+              {showPitched && showFlat && (
+                <div className="w-px self-stretch bg-border" aria-hidden="true" />
+              )}
+              {showFlat && (
+                <div className="flex-1" data-total="flat-roof">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Flat Total
+                  </span>
+                  <p className="text-xl font-bold text-foreground mt-0.5">
+                    ~{flatWaste.toLocaleString()}{' '}
+                    <span className="text-sm font-normal text-muted-foreground">sqft ({flatSquares} sq)</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Flat + 1% waste</p>
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">Used for pricing</p>
           </div>
         )
       })()}
