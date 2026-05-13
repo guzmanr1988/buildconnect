@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
+import { geocodeVendorAddress } from '@/lib/api/geocode'
 import { useVendorChangeRequestsStore } from '@/stores/vendor-change-requests-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
@@ -142,6 +143,13 @@ export default function VendorsPage() {
               .update(patch)
               .eq('id', req.vendorId)
             if (profileErr) throw profileErr
+            // Phase 2 — admin-approved address change requires re-geocode so
+            // profile.latitude/longitude stay in sync with the new address.
+            // Mirror lib/api/vendors.ts:45 fire-and-forget pattern (failures
+            // logged + swallowed; distance filter degrades to "skip null").
+            if (patch.address) {
+              void geocodeVendorAddress(req.vendorId, patch.address)
+            }
           }
           // Keep admin-moderation-store in sync for mock-backed surfaces
           applyVendorProfileEdit(req.vendorId, { name: editName, company: editCompany, phone: editPhone, address: editAddress, email: editEmail })
