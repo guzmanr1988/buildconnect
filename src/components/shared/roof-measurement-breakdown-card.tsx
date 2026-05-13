@@ -32,10 +32,11 @@ export type RoofMeasurementBreakdownCardProps = {
   editing?: { pitched: EditingControls; flat: EditingControls }
 }
 
-// Material Order toggle is the single area gate. Chip-tap drives material
-// selection (vendor SKU mapping), not whether the area belongs in the
-// order — both pitched and flat are part of the Material Order bundle
-// whenever the satellite measured them.
+// Two independent area gates: Main Roof toggle (includeMaterialOrder) gates
+// pitched material in the order; Flat Area toggle (includeFlatArea) gates
+// flat membrane independently. Chip-tap drives material selection (vendor
+// SKU mapping), not whether the area belongs in the order. Each toggle gates
+// its own area class — flipping Main Roof OFF does not also exclude flat.
 export function RoofMeasurementBreakdownCard({
   pitchedAreaSqft,
   flatAreaSqft,
@@ -54,8 +55,7 @@ export function RoofMeasurementBreakdownCard({
 }: RoofMeasurementBreakdownCardProps) {
   const isAddonsOnly = flowPath === 'addons_only'
   const hasFlatArea = flatAreaSqft > 0
-  const flatInOrder = includeMaterialOrder && includeFlatArea && hasFlatArea
-  const showAreaBreakdown = !isAddonsOnly && includeMaterialOrder && (pitchedAreaSqft > 0 || hasFlatArea)
+  const showAreaBreakdown = !isAddonsOnly && (pitchedAreaSqft > 0 || hasFlatArea)
 
   return (
     <div
@@ -69,20 +69,7 @@ export function RoofMeasurementBreakdownCard({
             <div className="flex items-center gap-1.5">
               <Layers className="h-3.5 w-3.5 text-primary" />
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Material Order{includeMaterialOrder && (() => {
-                  const parts: string[] = []
-                  if (pitchedAreaSqft > 0) parts.push('pitched')
-                  if (flatInOrder) parts.push('flat')
-                  if (parts.length === 0) return null
-                  return (
-                    <>
-                      {' '}
-                      <span className="text-muted-foreground/70 normal-case font-medium">
-                        ({parts.join(' + ')})
-                      </span>
-                    </>
-                  )
-                })()}
+                Main Roof
               </span>
             </div>
             {onToggleMaterialOrder && (
@@ -100,13 +87,13 @@ export function RoofMeasurementBreakdownCard({
           <div className="grid grid-cols-2 gap-4">
             <div>
               {includeMaterialOrder ? (() => {
-                const { pitchedWaste, flatWaste, pitchedSquares, flatSquares } = computeRoofTotal({
+                const { pitchedWaste, pitchedSquares } = computeRoofTotal({
                   pitchedAreaSqft: Math.round(pitchedAreaSqft),
                   flatAreaSqft: Math.round(flatAreaSqft),
                   includeMaterialOrder: true,
                   includeFlatArea,
                 })
-                if (pitchedWaste === 0 && flatWaste === 0) {
+                if (pitchedWaste === 0) {
                   return (
                     <p className="text-[11px] text-muted-foreground">
                       Roof measurement pending — re-measure or adjust to start an order.
@@ -114,24 +101,12 @@ export function RoofMeasurementBreakdownCard({
                   )
                 }
                 return (
-                  <div className="space-y-1" data-row="material-order-stack">
-                    {pitchedWaste > 0 && (
-                      <p className="text-base font-semibold text-foreground" data-row="material-order-pitched">
-                        Pitched: {Math.round(pitchedAreaSqft).toLocaleString()}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          sqft ({pitchedSquares} sq w/2% waste)
-                        </span>
-                      </p>
-                    )}
-                    {flatWaste > 0 && (
-                      <p className="text-base font-semibold text-foreground" data-row="material-order-flat">
-                        Flat: {Math.round(flatAreaSqft).toLocaleString()}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          sqft ({flatSquares} sq w/1% waste)
-                        </span>
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-base font-semibold text-foreground" data-row="material-order-pitched">
+                    Pitched: {Math.round(pitchedAreaSqft).toLocaleString()}{' '}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      sqft ({pitchedSquares} sq w/2% waste)
+                    </span>
+                  </p>
                 )
               })() : (
                 <>
@@ -217,7 +192,6 @@ export function RoofMeasurementBreakdownCard({
                     id="include-flat-area-toggle"
                     data-toggle="flat-area"
                     checked={includeFlatArea}
-                    disabled={!includeMaterialOrder}
                     onCheckedChange={onToggleFlatArea}
                   />
                 </>
