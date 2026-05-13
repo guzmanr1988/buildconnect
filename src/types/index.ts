@@ -305,7 +305,7 @@ export interface ServiceConfig {
   features: string[]
   stat: { label: string; value: string }
   optionGroups: OptionGroup[]
-  phase2?: boolean
+  status: 'draft' | 'live'
 }
 
 export interface ServiceOption {

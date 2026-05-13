@@ -43,17 +43,17 @@ interface ServiceCardProps {
 
 // V1 — Premium polished baseline.
 export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps) {
-  const isPhase2 = !!service.phase2
+  const isDraft = service.status === 'draft'
   const Icon = SERVICE_ICONS[service.id] || Home
   const iconGradient = ICON_GRADIENTS[service.id] || 'from-blue-400 to-blue-600'
 
   return (
     <motion.button
       type="button"
-      disabled={isPhase2}
-      onClick={isPhase2 ? undefined : onToggle}
-      whileHover={isPhase2 ? undefined : { y: -3 }}
-      whileTap={isPhase2 ? undefined : { scale: 0.98 }}
+      disabled={isDraft}
+      onClick={isDraft ? undefined : onToggle}
+      whileHover={isDraft ? undefined : { y: -3 }}
+      whileTap={isDraft ? undefined : { scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       className={cn(
         'group relative flex h-full w-full flex-col text-left rounded-2xl border bg-card p-4 overflow-hidden',
@@ -61,7 +61,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         'dark:hover:shadow-black/20 dark:hover:border-white/[0.08]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
         isExpanded && 'shadow-lg shadow-primary/[0.06] border-primary/25 dark:border-primary/30 ring-1 ring-primary/10',
-        isPhase2 && 'opacity-45 pointer-events-none',
+        isDraft && 'opacity-45 pointer-events-none',
       )}
     >
       <div className="flex items-start justify-between mb-3">
@@ -104,7 +104,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         ))}
       </div>
 
-      {!isPhase2 && (
+      {!isDraft && (
         <div className="flex items-center justify-between pt-2 border-t border-border/40">
           <span className="text-[12px] font-medium text-primary">
             {isExpanded ? 'Selected' : 'Get started'}

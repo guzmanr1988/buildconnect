@@ -85,7 +85,7 @@ async function seedService(service, serviceIdx) {
     description: service.description ?? '',
     badge: service.badge ?? null,
     badge_color: service.badgeColor ?? null,
-    phase2: service.phase2 ?? false,
+    status: service.status ?? 'live',
     features: service.features ?? [],
     stat_label: service.stat?.label ?? '',
     stat_value: service.stat?.value ?? '',

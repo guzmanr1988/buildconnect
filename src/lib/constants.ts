@@ -10,6 +10,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Complete residential roofing services — from full replacement to repairs.',
     features: ['Hurricane-Rated', 'Energy Efficient', '25-Year Warranty'],
     stat: { label: 'Projects Completed', value: '2,847' },
+    status: 'live',
     optionGroups: [
       {
         id: 'service_type',
@@ -91,6 +92,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Florida building code compliant impact windows and doors for maximum protection.',
     features: ['Impact-Rated', 'UV Protection', 'Noise Reduction'],
     stat: { label: 'Windows Installed', value: '18,420' },
+    status: 'live',
     optionGroups: [
       {
         id: 'products',
@@ -231,6 +233,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Custom pool design and construction with premium finishes and water features.',
     features: ['Custom Design', 'Smart Controls', 'Eco-Friendly'],
     stat: { label: 'Pools Built', value: '1,203' },
+    status: 'live',
     optionGroups: [
       {
         id: 'project_type',
@@ -332,6 +335,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Premium driveway installation and resurfacing for curb appeal that lasts.',
     features: ['Weather-Proof', 'Low Maintenance', 'Custom Patterns'],
     stat: { label: 'Driveways Paved', value: '956' },
+    status: 'live',
     optionGroups: [
       {
         id: 'scope',
@@ -377,6 +381,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Professional fence installation for privacy, security, and curb appeal.',
     features: ['Custom Materials', 'Privacy Options', 'Gates & Hardware'],
     stat: { label: 'Fences Installed', value: '612' },
+    status: 'live',
     optionGroups: [
       {
         id: 'material',
@@ -424,6 +429,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Custom outdoor structures for shade, style, and year-round entertainment.',
     features: ['Weather-Resistant', 'Motorized Options', 'Custom Sizes'],
     stat: { label: 'Structures Built', value: '734' },
+    status: 'live',
     optionGroups: [
       {
         id: 'structure',
@@ -467,6 +473,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'HVAC installation, replacement, and maintenance for South Florida homes.',
     features: ['Energy Star', 'Smart Thermostat', '10-Year Warranty'],
     stat: { label: 'Systems Installed', value: '4,312' },
+    status: 'live',
     optionGroups: [
       {
         id: 'system',
@@ -504,7 +511,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Full kitchen renovations from cabinets to countertops to appliances.',
     features: ['Custom Cabinets', 'Quartz Counters', 'Smart Appliances'],
     stat: { label: 'Kitchens Remodeled', value: '—' },
-    phase2: true,
+    status: 'draft',
     optionGroups: [],
   },
   {
@@ -516,7 +523,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Modern bathroom renovations with premium fixtures and finishes.',
     features: ['Walk-In Shower', 'Heated Floors', 'Smart Fixtures'],
     stat: { label: 'Bathrooms Remodeled', value: '—' },
-    phase2: true,
+    status: 'draft',
     optionGroups: [],
   },
   {
@@ -528,6 +535,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Custom wall paneling, accent walls, and interior design treatments.',
     features: ['Designer Styles', 'Quick Install', 'Eco Materials'],
     stat: { label: 'Walls Designed', value: '412' },
+    status: 'live',
     optionGroups: [
       {
         id: 'style',
@@ -563,6 +571,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Drywall, flooring, lighting, and interior finish work — transform any room without a whole-house teardown.',
     features: ['Drywall', 'Recessed Lighting', 'Flooring'],
     stat: { label: 'Rooms Finished', value: '287' },
+    status: 'live',
     optionGroups: [
       {
         id: 'rooms',
@@ -644,6 +653,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Professional interior and exterior painting — pick your colors, we handle the rest.',
     features: ['Interior', 'Exterior', 'Color Consultation'],
     stat: { label: 'Homes Painted', value: '940' },
+    status: 'live',
     optionGroups: [
       {
         id: 'height',
@@ -705,6 +715,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     description: 'Roller, venetian, roman, cellular, vertical, blackout, motorized — multiple materials, mount styles, and light-control options for residential applications.',
     features: ['Cordless Available', 'Energy Efficient', 'Custom Fit'],
     stat: { label: 'Homes Dressed', value: '1,240' },
+    status: 'live',
     optionGroups: [
       {
         // Multi — homes commonly mix blind types across rooms (roller in
