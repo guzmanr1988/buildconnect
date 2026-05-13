@@ -566,7 +566,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   },
   {
     id: 'garage',
-    name: 'Interior Remodel',
+    name: 'Remodel',
     tagline: 'Refresh any room from studs to finish',
     description: 'Drywall, flooring, lighting, and interior finish work — transform any room without a whole-house teardown.',
     features: ['Drywall', 'Recessed Lighting', 'Flooring'],
