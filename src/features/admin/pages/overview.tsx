@@ -179,7 +179,7 @@ export default function OverviewPage() {
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', icon: Wrench },
     { key: 'ar_mode', label: 'AR Mode', icon: Eye },
-    { key: 'phase2_enabled', label: 'Phase 2 Features', icon: Layers },
+    { key: 'phase2_enabled', label: 'Coming Soon Visibility', icon: Layers },
     { key: 'financing_enabled', label: 'Financing Options', icon: Banknote },
   ]
 

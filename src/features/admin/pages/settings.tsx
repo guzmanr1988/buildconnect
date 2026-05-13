@@ -75,7 +75,7 @@ export default function SettingsPage() {
   const toggles: { key: keyof AppSettings; label: string; description: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', description: 'Take the platform offline for maintenance', icon: Wrench },
     { key: 'ar_mode', label: 'AR Mode', description: 'Enable augmented reality visualization features', icon: Eye },
-    { key: 'phase2_enabled', label: 'Phase 2 Features', description: 'Kitchen, bathroom remodel services', icon: Layers },
+    { key: 'phase2_enabled', label: 'Coming Soon Visibility', description: 'Legacy site-wide toggle. Active control is per-service: Admin → Products → Activate/Deactivate.', icon: Layers },
     { key: 'financing_enabled', label: 'Financing Options', description: 'Allow vendors to offer financing to homeowners', icon: Banknote },
   ]
 
@@ -461,7 +461,7 @@ export default function SettingsPage() {
                   Platform Modes (Legacy)
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Display-only toggles from earlier prototyping. The Phase 2 toggle here doesn't gate anything — per-service Coming Soon control lives on individual services in /admin/products. Listed for reference; cleanup planned.
+                  Display-only toggle from earlier prototyping. Has no behavior — per-service Activate/Deactivate in Admin → Products is the active control. Listed for reference; cleanup planned.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
