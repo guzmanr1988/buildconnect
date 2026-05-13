@@ -10,7 +10,24 @@ type Action = keyof typeof STATUS_BY_ACTION
 
 const HERMES_NOTIFY_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-lead-event`
 
+// Browser path: vendor UI lives at https://buildc.net while this Edge Fn
+// lives at https://<project>.supabase.co — cross-origin. supabase-js
+// .functions.invoke() sends an `apikey` header in addition to
+// authorization+content-type, which makes the request non-simple and
+// triggers a CORS preflight (OPTIONS). Without this allow-list the
+// browser blocks the POST before it ever reaches our handler.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
+  'Access-Control-Max-Age': '86400',
+}
+
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
   try {
     const { lead_id, action } = (await req.json()) as { lead_id?: string; action?: Action }
 
@@ -88,6 +105,6 @@ serve(async (req) => {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   })
 }
