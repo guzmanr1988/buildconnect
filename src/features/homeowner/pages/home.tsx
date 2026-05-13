@@ -35,8 +35,8 @@ export function HomeownerHome() {
   const navigate = useNavigate()
 
   const services = useCatalogStore((s) => s.services)
-  const activeServices = services.filter((s) => !s.phase2)
-  const comingSoon = services.filter((s) => s.phase2)
+  const activeServices = services.filter((s) => s.status === 'live')
+  const comingSoon = services.filter((s) => s.status === 'draft')
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)

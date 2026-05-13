@@ -413,7 +413,6 @@ export const GARAGE_STEPS: GenericWizardStep[] = [
   { groupId: 'rooms', title: 'Which rooms?', subtitle: 'Select all the rooms you\'d like finished.' },
   { groupId: 'scope', title: "What's included?", subtitle: 'Choose everything in scope for this project.' },
   { groupId: 'size', title: 'Room size', subtitle: 'What\'s the total size of the space?' },
-  { groupId: 'finish', title: 'Finish level', subtitle: 'What quality level are you targeting?' },
   { groupId: 'addons', title: 'Any add-ons?', subtitle: 'Optional extras to complete the room.', skipLabel: 'Skip' },
   PERMIT_STEP,
 ]

@@ -60,7 +60,7 @@ type ServiceFormData = {
   description: string
   badge: string
   badgeColor: string
-  phase2: boolean
+  status: 'draft' | 'live'
   features: string
   statLabel: string
   statValue: string
@@ -73,7 +73,7 @@ const emptyServiceForm: ServiceFormData = {
   description: '',
   badge: '',
   badgeColor: '',
-  phase2: false,
+  status: 'draft',
   features: '',
   statLabel: '',
   statValue: '',
@@ -87,7 +87,7 @@ function serviceToForm(s: ServiceConfig): ServiceFormData {
     description: s.description,
     badge: s.badge ?? '',
     badgeColor: s.badgeColor ?? '',
-    phase2: s.phase2 ?? false,
+    status: s.status ?? 'live',
     features: s.features.join(', '),
     statLabel: s.stat.label,
     statValue: s.stat.value,
@@ -282,7 +282,7 @@ export default function ProductsAdminPage() {
           description: serviceForm.description,
           badge: serviceForm.badge || undefined,
           badgeColor: serviceForm.badgeColor || undefined,
-          phase2: serviceForm.phase2 || undefined,
+          status: serviceForm.status,
           features,
           stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
         })
@@ -294,7 +294,7 @@ export default function ProductsAdminPage() {
           description: serviceForm.description,
           badge: serviceForm.badge || undefined,
           badgeColor: serviceForm.badgeColor || undefined,
-          phase2: serviceForm.phase2 || undefined,
+          status: serviceForm.status,
           features,
           stat: { label: serviceForm.statLabel, value: serviceForm.statValue },
           optionGroups: [],
@@ -321,6 +321,20 @@ export default function ProductsAdminPage() {
       },
     })
     setDeleteDialogOpen(true)
+  }
+
+  async function toggleServiceStatus(s: ServiceConfig) {
+    const nextStatus: 'draft' | 'live' = s.status === 'live' ? 'draft' : 'live'
+    try {
+      await updateService(s.id, { status: nextStatus })
+      toast.success(
+        nextStatus === 'live'
+          ? `${s.name} is now live`
+          : `${s.name} moved to draft`,
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Status change failed')
+    }
   }
 
   /* ---------- Group handlers ---------- */
@@ -713,9 +727,13 @@ export default function ProductsAdminPage() {
                               {service.badge}
                             </Badge>
                           )}
-                          {service.phase2 && (
-                            <Badge variant="outline" className="text-[10px] sm:text-xs whitespace-nowrap">
-                              Phase 2
+                          {service.status === 'draft' && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] sm:text-xs whitespace-nowrap border-amber-400/60 text-amber-700 dark:text-amber-400"
+                              data-service-status="draft"
+                            >
+                              Draft
                             </Badge>
                           )}
                           <Badge variant="outline" className="text-[10px] sm:text-xs whitespace-nowrap">
@@ -724,7 +742,18 @@ export default function ProductsAdminPage() {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant={service.status === 'draft' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 px-2 text-[10px] sm:text-xs whitespace-nowrap"
+                        onClick={() => toggleServiceStatus(service)}
+                        data-service-action={service.status === 'draft' ? 'activate' : 'deactivate'}
+                        data-service-id={service.id}
+                        aria-label={service.status === 'draft' ? `Activate ${service.name}` : `Deactivate ${service.name}`}
+                      >
+                        {service.status === 'draft' ? 'Activate' : 'Deactivate'}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1307,13 +1336,25 @@ export default function ProductsAdminPage() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="svc-phase2"
-                checked={serviceForm.phase2}
-                onCheckedChange={(v) => setServiceForm((f) => ({ ...f, phase2: !!v }))}
-              />
-              <Label htmlFor="svc-phase2" className="text-sm font-normal">Phase 2 (coming soon)</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="svc-status">Status</Label>
+              <Select
+                value={serviceForm.status}
+                onValueChange={(v) =>
+                  setServiceForm((f) => ({ ...f, status: v as 'draft' | 'live' }))
+                }
+              >
+                <SelectTrigger id="svc-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft (homeowners see Coming Soon)</SelectItem>
+                  <SelectItem value="live">Live (visible to homeowners)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                New services start as Draft. Vendors can still build pricing for draft services.
+              </p>
             </div>
           </div>
           <DialogFooter>

@@ -22,7 +22,7 @@ function getServiceMeasurementPhrase(serviceId: string): string {
     case 'kitchen': return 'your kitchen'
     case 'bathroom': return 'your bathroom'
     case 'wall_paneling': return 'your wall space'
-    case 'garage': return 'your garage'
+    case 'garage': return 'your remodel area'
     case 'house_painting': return 'your painting area'
     case 'blinds': return 'your blinds'
     default: return 'your project'

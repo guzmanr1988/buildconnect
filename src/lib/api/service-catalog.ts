@@ -30,7 +30,7 @@ type DbService = {
   description: string
   badge: string | null
   badge_color: string | null
-  phase2: boolean
+  status: 'draft' | 'live'
   features: string[]
   stat_label: string
   stat_value: string
@@ -154,7 +154,7 @@ function serviceFromRow(r: DbService): ServiceConfig {
     description: r.description,
     ...(r.badge ? { badge: r.badge } : {}),
     ...(r.badge_color ? { badgeColor: r.badge_color } : {}),
-    ...(r.phase2 ? { phase2: r.phase2 } : {}),
+    status: r.status,
     features: r.features ?? [],
     stat: { label: r.stat_label, value: r.stat_value },
     optionGroups: (r.option_groups ?? [])
@@ -194,7 +194,8 @@ export async function createService(service: ServiceConfig): Promise<void> {
     description: service.description,
     badge: service.badge ?? null,
     badge_color: service.badgeColor ?? null,
-    phase2: service.phase2 ?? false,
+    status: service.status,
+    phase2: service.status === 'draft',
     features: service.features,
     stat_label: service.stat.label,
     stat_value: service.stat.value,
@@ -213,7 +214,10 @@ export async function updateService(
   if (patch.description !== undefined) dbPatch.description = patch.description
   if (patch.badge !== undefined) dbPatch.badge = patch.badge ?? null
   if (patch.badgeColor !== undefined) dbPatch.badge_color = patch.badgeColor ?? null
-  if (patch.phase2 !== undefined) dbPatch.phase2 = patch.phase2 ?? false
+  if (patch.status !== undefined) {
+    dbPatch.status = patch.status
+    dbPatch.phase2 = patch.status === 'draft'
+  }
   if (patch.features !== undefined) dbPatch.features = patch.features
   if (patch.stat !== undefined) {
     dbPatch.stat_label = patch.stat.label

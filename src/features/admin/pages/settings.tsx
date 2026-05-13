@@ -452,8 +452,9 @@ export default function SettingsPage() {
 
             {/* Legacy AppSettings toggles — kept for back-compat reference.
                 phase2_enabled in particular has no consumer; per-service
-                Coming Soon gating is per-service via catalog.phase2 in
-                /admin/products. Cleanup planned in a future ship. */}
+                Coming Soon gating now lives on each service's status
+                field (draft|live) in /admin/products. Cleanup planned in
+                a future ship. */}
             <div className="space-y-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

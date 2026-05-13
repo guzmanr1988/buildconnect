@@ -188,7 +188,7 @@ export function CartPage() {
   const serviceAbbrev: Record<string, string> = {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
     pergolas: 'Pergolas & Terraces', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
-    wall_paneling: 'Wall Paneling', garage: 'Interior Remodel', house_painting: 'Painting',
+    wall_paneling: 'Wall Paneling', garage: 'Remodel', house_painting: 'Painting',
   }
   const autoProjectName = profile
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`

@@ -121,7 +121,7 @@ export default function VendorCatalog() {
       </PageHeader>
 
       <div className="flex flex-col gap-4">
-        {adminServices.filter(s => !s.phase2).map((service) => {
+        {adminServices.map((service) => {
           const enabled = isServiceEnabled(service.id)
           const optionCount = service.optionGroups.reduce((sum, g) => {
             return sum + g.options.filter(o => isOptionEnabled(service.id, g.id, o.id)).length
