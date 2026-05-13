@@ -1,9 +1,9 @@
 -- 040_sent_projects_status_transitions.sql
 -- task_1778632251533_805 — vendor lead-status transition wiring
 --
--- Adds the 'expired' status to sent_projects, a generated expires_at column
--- (sent_at + 24h), and a pg_cron job that auto-expires stale pending rows
--- every 5 minutes. Accept/reject transitions are driven by the Edge Function
+-- Adds the 'expired' status to sent_projects, a partial sent_at index for
+-- pending rows, and a pg_cron job that auto-expires stale pending rows
+-- every 5 minutes (computed on the fly as sent_at + 24h < now()). Accept/reject transitions are driven by the Edge Function
 -- transition-lead-status (vendor-side); the cron path handles the silent
 -- auto-expire (no homeowner notification per shared-notification spec
 -- with hermes migration 039).
@@ -25,16 +25,13 @@ alter table public.sent_projects
   add constraint sent_projects_status_check
   check (status in ('pending', 'approved', 'declined', 'sold', 'expired'));
 
--- (2) Generated expires_at column (24h TTL from sent_at). Stored so the
--- cron index is usable without recomputation per row.
-alter table public.sent_projects
-  add column if not exists expires_at timestamptz
-  generated always as (sent_at + interval '24 hours') stored;
-
--- (3) Index for the cron query: only pending rows are candidates for
--- expiry; partial index keeps the working set tight as table grows.
-create index if not exists idx_sent_projects_pending_expiry
-  on public.sent_projects (expires_at)
+-- (2) Partial index on sent_at for the cron expiry query. Generated
+-- expires_at column was tried but rejected (42P17: timestamptz + interval
+-- is not immutable due to TZ/DST rules). Cron computes sent_at + 24h
+-- on the fly; the partial index keeps the working set tight (only
+-- pending rows are candidates for expiry).
+create index if not exists idx_sent_projects_pending_sent_at
+  on public.sent_projects (sent_at)
   where status = 'pending';
 
 -- (4) pg_cron extension (Supabase-managed; may need one-shot dashboard
@@ -52,6 +49,6 @@ select cron.schedule(
     update public.sent_projects
        set status = 'expired'
      where status = 'pending'
-       and expires_at < now()
+       and sent_at + interval '24 hours' < now()
   $$
 );
