@@ -594,6 +594,19 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     handleReset()
   }
 
+  // PR-223 Option B: drop back from 'confirmed' into 'done' and arm an extra
+  // polygon draw. Keeps already-drawn polygon(s) on the map; user can confirm
+  // again via "Use X sqft" after the new area is closed. Re-measure remains
+  // the nuclear reset (clears everything); this button only adds.
+  function continueAddingExtra() {
+    if (!mapRef.current) return
+    mapRef.current.setOptions({ gestureHandling: 'greedy', zoomControl: true, mapTypeControl: true, rotateControl: true })
+    polygonRef.current?.setOptions({ editable: true, clickable: true })
+    extraPolygonRefsRef.current.forEach((p) => p.setOptions({ editable: true, clickable: true }))
+    setPhase('done')
+    startAddingExtra()
+  }
+
   const showMap = phase === 'drawing' || phase === 'done' || phase === 'confirmed'
   const isDriveways = serviceCategory === 'driveways'
   const isPergolas = serviceCategory === 'pergolas'
@@ -800,6 +813,17 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
               {geoRef.current?.addr}
             </p>
           </div>
+          {canAddAnotherArea && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={continueAddingExtra}
+              data-measure-action="add-another-measurement"
+            >
+              <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+              Add another measurement
+            </Button>
+          )}
           <button
             data-measure-action="re-measure"
             className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"

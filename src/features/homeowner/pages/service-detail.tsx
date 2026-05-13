@@ -551,6 +551,19 @@ export function ServiceDetailPage() {
   })
   const allRequiredDone = completedRequired === requiredGroups.length
 
+  // PR-223 Option B — pergolas force-pick gate. Every drawn measurement
+  // square must have a structure assigned via the in-card picker before
+  // Add-to-Project unlocks. Custom-size flow (no polygons) is not affected;
+  // the top Structure Type chip group remains visible and satisfies the
+  // requiredGroups check on its own.
+  const pergolasStructuresAllAssigned = (() => {
+    if (serviceId !== 'pergolas') return true
+    const polys = areaMeasurement?.polygons
+    if (!polys || polys.length === 0) return true
+    const arr = selections['structure'] ?? []
+    return polys.every((_, idx) => Boolean(arr[idx]))
+  })()
+
   // Perimeter-only chip-tap mode: user keeps the satellite-measured perimeter
   // but skips the material-order portion. Material question becomes info-only
   // ("What is your existing roof?") and add-ons collapse to the linear-foot
@@ -810,15 +823,12 @@ export function ServiceDetailPage() {
                   serviceCategory={serviceId as ServiceCategory}
                   gmpEnabled={getFlag('googleMapsPlatform')}
                   initialAddress={selectedAddress?.full ?? ''}
-                  // Pergolas: cap polygons at the number of structure chips the
-                  // homeowner has picked. 1 structure = single-polygon flow
-                  // (Add another area button hidden); 2 = one extra prompt.
+                  // PR-223 Option B — pergolas allows up to 2 measurements,
+                  // decoupled from structure selection (structure is picked
+                  // per-square inside the Size group, not via a chip group
+                  // here). 2 is the hard cap regardless of prior picks.
                   // Other services leave maxPolygons undefined.
-                  maxPolygons={
-                    serviceId === 'pergolas'
-                      ? Math.max(1, (selections['structure'] ?? []).length || 1)
-                      : undefined
-                  }
+                  maxPolygons={serviceId === 'pergolas' ? 2 : undefined}
                   onMeasure={(result) => setAreaMeasurement({
                     areaSqft: result.areaSqft,
                     perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined,
@@ -893,6 +903,13 @@ export function ServiceDetailPage() {
             // page consumes it for per-unit pricing (laminar_jet /
             // waterfall_unit). Sibling of garage_door_* exclusion above.
             if (group.id === 'water_feature_units') {
+              return false
+            }
+            // PR-223 Option B — pergolas structure is picked PER measurement
+            // square (draw-then-assign), not via this top chip group. The
+            // group's options still feed the per-square chip-row inside the
+            // Size group breakdown, but the top-level group is hidden.
+            if (serviceId === 'pergolas' && group.id === 'structure') {
               return false
             }
             return true
@@ -1185,27 +1202,80 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
-                {/* Pergolas multi-structure — per-structure measurement breakdown
-                    shown under the Size group when 2 structures + 2 polygons are
-                    drawn. ColorCircles bind each line to the polygon on the
-                    satellite map (color order = chip pick order). */}
-                {serviceId === 'pergolas' && group.id === 'size' && areaMeasurement?.polygons && areaMeasurement.polygons.length > 1 && (
-                  <div className="mt-3 rounded-xl border bg-muted/30 p-3 space-y-1.5" data-pergolas-structure-breakdown="true">
-                    {areaMeasurement.polygons.map((poly, idx) => {
-                      const structureId = (selections['structure'] ?? [])[idx]
-                      const structureLabel = structureId
-                        ? service.optionGroups.find((g) => g.id === 'structure')?.options.find((o) => o.id === structureId)?.label ?? structureId
-                        : `Area ${idx + 1}`
-                      return (
-                        <div key={idx} className="flex items-center gap-2 text-sm" data-pergolas-structure-row={structureId ?? String(idx)}>
-                          <ColorCircle color={poly.color} size={10} />
-                          <span className="text-foreground font-medium">{structureLabel}</span>
-                          <span className="text-muted-foreground ml-auto">{poly.sqft.toLocaleString()} sqft</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                {/* PR-223 Option B — pergolas per-square structure assignment.
+                    For every measurement drawn, render a card with the sqft,
+                    a ColorCircle that matches the polygon on the satellite map,
+                    and a chip-row picker for the structure that occupies that
+                    area. Force-pick (no default) and prevent-same (the
+                    structure already assigned to another card is disabled).
+                    Renders for any polygons.length >= 1 — single-polygon also
+                    uses the in-card picker so the top Structure Type chip
+                    group stays hidden whenever measurements exist. */}
+                {serviceId === 'pergolas' && group.id === 'size' && areaMeasurement?.polygons && areaMeasurement.polygons.length >= 1 && (() => {
+                  const structureOptions = service.optionGroups.find((g) => g.id === 'structure')?.options ?? []
+                  const assigned = selections['structure'] ?? []
+                  return (
+                    <div className="mt-3 space-y-2" data-pergolas-structure-breakdown="true">
+                      {areaMeasurement.polygons!.map((poly, idx) => {
+                        const structureId = assigned[idx]
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-xl border bg-muted/30 p-3 space-y-2"
+                            data-pergolas-structure-row={structureId ?? String(idx)}
+                          >
+                            <div className="flex items-center gap-2 text-sm">
+                              <ColorCircle color={poly.color} size={10} />
+                              <span className="text-foreground font-medium">
+                                Area {idx + 1}
+                              </span>
+                              <span className="text-muted-foreground ml-auto">{poly.sqft.toLocaleString()} sqft</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2" data-pergolas-square-picker={String(idx)}>
+                              {structureOptions.map((opt) => {
+                                const isPicked = structureId === opt.id
+                                const pickedElsewhere = !isPicked && assigned.some((sid, i) => i !== idx && sid === opt.id)
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    data-pergolas-square-chip={opt.id}
+                                    data-pergolas-square-index={String(idx)}
+                                    data-chip-state={isPicked ? 'active' : 'inactive'}
+                                    disabled={pickedElsewhere}
+                                    title={pickedElsewhere ? 'Already assigned to another area — pick a different structure or remove that area.' : undefined}
+                                    onClick={() => {
+                                      setSelections((prev) => {
+                                        const arr = [...(prev['structure'] ?? [])]
+                                        while (arr.length <= idx) arr.push('')
+                                        arr[idx] = isPicked ? '' : opt.id
+                                        return { ...prev, structure: arr }
+                                      })
+                                    }}
+                                    className={cn(
+                                      'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                                      isPicked
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+                                      'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-background',
+                                    )}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {!structureId && (
+                              <p className="text-xs text-muted-foreground" data-pergolas-square-prompt={String(idx)}>
+                                Pick a structure type for this area.
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
                 {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only.
                     Floors + drops chips render inline ONLY when gutters chip is active
                     (ported from wizard Step 7; cart payload shape gutterDropsConfig
@@ -1698,7 +1768,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck)}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
