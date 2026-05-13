@@ -2,8 +2,11 @@ import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR } from './roof-pricing'
 
 /**
  * Single source of truth for roof waste-adjusted area + squares.
- * Pitched uses 2% waste (hip/valley cuts + starter-course overhang).
- * Flat uses 1% waste (membrane seams overlap on a single plane).
+ * Pitched uses 2% waste (hip/valley cuts + starter-course overhang), gated on
+ * the Main Roof toggle (includeMaterialOrder).
+ * Flat uses 1% waste (membrane seams overlap on a single plane), gated on the
+ * Flat Area toggle (includeFlatArea) independently — the two toggles are
+ * decoupled: flipping Main Roof OFF does NOT exclude flat.
  * squares = ceil(wasteSqft / 100) — rounds up to next whole square.
  *
  * Display surfaces should consume pitchedWaste + flatWaste + pitchedSquares
@@ -33,7 +36,7 @@ export function computeRoofTotal({
   const pitchedWaste = includeMaterialOrder
     ? Math.round((pitchedAreaSqft || 0) * PITCHED_WASTE_FACTOR)
     : 0
-  const flatWaste = includeMaterialOrder && includeFlatArea
+  const flatWaste = includeFlatArea
     ? Math.round((flatAreaSqft || 0) * FLAT_WASTE_FACTOR)
     : 0
   const pitchedSquares = Math.ceil(pitchedWaste / 100)

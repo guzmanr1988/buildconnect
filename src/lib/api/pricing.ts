@@ -163,21 +163,21 @@ export function computeVendorTotal(
           const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
           const includeFlatAreaOpt = item.roofMeasurement?.includeFlatArea !== false
           const useSplit = hasSplitData && hasFlatSelected && hasPitchedSelected
-            && includeMaterialOrderOpt
-          // Material-order opt-out: when the section toggle is OFF, no
-          // roof-material line items reach the quote. Both pitched (square-
-          // priced, non-flat) and flat options read 0. Flat-area sub-gate:
-          // when MO=ON but FA=OFF, the flat_roof option drops to 0 while
-          // pitched options remain priced.
-          const rawSqft = !includeMaterialOrderOpt
+          // Decoupled toggle gates: Main Roof (includeMaterialOrderOpt) zeros
+          // PITCHED options only; Flat Area (includeFlatAreaOpt) zeros the
+          // FLAT option only. Each toggle gates its own area class — flipping
+          // Main Roof OFF does not also zero flat (sibling: roof-area-math
+          // computeRoofTotal pitched/flat split + roof-measurement-breakdown
+          // -card UI toggle independence).
+          const isFlatZeroed = isFlatOpt && !includeFlatAreaOpt
+          const isPitchedZeroed = !isFlatOpt && !includeMaterialOrderOpt
+          const rawSqft = isFlatZeroed || isPitchedZeroed
             ? 0
-            : (isFlatOpt && !includeFlatAreaOpt)
-              ? 0
-              : useSplit
-                ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
-                : (isFlatOpt
-                    ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
-                    : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
+            : useSplit
+              ? (isFlatOpt ? (item.roofMeasurement!.flatAreaSqft ?? 0) : (item.roofMeasurement!.pitchedAreaSqft ?? 0))
+              : (isFlatOpt
+                  ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
+                  : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
           const wasteFactor = isFlatOpt ? FLAT_WASTE_FACTOR : PITCHED_WASTE_FACTOR
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)
