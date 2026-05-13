@@ -1,6 +1,11 @@
-// Single source of truth for the roof waste factor applied to raw measurements
-// before converting to squares. Change here propagates to all display + pricing surfaces.
-export const ROOF_WASTE_FACTOR = 1.02
+// Roof waste factors — split per surface class.
+// Pitched roofs (shingles, metal, tile) carry a higher cut-loss factor due to
+// hip/valley cuts and starter-course overhang. Flat roofs (membrane) waste
+// less because seams overlap on a single plane with minimal cut-loss.
+// Single source of truth for display + pricing surfaces. Change here
+// propagates everywhere via the named imports.
+export const PITCHED_WASTE_FACTOR = 1.02
+export const FLAT_WASTE_FACTOR = 1.01
 
 // Gutter total = perimeter + drops × per-floor downspout run. Per-floor
 // constants are industry rule-of-thumb (1-story ~10 ft, 2-story ~25 ft).

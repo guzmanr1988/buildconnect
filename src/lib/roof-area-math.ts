@@ -1,8 +1,16 @@
+import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR } from './roof-pricing'
+
 /**
  * Single source of truth for roof waste-adjusted area + squares.
- * Both pitched and flat use 2% waste (top-of-real bias to preserve cushion when
- * satellite under-detects flat sections by 50-100 sqft).
- * squares = ceil(totalWasteSqft / 100) — rounds up to next whole square.
+ * Pitched uses 2% waste (hip/valley cuts + starter-course overhang).
+ * Flat uses 1% waste (membrane seams overlap on a single plane).
+ * squares = ceil(wasteSqft / 100) — rounds up to next whole square.
+ *
+ * Display surfaces should consume pitchedWaste + flatWaste + pitchedSquares
+ * + flatSquares separately. totalSqft/totalSquares are retained for backend +
+ * legacy code paths only — do not render the combined values on any roof
+ * measurement display surface (Rod-locked spec: pitched/flat end-to-end
+ * separate, no combined number on screen).
  */
 export function computeRoofTotal({
   pitchedAreaSqft,
@@ -14,14 +22,25 @@ export function computeRoofTotal({
   flatAreaSqft: number
   includeMaterialOrder: boolean
   includeFlatArea?: boolean
-}): { totalSqft: number; totalSquares: number; pitchedWaste: number; flatWaste: number } {
-  const pitchedWaste = includeMaterialOrder ? Math.round((pitchedAreaSqft || 0) * 1.02) : 0
-  const flatWaste = includeMaterialOrder && includeFlatArea
-    ? Math.round((flatAreaSqft || 0) * 1.02)
+}): {
+  totalSqft: number
+  totalSquares: number
+  pitchedWaste: number
+  flatWaste: number
+  pitchedSquares: number
+  flatSquares: number
+} {
+  const pitchedWaste = includeMaterialOrder
+    ? Math.round((pitchedAreaSqft || 0) * PITCHED_WASTE_FACTOR)
     : 0
+  const flatWaste = includeMaterialOrder && includeFlatArea
+    ? Math.round((flatAreaSqft || 0) * FLAT_WASTE_FACTOR)
+    : 0
+  const pitchedSquares = Math.ceil(pitchedWaste / 100)
+  const flatSquares = Math.ceil(flatWaste / 100)
   const totalSqft = pitchedWaste + flatWaste
   const totalSquares = Math.ceil(totalSqft / 100)
-  return { totalSqft, totalSquares, pitchedWaste, flatWaste }
+  return { totalSqft, totalSquares, pitchedWaste, flatWaste, pitchedSquares, flatSquares }
 }
 
 // Under-quote guard threshold — single source of truth shared by wizard Step 2

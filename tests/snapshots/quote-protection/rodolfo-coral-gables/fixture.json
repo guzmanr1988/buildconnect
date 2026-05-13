@@ -5,8 +5,8 @@
     "recordedAt": "2026-05-08T21:48:00Z",
     "recordedBundle": "BUrV7oIT",
     "recordedBy": "apollo",
-    "rekeyedAt": "2026-05-12T00:00:00Z",
-    "rekeyedBy": "helios (PR-212 flat-area-sub-gate — MO single area gate at top; FA sub-gate zeros flat only when MO=ON+FA=OFF)",
+    "rekeyedAt": "2026-05-13T00:00:00Z",
+    "rekeyedBy": "helios (pitched/flat waste split — flat constant 2%→1% per Rod 2026-05-13 spec; pitched stays 2%; step2.flatSqft + step2.totalSqft shift while cart raw fields unchanged)",
     "surfaceDefinitions": {
       "step2": "Inside measurement-wizard modal, Step 2 'Total Used for pricing' label. Source-of-truth: computeRoofTotal(pitchedAreaSqft, flatAreaSqft, includeMaterialOrder). Both raw satellite values feed in when Material Order toggle is ON; both zeroed when OFF. Chip-tap is no longer a gate.",
       "cart": "buildconnect-cart store roofMeasurement after handleComplete. Raw pitched + flat written unconditionally when includeMaterialOrder=true; both zeroed when toggle is OFF."
@@ -28,8 +28,8 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 489,
-            "totalSqft": 2583,
+            "flatSqft": 484,
+            "totalSqft": 2578,
             "squares": 26,
             "includeMaterialOrderDefault": true,
             "includePerimeterDefault": true,
@@ -37,8 +37,8 @@
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
-            "flatSqft": 490,
-            "totalSqft": 3015,
+            "flatSqft": 485,
+            "totalSqft": 3010,
             "squares": 31
           }
         },
@@ -75,8 +75,8 @@
         "step2": {
           "gateLogic": {
             "pitchedSqft": 2053,
-            "flatSqft": 489,
-            "totalSqft": 2583,
+            "flatSqft": 484,
+            "totalSqft": 2578,
             "squares": 26,
             "includeMaterialOrderDefault": true,
             "includePerimeterDefault": true,
@@ -84,8 +84,8 @@
           },
           "canonicalTruth": {
             "pitchedSqft": 2475,
-            "flatSqft": 490,
-            "totalSqft": 3015,
+            "flatSqft": 485,
+            "totalSqft": 3010,
             "squares": 31
           }
         },

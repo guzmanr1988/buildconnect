@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ROOF_WASTE_FACTOR } from '@/lib/roof-pricing'
+import { PITCHED_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
 import { evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
@@ -218,7 +218,7 @@ async function measureRoofFromAddress(address: string): Promise<MeasurementData 
 
     const areaM2 = wholeRoofStats.areaMeters2
     const areaSqft = Math.round(areaM2 * SQM_TO_SQFT)
-    const wasteSqft = Math.round(areaSqft * ROOF_WASTE_FACTOR)
+    const wasteSqft = Math.round(areaSqft * PITCHED_WASTE_FACTOR)
 
     // Area-weighted average pitch across all roof segments
     const totalArea = roofSegmentStats.reduce((s, seg) => s + seg.stats.areaMeters2, 0)

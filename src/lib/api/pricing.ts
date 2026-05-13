@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
-import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
+import {
+  computeGutterTotalLinFt,
+  isRepairOption,
+  resolveRepairAreaSqft,
+  PITCHED_WASTE_FACTOR,
+  FLAT_WASTE_FACTOR,
+} from '@/lib/roof-pricing'
 import { applyAreaWaste } from '@/lib/area-waste'
 import type { CartItem } from '@/stores/cart-store'
 import type { ServiceConfig } from '@/types'
@@ -172,7 +178,7 @@ export function computeVendorTotal(
                 : (isFlatOpt
                     ? (item.roofMeasurement?.flatAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0)
                     : (item.roofMeasurement?.pitchedAreaSqft ?? item.roofMeasurement?.areaSqft ?? 0))
-          const wasteFactor = 1.02
+          const wasteFactor = isFlatOpt ? FLAT_WASTE_FACTOR : PITCHED_WASTE_FACTOR
           const wasteSqft = Math.round(rawSqft * wasteFactor)
           totalCents += basePrice * sqftToSquares(wasteSqft)
         } else if (meta.priceUnit === 'sqft') {

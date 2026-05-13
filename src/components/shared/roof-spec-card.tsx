@@ -1,6 +1,7 @@
 import { sqftToSquares } from '@/lib/option-metadata'
 import {
-  ROOF_WASTE_FACTOR,
+  PITCHED_WASTE_FACTOR,
+  FLAT_WASTE_FACTOR,
   GUTTER_DROP_FT_BY_FLOORS,
   computeGutterTotalLinFt,
   type GutterDropsConfig,
@@ -65,7 +66,7 @@ export function RoofSpecCard({
     : undefined
   const metalSquares = mrs?.roofSize
     ? Number(mrs.roofSize) > 200
-      ? sqftToSquares(Math.round(Number(mrs.roofSize) * ROOF_WASTE_FACTOR))
+      ? sqftToSquares(Math.round(Number(mrs.roofSize) * PITCHED_WASTE_FACTOR))
       : Number(mrs.roofSize)
     : undefined
 
@@ -94,7 +95,7 @@ export function RoofSpecCard({
                         includeMaterialOrder,
                       }).totalSquares
                     }
-                    return sqftToSquares(Math.round(rm.areaSqft * ROOF_WASTE_FACTOR))
+                    return sqftToSquares(Math.round(rm.areaSqft * PITCHED_WASTE_FACTOR))
                   })()} squares w/waste
                 </span>
               </div>
@@ -116,13 +117,13 @@ export function RoofSpecCard({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Pitched</span>
                   <span className="font-medium">
-                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.pitchedAreaSqft! * 1.02) / 100)} sq)
+                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground min-w-[72px]">Flat</span>
                   <span className="font-medium">
-                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * 1.02) / 100)} sq)
+                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)
                   </span>
                 </div>
               </>
