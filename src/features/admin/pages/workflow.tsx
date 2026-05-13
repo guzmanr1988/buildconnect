@@ -91,10 +91,28 @@ export default function WorkflowPage() {
   // Convert sent projects (cart-created homeowner flow) into pipeline items.
   // status flows end-to-end from homeowner submit → vendor confirm → vendor
   // sold → admin view. Cancellation-approved entries move to 'cancelled'.
+  //
+  // SentProject.status type is {pending|approved|sold|declined} per
+  // src/stores/projects-store.ts:84, but Supabase hydration at line 372 casts
+  // row.status without runtime validation — pre-#171 legacy rows can carry
+  // 'rejected' (now mapped to 'declined' via cancellationRequest flow in
+  // vendor-dashboard, but admin-workflow never normalized them). Without this
+  // map, raw 'rejected' (and any other future unknown) bypassed all 5 stage
+  // filters, producing the header_total ≠ sum(stage_counts) gap caught by
+  // apollo PR-179 walks. Mirrors mockStatusMap shape below + adds the '??
+  // pending' defensive fallback per banked widen-reads-narrow-writes.
+  const projectStatusMap: Record<string, 'pending' | 'approved' | 'sold' | 'declined'> = {
+    pending: 'pending',
+    approved: 'approved',
+    sold: 'sold',
+    declined: 'declined',
+    rejected: 'declined',
+  }
   const projectItems = useMemo(() => sentProjects.map((p) => {
     const leadKey = `L-${p.id.slice(0, 4).toUpperCase()}`
     const cReq = cancellationRequestsByLead[leadKey] ?? cancellationRequestsByLead[p.id]
     const cancelApproved = cReq?.status === 'approved'
+    const mappedStatus = cancelApproved ? 'declined' : (projectStatusMap[p.status] ?? 'pending')
     return {
       id: p.id,
       name: p.homeowner?.name || 'Customer',
@@ -103,7 +121,7 @@ export default function WorkflowPage() {
       initials: deriveInitials(p.homeowner?.name || 'Customer'),
       vendor: p.contractor?.company,
       rep: p.assignedRep?.name,
-      status: cancelApproved ? 'declined' : p.status,
+      status: mappedStatus,
       soldAt: p.soldAt,
       saleAmount: p.saleAmount,
       pendingCancel: cReq?.status === 'pending',
