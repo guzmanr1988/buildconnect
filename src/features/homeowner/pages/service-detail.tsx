@@ -507,6 +507,12 @@ export function ServiceDetailPage() {
 
   useDocumentTitle(service?.name)
 
+  useEffect(() => {
+    if (service && service.status !== 'live') {
+      navigate('/home', { replace: true })
+    }
+  }, [service, navigate])
+
   if (!service) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
