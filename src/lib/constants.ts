@@ -504,7 +504,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   },
   {
     id: 'kitchen',
-    name: 'Kitchen Remodel',
+    name: 'Kitchen',
     badge: 'Coming Soon',
     badgeColor: 'bg-muted text-muted-foreground',
     tagline: 'Transform your kitchen into the heart of your home',
