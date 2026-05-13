@@ -597,13 +597,9 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         options: [
           { id: 'drywall', label: 'Drywall / sheetrock' },
           { id: 'ceiling', label: 'Ceiling work' },
-          { id: 'recessed_lighting', label: 'Recessed lighting' },
-          { id: 'flooring', label: 'Flooring installation' },
           { id: 'trim_molding', label: 'Trim & molding' },
           { id: 'interior_doors', label: 'Interior doors' },
           { id: 'move_walls', label: 'Move or remove walls' },
-          { id: 'paint', label: 'Paint' },
-          { id: 'builtins', label: 'Built-ins / cabinetry' },
         ],
       },
       {
@@ -620,27 +616,12 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         ],
       },
       {
-        id: 'finish',
-        label: 'Finish level',
-        required: true,
-        type: 'single',
-        options: [
-          { id: 'standard', label: 'Standard' },
-          { id: 'premium', label: 'Premium' },
-          { id: 'custom', label: 'Custom / designer-grade' },
-        ],
-      },
-      {
         id: 'addons',
         label: 'Add-ons',
         required: false,
         type: 'multi',
         options: [
-          { id: 'closet_system', label: 'Closet system' },
           { id: 'crown_molding', label: 'Crown molding' },
-          { id: 'accent_wall', label: 'Accent wall' },
-          { id: 'smart_lighting', label: 'Smart lighting / switches' },
-          { id: 'skylight', label: 'Skylight' },
           { id: 'popcorn_removal', label: 'Popcorn ceiling removal' },
         ],
       },
