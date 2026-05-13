@@ -56,11 +56,21 @@ export default function LeadInbox() {
   // a refetch. Accept-side homeowner notify fires inside the Edge Function via
   // hermes notify-lead-event (migration 039); the FE only owns the optimistic
   // store patch + toast.
+  // supabase-js .functions.invoke() can throw on network/CORS failure rather
+  // than returning {error}, which would propagate as an unhandled promise
+  // rejection from the click handler. Wrap in try/catch so the toast fires
+  // on both paths.
   const handleVendorAccept = async (spId: string) => {
-    const { error } = await supabase.functions.invoke('transition-lead-status', {
-      body: { lead_id: spId, action: 'accept' },
-    })
-    if (error) {
+    let result: Awaited<ReturnType<typeof supabase.functions.invoke>>
+    try {
+      result = await supabase.functions.invoke('transition-lead-status', {
+        body: { lead_id: spId, action: 'accept' },
+      })
+    } catch {
+      toast.error('Failed to accept lead. Try again.')
+      return
+    }
+    if (result.error) {
       toast.error('Failed to accept lead. Try again.')
       return
     }
@@ -72,10 +82,16 @@ export default function LeadInbox() {
     toast.success('Lead accepted. Homeowner notified.')
   }
   const handleVendorReject = async (spId: string) => {
-    const { error } = await supabase.functions.invoke('transition-lead-status', {
-      body: { lead_id: spId, action: 'reject' },
-    })
-    if (error) {
+    let result: Awaited<ReturnType<typeof supabase.functions.invoke>>
+    try {
+      result = await supabase.functions.invoke('transition-lead-status', {
+        body: { lead_id: spId, action: 'reject' },
+      })
+    } catch {
+      toast.error('Failed to reject lead. Try again.')
+      return
+    }
+    if (result.error) {
       toast.error('Failed to reject lead. Try again.')
       return
     }
