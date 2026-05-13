@@ -97,7 +97,6 @@ export function CartPage() {
   const profile = useAuthStore((s) => s.profile)
   const SERVICE_CATALOG = useCatalogStore((s) => s.services)
   const [viewItem, setViewItem] = useState<CartItem | null>(null)
-  const [idPreviewOpen, setIdPreviewOpen] = useState(false)
   // Cancellation-request dialog (ship #88 extended + ship #90 simplified per
   // kratos msg 1776671567585). Simplification: single Reason textarea instead
   // of dropdown + explanation combo. Bulletproof 5-layer open-and-close
@@ -721,52 +720,6 @@ export function CartPage() {
         })}
       </div>
 
-      {/* Photo ID — managed on Documents page (PR #197). Single profile-level
-          ID; cart shows current status + deep-link to manage. */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
-        <label className="text-sm font-medium text-foreground mb-2 block">
-          Photo ID <span className="text-destructive">*</span>
-        </label>
-        <div className="rounded-xl border bg-card p-4">
-          {profile?.id_document_url ? (
-            <div className="flex flex-row items-start gap-3">
-              <button type="button" onClick={() => setIdPreviewOpen(true)} className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer">
-                <img src={profile.id_document_url} alt="ID Document" className="w-full h-full object-cover" />
-              </button>
-              <div className="flex-1 min-w-0 flex flex-col gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">ID on file</p>
-                  <p className="text-xs text-muted-foreground">Click image to preview</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/home/documents')}
-                  className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition w-full sm:w-auto self-start"
-                >
-                  Manage on Documents page
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => navigate('/home/documents')}
-              className="w-full flex flex-col items-center justify-center gap-2 py-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30 transition"
-            >
-              <Plus className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground font-medium">Upload your ID on the Documents page</span>
-            </button>
-          )}
-          <p className="text-[10px] text-muted-foreground leading-relaxed mt-3">
-            A valid photo ID is required before you can send a project to a contractor. It's used to verify your identity and for any paperwork tied to your project. Your information is kept secure and confidential.
-          </p>
-        </div>
-      </motion.div>
-
       {/* Sent Projects */}
       {sentProjects.length > 0 && (
         <motion.div
@@ -1137,30 +1090,6 @@ export function CartPage() {
               </div>
             )
           })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Ship #267 — ID Preview Dialog: DialogHeader + Title + larger
-          max-w-2xl. #268 — popup is view-only per Rodolfo's mental
-          model; Download moved inline to the uploaded-state row. Footer
-          carries just Close. */}
-      <Dialog open={idPreviewOpen} onOpenChange={setIdPreviewOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-heading">ID Document</DialogTitle>
-          </DialogHeader>
-          {profile?.id_document_url && (
-            <img src={profile.id_document_url} alt="ID Document Preview" className="w-full rounded-lg" />
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setIdPreviewOpen(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
