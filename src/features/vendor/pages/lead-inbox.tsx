@@ -3,8 +3,10 @@ import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   Package, ChevronDown, ChevronUp, ChevronRight, User, MapPin, Calendar,
-  Download, ZoomIn, Phone, CheckCircle2, RotateCcw,
+  Download, ZoomIn, Phone, CheckCircle2, RotateCcw, X,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -48,6 +50,42 @@ export default function LeadInbox() {
   const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
   const { vendorId: VENDOR_ID, isMock } = useVendorScope()
   const profile = useAuthStore((s) => s.profile)
+
+  // Vendor accept/reject — invokes server-side Edge Function transition-lead-status,
+  // then patches local sentProjects entry on success so the inbox reflects without
+  // a refetch. Accept-side homeowner notify fires inside the Edge Function via
+  // hermes notify-lead-event (migration 039); the FE only owns the optimistic
+  // store patch + toast.
+  const handleVendorAccept = async (spId: string) => {
+    const { error } = await supabase.functions.invoke('transition-lead-status', {
+      body: { lead_id: spId, action: 'accept' },
+    })
+    if (error) {
+      toast.error('Failed to accept lead. Try again.')
+      return
+    }
+    useProjectsStore.setState((state) => ({
+      sentProjects: state.sentProjects.map((p) =>
+        p.id === spId ? { ...p, status: 'approved' as const, confirmedAt: new Date().toISOString() } : p,
+      ),
+    }))
+    toast.success('Lead accepted. Homeowner notified.')
+  }
+  const handleVendorReject = async (spId: string) => {
+    const { error } = await supabase.functions.invoke('transition-lead-status', {
+      body: { lead_id: spId, action: 'reject' },
+    })
+    if (error) {
+      toast.error('Failed to reject lead. Try again.')
+      return
+    }
+    useProjectsStore.setState((state) => ({
+      sentProjects: state.sentProjects.map((p) =>
+        p.id === spId ? { ...p, status: 'declined' as const } : p,
+      ),
+    }))
+    toast.success('Lead rejected.')
+  }
 
   // Ship #214 — strict scope by contractor.vendor_id (with company
   // fallback for pre-#165 entries that pre-date the FK). Vendor
@@ -1014,6 +1052,37 @@ export default function LeadInbox() {
                               </div>
                             )}
                           </>
+                        )
+                      })()}
+                      {/* Vendor accept/reject — fires server-side transition + homeowner notify
+                          via Edge Function transition-lead-status. Gated to vendor role on
+                          pending leads only; rejects/accepts are non-rep flow distinct from the
+                          account_rep accept-schedule path below. */}
+                      {profile?.role === 'vendor' && lead.status === 'pending' && (() => {
+                        const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                        if (!sp) return null
+                        return (
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              className="gap-1.5"
+                              data-lead-action="accept"
+                              onClick={(e) => { e.stopPropagation(); handleVendorAccept(sp.id) }}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              data-lead-action="reject"
+                              onClick={(e) => { e.stopPropagation(); handleVendorReject(sp.id) }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Reject
+                            </Button>
+                          </div>
                         )
                       })()}
                       {/* Rep accept / reschedule actions — only for account_rep on pending-acceptance leads */}
