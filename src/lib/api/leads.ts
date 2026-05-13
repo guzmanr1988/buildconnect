@@ -12,6 +12,15 @@ export async function getLeads(role: 'homeowner' | 'vendor', userId: string) {
   return data as Lead[]
 }
 
+export async function getAllLeads() {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*')
+    .order('received_at', { ascending: false })
+  if (error) throw error
+  return data as Lead[]
+}
+
 export async function getLead(id: string) {
   const { data, error } = await supabase
     .from('leads')

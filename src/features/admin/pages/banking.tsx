@@ -58,6 +58,7 @@ import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useAdminBankAccounts } from '@/lib/hooks/use-admin-data'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -99,6 +100,14 @@ export default function BankingPage() {
   // chart reflect Mark-Sold actions taken through the mock loop.
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const mockClosedSales = useEffectiveMockClosedSales()
+  const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
+  // Real bank accounts from Supabase (RLS gates to admin role); always shown.
+  // Fixture rows merge in only when demoDataHidden=false.
+  const { data: realBankAccounts = [] } = useAdminBankAccounts()
+  const linkedBankAccounts = useMemo(
+    () => [...realBankAccounts, ...(demoDataHidden ? [] : MOCK_BANK_ACCOUNTS)],
+    [realBankAccounts, demoDataHidden],
+  )
   const baselineRevenue = useMemo(
     () => mockClosedSales.reduce((s, c) => s + c.commission, 0),
     [mockClosedSales],
@@ -479,7 +488,7 @@ export default function BankingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {MOCK_BANK_ACCOUNTS.length === 0 ? (
+                {linkedBankAccounts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No bank accounts linked yet.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border">
@@ -494,7 +503,7 @@ export default function BankingPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {MOCK_BANK_ACCOUNTS.map((acc) => (
+                      {linkedBankAccounts.map((acc) => (
                         <TableRow key={acc.id}>
                           <TableCell className="font-medium">{acc.bank_name}</TableCell>
                           <TableCell>{acc.account_holder}</TableCell>

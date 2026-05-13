@@ -1,5 +1,24 @@
 import { supabase } from '@/lib/supabase'
-import type { Transaction, AppSettings, Bug } from '@/types'
+import type { Transaction, AppSettings, Bug, Profile, BankAccount } from '@/types'
+
+export async function getHomeowners() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'homeowner')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as Profile[]
+}
+
+export async function getAllBankAccounts() {
+  const { data, error } = await supabase
+    .from('bank_accounts')
+    .select('*')
+    .order('linked_at', { ascending: false })
+  if (error) throw error
+  return data as BankAccount[]
+}
 
 export async function getTransactions() {
   const { data, error } = await supabase
