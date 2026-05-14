@@ -707,14 +707,7 @@ export default function VendorPermitsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Project Permits" description="City permit forms and tracker for your active projects">
-        {!isRep && (
-          <Button size="sm" className="gap-1.5" onClick={openAdd}>
-            <Plus className="h-4 w-4" />
-            Add Permit
-          </Button>
-        )}
-      </PageHeader>
+      <PageHeader title="Project Permits" description="City permit forms and tracker for your active projects" />
 
       {/* ── Permit Forms (vendor + rep — tracker write is rep-blocked, forms are not) ── */}
       <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
@@ -731,23 +724,32 @@ export default function VendorPermitsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 pt-4 space-y-4">
-            {/* Status chips */}
-            <div className="flex flex-wrap gap-2">
-              {(['all', 'approved', 'pending', 'expired', 'rejected'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(
-                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border',
-                    statusFilter === s
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80',
-                  )}
-                >
-                  {s === 'all' ? 'All' : PERMIT_STATUS_LABELS[s]}
-                  <span className="ml-1.5 opacity-70">{counts[s]}</span>
-                </button>
-              ))}
+            {/* Status chips + Add Permit — PR-243 relocated from PageHeader so
+                vendors don't miss the entry point above the fold. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'approved', 'pending', 'expired', 'rejected'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className={cn(
+                      'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border',
+                      statusFilter === s
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80',
+                    )}
+                  >
+                    {s === 'all' ? 'All' : PERMIT_STATUS_LABELS[s]}
+                    <span className="ml-1.5 opacity-70">{counts[s]}</span>
+                  </button>
+                ))}
+              </div>
+              {!isRep && (
+                <Button size="sm" className="gap-1.5" onClick={openAdd}>
+                  <Plus className="h-4 w-4" />
+                  Add Permit
+                </Button>
+              )}
             </div>
 
             {/* Search */}
