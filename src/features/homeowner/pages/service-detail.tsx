@@ -1001,7 +1001,16 @@ export function ServiceDetailPage() {
                       (group.id === 'service_type' &&
                         option.id === 'addons' &&
                         serviceId === 'roofing' &&
-                        roofMeasurement?.includePerimeter === false)
+                        roofMeasurement?.includePerimeter === false) ||
+                      // PR-240 — Perimeter excluded also locks every chip in the
+                      // Add-Ons SECTION (gutters, soffit/fascia wood+metal, attic
+                      // insulation, solar prep, extra plywood). Rod 14:51Z directive:
+                      // "grey out non selective on service type now do it on addons
+                      // too". Value-shape-agnostic !== true (undefined/null/false
+                      // all lock — matches codebase idiom includePerimeter ?? true).
+                      (group.id === 'addons' &&
+                        serviceId === 'roofing' &&
+                        roofMeasurement?.includePerimeter !== true)
                     // PR-220 — dynamic label for pergolas measured chip:
                     // reads the live measured sqft once a polygon is drawn,
                     // falls back to a "measure first" prompt otherwise.
