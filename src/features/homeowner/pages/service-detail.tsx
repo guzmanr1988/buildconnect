@@ -735,7 +735,7 @@ export function ServiceDetailPage() {
                   {roofMeasurement ? (
                     <>
                       <p className="text-sm font-semibold text-foreground">Roof measured</p>
-                      <p className="text-[12px] text-muted-foreground mt-0.5 truncate">{roofMeasurement.address}</p>
+                      <p className="text-base font-medium text-foreground mt-0.5 truncate">{roofMeasurement.address}</p>
                       <div className="mt-2 flex items-center gap-3 text-xs">
                         <button
                           className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"

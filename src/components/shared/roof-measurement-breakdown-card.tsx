@@ -101,12 +101,61 @@ export function RoofMeasurementBreakdownCard({
                   )
                 }
                 return (
-                  <p className="text-base font-semibold text-foreground" data-row="material-order-pitched">
-                    Pitched: {Math.round(pitchedAreaSqft).toLocaleString()}{' '}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      sqft ({pitchedSquares} sq w/2% waste)
-                    </span>
-                  </p>
+                  <>
+                    <p className="text-xl font-bold text-foreground" data-row="material-order-pitched">
+                      Pitched: {Math.round(pitchedAreaSqft).toLocaleString()}{' '}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        sqft ({pitchedSquares} sq w/2% waste)
+                      </span>
+                    </p>
+                    {!pitchedOmittedTriggered && (
+                      <div data-row="pitched" className="mt-0.5">
+                        {editing?.pitched.active ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={editing.pitched.rawValue}
+                              onChange={(e) => editing.pitched.onChange(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === 'Escape') editing.pitched.onDone()
+                              }}
+                              onBlur={() => editing.pitched.onDone()}
+                              autoFocus
+                              className="h-7 text-xs w-24"
+                              placeholder="raw sqft"
+                            />
+                            <span className="text-[11px] text-muted-foreground">sqft (raw)</span>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => editing.pitched.onDone()}
+                              className="text-primary hover:text-primary/80 transition-colors"
+                              aria-label="Save pitched sqft"
+                            >
+                              <Check className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] text-muted-foreground">
+                              {pitchedAreaSqft.toLocaleString()} sqft
+                            </p>
+                            {editing && (
+                              <button
+                                type="button"
+                                onClick={() => editing.pitched.onStart()}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Edit pitched sqft"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )
               })() : (
                 <>
@@ -227,9 +276,9 @@ export function RoofMeasurementBreakdownCard({
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-xl font-bold text-foreground">
                       <span data-row="flat">{Math.round(flatAreaSqft).toLocaleString()}</span>{' '}
-                      <span className="text-xs font-normal text-muted-foreground">sqft</span>
+                      <span className="text-sm font-normal text-muted-foreground">sqft</span>
                     </p>
                     {editing && (
                       <button
@@ -257,73 +306,26 @@ export function RoofMeasurementBreakdownCard({
           </div>
           )}
 
-          <div
-            data-row="pitched"
-            {...(pitchedOmittedTriggered ? { 'data-pitched-not-included': 'true' } : {})}
-            className={cn(
-              pitchedOmittedTriggered ? 'rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2' : '',
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 mb-0.5">
-              <p className="text-xs text-muted-foreground">Pitched</p>
-              {pitchedOmittedTriggered && (
+          {pitchedOmittedTriggered && (
+            <div
+              data-row="pitched"
+              data-pitched-not-included="true"
+              className="rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 p-2"
+            >
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <p className="text-xs text-muted-foreground">Pitched</p>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
                   Not included
                 </span>
-              )}
-            </div>
-            {editing?.pitched.active ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min="0"
-                  value={editing.pitched.rawValue}
-                  onChange={(e) => editing.pitched.onChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === 'Escape') editing.pitched.onDone()
-                  }}
-                  onBlur={() => editing.pitched.onDone()}
-                  autoFocus
-                  className="h-9 text-base w-28"
-                  placeholder="raw sqft"
-                />
-                <span className="text-xs text-muted-foreground">sqft (raw)</span>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => editing.pitched.onDone()}
-                  className="text-primary hover:text-primary/80 transition-colors"
-                  aria-label="Save pitched sqft"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <p className={cn(
-                  'text-sm font-semibold',
-                  pitchedOmittedTriggered ? 'text-red-900 dark:text-red-200' : 'text-foreground',
-                )}>
-                  {pitchedAreaSqft.toLocaleString()} sqft
-                </p>
-                {editing && (
-                  <button
-                    type="button"
-                    onClick={() => editing.pitched.onStart()}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Edit pitched sqft"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-            {pitchedOmittedTriggered && (
+              <p className="text-sm font-semibold text-red-900 dark:text-red-200">
+                {pitchedAreaSqft.toLocaleString()} sqft
+              </p>
               <p className="text-[11px] text-red-800 dark:text-red-300 mt-1">
                 This is the main roof. Tap a pitched material on the page to include it.
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
           {editing && (
             <p className="text-[11px] text-muted-foreground">
