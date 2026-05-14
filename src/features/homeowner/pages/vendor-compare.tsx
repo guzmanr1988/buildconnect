@@ -171,7 +171,14 @@ export function VendorComparePage() {
       // Mock vendors (non-UUID id or in DEMO map) already passed PRODUCT-IS-GOD.
       const isMock = !UUID_RE_DISPLAY.test(v.id) || v.id in DEMO_VENDOR_UUID_BY_MOCK_ID
       if (isMock) return true
-      // Real vendor: must have pricing covering all cart services.
+      // Apex floor: real Apex always renders even with partial pricing — the
+      // availability-gap UX (badge + deducted total + small-letters note)
+      // informs the homeowner instead of hiding the only contractor.
+      if (v.id === APEX_REAL_UUID) {
+        const r = totalsByVendor[v.id]
+        return !!(r && r.hasSelections)
+      }
+      // Other real vendors: PRODUCT-IS-GOD strict floor.
       const result = totalsByVendor[v.id]
       return !!(result && result.coversAllServices && result.totalCents > 0)
     })
@@ -234,6 +241,25 @@ export function VendorComparePage() {
           const result = totalsByVendor[vendor.id]
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
+          const isApex = vendor.id === APEX_REAL_UUID
+          // Availability-gap: Apex priced some-but-not-all cart services.
+          // computeVendorTotal already excludes missingOptionKeys from totalCents,
+          // so result.totalCents IS the deducted total. Surface the gap to the
+          // homeowner with a badge + small-letters note instead of hiding Apex
+          // or showing "Contact for quote".
+          const apexHasGap =
+            isApex &&
+            !!result &&
+            result.hasSelections &&
+            (!result.coversAllServices || result.missingOptionKeys.length > 0) &&
+            result.totalCents > 0
+          const gapServiceNames = apexHasGap
+            ? Array.from(
+                new Set(result.missingOptionKeys.map((k) => k.split('|')[0])),
+              ).map(
+                (sid) => services.find((s) => s.id === sid)?.name ?? sid,
+              )
+            : []
 
           // Decide what to render in the Price slot.
           let priceText: string
@@ -244,6 +270,9 @@ export function VendorComparePage() {
           } else if (!result || !result.hasSelections) {
             priceText = 'Configure to see price'
             priceTone = 'muted'
+          } else if (apexHasGap) {
+            priceText = formatPriceCents(result.totalCents)
+            priceTone = 'strong'
           } else if (!result.coversAllServices || result.missingOptionKeys.length > 0 || result.totalCents === 0) {
             priceText = 'Contact for quote'
             priceTone = 'muted'
@@ -328,15 +357,41 @@ export function VendorComparePage() {
                   <div
                     className="rounded-lg bg-muted/50 p-3"
                     data-vendor-price={result?.totalCents ?? 0}
-                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
+                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
                   >
-                    <p className="text-xs text-muted-foreground mb-1">Price</p>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">Price</p>
+                      {apexHasGap && (
+                        <span
+                          data-availability-gap="true"
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-900 dark:text-amber-200"
+                        >
+                          <AlertCircle className="h-3 w-3" />
+                          Some services unpriced
+                        </span>
+                      )}
+                    </div>
                     <p className={cn(
                       'text-lg font-bold font-heading',
                       priceTone === 'strong' ? 'text-foreground' : 'text-muted-foreground italic font-medium'
                     )}>
                       {priceText}
                     </p>
+                    {apexHasGap && (
+                      <p
+                        data-availability-gap-note="true"
+                        className="mt-1 text-[10px] leading-snug text-muted-foreground"
+                      >
+                        Apex doesn’t price{' '}
+                        {gapServiceNames.map((n, idx) => (
+                          <span key={n}>
+                            <span className="line-through">{n}</span>
+                            {idx < gapServiceNames.length - 1 ? ', ' : ''}
+                          </span>
+                        ))}
+                        {' '}— total excludes those. They may be covered as more contractors join.
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
@@ -357,7 +412,10 @@ export function VendorComparePage() {
                   {(() => {
                     // Stage B booking-block: vendor must have pricing configured for
                     // every service in the cart before homeowner can book.
-                    const unconfigured = result != null && result.hasSelections && !result.coversAllServices
+                    // Apex availability-gap exception: when Apex prices a subset,
+                    // homeowner can still book against the deducted total; the
+                    // unpriced services are surfaced via the gap badge + note.
+                    const unconfigured = result != null && result.hasSelections && !result.coversAllServices && !apexHasGap
                     const btn = (
                       <Button
                         size="lg"
