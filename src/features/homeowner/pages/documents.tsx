@@ -1,5 +1,5 @@
-import { FileText, Download, Trash2, FolderOpen, Folder, IdCard, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { FileText, Download, Trash2, FolderOpen, Folder, IdCard, Plus, Ruler, MapPin } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useHomeownerDocsStore, type HomeownerDoc } from '@/stores/homeowner-documents-store'
 import { useProjectsStore } from '@/stores/projects-store'
@@ -15,12 +15,30 @@ interface ProjectGroup {
   docs: HomeownerDoc[]
 }
 
+interface AddressGroup {
+  address: string
+  docs: HomeownerDoc[]
+}
+
 export function HomeownerDocumentsPage() {
   const profile = useAuthStore((s) => s.profile)
-  const { getDocsForHomeowner, removeDoc } = useHomeownerDocsStore()
+  const docs = useHomeownerDocsStore((s) => s.docs)
+  const loadDocs = useHomeownerDocsStore((s) => s.loadDocs)
+  const removeDoc = useHomeownerDocsStore((s) => s.removeDoc)
+  const getSignedUrl = useHomeownerDocsStore((s) => s.getSignedUrl)
+  const initializedFor = useHomeownerDocsStore((s) => s.initializedFor)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const [idPreviewOpen, setIdPreviewOpen] = useState(false)
   const [idBusy, setIdBusy] = useState(false)
+
+  // Hydrate docs for the active homeowner if the auth-state-change listener
+  // didn't already (e.g. direct-nav into this page with a session that was
+  // already SIGNED_IN before this module mounted).
+  useEffect(() => {
+    if (profile?.id && initializedFor !== profile.id) {
+      void loadDocs(profile.id)
+    }
+  }, [profile?.id, initializedFor, loadDocs])
 
   const idDocumentUrl = profile?.id_document_url
   const handleIdUpload = async (file: File) => {
@@ -46,13 +64,24 @@ export function HomeownerDocumentsPage() {
     }
   }
 
-  const docs = profile?.id ? getDocsForHomeowner(profile.id) : []
+  const myDocs = useMemo(
+    () => (profile?.id ? docs.filter((d) => d.homeownerId === profile.id) : []),
+    [docs, profile?.id],
+  )
+  const projectSubmissionDocs = useMemo(
+    () => myDocs.filter((d) => d.category === 'project-submission'),
+    [myDocs],
+  )
+  const roofMeasurementDocs = useMemo(
+    () => myDocs.filter((d) => d.category === 'roof-measurement'),
+    [myDocs],
+  )
 
-  const groups = useMemo<ProjectGroup[]>(() => {
+  const projectGroups = useMemo<ProjectGroup[]>(() => {
     const projectsById = new Map(sentProjects.map((p) => [p.id, p]))
     const buckets = new Map<string, ProjectGroup>()
 
-    for (const doc of docs) {
+    for (const doc of projectSubmissionDocs) {
       const project = doc.project_id ? projectsById.get(doc.project_id) : undefined
       const key = project ? project.id : '__other__'
       let bucket = buckets.get(key)
@@ -86,7 +115,51 @@ export function HomeownerDocumentsPage() {
       const bLatest = b.docs[0]?.createdAt ?? ''
       return bLatest.localeCompare(aLatest)
     })
-  }, [docs, sentProjects])
+  }, [projectSubmissionDocs, sentProjects])
+
+  const roofGroups = useMemo<AddressGroup[]>(() => {
+    const buckets = new Map<string, AddressGroup>()
+    for (const doc of roofMeasurementDocs) {
+      const label = (doc.address ?? '').trim() || 'Unspecified address'
+      const key = label.toLowerCase()
+      let bucket = buckets.get(key)
+      if (!bucket) {
+        bucket = { address: label, docs: [] }
+        buckets.set(key, bucket)
+      }
+      bucket.docs.push(doc)
+    }
+    for (const bucket of buckets.values()) {
+      bucket.docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    }
+    return Array.from(buckets.values()).sort((a, b) => {
+      const aLatest = a.docs[0]?.createdAt ?? ''
+      const bLatest = b.docs[0]?.createdAt ?? ''
+      return bLatest.localeCompare(aLatest)
+    })
+  }, [roofMeasurementDocs])
+
+  const handleDownload = async (doc: HomeownerDoc) => {
+    const url = await getSignedUrl(doc.storagePath)
+    if (!url) {
+      toast.error('Could not generate download link. Please try again.')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = doc.filename
+    a.target = '_blank'
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  const handleRemove = (id: string) => {
+    void removeDoc(id)
+  }
+
+  const hasAnyDocs = projectGroups.length > 0 || roofGroups.length > 0
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -184,7 +257,69 @@ export function HomeownerDocumentsPage() {
         </Dialog>
       )}
 
-      {groups.length === 0 ? (
+      {roofGroups.length > 0 && (
+        <div className="space-y-2" data-section="roof-measurements">
+          <div className="flex items-center gap-2 px-1">
+            <Ruler className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Roof Measurements</h2>
+          </div>
+          <div className="space-y-6">
+            {roofGroups.map((group) => (
+              <div key={group.address} className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground truncate">{group.address}</h3>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {group.docs.length} {group.docs.length === 1 ? 'document' : 'documents'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {group.docs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      data-doc-category="roof-measurement"
+                      className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3"
+                    >
+                      <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{doc.filename}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(doc.createdAt).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric',
+                            hour: 'numeric', minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => void handleDownload(doc)}
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemove(doc.id)}
+                          title="Remove"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasAnyDocs ? (
         <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-14 flex flex-col items-center gap-3 text-center">
           <FolderOpen className="h-10 w-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">No project documents yet</p>
@@ -192,9 +327,9 @@ export function HomeownerDocumentsPage() {
             Your project submission records will appear here automatically when you send a project to a contractor.
           </p>
         </div>
-      ) : (
+      ) : projectGroups.length > 0 ? (
         <div className="space-y-6">
-          {groups.map((group) => (
+          {projectGroups.map((group) => (
             <div key={group.projectId ?? 'other'} className="space-y-2">
               <div className="flex items-center gap-2 px-1">
                 <Folder className="h-4 w-4 text-muted-foreground" />
@@ -210,6 +345,7 @@ export function HomeownerDocumentsPage() {
                 {group.docs.map((doc) => (
                   <div
                     key={doc.id}
+                    data-doc-category="project-submission"
                     className="flex items-start gap-3 rounded-xl border bg-card px-4 py-3"
                   >
                     <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
@@ -227,17 +363,16 @@ export function HomeownerDocumentsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        asChild
+                        onClick={() => void handleDownload(doc)}
+                        title="Download"
                       >
-                        <a href={doc.dataUrl} download={doc.filename} title="Download">
-                          <Download className="h-4 w-4" />
-                        </a>
+                        <Download className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeDoc(doc.id)}
+                        onClick={() => handleRemove(doc.id)}
                         title="Remove"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -249,7 +384,7 @@ export function HomeownerDocumentsPage() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

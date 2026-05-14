@@ -404,17 +404,23 @@ export function BookingConfirmationPage() {
               homeownerAddress: homeowner?.address,
               idDocDataUrl: idDoc,
               permitWaiver: (pendingItem as any).permitWaiver ?? null,
-            }).then((dataUrl) => {
+            }).then(async (dataUrl) => {
               const dateSlug = new Date().toISOString().slice(0, 10)
               const vendorSlug = contractor.company.replace(/\s+/g, '-').toLowerCase().slice(0, 20)
-              addDoc({
+              // PR-242 — store now accepts a Blob (Supabase Storage upload).
+              // generateSubmissionPdf still returns a base64 dataURI; convert
+              // here rather than touching the generator (out of scope).
+              const blobRes = await fetch(dataUrl)
+              const blob = await blobRes.blob()
+              await addDoc({
                 homeownerId: liveProfile.id,
                 category: 'project-submission',
                 filename: `project-${vendorSlug}-${dateSlug}.pdf`,
-                dataUrl,
+                blob,
                 vendorCompany: contractor.company,
                 serviceName: pendingItem.serviceName,
                 project_id: sentProjectId,
+                address: homeowner?.address,
               })
             }).catch(() => { /* silent — never block flow */ })
           }
