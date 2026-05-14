@@ -481,6 +481,21 @@ export function ServiceDetailPage() {
     }
   }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
 
+  // Perimeter excluded + addons previously selected: clear the service_type
+  // selection so the user re-picks Full Replacement or Repair. Pairs with the
+  // isLocked clause that disables the Add-ons chip when Perimeter is OFF.
+  // Step-3 advance gate re-prompts the user; conscious re-pick > surprising
+  // auto-pick.
+  useEffect(() => {
+    if (
+      serviceId === 'roofing' &&
+      roofMeasurement?.includePerimeter === false &&
+      selections.service_type?.[0] === 'addons'
+    ) {
+      setSelections((prev) => ({ ...prev, service_type: [] }))
+    }
+  }, [serviceId, roofMeasurement?.includePerimeter, selections.service_type])
+
   // PR-220 — pergolas size auto-select. When the user confirms a polygon
   // measurement on a pergolas service, default the required Size group to
   // the synthetic 'measured' chip (label reads the measured sqft live in
@@ -978,7 +993,15 @@ export function ServiceDetailPage() {
                         !areaMeasurement) ||
                       // Perimeter-only mode: PR-219 auto-selects service_type=['addons'];
                       // lock all Service Type chips so the auto-selection cannot be changed.
-                      (group.id === 'service_type' && isRoofingPerimeterOnly)
+                      (group.id === 'service_type' && isRoofingPerimeterOnly) ||
+                      // Perimeter excluded: lock the Add-ons chip — without perimeter
+                      // there is no gutter/fascia/soffit work to add on, so Add-ons
+                      // is no longer a valid Service Type. Full Replacement and Repair
+                      // stay selectable.
+                      (group.id === 'service_type' &&
+                        option.id === 'addons' &&
+                        serviceId === 'roofing' &&
+                        roofMeasurement?.includePerimeter === false)
                     // PR-220 — dynamic label for pergolas measured chip:
                     // reads the live measured sqft once a polygon is drawn,
                     // falls back to a "measure first" prompt otherwise.
