@@ -771,7 +771,7 @@ export function ServiceDetailPage() {
                     <>
                       <p className="text-sm font-semibold text-foreground">Get an instant roof measurement</p>
                       <p className="text-[13px] text-muted-foreground mt-0.5">
-                        We'll measure your roof from satellite data and pre-fill your configuration. Skip this if you already know your measurements.
+                        We'll measure your roof from satellite data and pre-fill your configuration.
                       </p>
                       <Button
                         size="sm"
@@ -917,6 +917,12 @@ export function ServiceDetailPage() {
             if (group.id === 'garage_door_type' || group.id === 'garage_door_size' || group.id === 'garage_door_color' || group.id === 'garage_door_glass') {
               return false
             }
+            // PR-241 — Repair Materials only renders when service_type=repair.
+            // Rod 2026-05-14 15:11Z: "only show repair materials if on service
+            // type repair is selected". Render-gate not lock-gate.
+            if (group.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) {
+              return false
+            }
             // Hide water_feature_units chip group on homeowner side; the
             // canonical UI is the count-stepper waterfall configurator
             // (Laminar Jets + Waterfalls counts) further down. The
@@ -1010,7 +1016,15 @@ export function ServiceDetailPage() {
                       // all lock — matches codebase idiom includePerimeter ?? true).
                       (group.id === 'addons' &&
                         serviceId === 'roofing' &&
-                        roofMeasurement?.includePerimeter !== true)
+                        roofMeasurement?.includePerimeter !== true) ||
+                      // PR-241 — pre-measure gate. Until a roof measurement
+                      // exists, every chip across every group on the roofing
+                      // service-detail is locked. Rod 2026-05-14 15:11Z:
+                      // "don't allow to click on nothing like addons if measure
+                      // my roof is not done first". Either satellite-measure or
+                      // manual-skip flow satisfies — both set roofMeasurement
+                      // truthy.
+                      (serviceId === 'roofing' && !roofMeasurement)
                     // PR-220 — dynamic label for pergolas measured chip:
                     // reads the live measured sqft once a polygon is drawn,
                     // falls back to a "measure first" prompt otherwise.
