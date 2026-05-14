@@ -36,6 +36,8 @@ import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } fr
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { ColorCircle } from '@/components/ui/color-circle'
 import { applyAreaWaste } from '@/lib/area-waste'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
+import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
 
 // Polygon colors used to bind pergolas structure chips to map polygons.
 // POLYGON_COLORS[0] matches polygon-draw.tsx MAIN_COLOR; POLYGON_COLORS[1]
@@ -320,6 +322,79 @@ export function ServiceDetailPage() {
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
   }
+
+  // PR-242 — Roof measurement PDF auto-save. Fires once the homeowner has a
+  // roof measurement on file for this address (satellite path; manual entry
+  // path is gated behind chip-tap which is itself gated by !!roofMeasurement
+  // per PR-241). Idempotency: skip if a roof-measurement doc for this
+  // homeowner+normalized-address already exists within the last hour, so
+  // toggle-flips on the breakdown card don't churn out duplicates and a
+  // re-measure within an hour reuses the prior PDF. Never-block: failures
+  // are swallowed in the store; the UI is never gated on auto-save.
+  useEffect(() => {
+    if (serviceId !== 'roofing') return
+    if (!roofMeasurement) return
+    const liveProfile = useAuthStore.getState().profile
+    if (!liveProfile?.id) return
+    const measurementAddress = roofMeasurement.address || ''
+    const normalizedAddress = measurementAddress.trim().toLowerCase()
+    if (!normalizedAddress) return
+
+    const ONE_HOUR_MS = 60 * 60 * 1000
+    const now = Date.now()
+    const store = useHomeownerDocsStore.getState()
+    const existing = store.getDocsForHomeowner(liveProfile.id).find((d) => {
+      if (d.category !== 'roof-measurement') return false
+      const docAddress = (d.address ?? '').trim().toLowerCase()
+      if (docAddress !== normalizedAddress) return false
+      const docTime = new Date(d.createdAt).getTime()
+      return Number.isFinite(docTime) && now - docTime < ONE_HOUR_MS
+    })
+    if (existing) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const pdfBytes = await generateRoofMeasurementPdf({
+          address: measurementAddress,
+          pitch: roofMeasurement.pitch,
+          perimeterFt: roofMeasurement.perimeterFt,
+          pitchedAreaSqft: roofMeasurement.pitchedAreaSqft,
+          flatAreaSqft: roofMeasurement.flatAreaSqft,
+          includeMaterialOrder: roofMeasurement.includeMaterialOrder,
+          includePerimeter: roofMeasurement.includePerimeter,
+          includeFlatArea: roofMeasurement.includeFlatArea,
+        })
+        if (cancelled) return
+        // pdf-lib's save() returns Uint8Array<ArrayBufferLike> which TS strict
+        // mode won't widen to BlobPart automatically — copy the bytes through
+        // a fresh ArrayBuffer slice to land a concrete ArrayBuffer Blob input.
+        const buf = pdfBytes.buffer.slice(
+          pdfBytes.byteOffset,
+          pdfBytes.byteOffset + pdfBytes.byteLength,
+        ) as ArrayBuffer
+        const blob = new Blob([buf], { type: 'application/pdf' })
+        const dateSlug = new Date().toISOString().slice(0, 10)
+        const addressSlug = measurementAddress
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .toLowerCase()
+          .slice(0, 40)
+        await store.addDoc({
+          homeownerId: liveProfile.id,
+          category: 'roof-measurement',
+          filename: `roof-measurement-${addressSlug}-${dateSlug}.pdf`,
+          blob,
+          uploadedBy: 'system',
+          project_id: null,
+          address: measurementAddress,
+        })
+      } catch {
+        /* silent — never block flow */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [serviceId, roofMeasurement])
 
   // Legacy localStorage-based trigger: some older callers may still set
   // 'buildconnect-edit-item' instead of using the location.state channel.
