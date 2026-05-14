@@ -975,7 +975,10 @@ export function ServiceDetailPage() {
                       (serviceId === 'pergolas' &&
                         group.id === 'size' &&
                         option.id === 'measured' &&
-                        !areaMeasurement)
+                        !areaMeasurement) ||
+                      // Perimeter-only mode: PR-219 auto-selects service_type=['addons'];
+                      // lock all Service Type chips so the auto-selection cannot be changed.
+                      (group.id === 'service_type' && isRoofingPerimeterOnly)
                     // PR-220 — dynamic label for pergolas measured chip:
                     // reads the live measured sqft once a polygon is drawn,
                     // falls back to a "measure first" prompt otherwise.
