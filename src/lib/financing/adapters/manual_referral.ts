@@ -1,13 +1,20 @@
-// manual_referral — default Phase-2 adapter. No external bank API. The flow
-// is: BC creates an internal application record, emails Rod-team
-// (financing@buildc.net) with applicant + project scope, and exposes an
-// upload route for the customer to paste back their approval letter. Status
-// transitions are operator-driven from /admin/financing (not yet built).
+// manual_referral — default Phase-2 adapter. No external bank API. Browser
+// calls adapter.createApplication() directly; adapter does the Supabase
+// INSERT into financing_applications under RLS policy "homeowner INSERT own
+// with check status='applied'" (per migration 047 / PR-246). No Edge Fn
+// involved on the write path — webhook Edge Fn is Phase-3 only.
 //
-// This is the ZERO-DEPENDENCY adapter — it's what runs when
-// VITE_FINANCING_BANK is unset OR set to "manual_referral", and what we
-// fall back to if any branded adapter throws an uncaught error.
+// Operator flow (Rod-team): financing@buildc.net inbound email is fired
+// out-of-band by the FE form submit (helios PR), not by this adapter. The
+// adapter is the source of truth for the DB row; email notification is a
+// separate concern intentionally decoupled from the adapter contract.
 
+import { supabase } from '@/lib/supabase'
+import {
+  getFinancingApplicationById,
+  getFinancingApprovalByApplicationId,
+  insertFinancingApplication,
+} from '@/lib/api/financing'
 import type {
   ApprovalLetterResult,
   ApprovalStatusResult,
@@ -15,47 +22,58 @@ import type {
   CreateApplicationResult,
   FinancingBankAdapter,
   FinancingWebhookEvent,
-} from './_contract';
-import { AdapterCapabilityError } from './_contract';
+} from './_contract'
+import { AdapterCapabilityError } from './_contract'
 
-const ADAPTER_KEY = 'manual_referral';
+const ADAPTER_KEY = 'manual_referral'
 
 export const manualReferralAdapter: FinancingBankAdapter = {
   key: ADAPTER_KEY,
 
-  async createApplication(_input: CreateApplicationInput): Promise<CreateApplicationResult> {
-    // Implementation lands in a follow-up ship. The wire is:
-    //   1. Insert into customer_financing_applications (status='applied')
-    //   2. Fire send-notification Edge Fn → financing@buildc.net
-    //   3. Return {applicationUrl: '/financing/manual-status?id=...'}
-    // We deliberately do NOT throw here — leaving the body empty keeps the
-    // contract test in tests/financing/contract.test.ts (when that lands)
-    // green for shape-conformance without forcing a code-path that requires
-    // the schema-migration (hephaestus 5-17 morning).
-    return {};
+  async createApplication(input: CreateApplicationInput): Promise<CreateApplicationResult> {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('manual_referral.createApplication requires authenticated user')
+
+    const row = await insertFinancingApplication({
+      id: input.bcApplicationId,
+      homeowner_id: user.id,
+      adapter: ADAPTER_KEY,
+      adapter_application_id: input.bcApplicationId,
+    })
+
+    return {
+      partnerApplicationId: row.id,
+      applicationUrl: `/financing/status/${row.id}`,
+    }
   },
 
-  async getApprovalStatus(_input: { partnerApplicationId: string }): Promise<ApprovalStatusResult> {
-    // Manual flow has no automated polling. Operator updates status from
-    // /admin/financing; FE re-reads from customer_financing_applications.
-    return { status: 'pending' };
+  async getApprovalStatus(input: { partnerApplicationId: string }): Promise<ApprovalStatusResult> {
+    const app = await getFinancingApplicationById(input.partnerApplicationId)
+    if (!app) return { status: 'pending' }
+
+    const approval = await getFinancingApprovalByApplicationId(input.partnerApplicationId)
+    if (!approval) return { status: app.status }
+
+    return {
+      status: app.status,
+      approvedAmountCents: approval.envelope_amount_cents ?? undefined,
+      downPaymentCents: approval.dp_amount_cents ?? undefined,
+      termMonths: approval.term_months ?? undefined,
+      aprBps: approval.apr_bps ?? undefined,
+      expiresAt: approval.expires_at ?? undefined,
+      denialReasonCode: approval.denial_reason_code ?? undefined,
+      denialReasonText: approval.denial_reason_text ?? undefined,
+    }
   },
 
-  async getApprovalLetter(_input: { partnerApplicationId: string }): Promise<ApprovalLetterResult | null> {
-    // Customer uploads to homeowner-documents bucket (migration 046 PR-242).
-    // Letter path is stored on the application row; returning null here
-    // means "no letter on file yet". Real fetch lands with the schema ship.
-    return null;
+  async getApprovalLetter(input: { partnerApplicationId: string }): Promise<ApprovalLetterResult | null> {
+    const approval = await getFinancingApprovalByApplicationId(input.partnerApplicationId)
+    if (!approval?.letter_url) return null
+    const filename = approval.letter_url.split('/').pop() ?? 'approval-letter.pdf'
+    return { letterUrl: approval.letter_url, filename }
   },
 
   async handleWebhook(_rawBody: string, _headers: Record<string, string>): Promise<FinancingWebhookEvent> {
-    // No partner webhook for manual_referral. The bank-webhook-handler
-    // Edge Fn will skip this adapter and short-circuit 204.
-    throw new AdapterCapabilityError(ADAPTER_KEY, 'handleWebhook');
+    throw new AdapterCapabilityError(ADAPTER_KEY, 'handleWebhook')
   },
-
-  // requestDisbursement intentionally absent — manual_referral does not
-  // hold escrow. Disbursement is a customer→vendor payment routed through
-  // the escrow provider (Stripe Connect Express per docs §f.5), not the
-  // bank adapter.
-};
+}

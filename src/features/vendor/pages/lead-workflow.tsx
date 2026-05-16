@@ -37,6 +37,8 @@ import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 import type { Lead, VendorRep } from '@/types'
 import { mapsUrl, telHref } from '@/lib/contact-links'
+import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
+import { isFinancingEnabled } from '@/lib/financing/feature-flag'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -1139,7 +1141,18 @@ export default function VendorLeadWorkflow() {
                   </div>
                   <div className="flex items-center gap-2 text-foreground/90">
                     <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
+                    {(() => {
+                      const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                      if (!isFinancingEnabled() || !sp?.id) {
+                        return <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
+                      }
+                      return (
+                        <ProjectFinancingBadge
+                          projectId={sp.id}
+                          fallback={<span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>}
+                        />
+                      )
+                    })()}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <Badge variant="secondary" className="text-[10px] capitalize">

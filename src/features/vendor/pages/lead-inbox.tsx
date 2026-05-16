@@ -30,6 +30,7 @@ import { mapsUrl, telHref } from '@/lib/contact-links'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
 import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
+import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
 import type { Lead } from '@/types'
 
 function fmt(n: number) {
@@ -1007,14 +1008,28 @@ export default function LeadInbox() {
                         )
                       })()}
 
-                      {/* Permit & Financing info */}
+                      {/* Permit & Financing info — financing badge shows
+                          live application status when VITE_FINANCING_ENABLED
+                          AND vendor RLS permits read (approved/terms_accepted
+                          per migration 047); falls back to legacy
+                          Requested/Not-needed otherwise. */}
                       <div className="flex flex-wrap gap-2">
                         <Badge variant={lead.permit_choice ? 'default' : 'secondary'} className="text-xs">
                           Permit: {lead.permit_choice ? 'Yes' : 'No'}
                         </Badge>
-                        <Badge variant={lead.financing ? 'default' : 'secondary'} className="text-xs">
-                          Financing: {lead.financing ? 'Requested' : 'Not needed'}
-                        </Badge>
+                        {(() => {
+                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                          return (
+                            <ProjectFinancingBadge
+                              projectId={sp?.id ?? null}
+                              fallback={
+                                <Badge variant={lead.financing ? 'default' : 'secondary'} className="text-xs">
+                                  Financing: {lead.financing ? 'Requested' : 'Not needed'}
+                                </Badge>
+                              }
+                            />
+                          )
+                        })()}
                       </div>
 
                       {/* Customer photos, notes, ID */}
