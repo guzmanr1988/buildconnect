@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
 import {
   DollarSign,
@@ -17,6 +18,7 @@ import {
   Clock,
   BarChart3,
   RotateCcw,
+  Landmark,
 } from 'lucide-react'
 import {
   BarChart,
@@ -41,7 +43,27 @@ import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { getAdminFinancingStats } from '@/lib/api/financing'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
+
+function formatCentsAsUsd(cents: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(cents / 100)
+}
+
+const FINANCING_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending',
+  applied: 'Applied',
+  approved: 'Approved',
+  denied: 'Denied',
+  expired: 'Expired',
+  terms_accepted: 'Terms Accepted',
+  cancelled: 'Cancelled',
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -182,6 +204,15 @@ export default function OverviewPage() {
     { key: 'phase2_enabled', label: 'Coming Soon Visibility', icon: Layers },
     { key: 'financing_enabled', label: 'Financing Options', icon: Banknote },
   ]
+
+  // Phase-2 financing admin widget — direct browser→Supabase under admin
+  // RLS. Returns zeros when migration 047 not applied or no rows yet, so
+  // the card renders cleanly during the pre-launch ramp.
+  const { data: financingStats } = useQuery({
+    queryKey: ['admin-financing-stats'],
+    enabled: isFinancingEnabled(),
+    queryFn: getAdminFinancingStats,
+  })
 
   // 4-category transactions chart data (ship #158): Commissions Paid /
   // Pending Commissions / Memberships / Payouts by last-6-months. Replaces
@@ -478,6 +509,74 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Phase-2 financing — applications-by-status + commission ledger
+          totals (reserved / receivable / realized). Dark unless
+          VITE_FINANCING_ENABLED=true; renders zeros if migration 047
+          hasn't been applied yet. */}
+      {isFinancingEnabled() && (
+        <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible">
+          <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-primary" />
+                Financing
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Applications + commission ledger (Phase 2)</p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Applications by status</p>
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                  {(Object.entries(financingStats?.applicationsByStatus ?? {}) as [string, number][])
+                    .filter(([, count]) => count > 0)
+                    .map(([status, count]) => (
+                      <span
+                        key={status}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1"
+                      >
+                        <span className="font-semibold">{FINANCING_STATUS_LABEL[status] ?? status}</span>
+                        <span className="text-muted-foreground">{count}</span>
+                      </span>
+                    ))}
+                  {Object.values(financingStats?.applicationsByStatus ?? {}).every((n) => n === 0) && (
+                    <span className="text-xs text-muted-foreground">No applications yet</span>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">Reserved</p>
+                  <p className="text-lg font-bold font-heading leading-tight text-amber-700 dark:text-amber-400">
+                    {formatCentsAsUsd(financingStats?.totalReservedCents ?? 0)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {financingStats?.ledgerByState.reserved.count ?? 0} entries
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/40 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">Receivable</p>
+                  <p className="text-lg font-bold font-heading leading-tight text-blue-700 dark:text-blue-400">
+                    {formatCentsAsUsd(financingStats?.totalReceivableCents ?? 0)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {financingStats?.ledgerByState.receivable.count ?? 0} entries
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">Realized</p>
+                  <p className="text-lg font-bold font-heading leading-tight text-emerald-700 dark:text-emerald-400">
+                    {formatCentsAsUsd(financingStats?.totalRealizedCents ?? 0)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {financingStats?.ledgerByState.realized.count ?? 0} entries
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Ship #192 — reschedule activity visibility. Per Rodolfo ship
           #191 spec "make sure that this activity is also shown on admin
