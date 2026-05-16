@@ -12,6 +12,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
+import { FinancingCard } from '@/features/financing/components/financing-card'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
@@ -247,6 +248,12 @@ export function HomeownerHome() {
           </div>
         </div>
       </motion.div>
+
+      {/* Financing entry — renders only when VITE_FINANCING_ENABLED=true.
+          Phase-2 wave-2: surfaces last-known application status with CTA
+          to /home/financing/apply (no app yet) or /home/financing/status/:id
+          (has app). Default-OFF in production until Rod flips the flag. */}
+      <FinancingCard />
 
       {/* Project status accordion — 2x2 grid of lifecycle stage tiles fused
           with detail lists (ship #97 per kratos msg 1776697638074). Each tile

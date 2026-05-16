@@ -26,6 +26,12 @@ import { HomeownerDocumentsPage } from '@/features/homeowner/pages/documents'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
 import { CartPage } from '@/features/homeowner/pages/cart'
 
+// Financing (Phase-2, dark behind VITE_FINANCING_ENABLED — pages internally
+// redirect to /home when the flag is off, so a leaked deep-link can't reveal
+// the surface in production).
+import { FinancingApplyPage } from '@/features/financing/pages/apply'
+import { FinancingStatusPage } from '@/features/financing/pages/status'
+
 // Vendor (default exports)
 import VendorDashboard from '@/features/vendor/pages/dashboard'
 import VendorLeadWorkflow from '@/features/vendor/pages/lead-workflow'
@@ -92,6 +98,11 @@ export const router = createBrowserRouter([
           { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
           { path: 'documents', element: <HomeownerDocumentsPage />, handle: { title: 'Documents' } },
           { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
+          // Phase-2 financing — gated by VITE_FINANCING_ENABLED at component
+          // level (Navigate to /home when off). Routes still register so a
+          // flag-flip ship doesn't require a router code change.
+          { path: 'financing/apply', element: <FinancingApplyPage />, handle: { title: 'Apply for financing' } },
+          { path: 'financing/status/:applicationId', element: <FinancingStatusPage />, handle: { title: 'Application status' } },
         ],
       },
 
