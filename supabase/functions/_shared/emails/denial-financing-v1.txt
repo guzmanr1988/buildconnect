@@ -1,0 +1,26 @@
+Update on your financing application
+====================================
+
+Hi {{customer_first_name}},
+
+Thanks for applying for financing through BuildConnect. We heard back from {{lender_name}} on your application, and unfortunately they were not able to approve it at this time.
+
+{{#if denial_reason}}
+Reason provided by {{lender_name}}:
+  {{denial_reason}}{{#if denial_reason_code}} (ref: {{denial_reason_code}}){{/if}}
+
+{{/if}}
+{{#if retry_eligibility_days_if_any}}
+Many lenders allow customers to re-apply after a waiting period. {{lender_name}} may consider a new application after {{retry_eligibility_days_if_any}} days.
+
+{{/if}}
+A denial from one lender does not change what is possible for your project. We work with multiple financing partners, and you can explore other options here:
+
+  {{link_to_alternate_financing_options}}
+
+You can also continue your project without financing — your contractor can discuss alternative payment plans directly with you.
+
+---
+Need help? Reply to this email and our team will respond within one business day.
+
+BuildConnect — connecting homeowners with trusted contractors.
