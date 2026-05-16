@@ -21,6 +21,8 @@
 
 import denialFinancingV1Html from './denial-financing-v1.html' with { type: 'text' }
 import denialFinancingV1Txt from './denial-financing-v1.txt' with { type: 'text' }
+import approvalFinancingV1Html from './approval-financing-v1.html' with { type: 'text' }
+import approvalFinancingV1Txt from './approval-financing-v1.txt' with { type: 'text' }
 
 export type MergeTagSpec = {
   name: string
@@ -49,6 +51,23 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
       { name: 'denial_reason_code', required: false, description: 'Machine code for support lookup (renders alongside denial_reason)' },
       { name: 'retry_eligibility_days_if_any', required: false, description: 'Days until customer can re-apply with same lender, if disclosed' },
       { name: 'link_to_alternate_financing_options', required: true, description: 'URL routing back to BC alternate-financing flow (mailto: for v1 manual_referral, BC route post-Phase-2-D8)' },
+    ],
+  },
+  'approval-financing-v1': {
+    id: 'approval-financing-v1',
+    subject: 'Your financing is approved',
+    html: approvalFinancingV1Html,
+    text: approvalFinancingV1Txt,
+    mergeTags: [
+      { name: 'customer_first_name', required: true, description: 'Homeowner first name for greeting' },
+      { name: 'lender_name', required: true, description: 'Customer-facing lender label (e.g. "Sunlight Financial")' },
+      { name: 'approval_amount', required: true, description: 'Pre-formatted dollar string from template-format.ts (cents → "$12,500"); adapter contract field approvedAmountCents' },
+      { name: 'apr_pct', required: true, description: 'Pre-formatted percent string from template-format.ts (bps/100 → "15.00%"); adapter contract field aprBps' },
+      { name: 'term_months', required: true, description: 'Raw integer; template renders as "{{X}} months"' },
+      { name: 'approval_expires_at', required: true, description: 'Pre-formatted friendly date from template-format.ts (ISO → "May 23, 2026"); adapter contract field expiresAt' },
+      { name: 'approval_letter_url', required: true, description: 'URL passthrough to PDF or hosted offer letter; adapter contract field letterUrl' },
+      { name: 'dp_amount', required: false, description: 'Pre-formatted down-payment dollar string ("$2,500"); {{#if}}-gated since not universal (solar+HI specialty has DP, personal+POS typically do not); adapter contract field downPaymentCents' },
+      { name: 'link_to_account_portal', required: false, description: 'Optional URL composed by adapter from bcApplicationId — mailto:financing@buildc.net?subject=App+REF-{id} fallback for v1, /financing/applications/:id post-route-build; {{#if}}-gated' },
     ],
   },
 }

@@ -1,0 +1,29 @@
+Your financing is approved
+==========================
+
+Hi {{customer_first_name}},
+
+Great news — {{lender_name}} approved your financing application. Here are the terms they offered for your project.
+
+APPROVAL TERMS
+--------------
+Approved amount:   {{approval_amount}}
+{{#if dp_amount}}Down payment:      {{dp_amount}}
+{{/if}}APR:               {{apr_pct}}
+Term:              {{term_months}} months
+Offer expires:     {{approval_expires_at}}
+
+Review the offer letter, sign the agreement when you are ready, and your contractor can move ahead with scheduling.
+
+View your approval letter:
+  {{approval_letter_url}}
+
+{{#if link_to_account_portal}}View application in your account:
+  {{link_to_account_portal}}
+
+{{/if}}The offer is valid until {{approval_expires_at}}. After that, {{lender_name}} may require a new application.
+
+---
+Questions about your approval? Reply to this email and our team will respond within one business day.
+
+BuildConnect — connecting homeowners with trusted contractors.
