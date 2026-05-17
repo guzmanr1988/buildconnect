@@ -1,0 +1,1213 @@
+// Phase 1 Admin Financing surface — task_1779054206392_927
+//
+// Wires to AS-SHIPPED schema (migrations 047 + 048 + 049 + 050 + 051):
+//   - lenders (32 rows: 15 contractor_pos / 12 personal_loans / 5 solar_hi_specialty)
+//   - feature_flags (key='financing_enabled' master + 3 per-category keys
+//     'financing_category_<category>' upserted on first toggle)
+//   - admin-create-approval Edge Fn (already deployed; called from Set
+//     Approval dialog)
+//
+// 3-axis toggle model (per Rod scope):
+//   1. Master:   feature_flags.financing_enabled  (off = all financing UI dark)
+//   2. Category: feature_flags.financing_category_<category>  (per-bucket gate)
+//   3. Per-lender: lenders.active  (one row per partner)
+//
+// Friction fixes folded in per apollo ref §5 (F1-F8):
+//   F1 — inline shadcn Switch on every lender row (most-tapped action)
+//   F2 — leading Checkbox column + sticky bottom action bar when ≥1 selected
+//   F3 — multi-axis filter: Category Select + Status Select + search + Clear
+//   F4 — useMobile() conditional: ≥768px Table / <768px stacked Card-per-row
+//   F5 — CSV import dialog: paste OR upload, preview, confirm
+//   F6 — inline help text under every form Label
+//   F7 — Clear filters affordance always when any filter ≠ default
+//   F8 — extended 4-refinement type-confirm: master OFF + delete-lender +
+//        per-lender approval-set ≥ $50k envelope (named-target, earned-by-
+//        typing, steer-to-cancel, verb-matched-cancel)
+//
+// Test-id taxonomy (apollo walker pre-baked):
+//   admin-financing-master-toggle
+//   admin-financing-category-toggle  + data-category="<category>"
+//   admin-financing-lender-row       + data-target-lender-id="<id>"
+//   admin-financing-lender-toggle    + data-target-lender-id="<id>"
+//   admin-financing-bulk-checkbox    + data-target-lender-id="<id>"
+//   admin-financing-add-lender-dialog
+//   admin-financing-edit-lender-dialog
+//   admin-financing-csv-import-dialog
+//   admin-financing-master-off-confirm-dialog
+//   admin-financing-delete-lender-confirm-dialog
+//   admin-financing-tab-lenders / admin-financing-tab-approvals / admin-financing-tab-audit
+//   admin-financing-clear-filters
+//
+// Mutations: lenders + feature_flags writes use supabase-js direct (admin JWT
+// + RLS write-admin policies per migration 048). admin-create-approval calls
+// go through Edge Fn (service_role-only writes for financing_applications +
+// financing_approvals + customer_financing_profile per migration 047 RLS).
+//
+// Tabs scope (this PR):
+//   - Lenders  — fully wired (master + category + per-lender + CRUD + CSV + bulk)
+//   - Approvals — placeholder (T+1 PR wires live query + Set Approval dialog)
+//   - Audit    — placeholder (T+1 PR wires live audit_log query + filter)
+
+import { useState, useMemo, useEffect } from 'react'
+import { motion, type Variants } from 'framer-motion'
+import { toast } from 'sonner'
+import {
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
+  Upload,
+  X as XIcon,
+  Loader2,
+  Building2,
+  Wallet,
+  ShieldAlert,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { useMobile } from '@/hooks/use-mobile'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { PageHeader } from '@/components/shared/page-header'
+import { matchesSearch } from '@/lib/search-match'
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty'
+
+type Lender = {
+  id: string
+  name: string
+  category: LenderCategory
+  contact_email: string | null
+  notes: string | null
+  sort_order: number
+  active: boolean
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+type FeatureFlag = { key: string; enabled: boolean }
+
+type StatusFilter = 'all' | 'active' | 'inactive'
+type CategoryFilter = LenderCategory | 'all'
+
+const CATEGORY_LABELS: Record<LenderCategory, string> = {
+  contractor_pos: 'Contractor POS',
+  personal_loans: 'Personal Loans',
+  solar_hi_specialty: 'Solar & HI Specialty',
+}
+
+const CATEGORY_KEYS: Record<LenderCategory, string> = {
+  contractor_pos: 'financing_category_contractor_pos',
+  personal_loans: 'financing_category_personal_loans',
+  solar_hi_specialty: 'financing_category_solar_hi_specialty',
+}
+
+const MASTER_KEY = 'financing_enabled'
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 12 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' },
+  }),
+} satisfies Variants
+
+function categoryBadge(category: LenderCategory) {
+  const map: Record<LenderCategory, string> = {
+    contractor_pos: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    personal_loans: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+    solar_hi_specialty: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  }
+  return (
+    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', map[category])}>
+      {CATEGORY_LABELS[category]}
+    </span>
+  )
+}
+
+function statusBadge(active: boolean) {
+  return active ? (
+    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+      Active
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      Inactive
+    </span>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
+export default function AdminFinancingPage() {
+  const isMobile = useMobile()
+
+  /* ---- Data state ---- */
+  const [lenders, setLenders] = useState<Lender[]>([])
+  const [flags, setFlags] = useState<Record<string, boolean>>({})
+  const [loading, setLoading] = useState(true)
+
+  /* ---- Tabs ---- */
+  const [tab, setTab] = useState<'lenders' | 'approvals' | 'audit'>('lenders')
+
+  /* ---- Filter state ---- */
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  /* ---- Bulk-select state (F2) ---- */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  /* ---- Add / Edit dialog state ---- */
+  const [addOpen, setAddOpen] = useState(false)
+  const [editLender, setEditLender] = useState<Lender | null>(null)
+  const [newLender, setNewLender] = useState<{
+    name: string
+    category: LenderCategory
+    contact_email: string
+    notes: string
+    sort_order: number
+  }>({
+    name: '',
+    category: 'contractor_pos',
+    contact_email: '',
+    notes: '',
+    sort_order: 0,
+  })
+
+  /* ---- CSV import (F5) ---- */
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [csvText, setCsvText] = useState('')
+  const [csvSubmitting, setCsvSubmitting] = useState(false)
+
+  /* ---- 4-refinement confirm state (F8) ---- */
+  const [masterOffConfirmOpen, setMasterOffConfirmOpen] = useState(false)
+  const [masterOffTyped, setMasterOffTyped] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Lender | null>(null)
+  const [deleteTyped, setDeleteTyped] = useState('')
+
+  /* ---- Fetch lenders + feature_flags ---- */
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const [{ data: lendersData, error: lendersErr }, { data: flagsData, error: flagsErr }] =
+        await Promise.all([
+          supabase
+            .from('lenders')
+            .select('*')
+            .is('deleted_at', null)
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true }),
+          supabase.from('feature_flags').select('key, enabled'),
+        ])
+      if (cancelled) return
+      if (lendersErr) {
+        toast.error(`Load lenders failed: ${lendersErr.message}`)
+      }
+      if (flagsErr) {
+        toast.error(`Load flags failed: ${flagsErr.message}`)
+      }
+      setLenders((lendersData ?? []) as Lender[])
+      const flagMap: Record<string, boolean> = {}
+      for (const f of (flagsData ?? []) as FeatureFlag[]) flagMap[f.key] = f.enabled
+      setFlags(flagMap)
+      setLoading(false)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /* ---- Derived ---- */
+  const masterOn = flags[MASTER_KEY] === true
+
+  const filtered = useMemo(() => {
+    let list = lenders
+    if (categoryFilter !== 'all') {
+      list = list.filter((l) => l.category === categoryFilter)
+    }
+    if (statusFilter !== 'all') {
+      list = list.filter((l) => (statusFilter === 'active' ? l.active : !l.active))
+    }
+    if (search.trim()) {
+      list = list.filter((l) =>
+        matchesSearch({
+          query: search,
+          fields: [l.name, l.category, l.contact_email ?? '', l.notes ?? ''],
+          ids: [l.id],
+        }),
+      )
+    }
+    return list
+  }, [lenders, search, categoryFilter, statusFilter])
+
+  const filtersActive = search.trim() !== '' || categoryFilter !== 'all' || statusFilter !== 'all'
+
+  const counts = useMemo(() => {
+    const byCat: Record<LenderCategory, number> = {
+      contractor_pos: 0,
+      personal_loans: 0,
+      solar_hi_specialty: 0,
+    }
+    let active = 0
+    for (const l of lenders) {
+      byCat[l.category] += 1
+      if (l.active) active += 1
+    }
+    return { total: lenders.length, active, inactive: lenders.length - active, byCat }
+  }, [lenders])
+
+  /* ---- Mutations ---- */
+  // Master + category toggles UPSERT a feature_flags row. Both the master row
+  // and each category row use the same shape (key text PK + enabled bool).
+  async function setFlag(key: string, enabled: boolean) {
+    const { error } = await supabase
+      .from('feature_flags')
+      .upsert({ key, enabled }, { onConflict: 'key' })
+    if (error) {
+      toast.error(`Flag update failed: ${error.message}`)
+      return false
+    }
+    setFlags((prev) => ({ ...prev, [key]: enabled }))
+    return true
+  }
+
+  async function handleMasterToggle(next: boolean) {
+    if (next === false) {
+      // Master OFF is destructive — gate behind 4-refinement type-confirm
+      setMasterOffTyped('')
+      setMasterOffConfirmOpen(true)
+      return
+    }
+    const ok = await setFlag(MASTER_KEY, true)
+    if (ok) toast.success('Financing master switch ON')
+  }
+
+  async function confirmMasterOff() {
+    if (masterOffTyped.trim().toUpperCase() !== 'OFF') {
+      toast.error('Type OFF to confirm')
+      return
+    }
+    const ok = await setFlag(MASTER_KEY, false)
+    if (ok) {
+      toast.success('Financing master switch OFF — all financing UI hidden')
+      setMasterOffConfirmOpen(false)
+    }
+  }
+
+  async function handleCategoryToggle(category: LenderCategory, next: boolean) {
+    const ok = await setFlag(CATEGORY_KEYS[category], next)
+    if (ok) toast.success(`${CATEGORY_LABELS[category]} ${next ? 'enabled' : 'disabled'}`)
+  }
+
+  async function handleLenderToggle(id: string, next: boolean) {
+    const { error } = await supabase.from('lenders').update({ active: next }).eq('id', id)
+    if (error) {
+      toast.error(`Lender update failed: ${error.message}`)
+      return
+    }
+    setLenders((prev) => prev.map((l) => (l.id === id ? { ...l, active: next } : l)))
+    toast.success(`Lender ${next ? 'activated' : 'deactivated'}`)
+  }
+
+  async function handleBulkSetActive(next: boolean) {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase.from('lenders').update({ active: next }).in('id', ids)
+    if (error) {
+      toast.error(`Bulk update failed: ${error.message}`)
+      return
+    }
+    setLenders((prev) => prev.map((l) => (selectedIds.has(l.id) ? { ...l, active: next } : l)))
+    toast.success(`${ids.length} lenders ${next ? 'activated' : 'deactivated'}`)
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkSetCategory(category: LenderCategory) {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase.from('lenders').update({ category }).in('id', ids)
+    if (error) {
+      toast.error(`Bulk category update failed: ${error.message}`)
+      return
+    }
+    setLenders((prev) =>
+      prev.map((l) => (selectedIds.has(l.id) ? { ...l, category } : l)),
+    )
+    toast.success(`${ids.length} lenders moved to ${CATEGORY_LABELS[category]}`)
+    setSelectedIds(new Set())
+  }
+
+  async function handleAddLender() {
+    const name = newLender.name.trim()
+    if (!name) {
+      toast.error('Name is required')
+      return
+    }
+    const { data, error } = await supabase
+      .from('lenders')
+      .insert({
+        name,
+        category: newLender.category,
+        contact_email: newLender.contact_email.trim() || null,
+        notes: newLender.notes.trim() || null,
+        sort_order: newLender.sort_order,
+        active: true,
+      })
+      .select('*')
+      .single()
+    if (error || !data) {
+      toast.error(`Add lender failed: ${error?.message ?? 'unknown_error'}`)
+      return
+    }
+    setLenders((prev) => [...prev, data as Lender])
+    toast.success(`${name} added`)
+    setAddOpen(false)
+    setNewLender({ name: '', category: 'contractor_pos', contact_email: '', notes: '', sort_order: 0 })
+  }
+
+  async function handleEditLender() {
+    if (!editLender) return
+    const name = editLender.name.trim()
+    if (!name) {
+      toast.error('Name is required')
+      return
+    }
+    const { error } = await supabase
+      .from('lenders')
+      .update({
+        name,
+        category: editLender.category,
+        contact_email: editLender.contact_email,
+        notes: editLender.notes,
+        sort_order: editLender.sort_order,
+      })
+      .eq('id', editLender.id)
+    if (error) {
+      toast.error(`Edit lender failed: ${error.message}`)
+      return
+    }
+    setLenders((prev) => prev.map((l) => (l.id === editLender.id ? { ...editLender, name } : l)))
+    toast.success(`${name} updated`)
+    setEditLender(null)
+  }
+
+  async function confirmDeleteLender() {
+    if (!deleteTarget) return
+    if (deleteTyped.trim() !== deleteTarget.name) {
+      toast.error('Typed name does not match')
+      return
+    }
+    const { error } = await supabase
+      .from('lenders')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', deleteTarget.id)
+    if (error) {
+      toast.error(`Delete lender failed: ${error.message}`)
+      return
+    }
+    setLenders((prev) => prev.filter((l) => l.id !== deleteTarget.id))
+    toast.success(`${deleteTarget.name} removed`)
+    setDeleteTarget(null)
+    setDeleteTyped('')
+  }
+
+  // CSV import (F5) — naive split parser; expects header row
+  // `name,category,contact_email,notes,sort_order`. Category column accepts
+  // the exact enum value or the human label (case-insensitive).
+  async function handleCsvImport() {
+    if (csvSubmitting) return
+    const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean)
+    if (lines.length < 2) {
+      toast.error('CSV needs a header row + at least 1 data row')
+      return
+    }
+    const header = lines[0].split(',').map((c) => c.trim().toLowerCase())
+    const nameIdx = header.indexOf('name')
+    const catIdx = header.indexOf('category')
+    if (nameIdx < 0 || catIdx < 0) {
+      toast.error('CSV must include name + category columns')
+      return
+    }
+    const emailIdx = header.indexOf('contact_email')
+    const notesIdx = header.indexOf('notes')
+    const sortIdx = header.indexOf('sort_order')
+
+    function normCategory(s: string): LenderCategory | null {
+      const v = s.trim().toLowerCase()
+      if (v === 'contractor_pos' || v === 'contractor pos') return 'contractor_pos'
+      if (v === 'personal_loans' || v === 'personal loans') return 'personal_loans'
+      if (v === 'solar_hi_specialty' || v === 'solar & hi specialty' || v === 'solar hi specialty')
+        return 'solar_hi_specialty'
+      return null
+    }
+
+    const rows: Array<Omit<Lender, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>> = []
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(',').map((c) => c.trim())
+      const name = cells[nameIdx] ?? ''
+      const cat = normCategory(cells[catIdx] ?? '')
+      if (!name || !cat) {
+        toast.error(`Row ${i + 1}: invalid name or category`)
+        return
+      }
+      rows.push({
+        name,
+        category: cat,
+        contact_email: emailIdx >= 0 ? cells[emailIdx] ?? null : null,
+        notes: notesIdx >= 0 ? cells[notesIdx] ?? null : null,
+        sort_order: sortIdx >= 0 ? Number(cells[sortIdx] ?? 0) || 0 : 0,
+        active: true,
+      })
+    }
+
+    setCsvSubmitting(true)
+    try {
+      const { data, error } = await supabase.from('lenders').insert(rows).select('*')
+      if (error) {
+        toast.error(`CSV import failed: ${error.message}`)
+        return
+      }
+      setLenders((prev) => [...prev, ...((data ?? []) as Lender[])])
+      toast.success(`Imported ${rows.length} lenders`)
+      setCsvOpen(false)
+      setCsvText('')
+    } finally {
+      setCsvSubmitting(false)
+    }
+  }
+
+  function clearFilters() {
+    setSearch('')
+    setCategoryFilter('all')
+    setStatusFilter('all')
+  }
+
+  /* ---- Selection helpers ---- */
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    const allFilteredIds = filtered.map((l) => l.id)
+    const allSelected = allFilteredIds.every((id) => selectedIds.has(id))
+    setSelectedIds(allSelected ? new Set() : new Set(allFilteredIds))
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Render                                                             */
+  /* ------------------------------------------------------------------ */
+
+  return (
+    <div className="space-y-6 pb-24">
+      <PageHeader
+        title="Financing"
+        description="Manage lenders, category gates, and the master financing toggle."
+      >
+        <Button onClick={() => setCsvOpen(true)} size="sm" variant="outline" data-testid="admin-financing-csv-import-trigger">
+          <Upload className="mr-2 h-4 w-4" />
+          Import CSV
+        </Button>
+        <Button onClick={() => setAddOpen(true)} size="sm" data-testid="admin-financing-add-lender-trigger">
+          <Plus className="mr-2 h-4 w-4" />
+          Add Lender
+        </Button>
+      </PageHeader>
+
+      {/* AXIS 1 + 2 — Master + Category toggles */}
+      <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
+        <Card className="rounded-xl shadow-sm">
+          <CardContent className="space-y-4 p-6">
+            {/* Master toggle */}
+            <div className="flex items-start justify-between gap-4 border-b pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-primary" />
+                  <Label className="text-base font-semibold">Master Financing Switch</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Off hides the financing card on every homeowner, vendor, and admin surface. Use to fully dark the feature.
+                </p>
+              </div>
+              <Switch
+                checked={masterOn}
+                onCheckedChange={handleMasterToggle}
+                data-testid="admin-financing-master-toggle"
+                aria-label="Master financing switch"
+              />
+            </div>
+
+            {/* Category toggles */}
+            <div className="space-y-1">
+              <Label className="text-sm font-semibold">Category Gates</Label>
+              <p className="text-xs text-muted-foreground">
+                Disable a category to hide its lenders from homeowner financing applications without removing the partner records.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(Object.keys(CATEGORY_LABELS) as LenderCategory[]).map((cat) => {
+                const flagKey = CATEGORY_KEYS[cat]
+                const checked = flags[flagKey] !== false // default ON when row missing
+                return (
+                  <div
+                    key={cat}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{CATEGORY_LABELS[cat]}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {counts.byCat[cat]} lender{counts.byCat[cat] === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={checked}
+                      onCheckedChange={(next) => handleCategoryToggle(cat, next)}
+                      data-testid="admin-financing-category-toggle"
+                      data-category={cat}
+                      aria-label={`${CATEGORY_LABELS[cat]} category toggle`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Tabs: Lenders / Approvals / Audit */}
+      <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+          <TabsList>
+            <TabsTrigger value="lenders" data-testid="admin-financing-tab-lenders">
+              Lenders
+              <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px]">
+                {counts.total}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="approvals" data-testid="admin-financing-tab-approvals">
+              Approvals
+            </TabsTrigger>
+            <TabsTrigger value="audit" data-testid="admin-financing-tab-audit">
+              Audit Log
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ---------------------------------------------------- */}
+          {/*  LENDERS TAB                                          */}
+          {/* ---------------------------------------------------- */}
+          <TabsContent value="lenders" className="space-y-4">
+            {/* Filter row (F3 + F7) */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search lenders by name, category, email, or notes…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                  data-testid="admin-financing-search"
+                />
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Category</Label>
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
+                  >
+                    <SelectTrigger className="w-48" data-testid="admin-financing-filter-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
+                      <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
+                      <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Status</Label>
+                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                    <SelectTrigger className="w-40" data-testid="admin-financing-filter-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="active">Active only</SelectItem>
+                      <SelectItem value="inactive">Inactive only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {filtersActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    data-testid="admin-financing-clear-filters"
+                    className="gap-1"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Result summary */}
+            <div className="text-xs text-muted-foreground">
+              Showing {filtered.length} of {counts.total} lenders · {counts.active} active · {counts.inactive} inactive
+            </div>
+
+            {/* Lenders table or mobile cards (F4) */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading lenders…
+              </div>
+            ) : isMobile ? (
+              <div className="space-y-2">
+                {filtered.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-10 text-center text-muted-foreground">No lenders match the current filters.</CardContent>
+                  </Card>
+                ) : (
+                  filtered.map((lender) => (
+                    <Card
+                      key={lender.id}
+                      data-testid="admin-financing-lender-row"
+                      data-target-lender-id={lender.id}
+                    >
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={selectedIds.has(lender.id)}
+                                onCheckedChange={() => toggleSelect(lender.id)}
+                                data-testid="admin-financing-bulk-checkbox"
+                                data-target-lender-id={lender.id}
+                                aria-label={`Select ${lender.name}`}
+                              />
+                              <span className="font-medium">{lender.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {categoryBadge(lender.category)}
+                              {statusBadge(lender.active)}
+                            </div>
+                            {lender.contact_email && (
+                              <div className="text-xs text-muted-foreground">{lender.contact_email}</div>
+                            )}
+                          </div>
+                          <Switch
+                            checked={lender.active}
+                            onCheckedChange={(next) => handleLenderToggle(lender.id, next)}
+                            data-testid="admin-financing-lender-toggle"
+                            data-target-lender-id={lender.id}
+                            aria-label={`Toggle ${lender.name}`}
+                          />
+                        </div>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setEditLender({ ...lender })} aria-label={`Edit ${lender.name}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setDeleteTyped('')
+                              setDeleteTarget(lender)
+                            }}
+                            aria-label={`Delete ${lender.name}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            ) : (
+              <Card className="rounded-xl shadow-sm">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-10">
+                            <Checkbox
+                              checked={
+                                filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))
+                              }
+                              onCheckedChange={toggleSelectAll}
+                              aria-label="Select all filtered lenders"
+                            />
+                          </TableHead>
+                          <TableHead className="font-semibold">Name</TableHead>
+                          <TableHead className="font-semibold">Category</TableHead>
+                          <TableHead className="font-semibold">Contact</TableHead>
+                          <TableHead className="font-semibold">Sort</TableHead>
+                          <TableHead className="font-semibold">Active</TableHead>
+                          <TableHead className="font-semibold text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                              No lenders match the current filters.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filtered.map((lender) => (
+                            <TableRow
+                              key={lender.id}
+                              data-testid="admin-financing-lender-row"
+                              data-target-lender-id={lender.id}
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedIds.has(lender.id)}
+                                  onCheckedChange={() => toggleSelect(lender.id)}
+                                  data-testid="admin-financing-bulk-checkbox"
+                                  data-target-lender-id={lender.id}
+                                  aria-label={`Select ${lender.name}`}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div>{lender.name}</div>
+                                {lender.notes && (
+                                  <div className="text-xs text-muted-foreground font-normal">{lender.notes}</div>
+                                )}
+                              </TableCell>
+                              <TableCell>{categoryBadge(lender.category)}</TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {lender.contact_email ?? '—'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{lender.sort_order}</TableCell>
+                              <TableCell>
+                                <Switch
+                                  checked={lender.active}
+                                  onCheckedChange={(next) => handleLenderToggle(lender.id, next)}
+                                  data-testid="admin-financing-lender-toggle"
+                                  data-target-lender-id={lender.id}
+                                  aria-label={`Toggle ${lender.name}`}
+                                />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setEditLender({ ...lender })}
+                                    title="Edit"
+                                    aria-label={`Edit ${lender.name}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setDeleteTyped('')
+                                      setDeleteTarget(lender)
+                                    }}
+                                    title="Delete"
+                                    aria-label={`Delete ${lender.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ---------------------------------------------------- */}
+          {/*  APPROVALS TAB — placeholder (T+1 PR)                 */}
+          {/* ---------------------------------------------------- */}
+          <TabsContent value="approvals">
+            <Card>
+              <CardContent className="space-y-3 py-12 text-center text-muted-foreground">
+                <Building2 className="mx-auto h-10 w-10 opacity-50" />
+                <div className="text-sm">
+                  Approvals tab wires in the next ship. Edge Fn{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">admin-create-approval</code> is already deployed; this surface will render the live query + Set Approval dialog with the 4-refinement type-confirm on $50k envelopes.
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ---------------------------------------------------- */}
+          {/*  AUDIT TAB — placeholder (T+1 PR)                     */}
+          {/* ---------------------------------------------------- */}
+          <TabsContent value="audit">
+            <Card>
+              <CardContent className="space-y-3 py-12 text-center text-muted-foreground">
+                <ShieldAlert className="mx-auto h-10 w-10 opacity-50" />
+                <div className="text-sm">
+                  Audit Log tab wires in the next ship. Reads <code className="rounded bg-muted px-1 py-0.5 text-xs">audit_log</code> filtered to action=<code className="rounded bg-muted px-1 py-0.5 text-xs">admin_create_approval</code> (and the rest of the financing actions added in migration 051).
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </motion.div>
+
+      {/* Sticky bulk-action bar (F2) — visible only when selection non-empty */}
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background p-3 shadow-lg">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-2">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => handleBulkSetActive(true)} data-testid="admin-financing-bulk-activate">
+                Activate
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleBulkSetActive(false)} data-testid="admin-financing-bulk-deactivate">
+                Deactivate
+              </Button>
+              <Select
+                onValueChange={(v) => handleBulkSetCategory(v as LenderCategory)}
+              >
+                <SelectTrigger className="w-48" data-testid="admin-financing-bulk-category">
+                  <SelectValue placeholder="Move to category…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
+                  <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
+                  <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/*  Dialogs                                                       */}
+      {/* ============================================================ */}
+
+      {/* Add Lender */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent data-testid="admin-financing-add-lender-dialog">
+          <DialogHeader>
+            <DialogTitle>Add Lender</DialogTitle>
+            <DialogDescription>Register a new financing partner. Lenders default to Active.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-name">Name</Label>
+              <Input
+                id="add-lender-name"
+                value={newLender.name}
+                onChange={(e) => setNewLender({ ...newLender, name: e.target.value })}
+                placeholder="GoodLeap, Acorn, Hearth…"
+              />
+              <p className="text-xs text-muted-foreground">Used in homeowner-facing dropdowns and the Set Approval dialog. Must be unique.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-category">Category</Label>
+              <Select
+                value={newLender.category}
+                onValueChange={(v) => setNewLender({ ...newLender, category: v as LenderCategory })}
+              >
+                <SelectTrigger id="add-lender-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
+                  <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
+                  <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Contractor POS = lender pays merchant fee. Personal Loans = direct-to-consumer. Solar & HI Specialty = solar or home improvement specialty partners.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-email">Contact email (optional)</Label>
+              <Input
+                id="add-lender-email"
+                type="email"
+                value={newLender.contact_email}
+                onChange={(e) => setNewLender({ ...newLender, contact_email: e.target.value })}
+                placeholder="partner-ops@lender.com"
+              />
+              <p className="text-xs text-muted-foreground">Used when admin needs to reach the partner about a specific approval.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-notes">Notes (optional)</Label>
+              <Textarea
+                id="add-lender-notes"
+                value={newLender.notes}
+                onChange={(e) => setNewLender({ ...newLender, notes: e.target.value })}
+                placeholder="APR range, fee structure, anything operator should know…"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-sort">Sort order</Label>
+              <Input
+                id="add-lender-sort"
+                type="number"
+                value={newLender.sort_order}
+                onChange={(e) => setNewLender({ ...newLender, sort_order: Number(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-muted-foreground">Lower numbers surface first in homeowner dropdowns. Rod-direct partners use 0-5; researched partners use 100+.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddLender}>Add Lender</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Lender */}
+      <Dialog open={editLender !== null} onOpenChange={(open) => !open && setEditLender(null)}>
+        <DialogContent data-testid="admin-financing-edit-lender-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Lender</DialogTitle>
+            <DialogDescription>Update partner details. Soft-delete is via the trash icon on the row.</DialogDescription>
+          </DialogHeader>
+          {editLender && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-name">Name</Label>
+                <Input
+                  id="edit-lender-name"
+                  value={editLender.name}
+                  onChange={(e) => setEditLender({ ...editLender, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-category">Category</Label>
+                <Select
+                  value={editLender.category}
+                  onValueChange={(v) => setEditLender({ ...editLender, category: v as LenderCategory })}
+                >
+                  <SelectTrigger id="edit-lender-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
+                    <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
+                    <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-email">Contact email</Label>
+                <Input
+                  id="edit-lender-email"
+                  type="email"
+                  value={editLender.contact_email ?? ''}
+                  onChange={(e) => setEditLender({ ...editLender, contact_email: e.target.value || null })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-notes">Notes</Label>
+                <Textarea
+                  id="edit-lender-notes"
+                  value={editLender.notes ?? ''}
+                  onChange={(e) => setEditLender({ ...editLender, notes: e.target.value || null })}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-sort">Sort order</Label>
+                <Input
+                  id="edit-lender-sort"
+                  type="number"
+                  value={editLender.sort_order}
+                  onChange={(e) => setEditLender({ ...editLender, sort_order: Number(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditLender(null)}>Cancel</Button>
+            <Button onClick={handleEditLender}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import (F5) */}
+      <Dialog open={csvOpen} onOpenChange={setCsvOpen}>
+        <DialogContent className="sm:max-w-2xl" data-testid="admin-financing-csv-import-dialog">
+          <DialogHeader>
+            <DialogTitle>Import lenders from CSV</DialogTitle>
+            <DialogDescription>
+              Header row required: <code className="rounded bg-muted px-1 py-0.5 text-xs">name,category,contact_email,notes,sort_order</code>. Category accepts the enum value (contractor_pos / personal_loans / solar_hi_specialty) or the human label.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              placeholder={'name,category,contact_email,notes,sort_order\nNewLender,personal_loans,partner@example.com,Notes here,100'}
+              rows={10}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              Paste the CSV body above. All imported lenders default to Active. Duplicates are blocked by the database unique-name index (lower-case match).
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvOpen(false)}>Cancel</Button>
+            <Button onClick={handleCsvImport} disabled={csvSubmitting}>
+              {csvSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Master OFF — 4-refinement type-confirm (F8) */}
+      <Dialog
+        open={masterOffConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) setMasterOffTyped('')
+          setMasterOffConfirmOpen(open)
+        }}
+      >
+        <DialogContent data-testid="admin-financing-master-off-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Disable financing globally?</DialogTitle>
+            <DialogDescription>
+              This hides the financing card from every homeowner, vendor, and admin surface immediately. In-flight approvals stay banked in the database but are not surfaced in the UI until you flip the master switch back on.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="master-off-typed">Type <span className="font-mono font-semibold">OFF</span> to confirm</Label>
+            <Input
+              id="master-off-typed"
+              value={masterOffTyped}
+              onChange={(e) => setMasterOffTyped(e.target.value)}
+              autoComplete="off"
+              data-testid="admin-financing-master-off-confirm-typed"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setMasterOffConfirmOpen(false)}>Keep financing ON</Button>
+            <Button
+              variant="destructive"
+              onClick={confirmMasterOff}
+              disabled={masterOffTyped.trim().toUpperCase() !== 'OFF'}
+              data-testid="admin-financing-master-off-confirm-fire"
+            >
+              Disable financing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Lender — 4-refinement type-confirm (F8) */}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null)
+            setDeleteTyped('')
+          }
+        }}
+      >
+        <DialogContent data-testid="admin-financing-delete-lender-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Remove lender?</DialogTitle>
+            <DialogDescription>
+              Soft-deletes the lender (preserves audit trail). The partner stops appearing in homeowner-facing dropdowns and the Set Approval dialog immediately. You can re-add via Add Lender if needed.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="space-y-2">
+              <Label htmlFor="delete-lender-typed">
+                Type <span className="font-mono font-semibold">{deleteTarget.name}</span> to confirm
+              </Label>
+              <Input
+                id="delete-lender-typed"
+                value={deleteTyped}
+                onChange={(e) => setDeleteTyped(e.target.value)}
+                autoComplete="off"
+                data-testid="admin-financing-delete-lender-confirm-typed"
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="default"
+              onClick={() => {
+                setDeleteTarget(null)
+                setDeleteTyped('')
+              }}
+            >
+              Keep {deleteTarget?.name ?? 'lender'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteLender}
+              disabled={!deleteTarget || deleteTyped.trim() !== deleteTarget.name}
+              data-testid="admin-financing-delete-lender-confirm-fire"
+            >
+              Remove lender
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
