@@ -71,6 +71,7 @@ import ReportsPage from '@/features/admin/pages/reports'
 import AdminMessagesPage from '@/features/admin/pages/messages'
 import AdminTutorialsPage from '@/features/admin/pages/tutorials'
 import AdminActivityPage from '@/features/admin/pages/activity'
+import AdminFinancingPage from '@/features/admin/pages/financing'
 
 export const router = createBrowserRouter([
   {
@@ -180,6 +181,11 @@ export const router = createBrowserRouter([
           { path: 'homeowners/:homeownerId', element: <AdminHomeownerDetail />, handle: { title: 'Admin · Homeowner' } },
           // Ship #314 — BuildConnect contract review queue (Phase 1).
           { path: 'reviews', element: <ReviewsPage />, handle: { title: 'Admin · Reviews' } },
+          // Phase 1 Admin Financing — task_1779054206392_927. Page internally
+          // checks profiles.role='admin' via RequireAuth + reads feature_flags
+          // for master/category gates. Edge Fn admin-create-approval already
+          // deployed; this surface drives the lenders registry + approval set.
+          { path: 'financing', element: <AdminFinancingPage />, handle: { title: 'Admin · Financing' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
         ],
       },
