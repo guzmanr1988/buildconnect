@@ -33,6 +33,16 @@ jobs:
           VITE_DEMO_ADMIN_PW: ${{ secrets.VITE_DEMO_ADMIN_PW }}
           VITE_DEMO_ACCOUNT_REP_PW: ${{ secrets.VITE_DEMO_ACCOUNT_REP_PW }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          # PR-256 (2026-05-17) — financing-flag launch state. Pre-fix this
+          # workflow lacked both vars in the build env, so every CF Pages
+          # build since Rod's 2026-05-17 01:50Z STEP-2 wrangler-bypass
+          # silently rebuilt the bundle with VITE_FINANCING_ENABLED unset
+          # → isFinancingEnabled() === false → FinancingCard short-circuits.
+          # Hardcoded literals (not secrets) so the launch state is durable
+          # without out-of-band repo-settings configuration. Flip OFF for
+          # rollback = edit this file's literal to 'false' (1-line PR).
+          VITE_FINANCING_ENABLED: 'true'
+          VITE_FINANCING_BANK: 'manual_referral'
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
