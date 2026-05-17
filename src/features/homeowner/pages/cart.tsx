@@ -715,6 +715,9 @@ export function CartPage() {
                   {profile?.id_document_url ? 'Send to Contractor' : 'Upload ID First'}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground mt-2" data-helper="id-upload-required">
+                Projects can only be submitted when you upload your driver license or ID in documents to verify your identity and for financing purposes if it applies
+              </p>
             </motion.div>
           )
         })}
