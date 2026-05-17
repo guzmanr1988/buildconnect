@@ -314,6 +314,13 @@ serve(async (req: Request) => {
 
   // Write 3 — customer_financing_profile UPSERT (cfp-precedence: latest
   // approval wins; frozen until next approval or expiry per spec §cfp-precedence)
+  //
+  // Spec §L244 mandates single-transaction wrap with all-rollback + 500 on any
+  // failure. Edge Functions don't have native cross-request transactions
+  // (each .from() is a separate PostgREST call), so on cfp failure we manually
+  // unwind both prior writes — approval first (FK to application) then
+  // application. Admin retries idempotently on Edge Fn re-call; no
+  // inconsistent state visible to admin or /home FinancingCard.
   const { error: cfpErr } = await admin
     .from('customer_financing_profile')
     .upsert(
@@ -327,27 +334,9 @@ serve(async (req: Request) => {
       { onConflict: 'customer_id' },
     )
   if (cfpErr) {
-    // cfp failure leaves application+approval banked but cfp stale — admin
-    // can re-fire safely (cfp-precedence will rewrite). Surface but don't
-    // unwind the prior writes; the approval IS legitimate.
-    await admin
-      .from('audit_log')
-      .update({
-        status: 'partial_success',
-        target_id: apprId,
-        error_reason: 'cfp_upsert_failed',
-        error_detail: cfpErr.message,
-      })
-      .eq('id', auditId)
-    return jsonResponse(207, {
-      ok: false,
-      partial: true,
-      application_id: appId,
-      approval_id: apprId,
-      audit_id: auditId,
-      warning: 'cfp_upsert_failed_approval_banked',
-      detail: cfpErr.message,
-    })
+    await admin.from('financing_approvals').delete().eq('id', apprId)
+    await admin.from('financing_applications').delete().eq('id', appId)
+    return failAudit('cfp_upsert_failed_all_rolled_back', cfpErr.message)
   }
 
   // All three writes landed — close out the audit row
