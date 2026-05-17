@@ -1,42 +1,53 @@
 // admin-create-approval Edge Function
 // Phase 1 Admin Financing — task_1779054206392_927
-// Wires the /admin/financing manual approval-set surface (spec §Edge-Fn-shape)
-// to the AS-SHIPPED financing_core schema (hermes PR #256 + 050 fixup, prod
-// 2026-05-17 22:18Z): 32 lenders (15 contractor_pos / 12 personal_loans / 5
-// solar_hi_specialty), feature_flags.financing_enabled PK row, audit_log
-// service_role-only writer.
+// Wires the /admin/financing manual approval-set surface to the AS-SHIPPED
+// financing_core + admin_financing_surface schema:
+//   - migration 047_financing_core_tables.sql (financing_applications,
+//     financing_approvals, customer_financing_profile, commission_ledger)
+//   - migration 048_admin_financing_surface.sql (lenders, feature_flags, audit_log)
+//   - migration 049 + 050 (lenders seed: 32 rows AS-SHIPPED)
 //
 // Action: create-approval — given (customerEmail, lenderName, envelopeCents,
 //   aprBps, termMonths, expiresAt), perform a 3-write sequence:
-//     1. financing_applications INSERT (status='approved', service_role)
-//     2. financing_approvals    INSERT (approved_cents/apr_bps/term/expires)
-//     3. customer_financing_profile UPSERT (last_known_status='approved',
-//        last_approved_application_id=app.id) — cfp-precedence per spec
-//   then audit_log INSERT with full after_json payload.
+//     1. financing_applications INSERT (status='approved', adapter='admin_manual')
+//     2. financing_approvals    INSERT (status='approved', envelope_amount_cents,
+//        apr_bps, term_months, expires_at)
+//     3. customer_financing_profile UPSERT (has_financing=true, source='adapter',
+//        approval_partner=lender.name, last_known_status='approved',
+//        last_known_amount_cents=envelope, approval_expires_at=expiresAt)
+//   Audit row written post-action with full outcome captured in notes/after_json.
 //
-// Defense layers (mirror admin-reset-password 5-layer pattern):
+// Defense layers (mirror admin-reset-password 5-layer canonical pattern):
 //   1. JWT verify via supabase.auth.getUser(token) — signature-fail → 401
-//   2. profiles.role === 'admin' claim check — non-admin → 401
+//   2. profiles.role === 'admin' claim check (single-admin model)
 //   3. Optional ADMIN_EMAIL_ALLOWLIST — second-layer defense
-//   4. feature_flags.financing_enabled === true gate — flag-OFF → 503
-//   5. Partner validation: lenders.name match WHERE active AND NOT deleted
+//   4. feature_flags.enabled === true gate (key='financing_enabled') → 503 on OFF
+//   5. Partner validation: lenders.name ilike + active + deleted_at IS NULL
+//      (name-only — placement-transparent to WF AS-SHIPPED in personal_loans sort=5)
 //   6. Body validation: envelope/apr/term/expires bounds + email shape
-//   7. Audit log row BEFORE the privileged write sequence; status updated after
-//   8. Errors normalized — never leak Supabase internals to client
+//   7. Audit row written AFTER action settles (success or post-rollback);
+//      AS-SHIPPED audit_log lacks pending-lifecycle columns so we capture
+//      outcome shape in notes/after_json instead
+//   8. Full rollback on any write failure per spec L244 (FK-ordered:
+//      approvals → applications); errors normalized
 //
-// Coordination notes:
-//   - hermes: set_updated_at_secure() trigger fires on lenders + feature_flags
-//     UPDATEs; we don't write either of those tables here
-//   - hermes: audit_log has zero write policies — service_role is the only path
-//   - WF folded as personal_loans sort_order=5 pending Rod re-categorization;
-//     no hardcoded category branches in this Fn (partner validation is name-only)
-//   - cfp-precedence: latest approval wins, frozen until new approval or expiry
+// Coordination notes (post hermes + hephaestus sibling-axis source-read):
+//   - audit_log.action must be in {insert,update,delete,toggle,login,export};
+//     we use 'insert' for the create flow per kratos-blessed option-(b)
+//   - audit_log.target_id is TEXT (not UUID)
+//   - service_role bypasses RLS, so fa_insert_homeowner_own status='applied'
+//     constraint does not apply — we insert status='approved' directly
+//   - financing_applications.adapter is NOT NULL with no default — must supply
+//     ('admin_manual' marks the manual-set provenance)
+//   - financing_approvals.status enum is {approved, denied}; must supply explicit
+//   - customer_financing_profile.source enum is {self_attest, adapter};
+//     admin manual creation uses 'adapter' per hermes msg 1779055610342
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const MAX_ENVELOPE_CENTS = 5_000_000_00 // $5M ceiling — well above Phase 1 norms
-const MIN_ENVELOPE_CENTS = 100_00       // $100 floor — sub-$100 = data entry slip
+const MAX_ENVELOPE_CENTS = 5_000_000_00 // $5M ceiling
+const MIN_ENVELOPE_CENTS = 100_00       // $100 floor
 const MAX_APR_BPS = 5000  // 50% APR ceiling
 const MIN_APR_BPS = 0     // 0% promo allowed
 const MIN_TERM_MONTHS = 1
@@ -87,7 +98,7 @@ function isValidEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 }
 
-function isValidIsoDate(s: string): boolean {
+function isValidFutureIsoDate(s: string): boolean {
   if (typeof s !== 'string') return false
   const d = new Date(s)
   return !Number.isNaN(d.getTime()) && d.getTime() > Date.now()
@@ -137,17 +148,16 @@ serve(async (req: Request) => {
     return jsonResponse(401, { error: 'forbidden_not_allowlisted' })
   }
 
-  // Layer 4 — master flag check (DB-driven, replaces VITE_FINANCING_ENABLED
-  // redeploy class — admin can flip live without a CI run)
+  // Layer 4 — master flag check (DB-driven; column is `enabled` per migration 048)
   const { data: flagRow, error: flagErr } = await admin
     .from('feature_flags')
-    .select('value')
+    .select('enabled')
     .eq('key', 'financing_enabled')
     .maybeSingle()
   if (flagErr) {
     return jsonResponse(500, { error: 'flag_check_failed' })
   }
-  if (!flagRow || flagRow.value !== true) {
+  if (!flagRow || flagRow.enabled !== true) {
     return jsonResponse(503, { error: 'financing_disabled', flag: 'financing_enabled' })
   }
 
@@ -188,13 +198,13 @@ serve(async (req: Request) => {
   ) {
     return jsonResponse(400, { error: 'invalid_term_months', min: MIN_TERM_MONTHS, max: MAX_TERM_MONTHS })
   }
-  if (!isValidIsoDate(body.expiresAt)) {
+  if (!isValidFutureIsoDate(body.expiresAt)) {
     return jsonResponse(400, { error: 'invalid_expires_at_must_be_future_iso' })
   }
 
-  // Layer 5 — partner validation against AS-SHIPPED lenders
-  // (lower(name) match per unique index; no category-branch hardcoding because
-  // WF re-categorization is pending Rod post-launch admin action)
+  // Layer 5 — partner validation against AS-SHIPPED lenders (name-only ilike
+  // per unique index lower(name); no category branches because WF placement
+  // in personal_loans is LOCKED AS-SHIPPED per kratos rescind 22:23Z)
   const { data: lenderRow, error: lenderErr } = await admin
     .from('lenders')
     .select('id, name, category, active, deleted_at')
@@ -224,133 +234,152 @@ serve(async (req: Request) => {
   const userAgent = req.headers.get('user-agent')
   const highValue = body.envelopeCents >= HIGH_VALUE_CONFIRM_CENTS
 
-  // Audit log row BEFORE the privileged sequence (spec §audit-log).
-  // Holds before_json (null — new approval) + intended after_json + status='pending'.
-  // We update the audit row to 'success'/'error' after the writes resolve so
-  // the row is always present regardless of where the sequence fails.
-  const intendedAfter = {
-    customer_id: customerId,
-    customer_email: body.customerEmail,
-    lender_id: lenderRow.id,
+  // Build audit context (written post-action with outcome captured in notes/after_json).
+  // AS-SHIPPED audit_log columns: id, ts, actor_id, actor_role, action (enum:
+  // insert|update|delete|toggle|login|export), target_table, target_id (text),
+  // before_json, after_json, notes. No status / ip / user_agent / actor_email
+  // columns — those ride in notes JSON payload.
+  const auditCtx = {
+    actor_email: adminUser.email ?? null,
+    ip,
+    user_agent: userAgent,
+    high_value: highValue,
     lender_name: lenderRow.name,
     lender_category: lenderRow.category,
+    customer_email: body.customerEmail,
     envelope_cents: body.envelopeCents,
     apr_bps: body.aprBps,
     term_months: body.termMonths,
     expires_at: body.expiresAt,
     bc_application_ref: body.bcApplicationRef ?? null,
-    high_value: highValue,
   }
 
-  const { data: auditRow, error: auditInsertErr } = await admin
-    .from('audit_log')
-    .insert({
-      actor_id: adminUser.id,
-      actor_email: adminUser.email ?? '',
-      action: 'admin_create_approval',
-      target_table: 'financing_approvals',
-      target_id: null,
-      before_json: null,
-      after_json: intendedAfter,
-      status: 'pending',
-      ip,
-      user_agent: userAgent,
+  async function writeAuditOutcome(
+    outcome: 'success' | 'rollback',
+    targetId: string | null,
+    afterJson: Record<string, unknown>,
+    errorReason?: string,
+    errorDetail?: string,
+  ): Promise<void> {
+    const notes = JSON.stringify({
+      ...auditCtx,
+      outcome,
+      ...(errorReason ? { error_reason: errorReason, error_detail: errorDetail ?? null } : {}),
     })
-    .select('id')
-    .single()
-  if (auditInsertErr || !auditRow) {
-    return jsonResponse(500, { error: 'audit_log_write_failed' })
-  }
-  const auditId: string = auditRow.id
-
-  async function failAudit(reason: string, detail?: string): Promise<Response> {
-    await admin
-      .from('audit_log')
-      .update({ status: 'error', error_reason: reason, error_detail: detail ?? null })
-      .eq('id', auditId)
-    return jsonResponse(500, { error: reason, audit_id: auditId, detail: detail ?? null })
+    await admin.from('audit_log').insert({
+      actor_id: adminUser.id,
+      actor_role: 'admin',
+      action: 'insert',
+      target_table: 'financing_approvals',
+      target_id: targetId,
+      before_json: null,
+      after_json: afterJson,
+      notes,
+    })
   }
 
-  // Write 1 — financing_applications (admin-created on customer's behalf;
-  // service_role bypasses RLS for the customer-id INSERT)
+  // Write 1 — financing_applications (admin-created on customer's behalf via
+  // service_role; status='approved' direct-set; adapter='admin_manual' marks
+  // the manual provenance per spec §audit-log)
   const { data: appRow, error: appInsertErr } = await admin
     .from('financing_applications')
     .insert({
-      customer_id: customerId,
-      lender_id: lenderRow.id,
+      homeowner_id: customerId,
+      adapter: 'admin_manual',
+      adapter_application_id: body.bcApplicationRef ?? null,
       status: 'approved',
-      created_via: 'admin_manual',
-      created_by_admin_id: adminUser.id,
     })
     .select('id')
     .single()
   if (appInsertErr || !appRow) {
-    return failAudit('financing_applications_insert_failed', appInsertErr?.message)
+    await writeAuditOutcome(
+      'rollback',
+      null,
+      { ...auditCtx, write_failed_at: 'financing_applications_insert' },
+      'financing_applications_insert_failed',
+      appInsertErr?.message,
+    )
+    return jsonResponse(500, { error: 'financing_applications_insert_failed', detail: appInsertErr?.message })
   }
   const appId: string = appRow.id
 
-  // Write 2 — financing_approvals (envelope/APR/term/expires; service_role-only
-  // writeable per spec §RLS / hermes-confirmed pg_policies)
+  // Write 2 — financing_approvals (service_role-only writes per migration 047
+  // RLS pattern; status='approved' explicit per enum {approved,denied}; envelope
+  // + APR + term as cents/bps/int per migration 047 *_cents convention)
   const { data: apprRow, error: apprInsertErr } = await admin
     .from('financing_approvals')
     .insert({
-      application_id: appId,
-      lender_id: lenderRow.id,
-      approved_cents: body.envelopeCents,
+      financing_application_id: appId,
+      status: 'approved',
+      envelope_amount_cents: body.envelopeCents,
       apr_bps: body.aprBps,
       term_months: body.termMonths,
       expires_at: body.expiresAt,
-      issued_by_admin_id: adminUser.id,
-      source: 'admin_manual',
     })
     .select('id')
     .single()
   if (apprInsertErr || !apprRow) {
-    // Manual rollback — drop the orphan application (audit_log keeps the trail)
+    // FK-ordered manual rollback per spec L244 (no PostgREST cross-call txn)
     await admin.from('financing_applications').delete().eq('id', appId)
-    return failAudit('financing_approvals_insert_failed', apprInsertErr?.message)
+    await writeAuditOutcome(
+      'rollback',
+      null,
+      { ...auditCtx, write_failed_at: 'financing_approvals_insert', rolled_back_application_id: appId },
+      'financing_approvals_insert_failed',
+      apprInsertErr?.message,
+    )
+    return jsonResponse(500, { error: 'financing_approvals_insert_failed', detail: apprInsertErr?.message })
   }
   const apprId: string = apprRow.id
 
   // Write 3 — customer_financing_profile UPSERT (cfp-precedence: latest
   // approval wins; frozen until next approval or expiry per spec §cfp-precedence)
-  //
-  // Spec §L244 mandates single-transaction wrap with all-rollback + 500 on any
-  // failure. Edge Functions don't have native cross-request transactions
-  // (each .from() is a separate PostgREST call), so on cfp failure we manually
-  // unwind both prior writes — approval first (FK to application) then
-  // application. Admin retries idempotently on Edge Fn re-call; no
-  // inconsistent state visible to admin or /home FinancingCard.
+  // AS-SHIPPED cols: has_financing, last_known_status, last_known_amount_cents,
+  // source (enum {self_attest,adapter}), approval_partner, approval_expires_at
   const { error: cfpErr } = await admin
     .from('customer_financing_profile')
     .upsert(
       {
         customer_id: customerId,
+        has_financing: true,
         last_known_status: 'approved',
-        last_approved_application_id: appId,
-        last_approved_approval_id: apprId,
-        last_approved_at: new Date().toISOString(),
+        last_known_amount_cents: body.envelopeCents,
+        source: 'adapter',
+        approval_partner: lenderRow.name,
+        approval_expires_at: body.expiresAt,
       },
       { onConflict: 'customer_id' },
     )
   if (cfpErr) {
+    // Full rollback per spec L244: approvals first (FK to applications), then app
     await admin.from('financing_approvals').delete().eq('id', apprId)
     await admin.from('financing_applications').delete().eq('id', appId)
-    return failAudit('cfp_upsert_failed_all_rolled_back', cfpErr.message)
+    await writeAuditOutcome(
+      'rollback',
+      null,
+      { ...auditCtx, write_failed_at: 'cfp_upsert', rolled_back_approval_id: apprId, rolled_back_application_id: appId },
+      'cfp_upsert_failed_all_rolled_back',
+      cfpErr.message,
+    )
+    return jsonResponse(500, { error: 'cfp_upsert_failed_all_rolled_back', detail: cfpErr.message })
   }
 
-  // All three writes landed — close out the audit row
-  await admin
-    .from('audit_log')
-    .update({ status: 'success', target_id: apprId })
-    .eq('id', auditId)
+  // All three writes landed — capture success audit with full final state
+  await writeAuditOutcome(
+    'success',
+    apprId,
+    {
+      ...auditCtx,
+      application_id: appId,
+      approval_id: apprId,
+    },
+  )
 
   return jsonResponse(200, {
     ok: true,
     action: 'create-approval',
     application_id: appId,
     approval_id: apprId,
-    audit_id: auditId,
     high_value: highValue,
   })
 })
