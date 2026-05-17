@@ -96,9 +96,24 @@ const demoAccounts = [
 export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  // PR-254 (Rod-direct 2026-05-17) — after 5s of isLoading, surface
+  // "Still working..." copy so a slow CF→Supabase edge fetch doesn't
+  // read as a dead button. Apollo PoP-walker measured ~24s total during
+  // edge-pinning windows; the signIn timeout (12s, lib/auth.ts) is the
+  // hard ceiling, this is the soft "we're still trying" reassurance.
+  const [isStillWorking, setIsStillWorking] = useState(false)
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  useEffect(() => {
+    if (!isLoading) {
+      setIsStillWorking(false)
+      return
+    }
+    const handle = setTimeout(() => setIsStillWorking(true), 5_000)
+    return () => clearTimeout(handle)
+  }, [isLoading])
 
   const {
     register,
@@ -409,6 +424,16 @@ export function LoginPage() {
                 count is back to 3 (Homeowner / Vendor / Admin). Vertical
                 flex stack fits cleanly in the form panel without the
                 6-tile overflow that motivated the grid. */}
+            {isStillWorking && (
+              <p
+                className="mb-3 text-center text-xs text-muted-foreground"
+                data-loading-still-working
+                role="status"
+                aria-live="polite"
+              >
+                Still working... if this takes more than a few seconds, check your connection.
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               {demoAccounts.map((demo, i) => (
                 <motion.div

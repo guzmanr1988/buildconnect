@@ -11,8 +11,27 @@ export async function signUp(email: string, password: string, metadata: { name: 
   return data
 }
 
+// PR-254 (Rod-direct 2026-05-17) — UX timeout race to close the
+// "permanent hang" appearance during CF→Supabase /auth/v1/* edge-pinning
+// windows (N=3 same-day: apollo 16:25Z + 16:30Z + Rod 17:40Z, banked as
+// feedback_cf_supabase_auth_edge_pinning_class). Pre-fix the demo flow
+// took ~24s with no upper bound when the edge stalled — visible as a
+// dead button. 12s ceiling lets the user retry or switch networks; the
+// thrown Error bubbles to LoginPage's onSubmit/demoLogin catch which
+// already toasts via friendlyAuthError fallback.
+const SIGN_IN_TIMEOUT_MS = 12_000
+
 export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  const result = await Promise.race([
+    supabase.auth.signInWithPassword({ email, password }),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Sign-in is taking longer than expected. Please check your connection or try again.')),
+        SIGN_IN_TIMEOUT_MS,
+      ),
+    ),
+  ])
+  const { data, error } = result
   if (error) throw error
   return data
 }
