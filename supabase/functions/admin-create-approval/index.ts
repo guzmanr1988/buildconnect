@@ -31,17 +31,24 @@
 //   8. Full rollback on any write failure per spec L244 (FK-ordered:
 //      approvals → applications); errors normalized
 //
-// Coordination notes (post hermes + hephaestus sibling-axis source-read):
-//   - audit_log.action must be in {insert,update,delete,toggle,login,export};
-//     we use 'insert' for the create flow per kratos-blessed option-(b)
+// Coordination notes (post hermes + hephaestus sibling-axis source-read +
+// kratos plan-change msg 1779056062285 locked-in via 1779056185880):
+//   - audit_log.action = 'admin_create_approval' per hermes 051 enum-widen
+//     (queryable/indexable filter axis beats notes-text retrofit cost long-term;
+//     matches future-employee admin filter UX). Migration 051 adds the value
+//     via ALTER TYPE audit_action ADD VALUE IF NOT EXISTS 'admin_create_approval'.
 //   - audit_log.target_id is TEXT (not UUID)
 //   - service_role bypasses RLS, so fa_insert_homeowner_own status='applied'
 //     constraint does not apply — we insert status='approved' directly
 //   - financing_applications.adapter is NOT NULL with no default — must supply
 //     ('admin_manual' marks the manual-set provenance)
 //   - financing_approvals.status enum is {approved, denied}; must supply explicit
+//     (no DEFAULT — defaults on enum status fields drift downstream behaviors
+//      per hermes axis verdict)
 //   - customer_financing_profile.source enum is {self_attest, adapter};
 //     admin manual creation uses 'adapter' per hermes msg 1779055610342
+//   - Rollback DELETEs themselves wrapped via safeRollbackDelete() —
+//     rollback_failure_<table> keys captured in audit after_json on partial leak
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -269,13 +276,23 @@ serve(async (req: Request) => {
     await admin.from('audit_log').insert({
       actor_id: adminUser.id,
       actor_role: 'admin',
-      action: 'insert',
+      action: 'admin_create_approval',
       target_table: 'financing_approvals',
       target_id: targetId,
       before_json: null,
       after_json: afterJson,
       notes,
     })
+  }
+
+  // Rollback DELETEs themselves can fail (FK race, RLS surprise, network). Per
+  // kratos plan-change msg 1779056062285 / lock-in 1779056185880 (hermes axis
+  // verdict): wrap each rollback DELETE in error-capture so partial-state leak
+  // is at minimum auditable. Failed-rollback shows up as rollback_failure_<table>
+  // keys in the audit row's after_json.
+  async function safeRollbackDelete(table: string, id: string): Promise<string | null> {
+    const { error } = await admin.from(table).delete().eq('id', id)
+    return error ? error.message : null
   }
 
   // Write 1 — financing_applications (admin-created on customer's behalf via
@@ -320,11 +337,16 @@ serve(async (req: Request) => {
     .single()
   if (apprInsertErr || !apprRow) {
     // FK-ordered manual rollback per spec L244 (no PostgREST cross-call txn)
-    await admin.from('financing_applications').delete().eq('id', appId)
+    const appDelErr = await safeRollbackDelete('financing_applications', appId)
     await writeAuditOutcome(
       'rollback',
       null,
-      { ...auditCtx, write_failed_at: 'financing_approvals_insert', rolled_back_application_id: appId },
+      {
+        ...auditCtx,
+        write_failed_at: 'financing_approvals_insert',
+        rolled_back_application_id: appId,
+        ...(appDelErr ? { rollback_failure_financing_applications: appDelErr } : {}),
+      },
       'financing_approvals_insert_failed',
       apprInsertErr?.message,
     )
@@ -352,12 +374,19 @@ serve(async (req: Request) => {
     )
   if (cfpErr) {
     // Full rollback per spec L244: approvals first (FK to applications), then app
-    await admin.from('financing_approvals').delete().eq('id', apprId)
-    await admin.from('financing_applications').delete().eq('id', appId)
+    const apprDelErr = await safeRollbackDelete('financing_approvals', apprId)
+    const appDelErr = await safeRollbackDelete('financing_applications', appId)
     await writeAuditOutcome(
       'rollback',
       null,
-      { ...auditCtx, write_failed_at: 'cfp_upsert', rolled_back_approval_id: apprId, rolled_back_application_id: appId },
+      {
+        ...auditCtx,
+        write_failed_at: 'cfp_upsert',
+        rolled_back_approval_id: apprId,
+        rolled_back_application_id: appId,
+        ...(apprDelErr ? { rollback_failure_financing_approvals: apprDelErr } : {}),
+        ...(appDelErr ? { rollback_failure_financing_applications: appDelErr } : {}),
+      },
       'cfp_upsert_failed_all_rolled_back',
       cfpErr.message,
     )
