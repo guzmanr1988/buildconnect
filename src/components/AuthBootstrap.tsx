@@ -1,10 +1,19 @@
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { getProfile } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
+
+// PR-254 (Rod-direct 2026-05-17) — getProfile timeout ceiling. Apollo
+// PoP-walker measured ~17s on the getProfile fetch alone during the CF
+// edge-pinning window. Ship-275 already setSession FIRST so a getProfile
+// failure leaves the user authed (profile may be stale-persisted but
+// nav unblocks); this just bounds the wait so the diag log + toast
+// fire instead of the listener silently sitting on a pending promise.
+const GET_PROFILE_TIMEOUT_MS = 10_000
 
 export function AuthBootstrap() {
   useEffect(() => {
@@ -38,7 +47,15 @@ export function AuthBootstrap() {
       store.setSession({ access_token, user: { id: userId, email } })
       diagLog('AuthBootstrap.hydrate:setSession-called (defensive, pre-getProfile)')
       try {
-        const profile = await getProfile(userId)
+        const profile = await Promise.race([
+          getProfile(userId),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('getProfile timed out after 10s')),
+              GET_PROFILE_TIMEOUT_MS,
+            ),
+          ),
+        ])
         diagLog('AuthBootstrap.hydrate:getProfile-success', { profile_role: profile.role })
         if (!mounted) {
           diagLog('AuthBootstrap.hydrate:returning-early (unmounted)')
@@ -88,6 +105,13 @@ export function AuthBootstrap() {
       } catch (err) {
         diagLog('AuthBootstrap.hydrate:getProfile-FAILED', { error: String(err) })
         console.error('[AuthBootstrap] getProfile failed:', err)
+        // PR-254 — surface slow-profile to the user but keep session set
+        // (Ship-275 already called setSession pre-getProfile, so nav can
+        // proceed against any zustand-persisted profile from a prior load).
+        const message = err instanceof Error && err.message.includes('timed out')
+          ? 'Loading profile is slow. Try refreshing if this persists.'
+          : null
+        if (message) toast.error(message)
       }
     }
 
