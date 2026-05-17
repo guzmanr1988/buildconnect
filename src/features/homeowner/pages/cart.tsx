@@ -707,9 +707,15 @@ export function CartPage() {
                 <Button
                   size="default"
                   className="flex-1 h-10 gap-2 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-700"
-                  disabled={!profile?.id_document_url}
                   data-submit-gate={!profile?.id_document_url ? 'photo-id-required' : undefined}
-                  onClick={() => handleSendToContractor(item)}
+                  data-cta={profile?.id_document_url ? 'send-to-contractor' : 'upload-id-first'}
+                  onClick={() => {
+                    if (profile?.id_document_url) {
+                      handleSendToContractor(item)
+                    } else {
+                      navigate('/home/documents')
+                    }
+                  }}
                 >
                   <Send className="h-4 w-4" />
                   {profile?.id_document_url ? 'Send to Contractor' : 'Upload ID First'}
