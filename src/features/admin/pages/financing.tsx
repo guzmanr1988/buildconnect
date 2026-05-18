@@ -1026,6 +1026,7 @@ export default function AdminFinancingPage() {
               <Input
                 id="add-lender-apply-url"
                 type="url"
+                pattern="https://.*"
                 value={newLender.apply_url}
                 onChange={(e) => setNewLender({ ...newLender, apply_url: e.target.value })}
                 placeholder="https://lender.com/apply"
@@ -1118,6 +1119,7 @@ export default function AdminFinancingPage() {
                 <Input
                   id="edit-lender-apply-url"
                   type="url"
+                  pattern="https://.*"
                   value={editLender.apply_url ?? ''}
                   onChange={(e) => setEditLender({ ...editLender, apply_url: e.target.value || null })}
                   placeholder="https://lender.com/apply"
