@@ -304,14 +304,29 @@ export default function AdminVendorDetail() {
           <FileText className="h-5 w-5 text-primary" />
           <h2 className="font-heading text-lg font-semibold">Non-Circumvention Agreement</h2>
         </div>
-        <Card className="rounded-xl">
+        <Card
+          className={cn(
+            'rounded-xl border',
+            signed
+              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+              : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/40',
+          )}
+          data-admin-vendor-nca-state={signed ? 'signed' : 'unsigned'}
+        >
           <CardContent className="p-4 flex items-center gap-3">
-            <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+            <FileText
+              className={cn(
+                'h-5 w-5 shrink-0',
+                signed
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-red-700 dark:text-red-400',
+              )}
+            />
             <div className="flex-1 min-w-0">
               {signed ? (
                 <>
-                  <p className="text-sm font-medium text-foreground">Signed {signedDate}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Signed {signedDate}</p>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
                     Version {agreementVersion ?? '—'}
                     {!isAgreementCurrent && agreementVersion && (
                       <span className="ml-1 text-amber-700 dark:text-amber-400">(stale)</span>
@@ -319,7 +334,7 @@ export default function AdminVendorDetail() {
                   </p>
                 </>
               ) : (
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Not signed</p>
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">Not signed</p>
               )}
             </div>
             <Button variant="outline" size="sm" disabled={!signed} onClick={() => setAgreementViewOpen(true)}>
@@ -347,7 +362,7 @@ export default function AdminVendorDetail() {
             <CardContent className="p-5 text-sm text-muted-foreground">No products configured yet.</CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {vendorCatalogItems.map((ci) => {
               const svc = vendorCatalogServices.find((s) => s.serviceId === ci.category)
               const activeCount = svc?.enabled
@@ -355,23 +370,25 @@ export default function AdminVendorDetail() {
                 : 0
               return (
                 <Card key={ci.id} className="rounded-xl" data-admin-vendor-product={ci.id}>
-                  <CardContent className="p-4 flex items-center gap-4">
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <p className="font-medium text-foreground">{ci.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">
+                  <CardContent className="p-3 flex flex-col gap-2 h-full">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="font-medium text-foreground text-sm truncate">{ci.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize truncate">
                         {CATEGORY_LABELS[ci.category] ?? ci.category}
                       </p>
                     </div>
-                    <div
-                      className={cn(
-                        'flex items-center justify-center rounded-full h-9 px-3 text-xs font-semibold shrink-0',
-                        activeCount > 0
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                      data-admin-vendor-product-active-count={ci.id}
-                    >
-                      {activeCount} active
+                    <div className="flex justify-end mt-auto">
+                      <span
+                        className={cn(
+                          'inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                          activeCount > 0
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                        data-admin-vendor-product-active-count={ci.id}
+                      >
+                        {activeCount} active
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
