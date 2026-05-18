@@ -38,7 +38,7 @@ import { deriveInitials } from '@/lib/initials'
 import type { Lead, VendorRep } from '@/types'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -59,6 +59,7 @@ function fmtDateTime(iso: string) {
 // holds only Vendor Profile Card + KPI Row + a link to here.
 export default function VendorLeadWorkflow() {
   const navigate = useNavigate()
+  const financingEnabled = useFeatureFlag('financing_enabled')
   const profile = useAuthStore((s) => s.profile)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const updateProjectStatus = useProjectsStore((s) => s.updateStatus)
@@ -1143,7 +1144,7 @@ export default function VendorLeadWorkflow() {
                     <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     {(() => {
                       const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                      if (!isFinancingEnabled() || !sp?.id) {
+                      if (financingEnabled !== true || !sp?.id) {
                         return <span>Financing: {selected.financing ? 'Requested' : 'Not needed'}</span>
                       }
                       return (
