@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlagOnce } from '@/lib/financing/hooks/use-feature-flag'
 import { listRegisteredAdapters } from '@/lib/financing/adapters'
 import { FinancingAdapterDialog } from '@/features/financing/components/financing-adapter-dialog'
 
@@ -63,6 +63,7 @@ function lenderState(l: Lender): LenderState {
 export function FinancingApplyPage() {
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
+  const financingEnabled = useFeatureFlagOnce('financing_enabled')
 
   const [lenders, setLenders] = useState<Lender[]>([])
   const [flags, setFlags] = useState<Record<string, boolean>>({})
@@ -110,7 +111,10 @@ export function FinancingApplyPage() {
     }
   }, [])
 
-  if (!isFinancingEnabled()) {
+  if (financingEnabled === undefined) {
+    return null
+  }
+  if (financingEnabled === false) {
     return <Navigate to="/home" replace />
   }
   if (!profile) {

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { adapterDisplayName } from '@/lib/financing/display'
 import type { FinancingApplicationStatus } from '@/lib/financing/adapters/_contract'
 
@@ -163,12 +163,13 @@ function specForState(
 export function FinancingCard() {
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
+  const enabled = useFeatureFlag('financing_enabled')
   const [app, setApp] = useState<LatestApplication | null>(null)
   const [cfp, setCfp] = useState<FinancingProfile | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (!isFinancingEnabled()) {
+    if (!enabled) {
       setLoaded(true)
       return
     }
@@ -206,9 +207,9 @@ export function FinancingCard() {
     return () => {
       cancelled = true
     }
-  }, [profile?.id])
+  }, [profile?.id, enabled])
 
-  if (!isFinancingEnabled()) return null
+  if (!enabled) return null
   if (!loaded) return null
 
   const state = resolveState(cfp, app)
