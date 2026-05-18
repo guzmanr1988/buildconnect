@@ -182,7 +182,7 @@ export function FinancingStatusPage() {
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <dt className="text-xs text-muted-foreground">Lender</dt>
-                <dd className="text-foreground font-medium mt-0.5">{adapterDisplayName(application.adapter)}</dd>
+                <dd className="text-foreground font-medium mt-0.5">{financingProfile?.approval_partner ?? adapterDisplayName(application.adapter)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Submitted</dt>

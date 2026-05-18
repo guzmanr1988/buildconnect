@@ -2,6 +2,7 @@ import type { FinancingApplicationStatus } from './adapters/_contract'
 
 export const ADAPTER_DISPLAY_NAMES: Record<string, string> = {
   manual_referral: 'BuildConnect referral (manual)',
+  admin_manual: 'BuildConnect (manual)',
   goodleap: 'GoodLeap',
   momnt: 'Momnt',
   upgrade: 'Upgrade',
