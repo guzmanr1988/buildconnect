@@ -105,7 +105,7 @@ import { matchesSearch } from '@/lib/search-match'
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty'
+type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty' | 'pace'
 
 type Lender = {
   id: string
@@ -129,12 +129,14 @@ const CATEGORY_LABELS: Record<LenderCategory, string> = {
   contractor_pos: 'Contractor POS',
   personal_loans: 'Personal Loans',
   solar_hi_specialty: 'Solar & HI Specialty',
+  pace: 'PACE Financing',
 }
 
 const CATEGORY_KEYS: Record<LenderCategory, string> = {
   contractor_pos: 'financing_category_contractor_pos',
   personal_loans: 'financing_category_personal_loans',
   solar_hi_specialty: 'financing_category_solar_hi_specialty',
+  pace: 'financing_category_pace',
 }
 
 const MASTER_KEY = 'financing_enabled'
@@ -153,6 +155,7 @@ function categoryBadge(category: LenderCategory) {
     contractor_pos: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     personal_loans: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
     solar_hi_specialty: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    pace: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
   }
   return (
     <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', map[category])}>
@@ -288,6 +291,7 @@ export default function AdminFinancingPage() {
       contractor_pos: 0,
       personal_loans: 0,
       solar_hi_specialty: 0,
+      pace: 0,
     }
     let active = 0
     for (const l of lenders) {
@@ -479,6 +483,7 @@ export default function AdminFinancingPage() {
       if (v === 'personal_loans' || v === 'personal loans') return 'personal_loans'
       if (v === 'solar_hi_specialty' || v === 'solar & hi specialty' || v === 'solar hi specialty')
         return 'solar_hi_specialty'
+      if (v === 'pace' || v === 'pace financing') return 'pace'
       return null
     }
 
@@ -668,6 +673,7 @@ export default function AdminFinancingPage() {
                       <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
                       <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
                       <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                      <SelectItem value="pace">{CATEGORY_LABELS.pace}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -929,6 +935,7 @@ export default function AdminFinancingPage() {
                   <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
                   <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
                   <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                  <SelectItem value="pace">{CATEGORY_LABELS.pace}</SelectItem>
                 </SelectContent>
               </Select>
               <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
@@ -974,9 +981,10 @@ export default function AdminFinancingPage() {
                   <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
                   <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
                   <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                  <SelectItem value="pace">{CATEGORY_LABELS.pace}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Contractor POS = lender pays merchant fee. Personal Loans = direct-to-consumer. Solar & HI Specialty = solar or home improvement specialty partners.</p>
+              <p className="text-xs text-muted-foreground">Contractor POS = lender pays merchant fee. Personal Loans = direct-to-consumer. Solar & HI Specialty = solar or home improvement specialty partners. PACE Financing = repaid via property tax assessment (Property Assessed Clean Energy).</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="add-lender-email">Contact email (optional)</Label>
@@ -1047,6 +1055,7 @@ export default function AdminFinancingPage() {
                     <SelectItem value="contractor_pos">{CATEGORY_LABELS.contractor_pos}</SelectItem>
                     <SelectItem value="personal_loans">{CATEGORY_LABELS.personal_loans}</SelectItem>
                     <SelectItem value="solar_hi_specialty">{CATEGORY_LABELS.solar_hi_specialty}</SelectItem>
+                    <SelectItem value="pace">{CATEGORY_LABELS.pace}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1092,7 +1101,7 @@ export default function AdminFinancingPage() {
           <DialogHeader>
             <DialogTitle>Import lenders from CSV</DialogTitle>
             <DialogDescription>
-              Header row required: <code className="rounded bg-muted px-1 py-0.5 text-xs">name,category,contact_email,notes,sort_order</code>. Category accepts the enum value (contractor_pos / personal_loans / solar_hi_specialty) or the human label.
+              Header row required: <code className="rounded bg-muted px-1 py-0.5 text-xs">name,category,contact_email,notes,sort_order</code>. Category accepts the enum value (contractor_pos / personal_loans / solar_hi_specialty / pace) or the human label.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
