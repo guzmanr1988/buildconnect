@@ -984,7 +984,7 @@ export default function AdminFinancingPage() {
                   <SelectItem value="pace">{CATEGORY_LABELS.pace}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Contractor POS = lender pays merchant fee. Personal Loans = direct-to-consumer. Solar & HI Specialty = solar or home improvement specialty partners.</p>
+              <p className="text-xs text-muted-foreground">Contractor POS = lender pays merchant fee. Personal Loans = direct-to-consumer. Solar & HI Specialty = solar or home improvement specialty partners. PACE Financing = repaid via property tax assessment (Property Assessed Clean Energy).</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="add-lender-email">Contact email (optional)</Label>
