@@ -72,6 +72,7 @@ import AdminMessagesPage from '@/features/admin/pages/messages'
 import AdminTutorialsPage from '@/features/admin/pages/tutorials'
 import AdminActivityPage from '@/features/admin/pages/activity'
 import AdminFinancingPage from '@/features/admin/pages/financing'
+import AdminFinancingApplicationDetail from '@/features/admin/pages/financing-application-detail'
 
 export const router = createBrowserRouter([
   {
@@ -186,6 +187,11 @@ export const router = createBrowserRouter([
           // for master/category gates. Edge Fn admin-create-approval already
           // deployed; this surface drives the lenders registry + approval set.
           { path: 'financing', element: <AdminFinancingPage />, handle: { title: 'Admin · Financing' } },
+          // TEMP admin manual-stepper for financing lifecycle demo (Rod-direct
+          // 2026-05-18). Pre-launch hack so admin can advance/rewind any
+          // application's state for walking the customer demo. Real lender
+          // integration owns this transition path post-launch.
+          { path: 'financing-applications/:appId', element: <AdminFinancingApplicationDetail />, handle: { title: 'Admin · Application stepper' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
         ],
       },
