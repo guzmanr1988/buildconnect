@@ -21,10 +21,13 @@ import { supabase } from '@/lib/supabase'
 //   false     → flag disabled OR fetch errored (fail-safe: hide the gated surface)
 //   true      → flag enabled, render
 //
+// Consumer-choice rule (pick the gate by intent):
+//   Entry-class hide   →  if (!flag) return null         // undefined+false both hide
+//   Navigate-class     →  if (flag === false) Navigate   // undefined stays on page
+//   Pass-through       →  pass flag down; child decides shape
+//
 // Default-undefined matters for pages with `Navigate` early-returns (apply.tsx,
 // status.tsx): we must not bounce a user mid-load before the flag resolves.
-// Entry-class callers (cards/badges) can collapse undefined+false into "hide"
-// with a simple `!enabled` check — falsy semantics still work.
 
 const SUBSCRIBE_TIMEOUT_MS = 8000
 
