@@ -113,6 +113,8 @@ type Lender = {
   category: LenderCategory
   contact_email: string | null
   notes: string | null
+  apply_url: string | null
+  apply_instructions: string | null
   sort_order: number
   active: boolean
   created_at: string
@@ -207,12 +209,16 @@ export default function AdminFinancingPage() {
     category: LenderCategory
     contact_email: string
     notes: string
+    apply_url: string
+    apply_instructions: string
     sort_order: number
   }>({
     name: '',
     category: 'contractor_pos',
     contact_email: '',
     notes: '',
+    apply_url: '',
+    apply_instructions: '',
     sort_order: 0,
   })
 
@@ -276,7 +282,7 @@ export default function AdminFinancingPage() {
       list = list.filter((l) =>
         matchesSearch({
           query: search,
-          fields: [l.name, l.category, l.contact_email ?? '', l.notes ?? ''],
+          fields: [l.name, l.category, l.contact_email ?? '', l.notes ?? '', l.apply_instructions ?? ''],
           ids: [l.id],
         }),
       )
@@ -395,6 +401,8 @@ export default function AdminFinancingPage() {
         category: newLender.category,
         contact_email: newLender.contact_email.trim() || null,
         notes: newLender.notes.trim() || null,
+        apply_url: newLender.apply_url.trim() || null,
+        apply_instructions: newLender.apply_instructions.trim() || null,
         sort_order: newLender.sort_order,
         active: true,
       })
@@ -407,7 +415,7 @@ export default function AdminFinancingPage() {
     setLenders((prev) => [...prev, data as Lender])
     toast.success(`${name} added`)
     setAddOpen(false)
-    setNewLender({ name: '', category: 'contractor_pos', contact_email: '', notes: '', sort_order: 0 })
+    setNewLender({ name: '', category: 'contractor_pos', contact_email: '', notes: '', apply_url: '', apply_instructions: '', sort_order: 0 })
   }
 
   async function handleEditLender() {
@@ -424,6 +432,8 @@ export default function AdminFinancingPage() {
         category: editLender.category,
         contact_email: editLender.contact_email,
         notes: editLender.notes,
+        apply_url: editLender.apply_url,
+        apply_instructions: editLender.apply_instructions,
         sort_order: editLender.sort_order,
       })
       .eq('id', editLender.id)
@@ -457,8 +467,8 @@ export default function AdminFinancingPage() {
   }
 
   // CSV import (F5) — naive split parser; expects header row
-  // `name,category,contact_email,notes,sort_order`. Category column accepts
-  // the exact enum value or the human label (case-insensitive).
+  // `name,category,contact_email,notes,apply_url,apply_instructions,sort_order`.
+  // Category column accepts the exact enum value or the human label (case-insensitive).
   async function handleCsvImport() {
     if (csvSubmitting) return
     const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -475,6 +485,8 @@ export default function AdminFinancingPage() {
     }
     const emailIdx = header.indexOf('contact_email')
     const notesIdx = header.indexOf('notes')
+    const applyUrlIdx = header.indexOf('apply_url')
+    const applyInstructionsIdx = header.indexOf('apply_instructions')
     const sortIdx = header.indexOf('sort_order')
 
     function normCategory(s: string): LenderCategory | null {
@@ -501,6 +513,8 @@ export default function AdminFinancingPage() {
         category: cat,
         contact_email: emailIdx >= 0 ? cells[emailIdx] ?? null : null,
         notes: notesIdx >= 0 ? cells[notesIdx] ?? null : null,
+        apply_url: applyUrlIdx >= 0 ? (cells[applyUrlIdx] || null) : null,
+        apply_instructions: applyInstructionsIdx >= 0 ? (cells[applyInstructionsIdx] || null) : null,
         sort_order: sortIdx >= 0 ? Number(cells[sortIdx] ?? 0) || 0 : 0,
         active: true,
       })
@@ -1008,6 +1022,28 @@ export default function AdminFinancingPage() {
               />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="add-lender-apply-url">Apply URL (optional)</Label>
+              <Input
+                id="add-lender-apply-url"
+                type="url"
+                value={newLender.apply_url}
+                onChange={(e) => setNewLender({ ...newLender, apply_url: e.target.value })}
+                placeholder="https://lender.com/apply"
+              />
+              <p className="text-xs text-muted-foreground">HTTPS only; empty for manual-referral lenders.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-lender-apply-instructions">Apply instructions (optional)</Label>
+              <Textarea
+                id="add-lender-apply-instructions"
+                value={newLender.apply_instructions}
+                onChange={(e) => setNewLender({ ...newLender, apply_instructions: e.target.value })}
+                placeholder="e.g. Provide your contractor: BuildConnect Network · Vendor ID: VND-XXXX"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">Shown to homeowner on the lender card; supports multi-line.</p>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="add-lender-sort">Sort order</Label>
               <Input
                 id="add-lender-sort"
@@ -1078,6 +1114,28 @@ export default function AdminFinancingPage() {
                 />
               </div>
               <div className="space-y-1">
+                <Label htmlFor="edit-lender-apply-url">Apply URL</Label>
+                <Input
+                  id="edit-lender-apply-url"
+                  type="url"
+                  value={editLender.apply_url ?? ''}
+                  onChange={(e) => setEditLender({ ...editLender, apply_url: e.target.value || null })}
+                  placeholder="https://lender.com/apply"
+                />
+                <p className="text-xs text-muted-foreground">HTTPS only; empty for manual-referral lenders.</p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-lender-apply-instructions">Apply instructions</Label>
+                <Textarea
+                  id="edit-lender-apply-instructions"
+                  value={editLender.apply_instructions ?? ''}
+                  onChange={(e) => setEditLender({ ...editLender, apply_instructions: e.target.value || null })}
+                  placeholder="e.g. Provide your contractor: BuildConnect Network · Vendor ID: VND-XXXX"
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">Shown to homeowner on the lender card; supports multi-line.</p>
+              </div>
+              <div className="space-y-1">
                 <Label htmlFor="edit-lender-sort">Sort order</Label>
                 <Input
                   id="edit-lender-sort"
@@ -1101,14 +1159,14 @@ export default function AdminFinancingPage() {
           <DialogHeader>
             <DialogTitle>Import lenders from CSV</DialogTitle>
             <DialogDescription>
-              Header row required: <code className="rounded bg-muted px-1 py-0.5 text-xs">name,category,contact_email,notes,sort_order</code>. Category accepts the enum value (contractor_pos / personal_loans / solar_hi_specialty / pace) or the human label.
+              Header row required: <code className="rounded bg-muted px-1 py-0.5 text-xs">name,category,contact_email,notes,apply_url,apply_instructions,sort_order</code>. Category accepts the enum value (contractor_pos / personal_loans / solar_hi_specialty / pace) or the human label. apply_url + apply_instructions are optional; leave empty for manual-referral lenders.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Textarea
               value={csvText}
               onChange={(e) => setCsvText(e.target.value)}
-              placeholder={'name,category,contact_email,notes,sort_order\nNewLender,personal_loans,partner@example.com,Notes here,100'}
+              placeholder={'name,category,contact_email,notes,apply_url,apply_instructions,sort_order\nNewLender,personal_loans,partner@example.com,Notes here,https://lender.com/apply,Provide contractor: BuildConnect Network,100'}
               rows={10}
               className="font-mono text-xs"
             />
