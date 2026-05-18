@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlagOnce } from '@/lib/financing/hooks/use-feature-flag'
 import { adapterDisplayName, statusLabel, statusTone } from '@/lib/financing/display'
 import type { FinancingApplicationStatus } from '@/lib/financing/adapters/_contract'
 
@@ -69,13 +69,14 @@ export function FinancingStatusPage() {
   const { applicationId } = useParams<{ applicationId: string }>()
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
+  const financingEnabled = useFeatureFlagOnce('financing_enabled')
   const [application, setApplication] = useState<ApplicationRow | null>(null)
   const [financingProfile, setFinancingProfile] = useState<FinancingProfileRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
-    if (!isFinancingEnabled() || !profile?.id || !applicationId) return
+    if (financingEnabled !== true || !profile?.id || !applicationId) return
     let cancelled = false
     void Promise.all([
       supabase
@@ -103,9 +104,10 @@ export function FinancingStatusPage() {
     return () => {
       cancelled = true
     }
-  }, [applicationId, profile?.id])
+  }, [applicationId, profile?.id, financingEnabled])
 
-  if (!isFinancingEnabled()) return <Navigate to="/home" replace />
+  if (financingEnabled === undefined) return null
+  if (financingEnabled === false) return <Navigate to="/home" replace />
   if (!profile) return <Navigate to="/login" replace />
 
   const tone = application ? statusTone(application.status) : 'neutral'

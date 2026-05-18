@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { getFinancingApprovalByApplicationId } from '@/lib/api/financing'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import {
   useFinancingApplication,
   useFinancingApplicationByProject,
@@ -46,14 +46,15 @@ interface ProjectScopedProps {
 // flag off, renders the fallback (preserves pre-Phase-2 'Requested/Not
 // needed' badge UX).
 export function ProjectFinancingBadge({ projectId, fallback }: ProjectScopedProps) {
-  const { data: app } = useFinancingApplicationByProject(projectId)
+  const enabled = useFeatureFlag('financing_enabled')
+  const { data: app } = useFinancingApplicationByProject(projectId, enabled)
   const { data: approval } = useQuery({
     queryKey: ['financing-approval', app?.id],
-    enabled: isFinancingEnabled() && !!app?.id,
+    enabled: enabled && !!app?.id,
     queryFn: () => (app?.id ? getFinancingApprovalByApplicationId(app.id) : null),
   })
 
-  if (!isFinancingEnabled() || !app) return <>{fallback ?? null}</>
+  if (!enabled || !app) return <>{fallback ?? null}</>
 
   const amountSuffix = approval?.envelope_amount_cents != null
     ? ` ${formatCentsAsUsd(approval.envelope_amount_cents)}`
@@ -73,9 +74,10 @@ interface ApplicationScopedProps {
 // Customer-scoped badge: looks up by bcApplicationId via the active
 // adapter. Used by helios's /financing/status/:id and home page card.
 export function ApplicationFinancingBadge({ bcApplicationId }: ApplicationScopedProps) {
-  const { data } = useFinancingApplication(bcApplicationId)
+  const enabled = useFeatureFlag('financing_enabled')
+  const { data } = useFinancingApplication(bcApplicationId, enabled)
 
-  if (!isFinancingEnabled() || !data) return null
+  if (!enabled || !data) return null
 
   const amountSuffix = data.approvedAmountCents != null
     ? ` ${formatCentsAsUsd(data.approvedAmountCents)}`
