@@ -362,7 +362,7 @@ export default function AdminVendorDetail() {
             <CardContent className="p-5 text-sm text-muted-foreground">No products configured yet.</CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {vendorCatalogItems.map((ci) => {
               const svc = vendorCatalogServices.find((s) => s.serviceId === ci.category)
               const activeCount = svc?.enabled
@@ -370,17 +370,12 @@ export default function AdminVendorDetail() {
                 : 0
               return (
                 <Card key={ci.id} className="rounded-xl" data-admin-vendor-product={ci.id}>
-                  <CardContent className="p-3 flex flex-col gap-2 h-full">
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="font-medium text-foreground text-sm truncate">{ci.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize truncate">
-                        {CATEGORY_LABELS[ci.category] ?? ci.category}
-                      </p>
-                    </div>
-                    <div className="flex justify-end mt-auto">
+                  <CardContent className="p-2.5 space-y-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="font-medium text-foreground text-sm truncate flex-1">{ci.name}</p>
                       <span
                         className={cn(
-                          'inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                          'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
                           activeCount > 0
                             ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
                             : 'bg-muted text-muted-foreground',
@@ -390,6 +385,9 @@ export default function AdminVendorDetail() {
                         {activeCount} active
                       </span>
                     </div>
+                    <p className="text-[11px] text-muted-foreground capitalize truncate">
+                      {CATEGORY_LABELS[ci.category] ?? ci.category}
+                    </p>
                   </CardContent>
                 </Card>
               )
