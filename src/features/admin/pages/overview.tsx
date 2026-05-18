@@ -43,7 +43,7 @@ import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { isFinancingEnabled } from '@/lib/financing/feature-flag'
+import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { getAdminFinancingStats } from '@/lib/api/financing'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
 
@@ -83,6 +83,7 @@ const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').le
 
 export default function OverviewPage() {
   const navigate = useNavigate()
+  const financingEnabled = useFeatureFlag('financing_enabled')
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
 
   // Phase 5: admin analytics fetched from Supabase at mount (seeded by
@@ -210,7 +211,7 @@ export default function OverviewPage() {
   // the card renders cleanly during the pre-launch ramp.
   const { data: financingStats } = useQuery({
     queryKey: ['admin-financing-stats'],
-    enabled: isFinancingEnabled(),
+    enabled: financingEnabled === true,
     queryFn: getAdminFinancingStats,
   })
 
@@ -514,7 +515,7 @@ export default function OverviewPage() {
           totals (reserved / receivable / realized). Dark unless
           VITE_FINANCING_ENABLED=true; renders zeros if migration 047
           hasn't been applied yet. */}
-      {isFinancingEnabled() && (
+      {financingEnabled === true && (
         <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible">
           <Card className="rounded-xl shadow-sm hover:shadow-md transition">
             <CardHeader>
