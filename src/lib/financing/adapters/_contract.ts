@@ -1,5 +1,6 @@
-// FinancingBankAdapter contract — Phase-2 scaffolding (dark, behind
-// VITE_FINANCING_ENABLED). One adapter per bank. All adapters share this
+// FinancingBankAdapter contract — Phase-2 scaffolding (dark, gated by
+// feature_flags.financing_enabled DB row via useFeatureFlag hook). One
+// adapter per bank. All adapters share this
 // shape so swapping FINANCING_BANK env value is a one-line config change —
 // per the reversibility contract in docs/financing-architecture.md §(j).
 //
