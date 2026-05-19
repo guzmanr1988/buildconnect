@@ -742,18 +742,32 @@ export default function AdminFinancingPage() {
                       key={lender.id}
                       data-testid="admin-financing-lender-row"
                       data-target-lender-id={lender.id}
+                      onClick={() => setEditLender({ ...lender })}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setEditLender({ ...lender })
+                        }
+                      }}
+                      aria-label={`Edit ${lender.name}`}
+                      className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <CardContent className="space-y-3 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <Checkbox
-                                checked={selectedIds.has(lender.id)}
-                                onCheckedChange={() => toggleSelect(lender.id)}
-                                data-testid="admin-financing-bulk-checkbox"
-                                data-target-lender-id={lender.id}
-                                aria-label={`Select ${lender.name}`}
-                              />
+                              <span onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedIds.has(lender.id)}
+                                  onCheckedChange={() => toggleSelect(lender.id)}
+                                  data-testid="admin-financing-bulk-checkbox"
+                                  data-target-lender-id={lender.id}
+                                  aria-label={`Select ${lender.name}`}
+                                />
+                              </span>
                               <span className="font-medium">{lender.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -764,22 +778,33 @@ export default function AdminFinancingPage() {
                               <div className="text-xs text-muted-foreground">{lender.contact_email}</div>
                             )}
                           </div>
-                          <Switch
-                            checked={lender.active}
-                            onCheckedChange={(next) => handleLenderToggle(lender.id, next)}
-                            data-testid="admin-financing-lender-toggle"
-                            data-target-lender-id={lender.id}
-                            aria-label={`Toggle ${lender.name}`}
-                          />
+                          <span onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={lender.active}
+                              onCheckedChange={(next) => handleLenderToggle(lender.id, next)}
+                              data-testid="admin-financing-lender-toggle"
+                              data-target-lender-id={lender.id}
+                              aria-label={`Toggle ${lender.name}`}
+                            />
+                          </span>
                         </div>
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditLender({ ...lender })} aria-label={`Edit ${lender.name}`}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditLender({ ...lender })
+                            }}
+                            aria-label={`Edit ${lender.name}`}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               setDeleteTyped('')
                               setDeleteTarget(lender)
                             }}
@@ -830,8 +855,20 @@ export default function AdminFinancingPage() {
                               key={lender.id}
                               data-testid="admin-financing-lender-row"
                               data-target-lender-id={lender.id}
+                              onClick={() => setEditLender({ ...lender })}
+                              onKeyDown={(e) => {
+                                if (e.target !== e.currentTarget) return
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setEditLender({ ...lender })
+                                }
+                              }}
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`Edit ${lender.name}`}
+                              className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              <TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
                                 <Checkbox
                                   checked={selectedIds.has(lender.id)}
                                   onCheckedChange={() => toggleSelect(lender.id)}
@@ -851,7 +888,7 @@ export default function AdminFinancingPage() {
                                 {lender.contact_email ?? '—'}
                               </TableCell>
                               <TableCell className="text-muted-foreground">{lender.sort_order}</TableCell>
-                              <TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
                                 <Switch
                                   checked={lender.active}
                                   onCheckedChange={(next) => handleLenderToggle(lender.id, next)}
@@ -865,7 +902,10 @@ export default function AdminFinancingPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => setEditLender({ ...lender })}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setEditLender({ ...lender })
+                                    }}
                                     title="Edit"
                                     aria-label={`Edit ${lender.name}`}
                                   >
@@ -874,7 +914,8 @@ export default function AdminFinancingPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.stopPropagation()
                                       setDeleteTyped('')
                                       setDeleteTarget(lender)
                                     }}
