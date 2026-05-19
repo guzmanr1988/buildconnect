@@ -27,6 +27,13 @@ export interface LeadStageMeta {
   // values across both consumers (lead-workflow tiles + dashboard
   // summary row) per #103 single-source-of-truth.
   color: string
+  // Card-body background tint paired with `color` (icon-square). Used
+  // by PipelineStatRow on admin/workflow + vendor/dashboard + vendor/
+  // lead-workflow pipeline-preview row. Lifted from admin/workflow.tsx
+  // inline canonical values for cross-surface visual parity.
+  bgColor: string
+  // Card border tint paired with bgColor. Same source/scope as bgColor.
+  borderColor: string
   // Ship #310 — attention-grabbing pulse animation per Rodolfo
   // "add an animation on new leads and sold". true = renders the
   // colored-square with animate-pulse on both consumer surfaces
@@ -42,13 +49,16 @@ export interface LeadStageMeta {
 // from the original lead-workflow.tsx tile color props. Pulse field
 // added in #310 — attention-grabbing animation on the active-action
 // stages (New Leads needs vendor attention to confirm; Sold Active
-// is in-progress work surface).
+// is in-progress work surface). bgColor + borderColor added in
+// PR-275 — single-SoT for the PipelineStatRow pipeline-preview row
+// shared across admin/workflow + vendor/dashboard + vendor/lead-
+// workflow; canonical values lifted from admin/workflow.tsx inline.
 export const LEAD_STAGES: LeadStageMeta[] = [
-  { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-500', pulse: true },
-  { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck, color: 'bg-emerald-500' },
-  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-primary', pulse: true },
-  { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-500' },
-  { key: 'cancelled', title: 'Cancelled Projects', icon: X, color: 'bg-destructive' },
+  { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-500', bgColor: 'bg-amber-50 dark:bg-amber-950/20', borderColor: 'border-amber-300', pulse: true },
+  { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck, color: 'bg-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', borderColor: 'border-emerald-300' },
+  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-primary', bgColor: 'bg-primary/5 dark:bg-primary/10', borderColor: 'border-primary/30', pulse: true },
+  { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-500', bgColor: 'bg-slate-50 dark:bg-slate-950/20', borderColor: 'border-slate-300' },
+  { key: 'cancelled', title: 'Cancelled Projects', icon: X, color: 'bg-destructive', bgColor: 'bg-destructive/5 dark:bg-destructive/10', borderColor: 'border-destructive/30' },
 ]
 
 // By-key lookup maps for consumers that render tiles in fixed order

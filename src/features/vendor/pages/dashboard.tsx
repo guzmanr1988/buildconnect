@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
   Inbox, DollarSign, CalendarCheck, Target, MapPin, BadgeCheck,
@@ -24,9 +24,9 @@ import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
-import { LEAD_STAGES, useVendorLeadStages } from '@/lib/vendor-lead-stages'
+import { LEAD_STAGES, STAGE_PULSE_BY_KEY, useVendorLeadStages } from '@/lib/vendor-lead-stages'
+import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { SERVICE_CATALOG } from '@/lib/constants'
-import { cn } from '@/lib/utils'
 import type { Lead } from '@/types'
 
 // Ship #293 — VendorDashboard slimmed down per Rodolfo "more clean
@@ -357,45 +357,23 @@ export default function VendorDashboard() {
       {/* Ship #305 — Lead Workflow at-a-glance block. Relocated from
           inside Performance Stats card (#303 original placement) to
           standalone position directly under Vendor Profile per Rodolfo
-          "move leadflow under vendor info". Standalone block with
-          subtle bg-muted/30 wrapper for visual cohesion without
-          competing with neighbor Card primitives. Same source-of-truth
-          via useVendorLeadStages hook (#103 single-extraction
-          preserved). */}
+          "move leadflow under vendor info".
+          PR-275 — upgraded from the compact icon-strip to the full
+          PipelineStatRow primitive shared with admin/workflow and
+          vendor/lead-workflow. Same SoT via useVendorLeadStages
+          (#103 preserved). hrefForStage maintains the #310 deep-link
+          contract via Link wrap. Account_rep role hides 'new'
+          (admin-confirms-bookings out-of-role). */}
       <motion.div variants={item}>
         <div className="rounded-xl bg-muted/30 dark:bg-muted/10 px-3 py-3 sm:px-4 sm:py-4">
           <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Lead Workflow</p>
-          <div className={cn('grid gap-2 sm:gap-3', profile?.role === 'account_rep' ? 'grid-cols-4' : 'grid-cols-5')}>
-            {LEAD_STAGES.filter((s) => profile?.role !== 'account_rep' || s.key !== 'new').map((stage) => {
-              const StageIcon = stage.icon
-              return (
-                <Link
-                  key={stage.key}
-                  // Ship #310 — deep-link via ?stage=<key> so /vendor/
-                  // lead-workflow auto-opens the corresponding tile on
-                  // mount per Rodolfo "when clicked take it straight to
-                  // the lead that corresponds tab".
-                  to={`/vendor/lead-workflow?stage=${stage.key}`}
-                  className="group flex flex-col items-center gap-1.5 rounded-lg p-2 hover:bg-background/60 transition"
-                  aria-label={`${stage.title}: ${leadStageCounts[stage.key]}`}
-                  data-stage-key={stage.key}
-                  data-stage-count={leadStageCounts[stage.key]}
-                >
-                  {/* Ship #306 — colored square per stage, lifted from
-                      lead-workflow.tsx tile color SoT (STAGE_COLOR_BY_KEY).
-                      Mirrors the tile-icon visual treatment so the at-a-
-                      glance row reads as a preview of the full Lead
-                      Workflow page.
-                      Ship #310 — pulse animation on active-action stages
-                      (New Leads + Sold Active per LEAD_STAGES.pulse). */}
-                  <div className={cn('rounded-md p-1.5', stage.color, stage.pulse && 'animate-pulse')}>
-                    <StageIcon className="h-4 w-4 text-white" />
-                  </div>
-                  <span className="text-base sm:text-lg font-bold font-heading">{leadStageCounts[stage.key]}</span>
-                </Link>
-              )
-            })}
-          </div>
+          <PipelineStatRow
+            stages={LEAD_STAGES.filter((s) => profile?.role !== 'account_rep' || s.key !== 'new')}
+            counts={leadStageCounts}
+            hrefForStage={(k) => `/vendor/lead-workflow?stage=${k}`}
+            pulseByKey={STAGE_PULSE_BY_KEY}
+            testIdPrefix="vendor-pipeline-stage"
+          />
         </div>
       </motion.div>
 
