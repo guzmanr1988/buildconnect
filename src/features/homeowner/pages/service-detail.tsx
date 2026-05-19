@@ -228,11 +228,14 @@ export function ServiceDetailPage() {
   // service-id flips can still force a remount if needed.
   const areaMeasureKey = 0
   const [roofPermit, setRoofPermit] = useState<'yes' | 'no' | null>(null)
-  const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(
-    editItemForService?.roofAddonLinearFt
-      ? Object.fromEntries(Object.entries(editItemForService.roofAddonLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
-      : {}
-  )
+  const [addonLinearFt, setAddonLinearFt] = useState<Record<string, string>>(() => {
+    const roof = editItemForService?.roofAddonLinearFt as Record<string, number> | undefined
+    const generic = editItemForService?.addonLinearFt as Record<string, number> | undefined
+    const merged: Record<string, string> = {}
+    if (roof) for (const [k, v] of Object.entries(roof)) merged[k] = String(v)
+    if (generic) for (const [k, v] of Object.entries(generic)) merged[k] = String(v)
+    return merged
+  })
   const [subGroupExpanded, setSubGroupExpanded] = useState<Record<string, boolean>>({})
   const [subGroupLinearFt, setSubGroupLinearFt] = useState<Record<string, string>>(
     editItemForService?.subGroupLinearFt
@@ -1392,6 +1395,42 @@ export function ServiceDetailPage() {
                   .filter(
                     (option) =>
                       selected.includes(option.id) &&
+                      (option.subGroups?.length ?? 0) === 0 &&
+                      !ADDON_LINEAR_FT_IDS.includes(option.id),
+                  )
+                  .map((option) => (
+                    <div
+                      key={`${group.id}-${option.id}-linearft`}
+                      className="ml-2 sm:ml-4 mt-2 flex items-center gap-2"
+                      data-testid="config-option-linear-feet-row"
+                      data-option-id={option.id}
+                    >
+                      <label
+                        htmlFor={`option-linear-feet-${option.id}`}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        Linear feet
+                      </label>
+                      <Input
+                        id={`option-linear-feet-${option.id}`}
+                        data-testid="config-option-linear-feet-input"
+                        data-option-id={option.id}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder="0"
+                        value={addonLinearFt[option.id] ?? ''}
+                        onChange={(e) =>
+                          setAddonLinearFt((prev) => ({ ...prev, [option.id]: e.target.value }))
+                        }
+                        className="h-9 w-24"
+                      />
+                    </div>
+                  ))}
+                {renderOptions
+                  .filter(
+                    (option) =>
+                      selected.includes(option.id) &&
                       (option.subGroups?.length ?? 0) > 0 &&
                       (subGroupExpanded[option.id] ?? true),
                   )
@@ -2112,6 +2151,15 @@ export function ServiceDetailPage() {
                 }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
+                ...((): { addonLinearFt?: Record<string, number> } => {
+                  const entries = Object.entries(addonLinearFt)
+                    .filter(([k]) => !ADDON_LINEAR_FT_IDS.includes(k))
+                    .map(([k, v]) => [k, Number(v) || 0] as const)
+                    .filter(([, n]) => n > 0)
+                  return entries.length > 0
+                    ? { addonLinearFt: Object.fromEntries(entries) }
+                    : {}
+                })(),
                 ...((): { subGroupLinearFt?: Record<string, number> } => {
                   const entries = Object.entries(subGroupLinearFt)
                     .map(([k, v]) => [k, Number(v) || 0] as const)

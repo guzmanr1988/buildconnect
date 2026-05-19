@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { ServiceConfig, OptionGroup } from '@/types'
 import { cn } from '@/lib/utils'
 import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
@@ -32,6 +33,7 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
   const [selections, setSelections] = useState<Record<string, string[]>>({})
   const [subGroupExpanded, setSubGroupExpanded] = useState<Record<string, boolean>>({})
   const [subGroupLinearFt, setSubGroupLinearFt] = useState<Record<string, string>>({})
+  const [optionLinearFt, setOptionLinearFt] = useState<Record<string, string>>({})
 
   const requiredGroups = service.optionGroups.filter((g) => g.required)
   const completedRequired = requiredGroups.filter(
@@ -84,6 +86,10 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
 
   function handleSubLinearFeetChange(parentOptionId: string, value: string) {
     setSubGroupLinearFt((prev) => ({ ...prev, [parentOptionId]: value }))
+  }
+
+  function handleOptionLinearFeetChange(optionId: string, value: string) {
+    setOptionLinearFt((prev) => ({ ...prev, [optionId]: value }))
   }
 
   return (
@@ -172,6 +178,39 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                     )
                   })}
                 </div>
+                {group.options
+                  .filter(
+                    (option) =>
+                      selected.includes(option.id) &&
+                      (option.subGroups?.length ?? 0) === 0,
+                  )
+                  .map((option) => (
+                    <div
+                      key={`${group.id}-${option.id}-linearft`}
+                      className="ml-2 sm:ml-4 mt-2 flex items-center gap-2"
+                      data-testid="config-option-linear-feet-row"
+                      data-option-id={option.id}
+                    >
+                      <label
+                        htmlFor={`option-linear-feet-${option.id}`}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        Linear feet
+                      </label>
+                      <Input
+                        id={`option-linear-feet-${option.id}`}
+                        data-testid="config-option-linear-feet-input"
+                        data-option-id={option.id}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder="0"
+                        value={optionLinearFt[option.id] ?? ''}
+                        onChange={(e) => handleOptionLinearFeetChange(option.id, e.target.value)}
+                        className="h-9 w-24"
+                      />
+                    </div>
+                  ))}
                 {group.options
                   .filter(
                     (option) =>
