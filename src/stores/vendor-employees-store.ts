@@ -33,8 +33,13 @@ export interface VendorEmployee {
 
 export type VendorEmployeeInput = Omit<VendorEmployee, 'id' | 'createdAt' | 'updatedAt'>
 
-// Demo vendors stay in-memory — no Supabase row for mock IDs.
-const DEMO_VENDOR_IDS = new Set(['v-1', 'v-2', 'v-3'])
+// Vendor IDs that aren't real Supabase UUIDs (demo fixtures, ad-hoc
+// walker rows like v-fix-suspended) stay in-memory — no Supabase
+// round-trip. Previously a closed Set of {v-1,v-2,v-3} which 400'd on
+// any non-canonical mock id; widened to a UUID-shape probe so the gate
+// covers every non-UUID vendor_id passed by upstream callers.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isLocalVendorId = (id: string) => !UUID_RE.test(id)
 
 const SEED_EMPLOYEES: Record<string, VendorEmployee[]> = {
   'v-1': [
@@ -360,7 +365,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   hydratedVendors: new Set(),
 
   hydrateVendor: async (vendorId) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) return
+    if (isLocalVendorId(vendorId)) return
     if (get().hydratedVendors.has(vendorId)) return
     const { data } = await supabase
       .from('vendor_employees')
@@ -376,7 +381,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   hydrateAdmin: async (vendorId) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) return
+    if (isLocalVendorId(vendorId)) return
     if (get().hydratedVendors.has(vendorId)) return
     const { data } = await supabase
       .from('vendor_employees')
@@ -392,7 +397,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   addEmployee: async (vendorId, input) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) {
+    if (isLocalVendorId(vendorId)) {
       const now = new Date().toISOString()
       const next: VendorEmployee = { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
       set((state) => ({
@@ -418,7 +423,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   updateEmployee: async (vendorId, id, patch) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) {
+    if (isLocalVendorId(vendorId)) {
       set((state) => ({
         employeesByVendor: {
           ...state.employeesByVendor,
@@ -448,7 +453,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   deactivateEmployee: async (vendorId, id) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) {
+    if (isLocalVendorId(vendorId)) {
       set((state) => ({
         employeesByVendor: {
           ...state.employeesByVendor,
@@ -475,7 +480,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   reactivateEmployee: async (vendorId, id) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) {
+    if (isLocalVendorId(vendorId)) {
       set((state) => ({
         employeesByVendor: {
           ...state.employeesByVendor,
@@ -502,7 +507,7 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
   },
 
   removeEmployee: async (vendorId, id) => {
-    if (DEMO_VENDOR_IDS.has(vendorId)) {
+    if (isLocalVendorId(vendorId)) {
       set((state) => ({
         employeesByVendor: {
           ...state.employeesByVendor,
