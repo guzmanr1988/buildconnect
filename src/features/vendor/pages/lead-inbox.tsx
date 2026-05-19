@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { sqftToSquares } from '@/lib/option-metadata'
-import { useProjectsStore } from '@/stores/projects-store'
+import { useProjectsStore, fetchProjectIdDocument } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
@@ -198,6 +198,20 @@ export default function LeadInbox() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
   const [repRescheduleLeadId, setRepRescheduleLeadId] = useState<string | null>(null)
+  // PR-273 — id_document fetched on-demand only for the currently-expanded
+  // lead (no longer hydrated wide). Single-slot cache; resets per expand.
+  const [expandedIdDocument, setExpandedIdDocument] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    setExpandedIdDocument(undefined)
+    if (!expandedId) return
+    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === expandedId)
+    if (!sp) return
+    let cancelled = false
+    fetchProjectIdDocument(sp.id).then((dataUrl) => {
+      if (!cancelled) setExpandedIdDocument(dataUrl)
+    })
+    return () => { cancelled = true }
+  }, [expandedId, sentProjects])
 
   // Ship #187 (Rodolfo-direct 2026-04-21) — group /vendor/leads by
   // service_category. Empty categories hidden (vendors who don't
@@ -1038,16 +1052,16 @@ export default function LeadInbox() {
                         if (!sp) return null
                         return (
                           <>
-                            {sp.idDocument && lead.status === 'confirmed' && (
+                            {expandedIdDocument && lead.status === 'confirmed' && (
                               <div className="rounded-lg border bg-muted/30 p-3">
                                 <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-2">Customer ID</p>
                                 <div className="flex items-end gap-3">
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); setIdPreview({ dataUrl: sp.idDocument!, name: lead.homeowner_name }) }}
+                                    onClick={(e) => { e.stopPropagation(); setIdPreview({ dataUrl: expandedIdDocument, name: lead.homeowner_name }) }}
                                     className="relative group w-20 h-14 rounded-lg overflow-hidden border cursor-pointer"
                                   >
-                                    <img src={sp.idDocument} alt="Customer ID" className="w-full h-full object-cover" />
+                                    <img src={expandedIdDocument} alt="Customer ID" className="w-full h-full object-cover" />
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                                       <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
@@ -1056,7 +1070,7 @@ export default function LeadInbox() {
                                     variant="outline"
                                     size="sm"
                                     className="h-8 text-xs gap-1.5"
-                                    onClick={(e) => { e.stopPropagation(); downloadIdDocument(sp.idDocument!, lead.homeowner_name) }}
+                                    onClick={(e) => { e.stopPropagation(); downloadIdDocument(expandedIdDocument, lead.homeowner_name) }}
                                   >
                                     <Download className="h-3.5 w-3.5" />
                                     Download
