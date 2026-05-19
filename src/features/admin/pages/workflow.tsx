@@ -293,9 +293,20 @@ export default function WorkflowPage() {
           PR-275 — extracted to PipelineStatRow shared primitive
           (admin/workflow + vendor/dashboard + vendor/lead-workflow
           all consume now). Admin is informational (no click handler),
-          so PipelineStatRow falls through to its plain-<div> branch. */}
+          so PipelineStatRow falls through to its plain-<div> branch.
+          pulseByKey={{...all false}} suppresses the LEAD_STAGES.pulse
+          defaults (new + sold) so admin Pipeline Summary stays BYTE-
+          IDENTICAL to pre-PR-275 static treatment — Rod 20:06Z
+          directive framed admin-as-current-model ("vendor should
+          look like admin"), not "both surfaces richer". Cross-surface
+          pulse parity is a separate Rod-aesthetic decision queued
+          post-launch (kratos 1779151219359). */}
       <motion.div variants={item}>
-        <PipelineStatRow stages={LEAD_STAGES} counts={stageCounts} />
+        <PipelineStatRow
+          stages={LEAD_STAGES}
+          counts={stageCounts}
+          pulseByKey={{ new: false, confirmed: false, sold: false, completed: false, cancelled: false }}
+        />
       </motion.div>
 
       {/* Kanban Columns */}
