@@ -334,23 +334,22 @@ export default function LeadInbox() {
                     id={`lead-category-panel-${categoryId}`}
                     className="overflow-hidden"
                   >
-                    <div className="grid gap-4">
+                    <div className="grid gap-3">
                       {categoryLeads.map((lead) => {
             const isExpanded = expandedId === lead.id
             const packEntries = Object.entries(lead.pack_items)
+            const statusBorderClass =
+              lead.status === 'pending' ? 'border-l-4 border-l-amber-500'
+              : lead.status === 'confirmed' ? 'border-l-4 border-l-emerald-500'
+              : lead.status === 'rescheduled' ? 'border-l-4 border-l-sky-500'
+              : lead.status === 'completed' ? 'border-l-4 border-l-slate-400'
+              : lead.status === 'cancelled' ? 'border-l-4 border-l-red-500'
+              : lead.status === 'rejected' ? 'border-l-4 border-l-slate-400'
+              : 'border-l-4 border-l-slate-300'
 
             return (
               <motion.div key={lead.id} variants={item} data-lead-id={lead.id} data-lead-status={lead.status}>
-                {/* Ship #292 — drop inline shadow-sm/hover:shadow-md/transition
-                    overrides that masked the platform-wide floating-card
-                    default applied at the Card primitive level (#245).
-                    Card primitive provides shadow-md + transition-all +
-                    pointer-fine:hover:shadow-lg + pointer-fine:hover:
-                    -translate-y-0.5; per Rodolfo "same floating effect
-                    same rules" directive, no override needed. Inner
-                    nested Card (line 306) is intentionally flat per
-                    banked nested-inner-card flat-stance — left as-is. */}
-                <Card className="rounded-xl">
+                <Card className={cn('rounded-xl shadow-xl pointer-fine:hover:shadow-2xl pointer-fine:hover:-translate-y-1', statusBorderClass)}>
                   {/* Header - always visible */}
                   <button
                     type="button"
@@ -360,7 +359,7 @@ export default function LeadInbox() {
                     data-lead-expanded={isExpanded ? 'true' : 'false'}
                     onClick={() => setExpandedId(isExpanded ? null : lead.id)}
                   >
-                    <CardContent className="p-4 sm:p-5">
+                    <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
                           <AvatarInitials
@@ -370,8 +369,8 @@ export default function LeadInbox() {
                           />
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
-                            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 break-words">{lead.project}</p>
-                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            <p className="text-sm text-muted-foreground line-clamp-1 break-words">{lead.project}</p>
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <StatusBadge status={lead.status} label={resolveLeadStatusLabel(lead)} />
                               {profile?.role === 'account_rep' && repAcceptanceByLead[lead.id] === 'pending' && (
                                 <Badge className="text-[10px] bg-primary text-primary-foreground animate-pulse">New</Badge>
