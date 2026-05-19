@@ -64,6 +64,7 @@ type DbSubGroup = {
   id: string
   sub_group_id: string
   label: string
+  description: string | null
   required: boolean
   type: 'single' | 'multi'
   sort_order: number
@@ -102,6 +103,7 @@ function subGroupFromRow(r: DbSubGroup): OptionGroup {
   return {
     id: r.sub_group_id,
     label: r.label,
+    ...(r.description ? { description: r.description } : {}),
     required: r.required,
     type: r.type,
     options: (r.sub_options ?? [])
@@ -408,6 +410,7 @@ export async function createSubGroup(
     option_id: optionUuid,
     sub_group_id: subGroup.id,
     label: subGroup.label,
+    description: subGroup.description ?? null,
     required: subGroup.required,
     type: subGroup.type,
     sort_order: 999,
@@ -425,6 +428,7 @@ export async function updateSubGroup(
   const optionUuid = await resolveOptionUuid(serviceId, groupId, optionId)
   const dbPatch: Record<string, unknown> = {}
   if (patch.label !== undefined) dbPatch.label = patch.label
+  if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.required !== undefined) dbPatch.required = patch.required
   if (patch.type !== undefined) dbPatch.type = patch.type
   const { error } = await supabase

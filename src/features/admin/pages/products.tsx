@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -97,11 +98,12 @@ function serviceToForm(s: ServiceConfig): ServiceFormData {
 type GroupFormData = {
   id: string
   label: string
+  description: string
   required: boolean
   type: 'single' | 'multi'
 }
 
-const emptyGroupForm: GroupFormData = { id: '', label: '', required: true, type: 'single' }
+const emptyGroupForm: GroupFormData = { id: '', label: '', description: '', required: true, type: 'single' }
 
 type PriceUnit = 'flat' | 'square' | 'sqft' | 'linear_ft'
 type OptionFormData = { id: string; label: string; description: string; priceUnit: PriceUnit }
@@ -349,7 +351,7 @@ export default function ProductsAdminPage() {
   function openEditGroup(serviceId: string, group: OptionGroup) {
     setGroupContext(serviceId)
     setEditingGroup(group)
-    setGroupForm({ id: group.id, label: group.label, required: group.required, type: group.type })
+    setGroupForm({ id: group.id, label: group.label, description: '', required: group.required, type: group.type })
     setGroupDialogOpen(true)
   }
 
@@ -476,6 +478,7 @@ export default function ProductsAdminPage() {
     setSubGroupForm({
       id: subGroup.id,
       label: subGroup.label,
+      description: subGroup.description ?? '',
       required: subGroup.required,
       type: subGroup.type,
     })
@@ -492,14 +495,17 @@ export default function ProductsAdminPage() {
           editingSubGroupId,
           {
             label: subGroupForm.label,
+            description: subGroupForm.description.trim() || null,
             required: subGroupForm.required,
             type: subGroupForm.type,
           }
         )
       } else {
+        const trimmedDesc = subGroupForm.description.trim()
         const newSubGroup: OptionGroup = {
           id: subGroupForm.id,
           label: subGroupForm.label,
+          ...(trimmedDesc ? { description: trimmedDesc } : {}),
           required: subGroupForm.required,
           type: subGroupForm.type,
           options: [],
@@ -1535,6 +1541,17 @@ export default function ProductsAdminPage() {
                 placeholder="Color Options"
                 value={subGroupForm.label}
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, label: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="subgrp-description">Description (optional)</Label>
+              <Textarea
+                id="subgrp-description"
+                data-testid="admin-sub-menu-description-input"
+                placeholder="What the homeowner sees under this sub-menu — e.g. 'Choose a cabinet material.'"
+                value={subGroupForm.description}
+                onChange={(e) => setSubGroupForm((f) => ({ ...f, description: e.target.value }))}
+                rows={3}
               />
             </div>
             <div className="space-y-1.5">

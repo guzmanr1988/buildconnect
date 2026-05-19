@@ -1,0 +1,37 @@
+-- 060_sub_groups_description.sql
+-- Add description column to sub_groups so admin can attach a short
+-- explanatory blurb to each sub-menu (e.g. "Choose a cabinet material.")
+-- that the homeowner sees when the parent option is selected.
+--
+-- ROD-DIRECT 2026-05-19 (via kratos dispatch 1779210093770): empty
+-- sub-menus should still render on the homeowner side as selectable
+-- choices (no sub_options beneath them), and admin needs a description
+-- field on each sub-menu — the homeowner reads that copy when choosing.
+--
+-- column: description  text  NULL
+--   - Optional. Existing 4 cabinet sub_groups (Plywood / MDF / Hardboard /
+--     Veneered Board) have no description today; admin populates per-row
+--     via the Sub-Menu dialog at his cadence.
+--   - text NULL, no length cap, no default — matches sub_options.description
+--     pattern already in tree.
+--
+-- TRIGGER INTERACTION: trg_sub_groups_updated_at fires BEFORE UPDATE for
+-- any column diff, so editing description bumps updated_at. No audit-log
+-- trigger registered on sub_groups today (v1 intentional per
+-- feedback_audit_trigger_walker_validates_lifecycle_class); if description
+-- edits later need audit-capture, separate migration extends
+-- audit_table_change() to add a sub_groups branch + 2 idempotent triggers.
+--
+-- RLS: existing 4 policies on sub_groups (admin INSERT/UPDATE/DELETE,
+-- authenticated SELECT) cover the new column without change.
+--
+-- Pattern: PAT-apply pre-PR-open per kratos splits-by-class doctrine —
+-- column-add is greenfield + additive + reversibility-cheap. Mirrors 057
+-- enum-widen-ahead-of-PR timing. Sibling-axis pre-fire cross-check: hermes
+-- (spec) 1779210604719 + hephaestus (info_schema) 1779210620445 +
+-- apollo (source-read) 1779210675148. PAT-applied by hermes 2026-05-19
+-- 17:12Z; end-state confirmed (description text, is_nullable=YES, no
+-- default).
+
+alter table public.sub_groups
+  add column if not exists description text;
