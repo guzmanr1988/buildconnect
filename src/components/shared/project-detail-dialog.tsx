@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { User, Phone, Mail, MapPin, Calendar, Clock, UserCheck, RefreshCw, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
-import { useProjectsStore } from '@/stores/projects-store'
+import { useProjectsStore, fetchProjectIdDocument } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
@@ -78,6 +78,20 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   const [windowsExpanded, setWindowsExpanded] = useState(false)
   const [doorsExpanded, setDoorsExpanded] = useState(false)
   const [stormFrontsExpanded, setStormFrontsExpanded] = useState(false)
+  // PR-273 — id_document fetched on-demand (no longer hydrated wide).
+  // Resets per projectId; fires only for the sentProject path.
+  const [fetchedIdDocument, setFetchedIdDocument] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    setFetchedIdDocument(undefined)
+    if (!open || !projectId) return
+    const sp = sentProjects.find((p) => p.id === projectId)
+    if (!sp) return
+    let cancelled = false
+    fetchProjectIdDocument(projectId).then((dataUrl) => {
+      if (!cancelled) setFetchedIdDocument(dataUrl)
+    })
+    return () => { cancelled = true }
+  }, [open, projectId, sentProjects])
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -143,7 +157,10 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
         _repAssignedAt: sp.repAssignedAt ?? repAssignedAtByLead[leadKey],
         _rescheduleRequest: rescheduleRequestsByLead[leadKey],
         _cancellationRequest: cReq,
-        _idDocument: sp.idDocument,
+        // PR-273 — id_document loaded via lazy fetchProjectIdDocument
+        // effect (no longer hydrated wide). May be undefined briefly
+        // until fetch resolves.
+        _idDocument: fetchedIdDocument,
         // Ship #269 — homeowner.id snapshot for admin auditing /
         // dispute-support. Surfaces only when populated (post-#269
         // sendProject calls); legacy persisted entries fall through.
@@ -213,7 +230,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
       _idDocument: undefined,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides, leadConfirmedAtByLead, repAssignedAtByLead, rescheduleRequestsByLead, mockLeads, mockClosedSales])
+  }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides, leadConfirmedAtByLead, repAssignedAtByLead, rescheduleRequestsByLead, mockLeads, mockClosedSales, fetchedIdDocument])
 
   const commissionPct = resolvePct(selectedItem?.vendor)
 

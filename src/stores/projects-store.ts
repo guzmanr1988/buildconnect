@@ -23,6 +23,24 @@ function updateProject(id: string, fields: Record<string, unknown>) {
     .then(({ error }) => { if (error) console.error('[projects] update failed:', error.message) })
 }
 
+// On-demand fetch for the heavy base64 id_document column. The hydrate
+// path narrows it out (PR-273) to keep wide-select payload under the 8s
+// authenticated statement_timeout; ID-review surfaces (vendor lead-inbox
+// preview / admin project-detail-dialog) call this when the reviewer
+// actually opens the preview.
+export async function fetchProjectIdDocument(projectId: string): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from('sent_projects')
+    .select('id_document')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (error) {
+    console.error('[projects] id_document fetch failed:', error.message)
+    return undefined
+  }
+  return (data?.id_document as string | null) ?? undefined
+}
+
 // Athena gap #4 — server-side audit trail for reschedule negotiations.
 // Mirrors the in-memory rescheduleRequestsByLead map into the
 // reschedule_requests table (migration 035). request inserts a fresh
@@ -353,7 +371,19 @@ export const useProjectsStore = create<ProjectsState>()(
         }
 
         // 1. Load rows from Supabase scoped to this user's role.
-        let query = supabase.from('sent_projects').select('*')
+        // Narrow column list — id_document (base64 ~4.6MB/row) is excluded
+        // from the hydrate path; fetched on-demand via fetchProjectIdDocument
+        // when the admin / vendor ID-review surfaces actually need it.
+        // See PR-273 (hephaestus PAT-probe 2026-05-18 19:52Z: 25 rows × 4.6MB
+        // = 115MB exceeded 8s authenticated statement_timeout).
+        let query = supabase.from('sent_projects').select(
+          'id, item, status, contractor, booking_date, booking_time, ' +
+          'homeowner_name, homeowner_phone, homeowner_email, homeowner_address, ' +
+          'homeowner_id, vendor_id, sent_at, sold_at, completed_at, sale_amount, ' +
+          'rejection_reason, assigned_rep, account_rep_id, rep_acceptance, ' +
+          'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
+          'reviewed_by, review_note, price_line_items, quoted_price_cents'
+        )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
         else if (role === 'account_rep') query = query.eq('account_rep_id', userUuid)
@@ -366,7 +396,8 @@ export const useProjectsStore = create<ProjectsState>()(
         }
 
         // 2. Map DB rows to SentProject shape.
-        const dbProjects: SentProject[] = (dbRows ?? []).map((row) => ({
+        const rows = (dbRows ?? []) as unknown as Record<string, unknown>[]
+        const dbProjects: SentProject[] = rows.map((row: any) => ({
           id:              row.id,
           item:            row.item as CartItem,
           status:          row.status as SentProject['status'],
@@ -385,7 +416,8 @@ export const useProjectsStore = create<ProjectsState>()(
           completedAt:     row.completed_at ?? undefined,
           saleAmount:      row.sale_amount != null ? Number(row.sale_amount) : undefined,
           rejectionReason: row.rejection_reason ?? undefined,
-          idDocument:      row.id_document ?? undefined,
+          // idDocument intentionally NOT hydrated — fetch on-demand via
+          // fetchProjectIdDocument(projectId) on ID-review surfaces.
           assignedRep:     row.assigned_rep as VendorRep | undefined,
           confirmedAt:     row.confirmed_at ?? undefined,
           repAssignedAt:   row.rep_assigned_at ?? undefined,
@@ -411,7 +443,7 @@ export const useProjectsStore = create<ProjectsState>()(
           const newRepAcceptance: Record<string, 'pending' | 'accepted' | 'reschedule_requested'> = { ...state.repAcceptanceByLead }
           const newConfirmedAt: Record<string, string> = { ...state.leadConfirmedAtByLead }
           const newRepAssignedAt: Record<string, string> = { ...state.repAssignedAtByLead }
-          for (const row of (dbRows ?? []) as Record<string, unknown>[]) {
+          for (const row of rows) {
             const rowId = row.id as string
             if (row.assigned_rep)   newAssignedRep[rowId]    = row.assigned_rep as VendorRep
             if (row.account_rep_id) newAccountRep[rowId]     = row.account_rep_id as string
