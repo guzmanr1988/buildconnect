@@ -33,6 +33,7 @@ import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../
 import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
 import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
+import { SubGroupChoices } from '../components/sub-group-choices'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
 import { ColorCircle } from '@/components/ui/color-circle'
 import { applyAreaWaste } from '@/lib/area-waste'
@@ -1332,6 +1333,16 @@ export function ServiceDetailPage() {
                     )
                   })}
                 </div>
+                {renderOptions
+                  .filter((option) => selected.includes(option.id) && (option.subGroups?.length ?? 0) > 0)
+                  .map((option) => (
+                    <SubGroupChoices
+                      key={`${group.id}-${option.id}-subgroups`}
+                      parentOption={option}
+                      selections={selections}
+                      onSelect={(subGroup, choiceId) => handleSelect(subGroup, choiceId)}
+                    />
+                  ))}
                 {/* PR-223 Option B — pergolas per-square structure assignment.
                     For every measurement drawn, render a card with the sqft,
                     a ColorCircle that matches the polygon on the satellite map,

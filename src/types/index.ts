@@ -322,6 +322,7 @@ export interface ServiceOption {
 export interface OptionGroup {
   id: string
   label: string
+  description?: string | null
   required: boolean
   type: 'single' | 'multi'
   // Cap for type:'multi' groups. When the user has maxSelect items picked,

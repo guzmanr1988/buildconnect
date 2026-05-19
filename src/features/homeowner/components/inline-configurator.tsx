@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { ServiceConfig, OptionGroup } from '@/types'
 import { cn } from '@/lib/utils'
 import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
+import { SubGroupChoices } from './sub-group-choices'
 
 interface InlineConfiguratorProps {
   service: ServiceConfig
@@ -110,6 +111,16 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                     )
                   })}
                 </div>
+                {group.options
+                  .filter((option) => selected.includes(option.id) && (option.subGroups?.length ?? 0) > 0)
+                  .map((option) => (
+                    <SubGroupChoices
+                      key={`${group.id}-${option.id}-subgroups`}
+                      parentOption={option}
+                      selections={selections}
+                      onSelect={(subGroup, choiceId) => handleSelect(subGroup, choiceId)}
+                    />
+                  ))}
               </div>
             )
           })}
