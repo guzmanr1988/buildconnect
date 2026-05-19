@@ -1023,9 +1023,10 @@ export default function LeadInbox() {
                       })()}
 
                       {/* Permit & Financing info — financing badge shows
-                          live application status when VITE_FINANCING_ENABLED
-                          AND vendor RLS permits read (approved/terms_accepted
-                          per migration 047); falls back to legacy
+                          live application status when
+                          feature_flags.financing_enabled is true AND vendor
+                          RLS permits read (approved/terms_accepted per
+                          migration 047); falls back to legacy
                           Requested/Not-needed otherwise. */}
                       <div className="flex flex-wrap gap-2">
                         <Badge variant={lead.permit_choice ? 'default' : 'secondary'} className="text-xs">

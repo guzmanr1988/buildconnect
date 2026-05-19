@@ -249,9 +249,10 @@ export function HomeownerHome() {
         </div>
       </motion.div>
 
-      {/* Financing entry — renders only when VITE_FINANCING_ENABLED=true.
-          Phase-2 wave-2: surfaces last-known application status with CTA
-          to /home/financing/apply (no app yet) or /home/financing/status/:id
+      {/* Financing entry — renders only when feature_flags.financing_enabled
+          is true (read via useFeatureFlag inside FinancingCard). Phase-2
+          wave-2: surfaces last-known application status with CTA to
+          /home/financing/apply (no app yet) or /home/financing/status/:id
           (has app). Default-OFF in production until Rod flips the flag. */}
       <FinancingCard />
 

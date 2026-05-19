@@ -513,8 +513,8 @@ export default function OverviewPage() {
 
       {/* Phase-2 financing — applications-by-status + commission ledger
           totals (reserved / receivable / realized). Dark unless
-          VITE_FINANCING_ENABLED=true; renders zeros if migration 047
-          hasn't been applied yet. */}
+          feature_flags.financing_enabled is true (read via useFeatureFlag
+          hook); renders zeros if migration 047 hasn't been applied yet. */}
       {financingEnabled === true && (
         <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible">
           <Card className="rounded-xl shadow-sm hover:shadow-md transition">
