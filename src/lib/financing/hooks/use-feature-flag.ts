@@ -55,8 +55,19 @@ export function useFeatureFlag(key: string): boolean | undefined {
 
     reconcile()
 
+    // Unique-per-instance channel topic. supabase-js v2 channel(name) returns
+    // the existing channel from its internal cache when called with the same
+    // topic, so a second consumer of the same flag-key receives an
+    // already-subscribed channel — .on() then throws "cannot add
+    // postgres_changes callbacks ... after subscribe()". With 8 concurrent
+    // consumers of useFeatureFlag('financing_enabled') in the app (badges,
+    // cards, page-gates) the collision was reliable. Appending a UUID
+    // guarantees a fresh channel per useEffect invocation; the postgres-side
+    // filter (key=eq.${key}) still narrows realtime payloads to the same
+    // flag row, so cost is one extra ws-subscription per consumer — fine for
+    // the handful of feature-flag mounts we render.
     const channel = supabase
-      .channel(`feature_flag:${key}`)
+      .channel(`feature_flag:${key}:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'feature_flags', filter: `key=eq.${key}` },
