@@ -746,6 +746,7 @@ export default function AdminFinancingPage() {
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
                           setEditLender({ ...lender })
@@ -856,6 +857,7 @@ export default function AdminFinancingPage() {
                               data-target-lender-id={lender.id}
                               onClick={() => setEditLender({ ...lender })}
                               onKeyDown={(e) => {
+                                if (e.target !== e.currentTarget) return
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault()
                                   setEditLender({ ...lender })
