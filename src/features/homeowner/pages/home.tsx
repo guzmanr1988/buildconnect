@@ -13,6 +13,7 @@ import { formatProjectTitle } from '@/lib/format-project-title'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { FinancingCard } from '@/features/financing/components/financing-card'
+import { ApprovedAmountBanner } from '@/features/financing/components/approved-amount-banner'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
@@ -248,6 +249,13 @@ export function HomeownerHome() {
           </div>
         </div>
       </motion.div>
+
+      {/* Approved-amount banner — renders only when cfp has an active approved
+          envelope (status approved/terms_accepted + amount > 0 + not expired).
+          Phase 1 of the financing → project bridge (Rod 2026-05-19). Sits
+          above the FinancingCard so the headline affordance lands first when
+          a real offer is on the table. */}
+      <ApprovedAmountBanner />
 
       {/* Financing entry — renders only when feature_flags.financing_enabled
           is true (read via useFeatureFlag inside FinancingCard). Phase-2
