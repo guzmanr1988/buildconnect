@@ -12,15 +12,40 @@ interface InlineConfiguratorProps {
   service: ServiceConfig
 }
 
+function resolveSubChoiceLabel(
+  option: { subGroups?: OptionGroup[] | null },
+  choiceId: string,
+): string | null {
+  for (const sg of option.subGroups ?? []) {
+    if (sg.options.length > 0) {
+      const found = sg.options.find((o) => o.id === choiceId)
+      if (found) return found.label
+    } else if (sg.id === choiceId) {
+      return sg.label
+    }
+  }
+  return null
+}
+
 export function InlineConfigurator({ service }: InlineConfiguratorProps) {
   const navigate = useNavigate()
   const [selections, setSelections] = useState<Record<string, string[]>>({})
+  const [subGroupExpanded, setSubGroupExpanded] = useState<Record<string, boolean>>({})
+  const [subGroupLinearFt, setSubGroupLinearFt] = useState<Record<string, string>>({})
 
   const requiredGroups = service.optionGroups.filter((g) => g.required)
   const completedRequired = requiredGroups.filter(
     (g) => (selections[g.id]?.length ?? 0) > 0
   ).length
-  const allRequiredDone = completedRequired === requiredGroups.length
+  const subPicksDone = service.optionGroups.every((g) =>
+    (selections[g.id] ?? []).every((optId) => {
+      const opt = g.options.find((o) => o.id === optId)
+      if (!opt?.subGroups?.length) return true
+      return (selections[`${optId}-sub`]?.length ?? 0) > 0
+    }),
+  )
+  const allRequiredDone =
+    completedRequired === requiredGroups.length && subPicksDone
 
   function handleSelect(group: OptionGroup, optionId: string) {
     setSelections((prev) => {
@@ -31,12 +56,34 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
       if (service.id === 'roofing' && group.id === 'material') {
         return { ...prev, [group.id]: applyRoofingMaterialPitchedSingleton(current, optionId) }
       }
-      // multi
       if (current.includes(optionId)) {
         return { ...prev, [group.id]: current.filter((id) => id !== optionId) }
       }
       return { ...prev, [group.id]: [...current, optionId] }
     })
+  }
+
+  function handleParentChipClick(group: OptionGroup, option: { id: string; subGroups?: OptionGroup[] | null }) {
+    const isSelected = (selections[group.id] ?? []).includes(option.id)
+    const hasSubGroups = (option.subGroups?.length ?? 0) > 0
+
+    if (hasSubGroups && isSelected) {
+      setSubGroupExpanded((prev) => ({ ...prev, [option.id]: !(prev[option.id] ?? true) }))
+      return
+    }
+
+    handleSelect(group, option.id)
+    if (hasSubGroups) {
+      setSubGroupExpanded((prev) => ({ ...prev, [option.id]: true }))
+    }
+  }
+
+  function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
+    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub`]: [choiceId] }))
+  }
+
+  function handleSubLinearFeetChange(parentOptionId: string, value: string) {
+    setSubGroupLinearFt((prev) => ({ ...prev, [parentOptionId]: value }))
   }
 
   return (
@@ -88,6 +135,9 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                 <div className="flex flex-wrap gap-2">
                   {group.options.map((option) => {
                     const isSelected = selected.includes(option.id)
+                    const hasSubGroups = (option.subGroups?.length ?? 0) > 0
+                    const subPickId = selections[`${option.id}-sub`]?.[0]
+                    const subPickLabel = subPickId ? resolveSubChoiceLabel(option, subPickId) : null
                     return (
                       <button
                         key={option.id}
@@ -95,7 +145,9 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                         data-chip-id={option.id}
                         data-chip-group={group.id}
                         data-chip-state={isSelected ? 'active' : 'inactive'}
-                        onClick={() => handleSelect(group, option.id)}
+                        data-sub-expanded={hasSubGroups ? String(subGroupExpanded[option.id] ?? true) : undefined}
+                        aria-expanded={hasSubGroups ? (subGroupExpanded[option.id] ?? true) : undefined}
+                        onClick={() => handleParentChipClick(group, option)}
                         className={cn(
                           'inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-all duration-150',
                           isSelected
@@ -107,18 +159,34 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                           <Check className="h-3.5 w-3.5" />
                         )}
                         {option.label}
+                        {subPickLabel && (
+                          <span
+                            data-testid="config-parent-sub-pick-badge"
+                            data-parent-option-id={option.id}
+                            className="ml-1 inline-flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold"
+                          >
+                            {subPickLabel}
+                          </span>
+                        )}
                       </button>
                     )
                   })}
                 </div>
                 {group.options
-                  .filter((option) => selected.includes(option.id) && (option.subGroups?.length ?? 0) > 0)
+                  .filter(
+                    (option) =>
+                      selected.includes(option.id) &&
+                      (option.subGroups?.length ?? 0) > 0 &&
+                      (subGroupExpanded[option.id] ?? true),
+                  )
                   .map((option) => (
                     <SubGroupChoices
                       key={`${group.id}-${option.id}-subgroups`}
                       parentOption={option}
                       selections={selections}
-                      onSelect={(subGroup, choiceId) => handleSelect(subGroup, choiceId)}
+                      onSelect={handleSubChoiceSelect}
+                      linearFeet={subGroupLinearFt[option.id] ?? ''}
+                      onLinearFeetChange={handleSubLinearFeetChange}
                     />
                   ))}
               </div>

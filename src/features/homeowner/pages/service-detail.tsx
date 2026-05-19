@@ -233,6 +233,12 @@ export function ServiceDetailPage() {
       ? Object.fromEntries(Object.entries(editItemForService.roofAddonLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
       : {}
   )
+  const [subGroupExpanded, setSubGroupExpanded] = useState<Record<string, boolean>>({})
+  const [subGroupLinearFt, setSubGroupLinearFt] = useState<Record<string, string>>(
+    editItemForService?.subGroupLinearFt
+      ? Object.fromEntries(Object.entries(editItemForService.subGroupLinearFt as Record<string, number>).map(([k, v]) => [k, String(v)]))
+      : {}
+  )
   const [gutterFloors, setGutterFloors] = useState<1 | 2 | null>(() => {
     const persisted = (editItemForService?.gutterDropsConfig as { floors?: 1 | 2 } | undefined)?.floors
     return persisted === 1 || persisted === 2 ? persisted : null
@@ -672,6 +678,29 @@ export function ServiceDetailPage() {
     roofMeasurement?.includePerimeter === true
 
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
+
+  function resolveSubChoiceLabel(
+    option: { subGroups?: OptionGroup[] | null },
+    choiceId: string,
+  ): string | null {
+    for (const sg of option.subGroups ?? []) {
+      if (sg.options.length > 0) {
+        const found = sg.options.find((o) => o.id === choiceId)
+        if (found) return found.label
+      } else if (sg.id === choiceId) {
+        return sg.label
+      }
+    }
+    return null
+  }
+
+  function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
+    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub`]: [choiceId] }))
+  }
+
+  function handleSubLinearFeetChange(parentOptionId: string, value: string) {
+    setSubGroupLinearFt((prev) => ({ ...prev, [parentOptionId]: value }))
+  }
 
   function handleSelect(group: OptionGroup, optionId: string) {
     // For pool add-ons: enforce one-at-a-time for items with configurators
@@ -1122,8 +1151,21 @@ export function ServiceDetailPage() {
                         data-chip-state={isSelected ? 'active' : 'inactive'}
                         data-chip-locked={isLocked ? 'true' : 'false'}
                         data-service-type-option={group.id === 'service_type' ? option.id : undefined}
+                        data-sub-expanded={(option.subGroups?.length ?? 0) > 0 ? String(subGroupExpanded[option.id] ?? true) : undefined}
+                        aria-expanded={(option.subGroups?.length ?? 0) > 0 ? (subGroupExpanded[option.id] ?? true) : undefined}
                         disabled={isLocked}
                         onClick={() => {
+                          const hasSubGroups = (option.subGroups?.length ?? 0) > 0
+                          if (hasSubGroups && isSelected) {
+                            setSubGroupExpanded((prev) => ({
+                              ...prev,
+                              [option.id]: !(prev[option.id] ?? true),
+                            }))
+                            return
+                          }
+                          if (hasSubGroups) {
+                            setSubGroupExpanded((prev) => ({ ...prev, [option.id]: true }))
+                          }
                           handleSelect(group, option.id)
                           // Auto-close addon menu after size selection
                           if (group.id === 'spa_size') setActiveAddonMenu(null)
@@ -1241,6 +1283,19 @@ export function ServiceDetailPage() {
                           return <ColorCircle color={color} size={8} />
                         })()}
                         {optionLabel}
+                        {(option.subGroups?.length ?? 0) > 0 && (() => {
+                          const subPickId = selections[`${option.id}-sub`]?.[0]
+                          const subPickLabel = subPickId ? resolveSubChoiceLabel(option, subPickId) : null
+                          return subPickLabel ? (
+                            <span
+                              data-testid="config-parent-sub-pick-badge"
+                              data-parent-option-id={option.id}
+                              className="ml-1 inline-flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold"
+                            >
+                              {subPickLabel}
+                            </span>
+                          ) : null
+                        })()}
                         {serviceId === 'windows_doors' && option.id === 'windows' && windowTotal > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
                             {windowTotal}
@@ -1334,13 +1389,20 @@ export function ServiceDetailPage() {
                   })}
                 </div>
                 {renderOptions
-                  .filter((option) => selected.includes(option.id) && (option.subGroups?.length ?? 0) > 0)
+                  .filter(
+                    (option) =>
+                      selected.includes(option.id) &&
+                      (option.subGroups?.length ?? 0) > 0 &&
+                      (subGroupExpanded[option.id] ?? true),
+                  )
                   .map((option) => (
                     <SubGroupChoices
                       key={`${group.id}-${option.id}-subgroups`}
                       parentOption={option}
                       selections={selections}
-                      onSelect={(subGroup, choiceId) => handleSelect(subGroup, choiceId)}
+                      onSelect={handleSubChoiceSelect}
+                      linearFeet={subGroupLinearFt[option.id] ?? ''}
+                      onLinearFeetChange={handleSubLinearFeetChange}
                     />
                   ))}
                 {/* PR-223 Option B — pergolas per-square structure assignment.
@@ -2050,6 +2112,14 @@ export function ServiceDetailPage() {
                 }),
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
+                ...((): { subGroupLinearFt?: Record<string, number> } => {
+                  const entries = Object.entries(subGroupLinearFt)
+                    .map(([k, v]) => [k, Number(v) || 0] as const)
+                    .filter(([, n]) => n > 0)
+                  return entries.length > 0
+                    ? { subGroupLinearFt: Object.fromEntries(entries) }
+                    : {}
+                })(),
                 ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
                   gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
                 }),
