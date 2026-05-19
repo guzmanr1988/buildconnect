@@ -64,6 +64,10 @@ export interface CartItem {
   // Keyed by option id. Pricing layer reads this OR roofAddonLinearFt for any
   // option flagged priceUnit:'linear_ft' in OPTION_METADATA.
   addonLinearFt?: Record<string, number>
+  // Linear feet per parent-option's sub_group pick. Keyed by parent option_id.
+  // Populated when an option with non-empty subGroups gets a sub-pick + the
+  // homeowner enters a linear-feet value in the inline input.
+  subGroupLinearFt?: Record<string, number>
   // Per-option-id sqft for custom-sized products that bill per sqft (e.g. pool
   // size 'custom', pool floor surfaces, square_concrete). Sibling to areaSqft
   // for cases where a single cart item carries MULTIPLE independent sqft

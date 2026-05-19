@@ -1,109 +1,114 @@
-import { Check } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import type { OptionGroup } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface SubGroupChoicesProps {
   parentOption: { id: string; label: string; subGroups?: OptionGroup[] | null }
   selections: Record<string, string[]>
-  onSelect: (subGroup: OptionGroup, choiceId: string) => void
+  onSelect: (parentOptionId: string, choiceId: string) => void
+  linearFeet: string
+  onLinearFeetChange: (parentOptionId: string, value: string) => void
 }
 
 export function SubGroupChoices({
   parentOption,
   selections,
   onSelect,
+  linearFeet,
+  onLinearFeetChange,
 }: SubGroupChoicesProps) {
   const subGroups = parentOption.subGroups ?? []
   if (subGroups.length === 0) return null
 
+  const flatChoices = subGroups.flatMap((sg) =>
+    sg.options.length > 0
+      ? sg.options.map((o) => ({
+          id: o.id,
+          label: o.label,
+          description: o.description ?? null,
+          subGroupId: sg.id,
+        }))
+      : [
+          {
+            id: sg.id,
+            label: sg.label,
+            description: sg.description ?? null,
+            subGroupId: sg.id,
+          },
+        ],
+  )
+
+  const selectionKey = `${parentOption.id}-sub`
+  const selected = selections[selectionKey] ?? []
+  const hasPick = selected.length > 0
+
   return (
     <div
-      className="ml-2 sm:ml-4 mt-2 border-l-2 border-primary/20 pl-3 sm:pl-4 space-y-3"
+      className="ml-2 sm:ml-4 mt-2 border-l-2 border-primary/20 pl-3 sm:pl-4"
       data-testid="config-sub-menu-group"
       data-parent-option-id={parentOption.id}
     >
-      {subGroups.map((subGroup) => {
-        const selected = selections[subGroup.id] ?? []
-        const choices =
-          subGroup.options.length > 0
-            ? subGroup.options.map((o) => ({
-                id: o.id,
-                label: o.label,
-                description: o.description ?? null,
-              }))
-            : [
-                {
-                  id: subGroup.id,
-                  label: subGroup.label,
-                  description: subGroup.description ?? null,
-                },
-              ]
-
-        return (
-          <div
-            key={subGroup.id}
-            data-testid="config-sub-menu"
-            data-sub-menu-id={subGroup.id}
-          >
-            <div className="mb-1.5 flex items-center gap-1.5">
-              <span className="text-sm font-medium text-foreground">
-                {subGroup.label}
-              </span>
-              {subGroup.required ? (
-                <span className="text-destructive text-xs">*</span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5">
-                  Optional
+      <div className="flex flex-wrap gap-2" role="radiogroup">
+        {flatChoices.map((choice) => {
+          const isSelected = selected.includes(choice.id)
+          return (
+            <button
+              key={choice.id}
+              type="button"
+              role="radio"
+              data-testid="config-sub-menu-choice"
+              data-choice-id={choice.id}
+              data-choice-name={choice.label}
+              data-sub-menu-id={choice.subGroupId}
+              data-chip-state={isSelected ? 'active' : 'inactive'}
+              aria-checked={isSelected}
+              onClick={() => onSelect(parentOption.id, choice.id)}
+              className={cn(
+                'inline-flex max-w-[220px] flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150',
+                isSelected
+                  ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+                  : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+              )}
+            >
+              <span className="font-medium">{choice.label}</span>
+              {choice.description && (
+                <span
+                  data-testid="config-sub-menu-choice-desc"
+                  className={cn(
+                    'text-xs',
+                    isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground',
+                  )}
+                >
+                  {choice.description}
                 </span>
               )}
-            </div>
-            <div className="flex flex-col gap-2">
-              {choices.map((choice) => {
-                const isSelected = selected.includes(choice.id)
-                return (
-                  <button
-                    key={choice.id}
-                    type="button"
-                    data-testid="config-sub-menu-choice"
-                    data-choice-id={choice.id}
-                    data-choice-name={choice.label}
-                    data-chip-state={isSelected ? 'active' : 'inactive'}
-                    onClick={() => onSelect(subGroup, choice.id)}
-                    className={cn(
-                      'group/choice inline-flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150',
-                      isSelected
-                        ? 'border-primary bg-primary/10 text-foreground shadow-sm ring-1 ring-primary'
-                        : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                        isSelected
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-muted-foreground/40',
-                      )}
-                    >
-                      {isSelected && <Check className="h-2.5 w-2.5" />}
-                    </span>
-                    <span className="flex flex-col gap-0.5 min-w-0">
-                      <span className="font-medium">{choice.label}</span>
-                      {choice.description && (
-                        <span
-                          data-testid="config-sub-menu-choice-desc"
-                          className="text-xs text-muted-foreground"
-                        >
-                          {choice.description}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+            </button>
+          )
+        })}
+      </div>
+
+      {hasPick && (
+        <div className="mt-3 flex items-center gap-2">
+          <label
+            htmlFor={`sub-linear-feet-${parentOption.id}`}
+            className="text-sm font-medium text-foreground"
+          >
+            Linear feet
+          </label>
+          <Input
+            id={`sub-linear-feet-${parentOption.id}`}
+            data-testid="config-sub-linear-feet-input"
+            data-parent-option-id={parentOption.id}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            placeholder="0"
+            value={linearFeet}
+            onChange={(e) => onLinearFeetChange(parentOption.id, e.target.value)}
+            className="h-9 w-24"
+          />
+        </div>
+      )}
     </div>
   )
 }
