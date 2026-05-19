@@ -13,7 +13,7 @@ export const MOCK_HOMEOWNERS: Profile[] = [
 ]
 
 export const MOCK_VENDORS: Vendor[] = [
-  { id: 'v-1', email: 'apex@vendor.com', name: 'Carlos Mendez', role: 'vendor', phone: '(305) 555-1001', address: '100 NW 7th St, Miami, FL 33136', latitude: 25.7811, longitude: -80.2012, company: 'Apex Roofing & Solar', avatar_color: '#f59e0b', initials: 'AM', status: 'active', created_at: '2025-11-01T08:00:00Z', noncircumvention_agreement_signed_at: '2025-11-01T08:00:00Z', noncircumvention_agreement_signed_name: 'Carlos Mendez', noncircumvention_agreement_version: 'v1', service_categories: ['roofing', 'air_conditioning'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 127, commission_pct: 10, reps: [
+  { id: 'v-1', email: 'apex@vendor.com', name: 'Carlos Mendez', role: 'vendor', phone: '(305) 555-1001', address: '100 NW 7th St, Miami, FL 33136', latitude: 25.7811, longitude: -80.2012, company: 'Apex Roofing & Solar', avatar_color: '#f59e0b', initials: 'AM', status: 'active', created_at: '2025-11-01T08:00:00Z', noncircumvention_agreement_signed_at: '2025-11-01T08:00:00Z', noncircumvention_agreement_signed_name: 'Carlos Mendez', noncircumvention_agreement_version: 'v1.0-draft', service_categories: ['roofing', 'air_conditioning'], rating: 4.8, response_time: '~2 hours', verified: true, financing_available: true, total_reviews: 127, commission_pct: 10, reps: [
     { id: 'v-1-rep-1', name: 'Luis Ortega', role: 'Senior Project Manager', phone: '(305) 555-2001' },
     { id: 'v-1-rep-2', name: 'Marco DeLeon', role: 'Roofing Lead', phone: '(305) 555-2002' },
     { id: 'v-1-rep-3', name: 'Jennifer Alvarez', role: 'Solar Specialist', phone: '(305) 555-2003' },
