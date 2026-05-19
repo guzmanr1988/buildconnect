@@ -155,9 +155,9 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
           <NavLink key={to} to={to} end={to === '/vendor'} onClick={onNavigate}>
             {({ isActive }) => (
               <div className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 collapsed && 'justify-center px-2'
               )}>
