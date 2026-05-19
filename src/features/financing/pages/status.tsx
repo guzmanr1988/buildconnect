@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,12 @@ export function FinancingStatusPage() {
   const [financingProfile, setFinancingProfile] = useState<FinancingProfileRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // DEMO-ONLY: rip at GA cleanup beat — see banked
+  // project_buildconnect_financing_demo_controls_pre_launch_only.
+  // Grep `data-demo-control` to find all demo-control surfaces.
+  const [acceptingTerms, setAcceptingTerms] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [demoError, setDemoError] = useState<string | null>(null)
 
   useEffect(() => {
     if (financingEnabled !== true || !profile?.id || !applicationId) return
@@ -105,6 +111,54 @@ export function FinancingStatusPage() {
       cancelled = true
     }
   }, [applicationId, profile?.id, financingEnabled])
+
+  // DEMO-ONLY handlers — rip at GA cleanup beat. Grep `data-demo-control`.
+  async function handleAcceptTerms() {
+    if (!applicationId) return
+    setDemoError(null)
+    setAcceptingTerms(true)
+    const { data, error } = await supabase.functions.invoke('financing-demo-action', {
+      body: { action: 'accept_terms', applicationId },
+    })
+    if (error || !data?.ok) {
+      setDemoError(
+        (error?.message as string | undefined) ||
+          (data?.error as string | undefined) ||
+          'Could not accept terms.'
+      )
+      setAcceptingTerms(false)
+      return
+    }
+    const { data: appRes } = await supabase
+      .from('financing_applications')
+      .select('id,status,adapter,applied_at')
+      .eq('id', applicationId)
+      .maybeSingle()
+    if (appRes) setApplication(appRes as ApplicationRow)
+    setAcceptingTerms(false)
+  }
+
+  async function handleResetFinancing() {
+    if (typeof window !== 'undefined') {
+      const ok = window.confirm('Reset financing flow? This deletes your current application.')
+      if (!ok) return
+    }
+    setDemoError(null)
+    setResetting(true)
+    const { data, error } = await supabase.functions.invoke('financing-demo-action', {
+      body: { action: 'reset' },
+    })
+    if (error || !data?.ok) {
+      setDemoError(
+        (error?.message as string | undefined) ||
+          (data?.error as string | undefined) ||
+          'Could not reset financing flow.'
+      )
+      setResetting(false)
+      return
+    }
+    navigate('/home')
+  }
 
   if (financingEnabled === undefined) return null
   if (financingEnabled === false) return <Navigate to="/home" replace />
@@ -262,6 +316,33 @@ export function FinancingStatusPage() {
                 Full envelope, APR, and term details will arrive in your approval email and on the
                 offer letter from your lender.
               </p>
+              {application.status === 'approved' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAcceptTerms}
+                  disabled={acceptingTerms}
+                  className="mt-4 w-full sm:w-auto"
+                  data-demo-control="accept-terms"
+                  data-testid="financing-accept-terms"
+                >
+                  {acceptingTerms ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Accepting…
+                    </>
+                  ) : (
+                    'Accept Terms'
+                  )}
+                </Button>
+              ) : (
+                <p
+                  className="mt-3 text-xs text-emerald-700 dark:text-emerald-300"
+                  data-testid="financing-terms-accepted-note"
+                >
+                  Terms accepted — your lender will reach out from here.
+                </p>
+              )}
             </div>
           ) : null}
 
@@ -282,6 +363,43 @@ export function FinancingStatusPage() {
               </Button>
             </div>
           ) : null}
+
+          {demoError ? (
+            <p className="text-xs text-destructive" role="alert">
+              {demoError}
+            </p>
+          ) : null}
+
+          {/* DEMO-ONLY: rip at GA cleanup beat. Banked:
+              project_buildconnect_financing_demo_controls_pre_launch_only.
+              Grep `data-demo-control` to find sibling surfaces. */}
+          <div
+            className="mt-6 pt-4 border-t flex flex-col gap-2"
+            data-demo-control="reset-section"
+          >
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Demo controls
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFinancing}
+              disabled={resetting}
+              className="self-start text-destructive hover:text-destructive hover:bg-destructive/10"
+              data-demo-control="reset-financing"
+              data-testid="financing-reset-demo"
+            >
+              {resetting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Resetting…
+                </>
+              ) : (
+                'Reset financing (demo)'
+              )}
+            </Button>
+          </div>
         </motion.div>
       )}
     </div>
