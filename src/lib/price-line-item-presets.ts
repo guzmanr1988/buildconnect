@@ -33,10 +33,8 @@ const lineItem = (id: string, label: string, amount: number): PriceLineItem => (
 
 export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> = {
   roofing: [
-    lineItem('roofing-material', 'Material Price', 8500),
+    lineItem('roofing-material', 'Material Price', 14500),
     lineItem('roofing-permit', 'Permit Price', 450),
-    lineItem('roofing-tearoff', 'Tear-off & Disposal', 1800),
-    lineItem('roofing-install', 'Install Price', 4200),
   ],
   windows_doors: [
     lineItem('wd-product', 'Product Price', 6800),
