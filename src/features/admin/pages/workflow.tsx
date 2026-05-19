@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { GitBranch, Inbox, CalendarCheck, Handshake, ArrowRight, User, Calendar, Archive, Search, ChevronDown, ChevronUp, UserCheck, X } from 'lucide-react'
+import { GitBranch, User, Calendar, Search, ChevronDown, ChevronUp, UserCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
+import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { useProjectsStore } from '@/stores/projects-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
@@ -16,6 +17,7 @@ import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
+import { LEAD_STAGES, type LeadStageKey } from '@/lib/vendor-lead-stages'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -226,13 +228,34 @@ export default function WorkflowPage() {
   })
   const cancelledProjects = filtered.filter(i => i.status === 'declined')
 
-  const stages = [
-    { title: 'New Leads', subtitle: undefined, subtitleColor: undefined, icon: Inbox, color: 'bg-amber-500', borderColor: 'border-amber-300', bgColor: 'bg-amber-50 dark:bg-amber-950/20', items: newLeads },
-    { title: 'Scheduled Leads', subtitle: undefined, subtitleColor: undefined, icon: CalendarCheck, color: 'bg-emerald-500', borderColor: 'border-emerald-300', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', items: scheduledLeads },
-    { title: 'Sold, Active', subtitle: undefined, subtitleColor: undefined, icon: Handshake, color: 'bg-primary', borderColor: 'border-primary/30', bgColor: 'bg-primary/5 dark:bg-primary/10', items: projectSold },
-    { title: 'Projects Completed', subtitle: undefined, subtitleColor: undefined, icon: Archive, color: 'bg-slate-500', borderColor: 'border-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-950/20', items: projectsCompleted },
-    { title: 'Cancelled Projects', subtitle: undefined, subtitleColor: undefined, icon: X, color: 'bg-destructive', borderColor: 'border-destructive/30', bgColor: 'bg-destructive/5 dark:bg-destructive/10', items: cancelledProjects },
-  ]
+  // PR-275 — derive admin stages from LEAD_STAGES single-SoT (was
+  // inline literal here pre-extraction). Kanban downstream still
+  // reads stage.title / stage.icon / stage.color / stage.bgColor /
+  // stage.borderColor / stage.subtitle / stage.subtitleColor / stage
+  // .items, so we project the SoT shape + admin-specific bucket
+  // items + null subtitle fields (admin Pipeline Summary doesn't use
+  // subtitle on any stage; vendor sets it via overrides not in
+  // scope here).
+  const stagesByKey: Record<LeadStageKey, typeof newLeads> = {
+    new: newLeads,
+    confirmed: scheduledLeads,
+    sold: projectSold,
+    completed: projectsCompleted,
+    cancelled: cancelledProjects,
+  }
+  const stageCounts: Record<LeadStageKey, number> = {
+    new: newLeads.length,
+    confirmed: scheduledLeads.length,
+    sold: projectSold.length,
+    completed: projectsCompleted.length,
+    cancelled: cancelledProjects.length,
+  }
+  const stages = LEAD_STAGES.map((s) => ({
+    ...s,
+    items: stagesByKey[s.key],
+    subtitle: undefined as string | undefined,
+    subtitleColor: undefined as string | undefined,
+  }))
 
   const container = {
     hidden: { opacity: 0 },
@@ -266,29 +289,24 @@ export default function WorkflowPage() {
         </div>
       </motion.div>
 
-      {/* Pipeline Summary — 5 columns matching vendor dashboard lifecycle */}
+      {/* Pipeline Summary — 5 columns matching vendor dashboard lifecycle.
+          PR-275 — extracted to PipelineStatRow shared primitive
+          (admin/workflow + vendor/dashboard + vendor/lead-workflow
+          all consume now). Admin is informational (no click handler),
+          so PipelineStatRow falls through to its plain-<div> branch.
+          pulseByKey={{...all false}} suppresses the LEAD_STAGES.pulse
+          defaults (new + sold) so admin Pipeline Summary stays BYTE-
+          IDENTICAL to pre-PR-275 static treatment — Rod 20:06Z
+          directive framed admin-as-current-model ("vendor should
+          look like admin"), not "both surfaces richer". Cross-surface
+          pulse parity is a separate Rod-aesthetic decision queued
+          post-launch (kratos 1779151219359). */}
       <motion.div variants={item}>
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
-          {stages.map((stage, idx) => (
-            <div key={stage.title} className="flex items-center gap-2 sm:gap-3 flex-1">
-              <div className={cn('flex-1 rounded-xl border p-3 sm:p-4 text-center', stage.bgColor, stage.borderColor)} data-workflow-stage={stage.title} data-workflow-count={stage.items.length}>
-                <div className={cn('inline-flex items-center justify-center rounded-lg p-2 mb-2', stage.color)}>
-                  <stage.icon className="h-4 w-4 text-white" />
-                </div>
-                <p className="text-2xl font-bold font-heading">{stage.items.length}</p>
-                <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{stage.title}</p>
-                {stage.subtitle && (
-                  <p className={cn('text-[9px] font-semibold uppercase tracking-wider mt-0.5', stage.subtitleColor ?? 'text-muted-foreground')}>
-                    {stage.subtitle}
-                  </p>
-                )}
-              </div>
-              {idx < stages.length - 1 && (
-                <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0 hidden lg:block" />
-              )}
-            </div>
-          ))}
-        </div>
+        <PipelineStatRow
+          stages={LEAD_STAGES}
+          counts={stageCounts}
+          pulseByKey={{ new: false, confirmed: false, sold: false, completed: false, cancelled: false }}
+        />
       </motion.div>
 
       {/* Kanban Columns */}

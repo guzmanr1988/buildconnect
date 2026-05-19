@@ -22,8 +22,9 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useVendorLeadStages, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
+import { useVendorLeadStages, LEAD_STAGES, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
 import type { LeadStageKey, LeadExt } from '@/lib/vendor-lead-stages'
+import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
@@ -179,6 +180,7 @@ export default function VendorLeadWorkflow() {
       completed: projectsCompleted,
       cancelled: cancelledProjects,
     },
+    counts: leadStageCounts,
     isCancelledLead,
   } = useVendorLeadStages()
 
@@ -303,6 +305,17 @@ export default function VendorLeadWorkflow() {
   const initialOpenTile: LeadStageKey | null = stageFromUrl && validTileIds.includes(stageFromUrl) ? stageFromUrl : null
   const [openTile, setOpenTile] = useState<LeadStageKey | null>(initialOpenTile)
   const toggleTile = (id: LeadStageKey) => setOpenTile((prev) => (prev === id ? null : id))
+  // PR-275 — PipelineStatRow click handler: open the matching tile +
+  // scroll it into view. Mirrors the dashboard hrefForStage deep-link
+  // contract but within the same page (no nav). rAF defers the
+  // scrollIntoView so the tile-expand transition starts first and
+  // the scroll lands on the already-expanded position.
+  const scrollAndExpandTile = (id: LeadStageKey) => {
+    setOpenTile(id)
+    requestAnimationFrame(() => {
+      document.getElementById(`stage-tile-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   // Layer 5 of bulletproof close (kratos msg 1776670030582): if sheetOpen
   // ever flips to false but selected is non-null, forcibly clear selected +
@@ -754,78 +767,104 @@ export default function VendorLeadWorkflow() {
         </p>
       </motion.div>
 
+      {/* PR-275 — Pipeline preview row above the tile sequence so the
+          full-page view mirrors the at-a-glance row from /vendor
+          dashboard. Click a card to expand the matching tile + scroll
+          to it (scroll-and-expand pattern; same-page so onStageClick,
+          not hrefForStage). Account_rep filters out 'new' to match
+          the per-tile gate below. */}
+      <motion.div variants={item}>
+        <PipelineStatRow
+          stages={LEAD_STAGES.filter((s) => profile?.role !== 'account_rep' || s.key !== 'new')}
+          counts={leadStageCounts}
+          onStageClick={scrollAndExpandTile}
+          pulseByKey={STAGE_PULSE_BY_KEY}
+          testIdPrefix="vendor-pipeline-stage"
+        />
+      </motion.div>
+
       {/* Lead Status Tiles — vertical accordion. Each tile owns its own expand
-          content inline beneath its summary row (kratos msg 1776576002292). */}
+          content inline beneath its summary row (kratos msg 1776576002292).
+          PR-275 — each tile wrapped in id-tagged div so the PipelineStatRow
+          scroll-and-expand handler can scrollIntoView. */}
       <motion.div variants={item} className="flex flex-col gap-2">
         {profile?.role !== 'account_rep' && (
+          <div id="stage-tile-new">
+            <LeadStatusTile
+              title="New Leads"
+              count={newLeads.length}
+              color={STAGE_COLOR_BY_KEY.new}
+              pulse={STAGE_PULSE_BY_KEY.new}
+              icon={Inbox}
+              open={openTile === 'new'}
+              onToggle={() => toggleTile('new')}
+            >
+              <div className="grid gap-3">
+                {newLeads.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
+                ) : (
+                  newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+                )}
+              </div>
+            </LeadStatusTile>
+          </div>
+        )}
+        <div id="stage-tile-confirmed">
           <LeadStatusTile
-            title="New Leads"
-            count={newLeads.length}
-            color={STAGE_COLOR_BY_KEY.new}
-            pulse={STAGE_PULSE_BY_KEY.new}
-            icon={Inbox}
-            open={openTile === 'new'}
-            onToggle={() => toggleTile('new')}
+            title="Scheduled Leads"
+            count={confirmedLeads.length}
+            color={STAGE_COLOR_BY_KEY.confirmed}
+            pulse={STAGE_PULSE_BY_KEY.confirmed}
+            icon={CalendarCheck}
+            open={openTile === 'confirmed'}
+            onToggle={() => toggleTile('confirmed')}
           >
             <div className="grid gap-3">
-              {newLeads.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No new leads at the moment.</p>
+              {confirmedLeads.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No scheduled leads yet.</p>
               ) : (
-                newLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+                confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
               )}
             </div>
           </LeadStatusTile>
-        )}
-        <LeadStatusTile
-          title="Scheduled Leads"
-          count={confirmedLeads.length}
-          color={STAGE_COLOR_BY_KEY.confirmed}
-          pulse={STAGE_PULSE_BY_KEY.confirmed}
-          icon={CalendarCheck}
-          open={openTile === 'confirmed'}
-          onToggle={() => toggleTile('confirmed')}
-        >
-          <div className="grid gap-3">
-            {confirmedLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No scheduled leads yet.</p>
-            ) : (
-              confirmedLeads.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
-        <LeadStatusTile
-          title="Sold, Active"
-          count={projectSold.length}
-          color={STAGE_COLOR_BY_KEY.sold}
-          pulse={STAGE_PULSE_BY_KEY.sold}
-          icon={Handshake}
-          open={openTile === 'sold'}
-          onToggle={() => toggleTile('sold')}
-        >
-          <div className="grid gap-3">
-            {projectSold.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No active projects yet.</p>
-            ) : (
-              projectSold.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
-        <LeadStatusTile
-          title="Projects Completed"
-          count={projectsCompleted.length}
-          color={STAGE_COLOR_BY_KEY.completed}
-          icon={Archive}
-          open={openTile === 'completed'}
-          onToggle={() => toggleTile('completed')}
-        >
-          <div className="grid gap-3">
-            {projectsCompleted.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No completed projects yet.</p>
-            ) : (
-              projectsCompleted.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
+        </div>
+        <div id="stage-tile-sold">
+          <LeadStatusTile
+            title="Sold, Active"
+            count={projectSold.length}
+            color={STAGE_COLOR_BY_KEY.sold}
+            pulse={STAGE_PULSE_BY_KEY.sold}
+            icon={Handshake}
+            open={openTile === 'sold'}
+            onToggle={() => toggleTile('sold')}
+          >
+            <div className="grid gap-3">
+              {projectSold.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No active projects yet.</p>
+              ) : (
+                projectSold.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              )}
+            </div>
+          </LeadStatusTile>
+        </div>
+        <div id="stage-tile-completed">
+          <LeadStatusTile
+            title="Projects Completed"
+            count={projectsCompleted.length}
+            color={STAGE_COLOR_BY_KEY.completed}
+            icon={Archive}
+            open={openTile === 'completed'}
+            onToggle={() => toggleTile('completed')}
+          >
+            <div className="grid gap-3">
+              {projectsCompleted.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No completed projects yet.</p>
+              ) : (
+                projectsCompleted.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              )}
+            </div>
+          </LeadStatusTile>
+        </div>
         {/* Ship #184 (Rodolfo-direct 2026-04-21): unified Cancelled
             Projects tile — Rejected Leads tile eliminated per "in vendor
             rejected leads are the same as cancelled projects eliminate
@@ -833,22 +872,24 @@ export default function VendorLeadWorkflow() {
             since the unified bucket represents 'deals that didn't
             happen' semantically, where the softer zinc was premised on
             the #171 rejected-vs-cancelled split being user-visible. */}
-        <LeadStatusTile
-          title="Cancelled Projects"
-          count={cancelledProjects.length}
-          color={STAGE_COLOR_BY_KEY.cancelled}
-          icon={X}
-          open={openTile === 'cancelled'}
-          onToggle={() => toggleTile('cancelled')}
-        >
-          <div className="grid gap-3">
-            {cancelledProjects.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No cancelled projects.</p>
-            ) : (
-              cancelledProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
-            )}
-          </div>
-        </LeadStatusTile>
+        <div id="stage-tile-cancelled">
+          <LeadStatusTile
+            title="Cancelled Projects"
+            count={cancelledProjects.length}
+            color={STAGE_COLOR_BY_KEY.cancelled}
+            icon={X}
+            open={openTile === 'cancelled'}
+            onToggle={() => toggleTile('cancelled')}
+          >
+            <div className="grid gap-3">
+              {cancelledProjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No cancelled projects.</p>
+              ) : (
+                cancelledProjects.map((lead) => <LeadCard key={lead.id} lead={lead} />)
+              )}
+            </div>
+          </LeadStatusTile>
+        </div>
       </motion.div>
 
       {/* Lead Detail Modal — centered floating dialog with dark backdrop (Dialog primitive handles ESC + backdrop-click dismissal).
