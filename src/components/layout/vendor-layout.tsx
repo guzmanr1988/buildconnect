@@ -156,14 +156,8 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
             {({ isActive }) => (
               <div className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                // Collapsed-state active uses subtle primary tint instead of
-                // the full bg-primary fill. The icon-only tile sits in an
-                // otherwise empty near-white sidebar; the solid dark-navy
-                // square read as harsh/isolated. Expanded state keeps the
-                // button-like solid fill since the full label gives it
-                // enough visual weight to feel intentional.
                 isActive
-                  ? (collapsed ? 'bg-primary/10 text-primary' : 'bg-primary text-primary-foreground')
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 collapsed && 'justify-center px-2'
               )}>
