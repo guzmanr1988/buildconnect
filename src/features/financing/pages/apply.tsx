@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { ChevronLeft, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ExternalLink, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth-store'
 import { supabase } from '@/lib/supabase'
@@ -166,7 +166,9 @@ export function FinancingApplyPage() {
       {!loading &&
         sections.map(({ category, rows }) => {
           const expandedInSection = rows.find(
-            (l) => l.id === expandedId && lenderState(l) === 'instr-only',
+            (l) =>
+              l.id === expandedId &&
+              !!(l.apply_instructions && l.apply_instructions.trim()),
           )
           return (
             <section
@@ -183,6 +185,8 @@ export function FinancingApplyPage() {
                   const hasAdapter = adapterKeys.has(slug)
                   const isComingSoon = state === 'coming-soon'
                   const isExpanded = expandedId === l.id
+                  const hasInstructions = !!(l.apply_instructions && l.apply_instructions.trim())
+                  const showInfoIcon = hasInstructions && state !== 'instr-only'
 
                   const handleTap = () => {
                     if (isComingSoon) return
@@ -198,55 +202,70 @@ export function FinancingApplyPage() {
                   }
 
                   return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={handleTap}
-                      disabled={isComingSoon}
-                      data-testid={`financing-lender-card-${l.id}`}
-                      data-lender={l.name}
-                      data-financing-lender-state={state}
-                      data-financing-lender-id={l.id}
-                      aria-expanded={state === 'instr-only' ? isExpanded : undefined}
-                      className={`group relative aspect-square rounded-lg border border-border bg-card p-3 flex flex-col text-left transition-colors ${
-                        isComingSoon
-                          ? 'opacity-60 cursor-not-allowed'
-                          : 'hover:border-primary hover:bg-accent/30 active:bg-accent/50'
-                      }`}
-                    >
-                      <div className="flex-1 flex flex-col gap-1 min-h-0">
-                        <p className="text-sm font-semibold text-foreground line-clamp-2">{l.name}</p>
-                        {l.notes && (
-                          <p className="text-xs text-muted-foreground line-clamp-3">{l.notes}</p>
-                        )}
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        {isComingSoon ? (
-                          <span
-                            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                            data-testid={`financing-lender-coming-soon-${l.id}`}
-                          >
-                            Coming soon
-                          </span>
-                        ) : hasAdapter ? (
-                          <span className="text-[11px] font-semibold text-primary">Apply</span>
-                        ) : l.apply_url ? (
-                          <span className="inline-flex items-center text-[11px] font-semibold text-primary">
-                            Apply
-                            <ExternalLink className="h-3 w-3 ml-1" />
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center text-[11px] font-semibold text-primary">
-                            How to apply
-                            {isExpanded ? (
-                              <ChevronUp className="h-3 w-3 ml-1" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3 ml-1" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </button>
+                    <div key={l.id} className="relative">
+                      <button
+                        type="button"
+                        onClick={handleTap}
+                        disabled={isComingSoon}
+                        data-testid={`financing-lender-card-${l.id}`}
+                        data-lender={l.name}
+                        data-financing-lender-state={state}
+                        data-financing-lender-id={l.id}
+                        aria-expanded={state === 'instr-only' ? isExpanded : undefined}
+                        className={`group aspect-square w-full rounded-lg border border-border bg-card p-3 flex flex-col text-left transition-colors ${
+                          isComingSoon
+                            ? 'opacity-60 cursor-not-allowed'
+                            : 'hover:border-primary hover:bg-accent/30 active:bg-accent/50'
+                        }`}
+                      >
+                        <div className="flex-1 flex flex-col gap-1 min-h-0">
+                          <p className="text-sm font-semibold text-foreground line-clamp-2 pr-6">
+                            {l.name}
+                          </p>
+                          {l.notes && (
+                            <p className="text-xs text-muted-foreground line-clamp-3">{l.notes}</p>
+                          )}
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          {isComingSoon ? (
+                            <span
+                              className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                              data-testid={`financing-lender-coming-soon-${l.id}`}
+                            >
+                              Coming soon
+                            </span>
+                          ) : hasAdapter ? (
+                            <span className="text-[11px] font-semibold text-primary">Apply</span>
+                          ) : l.apply_url ? (
+                            <span className="inline-flex items-center text-[11px] font-semibold text-primary">
+                              Apply
+                              <ExternalLink className="h-3 w-3 ml-1" />
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[11px] font-semibold text-primary">
+                              How to apply
+                              {isExpanded ? (
+                                <ChevronUp className="h-3 w-3 ml-1" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      {showInfoIcon && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(isExpanded ? null : l.id)}
+                          aria-label={`How to apply at ${l.name}`}
+                          aria-expanded={isExpanded}
+                          data-testid={`financing-lender-info-${l.id}`}
+                          className="absolute top-1.5 right-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>
