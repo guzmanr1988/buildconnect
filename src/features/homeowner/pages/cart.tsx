@@ -60,6 +60,14 @@ function isAddedToday(iso: string): boolean {
   )
 }
 
+// Rod-direct 2026-05-20: "-sub" suffix on Project Summary headers looks bad.
+// Strip trailing "-sub" (and "-sub-<subgroup-id>" variant) from any label
+// rendered as a section header, regardless of source (group.label OR groupId
+// fallback). Sub-pick chip below the header is preserved.
+function stripSubSuffix(label: string): string {
+  return label.replace(/-sub(?:-[^\s]+)?$/, '').trim()
+}
+
 const ICON_GRADIENTS: Record<string, string> = {
   roofing: 'from-orange-400 to-red-500',
   windows_doors: 'from-sky-400 to-blue-500',
@@ -985,8 +993,8 @@ export function CartPage() {
                       const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
                       return (
                         <div key={groupId}>
-                          <p className="text-sm font-semibold text-foreground mb-1.5">
-                            {group?.label || groupId.replace(/_/g, ' ')}
+                          <p className="text-sm font-semibold text-foreground mb-1.5" data-section-label-source={group ? 'group' : 'fallback'}>
+                            {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {optionIds.map((optId) => {
