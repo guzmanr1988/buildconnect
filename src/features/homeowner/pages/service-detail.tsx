@@ -1154,7 +1154,14 @@ export function ServiceDetailPage() {
                         aria-expanded={(option.subGroups?.length ?? 0) > 0 ? (subGroupExpanded[option.id] ?? true) : undefined}
                         disabled={isLocked}
                         onClick={() => {
-                          const hasSubGroups = (option.subGroups?.length ?? 0) > 0
+                          // SubGroupChoices accordion expand/collapse only
+                          // applies in the kitchen vertical (Path A
+                          // vertical-gate). For non-kitchen verticals the
+                          // chip must toggle selection normally so the
+                          // pre-PR-289 deselect-by-clicking-chip behavior is
+                          // preserved on Windows / Doors / Storm / Garage.
+                          const hasSubGroups =
+                            serviceId === 'kitchen' && (option.subGroups?.length ?? 0) > 0
                           if (hasSubGroups && isSelected) {
                             setSubGroupExpanded((prev) => ({
                               ...prev,
@@ -1282,7 +1289,7 @@ export function ServiceDetailPage() {
                           return <ColorCircle color={color} size={8} />
                         })()}
                         {optionLabel}
-                        {(option.subGroups?.length ?? 0) === 1 && (() => {
+                        {serviceId === 'kitchen' && (option.subGroups?.length ?? 0) === 1 && (() => {
                           const sg = option.subGroups![0]
                           const subPickId = selections[`${option.id}-sub-${sg.id}`]?.[0]
                           const subPickLabel = subPickId ? resolveSubChoiceLabel(option, sg.id, subPickId) : null
@@ -1389,13 +1396,14 @@ export function ServiceDetailPage() {
                   })}
                 </div>
                 {/* Stone-scoped Linear feet input (Kitchen vertical only).
-                    Group identified by label match ("Stone") since the group_id
-                    is DB-seeded and not stable enough to hardcode. Renders under
-                    each selected Stone variant (Quartz / Granite / Quartzite),
-                    persisted via subGroupLinearFt keyed by the variant option_id.
-                    Replaces PR-291's universal chip-row Input which leaked into
-                    Windows / Doors / Storm Front / Garage Doors. */}
-                {group.label.toLowerCase().includes('stone') &&
+                    Vertical-gated to serviceId==='kitchen' at consumer call-site
+                    per feedback_rod_vertical_scoped_changes_never_bleed so a
+                    future non-kitchen vertical with a label-match 'stone' group
+                    cannot inherit the Linear feet input. Group identified by
+                    label match within the kitchen vertical since group_id is
+                    DB-seeded and not stable enough to hardcode. */}
+                {serviceId === 'kitchen' &&
+                  group.label.toLowerCase().includes('stone') &&
                   renderOptions
                     .filter(
                       (option) =>
@@ -1431,23 +1439,37 @@ export function ServiceDetailPage() {
                         />
                       </div>
                     ))}
-                {renderOptions
-                  .filter(
-                    (option) =>
-                      selected.includes(option.id) &&
-                      (option.subGroups?.length ?? 0) > 0 &&
-                      (subGroupExpanded[option.id] ?? true),
-                  )
-                  .map((option) => (
-                    <SubGroupChoices
-                      key={`${group.id}-${option.id}-subgroups`}
-                      parentOption={option}
-                      selections={selections}
-                      onSelect={handleSubChoiceSelect}
-                      linearFeet={subGroupLinearFt[option.id] ?? ''}
-                      onLinearFeetChange={handleSubLinearFeetChange}
-                    />
-                  ))}
+                {/* Vertical-gated to serviceId==='kitchen' at consumer
+                    call-site (Path A, PR-windows-vertical-gate). Windows /
+                    Doors / Storm Front / Garage Doors verticals render the
+                    pre-existing WindowConfigurator / DoorConfigurator /
+                    StormFrontConfigurator / GarageDoorConfigurator +Add row
+                    list components below at L1815-1854 (their original UX
+                    matching Rod ground-truth screenshot). PR-289's
+                    SubGroupChoices chip-wall was bleeding alongside those
+                    configurators because Windows/Doors/Storm/Garage options
+                    have DB-seeded sub_groups; serviceId-gate restores the
+                    pre-PR-289 single-component render for non-kitchen
+                    verticals while preserving Kitchen Cabinet PR-290+PR-292
+                    flat-chip + linear-feet UX bit-identical. */}
+                {serviceId === 'kitchen' &&
+                  renderOptions
+                    .filter(
+                      (option) =>
+                        selected.includes(option.id) &&
+                        (option.subGroups?.length ?? 0) > 0 &&
+                        (subGroupExpanded[option.id] ?? true),
+                    )
+                    .map((option) => (
+                      <SubGroupChoices
+                        key={`${group.id}-${option.id}-subgroups`}
+                        parentOption={option}
+                        selections={selections}
+                        onSelect={handleSubChoiceSelect}
+                        linearFeet={subGroupLinearFt[option.id] ?? ''}
+                        onLinearFeetChange={handleSubLinearFeetChange}
+                      />
+                    ))}
                 {/* PR-223 Option B — pergolas per-square structure assignment.
                     For every measurement drawn, render a card with the sqft,
                     a ColorCircle that matches the polygon on the satellite map,
@@ -2156,6 +2178,11 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && roofPermit && { roofPermit }),
                 ...(serviceId === 'roofing' && Object.keys(roofAddonLinearFt).length > 0 && { roofAddonLinearFt }),
                 ...((): { subGroupLinearFt?: Record<string, number> } => {
+                  // Vertical-gated to kitchen so stale subGroupLinearFt
+                  // state from a prior kitchen visit can't bleed into a
+                  // non-kitchen cart-add if the same component instance
+                  // persists across SPA navigations.
+                  if (serviceId !== 'kitchen') return {}
                   const entries = Object.entries(subGroupLinearFt)
                     .map(([k, v]) => [k, Number(v) || 0] as const)
                     .filter(([, n]) => n > 0)
