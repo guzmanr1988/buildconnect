@@ -55,13 +55,18 @@ export function SubGroupChoices({
       data-multi-section-mode={String(isMultiSectionMode)}
       role="radiogroup"
     >
-      {isMultiSectionMode
-        ? subGroups.map((sg) => {
+      {isMultiSectionMode ? (
+        <div
+          className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
+          data-testid="config-sub-menu-sections-row"
+          data-section-layout="horizontal-md"
+        >
+          {subGroups.map((sg) => {
             const isSelected = selectedChoiceId === sg.id
             return (
               <div
                 key={sg.id}
-                className="mb-3 last:mb-0"
+                className="flex-1 min-w-[120px]"
                 data-testid="config-sub-menu-section"
                 data-sub-menu-id={sg.id}
               >
@@ -98,8 +103,10 @@ export function SubGroupChoices({
                 </div>
               </div>
             )
-          })
-        : (() => {
+          })}
+        </div>
+      ) : (
+        (() => {
             const sg = subGroups[0]
             return (
               <div data-testid="config-sub-menu-section" data-sub-menu-id={sg.id}>
@@ -135,7 +142,8 @@ export function SubGroupChoices({
                 </div>
               </div>
             )
-          })()}
+          })()
+      )}
 
       {hasPick && (
         <div className="mt-3 flex items-center gap-2">
