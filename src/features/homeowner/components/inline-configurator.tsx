@@ -15,17 +15,16 @@ interface InlineConfiguratorProps {
 
 function resolveSubChoiceLabel(
   option: { subGroups?: OptionGroup[] | null },
+  subGroupId: string,
   choiceId: string,
 ): string | null {
-  for (const sg of option.subGroups ?? []) {
-    if (sg.options.length > 0) {
-      const found = sg.options.find((o) => o.id === choiceId)
-      if (found) return found.label
-    } else if (sg.id === choiceId) {
-      return sg.label
-    }
+  const sg = (option.subGroups ?? []).find((g) => g.id === subGroupId)
+  if (!sg) return null
+  if (sg.options.length > 0) {
+    const found = sg.options.find((o) => o.id === choiceId)
+    return found?.label ?? null
   }
-  return null
+  return sg.id === choiceId ? sg.label : null
 }
 
 export function InlineConfigurator({ service }: InlineConfiguratorProps) {
@@ -33,7 +32,6 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
   const [selections, setSelections] = useState<Record<string, string[]>>({})
   const [subGroupExpanded, setSubGroupExpanded] = useState<Record<string, boolean>>({})
   const [subGroupLinearFt, setSubGroupLinearFt] = useState<Record<string, string>>({})
-  const [optionLinearFt, setOptionLinearFt] = useState<Record<string, string>>({})
 
   const requiredGroups = service.optionGroups.filter((g) => g.required)
   const completedRequired = requiredGroups.filter(
@@ -43,7 +41,9 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
     (selections[g.id] ?? []).every((optId) => {
       const opt = g.options.find((o) => o.id === optId)
       if (!opt?.subGroups?.length) return true
-      return (selections[`${optId}-sub`]?.length ?? 0) > 0
+      return opt.subGroups.every(
+        (sg) => (selections[`${optId}-sub-${sg.id}`]?.length ?? 0) > 0,
+      )
     }),
   )
   const allRequiredDone =
@@ -80,16 +80,12 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
     }
   }
 
-  function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
-    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub`]: [choiceId] }))
+  function handleSubChoiceSelect(parentOptionId: string, subGroupId: string, choiceId: string) {
+    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub-${subGroupId}`]: [choiceId] }))
   }
 
   function handleSubLinearFeetChange(parentOptionId: string, value: string) {
     setSubGroupLinearFt((prev) => ({ ...prev, [parentOptionId]: value }))
-  }
-
-  function handleOptionLinearFeetChange(optionId: string, value: string) {
-    setOptionLinearFt((prev) => ({ ...prev, [optionId]: value }))
   }
 
   return (
@@ -124,6 +120,7 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
         <div className="flex flex-col gap-5">
           {service.optionGroups.map((group) => {
             const selected = selections[group.id] ?? []
+            const isStoneGroup = group.label.toLowerCase().includes('stone')
             return (
               <div key={group.id}>
                 <div className="mb-2 flex items-center gap-1.5">
@@ -142,8 +139,15 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                   {group.options.map((option) => {
                     const isSelected = selected.includes(option.id)
                     const hasSubGroups = (option.subGroups?.length ?? 0) > 0
-                    const subPickId = selections[`${option.id}-sub`]?.[0]
-                    const subPickLabel = subPickId ? resolveSubChoiceLabel(option, subPickId) : null
+                    const singleSubGroup = hasSubGroups && option.subGroups!.length === 1
+                    const singleSubGroupId = singleSubGroup ? option.subGroups![0].id : null
+                    const subPickId = singleSubGroupId
+                      ? selections[`${option.id}-sub-${singleSubGroupId}`]?.[0]
+                      : undefined
+                    const subPickLabel =
+                      subPickId && singleSubGroupId
+                        ? resolveSubChoiceLabel(option, singleSubGroupId, subPickId)
+                        : null
                     return (
                       <button
                         key={option.id}
@@ -178,39 +182,44 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
                     )
                   })}
                 </div>
-                {group.options
-                  .filter(
-                    (option) =>
-                      selected.includes(option.id) &&
-                      (option.subGroups?.length ?? 0) === 0,
-                  )
-                  .map((option) => (
-                    <div
-                      key={`${group.id}-${option.id}-linearft`}
-                      className="ml-2 sm:ml-4 mt-2 flex items-center gap-2"
-                      data-testid="config-option-linear-feet-row"
-                      data-option-id={option.id}
-                    >
-                      <label
-                        htmlFor={`option-linear-feet-${option.id}`}
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Linear feet
-                      </label>
-                      <Input
-                        id={`option-linear-feet-${option.id}`}
-                        data-testid="config-option-linear-feet-input"
+                {/* Stone-scoped Linear feet input (Kitchen vertical only). Group
+                    matched by label; storage uses subGroupLinearFt slot keyed
+                    by the selected Stone variant option_id. Replaces PR-291's
+                    universal chip-row Input. */}
+                {isStoneGroup &&
+                  group.options
+                    .filter(
+                      (option) =>
+                        selected.includes(option.id) &&
+                        (option.subGroups?.length ?? 0) === 0,
+                    )
+                    .map((option) => (
+                      <div
+                        key={`${group.id}-${option.id}-linearft`}
+                        className="ml-2 sm:ml-4 mt-2 flex items-center gap-2"
+                        data-testid="config-option-linear-feet-row"
                         data-option-id={option.id}
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        placeholder="0"
-                        value={optionLinearFt[option.id] ?? ''}
-                        onChange={(e) => handleOptionLinearFeetChange(option.id, e.target.value)}
-                        className="h-9 w-24"
-                      />
-                    </div>
-                  ))}
+                      >
+                        <label
+                          htmlFor={`option-linear-feet-${option.id}`}
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Linear feet
+                        </label>
+                        <Input
+                          id={`option-linear-feet-${option.id}`}
+                          data-testid="config-option-linear-feet-input"
+                          data-option-id={option.id}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          placeholder="0"
+                          value={subGroupLinearFt[option.id] ?? ''}
+                          onChange={(e) => handleSubLinearFeetChange(option.id, e.target.value)}
+                          className="h-9 w-24"
+                        />
+                      </div>
+                    ))}
                 {group.options
                   .filter(
                     (option) =>
