@@ -56,52 +56,33 @@ export function SubGroupChoices({
       role="radiogroup"
     >
       {isMultiSectionMode ? (
-        <div
-          className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
-          data-testid="config-sub-menu-sections-row"
-          data-section-layout="horizontal-md"
-        >
+        <div className="flex flex-wrap gap-2" data-testid="config-sub-menu-section">
           {subGroups.map((sg) => {
             const isSelected = selectedChoiceId === sg.id
             return (
-              <div
+              <button
                 key={sg.id}
-                className="flex-1 min-w-[120px]"
-                data-testid="config-sub-menu-section"
+                type="button"
+                role="radio"
+                data-testid="config-sub-menu-choice"
+                data-choice-id={sg.id}
+                data-choice-name={sg.label}
                 data-sub-menu-id={sg.id}
+                data-chip-state={isSelected ? 'active' : 'inactive'}
+                aria-checked={isSelected}
+                onClick={() => onSelect(parentOption.id, sg.id)}
+                className={chipClass(isSelected)}
               >
-                <div
-                  className="mb-1.5 text-xs font-medium text-foreground"
-                  data-testid="config-sub-menu-section-label"
-                  data-sub-menu-id={sg.id}
-                >
-                  {sg.label}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    role="radio"
-                    data-testid="config-sub-menu-choice"
-                    data-choice-id={sg.id}
-                    data-choice-name={sg.label}
-                    data-sub-menu-id={sg.id}
-                    data-chip-state={isSelected ? 'active' : 'inactive'}
-                    aria-checked={isSelected}
-                    onClick={() => onSelect(parentOption.id, sg.id)}
-                    className={chipClass(isSelected)}
+                <span className="font-medium">{sg.label}</span>
+                {sg.description && (
+                  <span
+                    data-testid="config-sub-menu-choice-desc"
+                    className={descClass(isSelected)}
                   >
-                    <span className="font-medium">{sg.label}</span>
-                    {sg.description && (
-                      <span
-                        data-testid="config-sub-menu-choice-desc"
-                        className={descClass(isSelected)}
-                      >
-                        {sg.description}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
+                    {sg.description}
+                  </span>
+                )}
+              </button>
             )
           })}
         </div>
