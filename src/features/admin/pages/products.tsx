@@ -155,12 +155,62 @@ export default function ProductsAdminPage() {
     updateSubOption,
     removeSubOption,
     hydrateFromServer,
-    // Ship #175 — reorder actions for the 4 nested levels.
     reorderOptionGroups,
     reorderOptions,
     reorderSubGroups,
     reorderSubOptions,
+    saveService,
   } = useCatalogStore()
+
+  const [savingServiceId, setSavingServiceId] = useState<string | null>(null)
+
+  async function handleReorderOptionGroups(serviceId: string, from: number, to: number) {
+    try {
+      await reorderOptionGroups(serviceId, from, to)
+      toast.success('Order saved')
+    } catch (err) {
+      toast.error(formatCatalogError(err, 'Failed to save order — try again'))
+    }
+  }
+
+  async function handleReorderOptions(serviceId: string, groupId: string, from: number, to: number) {
+    try {
+      await reorderOptions(serviceId, groupId, from, to)
+      toast.success('Order saved')
+    } catch (err) {
+      toast.error(formatCatalogError(err, 'Failed to save order — try again'))
+    }
+  }
+
+  async function handleReorderSubGroups(serviceId: string, groupId: string, optionId: string, from: number, to: number) {
+    try {
+      await reorderSubGroups(serviceId, groupId, optionId, from, to)
+      toast.success('Order saved')
+    } catch (err) {
+      toast.error(formatCatalogError(err, 'Failed to save order — try again'))
+    }
+  }
+
+  async function handleReorderSubOptions(serviceId: string, groupId: string, optionId: string, subGroupId: string, from: number, to: number) {
+    try {
+      await reorderSubOptions(serviceId, groupId, optionId, subGroupId, from, to)
+      toast.success('Order saved')
+    } catch (err) {
+      toast.error(formatCatalogError(err, 'Failed to save order — try again'))
+    }
+  }
+
+  async function handleSaveServiceClick(serviceId: string) {
+    setSavingServiceId(serviceId)
+    try {
+      await saveService(serviceId)
+      toast.success('Saved')
+    } catch (err) {
+      toast.error(formatCatalogError(err, 'Failed to save — try again'))
+    } finally {
+      setSavingServiceId(null)
+    }
+  }
 
   // Trigger server hydration on mount so admin sees fresh data from Supabase,
   // not just whatever's cached in localStorage. SWR pattern: bundled/cached
@@ -809,35 +859,52 @@ export default function ProductsAdminPage() {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant={service.status === 'draft' ? 'default' : 'outline'}
+                          size="sm"
+                          className="h-8 px-2 text-[10px] sm:text-xs whitespace-nowrap"
+                          onClick={() => toggleServiceStatus(service)}
+                          data-service-action={service.status === 'draft' ? 'activate' : 'deactivate'}
+                          data-service-id={service.id}
+                          aria-label={service.status === 'draft' ? `Activate ${service.name}` : `Deactivate ${service.name}`}
+                        >
+                          {service.status === 'draft' ? 'Activate' : 'Deactivate'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditService(service)}
+                          aria-label={`Edit ${service.name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => confirmDeleteService(service)}
+                          aria-label={`Delete ${service.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                       <Button
-                        variant={service.status === 'draft' ? 'default' : 'outline'}
+                        variant="secondary"
                         size="sm"
-                        className="h-8 px-2 text-[10px] sm:text-xs whitespace-nowrap"
-                        onClick={() => toggleServiceStatus(service)}
-                        data-service-action={service.status === 'draft' ? 'activate' : 'deactivate'}
+                        className="h-8 px-3 text-[10px] sm:text-xs whitespace-nowrap"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSaveServiceClick(service.id)
+                        }}
+                        disabled={savingServiceId === service.id}
+                        data-testid="admin-service-save-button"
                         data-service-id={service.id}
-                        aria-label={service.status === 'draft' ? `Activate ${service.name}` : `Deactivate ${service.name}`}
+                        aria-label={`Save changes for ${service.name}`}
                       >
-                        {service.status === 'draft' ? 'Activate' : 'Deactivate'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEditService(service)}
-                        aria-label={`Edit ${service.name}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => confirmDeleteService(service)}
-                        aria-label={`Delete ${service.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        {savingServiceId === service.id ? 'Saving…' : 'Save Changes'}
                       </Button>
                     </div>
                   </div>
@@ -883,7 +950,7 @@ export default function ProductsAdminPage() {
                       <ReorderableList
                         items={service.optionGroups}
                         keyFor={(g) => g.id}
-                        onReorder={(from, to) => reorderOptionGroups(service.id, from, to)}
+                        onReorder={(from, to) => handleReorderOptionGroups(service.id, from, to)}
                         renderItem={(group, _gi, dragProps, dragState) => {
                         const groupKey = `${service.id}-${group.id}`
                         const groupOpen = openGroups.has(groupKey)
@@ -997,7 +1064,7 @@ export default function ProductsAdminPage() {
                               <ReorderableList
                                 items={group.options}
                                 keyFor={(o) => o.id}
-                                onReorder={(from, to) => reorderOptions(service.id, group.id, from, to)}
+                                onReorder={(from, to) => handleReorderOptions(service.id, group.id, from, to)}
                                 renderItem={(opt, _oi, optDragProps, optDragState) => (
                                 <div className="space-y-2">
                                   <div
@@ -1091,7 +1158,7 @@ export default function ProductsAdminPage() {
                                       <ReorderableList
                                         items={opt.subGroups}
                                         keyFor={(sg) => sg.id}
-                                        onReorder={(from, to) => reorderSubGroups(service.id, group.id, opt.id, from, to)}
+                                        onReorder={(from, to) => handleReorderSubGroups(service.id, group.id, opt.id, from, to)}
                                         renderItem={(subGroup, _sgi, sgDragProps, sgDragState) => (
                                         <div
                                           {...sgDragProps.row}
@@ -1188,7 +1255,7 @@ export default function ProductsAdminPage() {
                                             <ReorderableList
                                               items={subGroup.options}
                                               keyFor={(so) => so.id}
-                                              onReorder={(from, to) => reorderSubOptions(service.id, group.id, opt.id, subGroup.id, from, to)}
+                                              onReorder={(from, to) => handleReorderSubOptions(service.id, group.id, opt.id, subGroup.id, from, to)}
                                               renderItem={(subOpt, _soi, soDragProps, soDragState) => (
                                               <div
                                                 {...soDragProps.row}
