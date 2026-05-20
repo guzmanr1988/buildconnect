@@ -101,6 +101,12 @@ function metalRoofDisplaySquares(roofSize: string): number {
   return n > 200 ? sqftToSquares(Math.round(n * PITCHED_WASTE_FACTOR)) : n
 }
 
+// Rod-direct 2026-05-20: strip "-sub" / "-sub-<id>" suffix from section headers
+// in Project Summary surfaces. Mirrors cart.tsx helper.
+function stripSubSuffix(label: string): string {
+  return label.replace(/-sub(?:-[^\s]+)?$/, '').trim()
+}
+
 export function ServiceDetailPage() {
   const { serviceId } = useParams<{ serviceId: string }>()
   const navigate = useNavigate()
@@ -2520,8 +2526,8 @@ export function ServiceDetailPage() {
               const selected = selections[group.id] ?? []
               return (
                 <div key={group.id} className="border-b border-border/50 pb-4 last:border-0">
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    {group.label}
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2" data-section-label-source="group">
+                    {stripSubSuffix(group.label)}
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {selected.map((optId) => {
