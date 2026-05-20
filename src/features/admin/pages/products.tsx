@@ -47,8 +47,24 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ReorderableList } from '@/features/admin/components/reorderable-list'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { CatalogMutationError } from '@/lib/api/service-catalog'
 import type { ServiceConfig, OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
+
+function toSnakeCase(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function formatCatalogError(err: unknown, fallback: string): string {
+  if (err instanceof CatalogMutationError && err.code === '23505') {
+    return 'An item with that ID already exists in this scope. Choose a different ID and try again.'
+  }
+  if (err instanceof Error) return err.message
+  return fallback
+}
 
 /* ------------------------------------------------------------------ */
 /*  Dialogs                                                           */
@@ -276,6 +292,13 @@ export default function ProductsAdminPage() {
       .map((f) => f.trim())
       .filter(Boolean)
 
+    if (!editingService) {
+      if (services.some((s) => s.id === serviceForm.id)) {
+        toast.error(`Service ID "${serviceForm.id}" already exists. Choose a different ID.`)
+        return
+      }
+    }
+
     try {
       if (editingService) {
         await updateService(editingService.id, {
@@ -305,7 +328,7 @@ export default function ProductsAdminPage() {
       }
       setServiceDialogOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(formatCatalogError(err, 'Save failed'))
     }
   }
 
@@ -318,7 +341,7 @@ export default function ProductsAdminPage() {
           await removeService(s.id)
           setDeleteDialogOpen(false)
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Delete failed')
+          toast.error(formatCatalogError(err, 'Delete failed'))
         }
       },
     })
@@ -335,7 +358,7 @@ export default function ProductsAdminPage() {
           : `${s.name} moved to draft`,
       )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Status change failed')
+      toast.error(formatCatalogError(err, 'Status change failed'))
     }
   }
 
@@ -356,6 +379,14 @@ export default function ProductsAdminPage() {
   }
 
   async function handleSaveGroup() {
+    if (!editingGroup) {
+      const parentSvc = services.find((s) => s.id === groupContext)
+      if (parentSvc?.optionGroups.some((g) => g.id === groupForm.id)) {
+        toast.error(`Group ID "${groupForm.id}" already exists in this service. Choose a different ID.`)
+        return
+      }
+    }
+
     try {
       if (editingGroup) {
         await updateOptionGroup(groupContext, editingGroup.id, {
@@ -375,7 +406,7 @@ export default function ProductsAdminPage() {
       }
       setGroupDialogOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(formatCatalogError(err, 'Save failed'))
     }
   }
 
@@ -388,7 +419,7 @@ export default function ProductsAdminPage() {
           await removeOptionGroup(serviceId, group.id)
           setDeleteDialogOpen(false)
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Delete failed')
+          toast.error(formatCatalogError(err, 'Delete failed'))
         }
       },
     })
@@ -429,7 +460,7 @@ export default function ProductsAdminPage() {
           await removeOption(serviceId, groupId, opt.id)
           setDeleteDialogOpen(false)
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Delete failed')
+          toast.error(formatCatalogError(err, 'Delete failed'))
         }
       },
     })
@@ -437,6 +468,15 @@ export default function ProductsAdminPage() {
   }
 
   async function handleSaveOption() {
+    if (!editingOptionId) {
+      const parentSvc = services.find((s) => s.id === optionContext.serviceId)
+      const parentGroup = parentSvc?.optionGroups.find((g) => g.id === optionContext.groupId)
+      if (parentGroup?.options.some((o) => o.id === optionForm.id)) {
+        toast.error(`Option ID "${optionForm.id}" already exists in this group. Choose a different ID.`)
+        return
+      }
+    }
+
     try {
       if (editingOptionId) {
         await updateOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
@@ -454,7 +494,7 @@ export default function ProductsAdminPage() {
       }
       setOptionDialogOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(formatCatalogError(err, 'Save failed'))
     }
   }
 
@@ -486,6 +526,16 @@ export default function ProductsAdminPage() {
   }
 
   async function handleSaveSubGroup() {
+    if (!editingSubGroupId) {
+      const parentSvc = services.find((s) => s.id === subGroupContext.serviceId)
+      const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subGroupContext.groupId)
+      const parentOpt = parentGroup?.options.find((o) => o.id === subGroupContext.optionId)
+      if ((parentOpt?.subGroups ?? []).some((sg) => sg.id === subGroupForm.id)) {
+        toast.error(`Sub-menu ID "${subGroupForm.id}" already exists under this option. Choose a different ID.`)
+        return
+      }
+    }
+
     try {
       if (editingSubGroupId) {
         await updateSubGroup(
@@ -519,7 +569,7 @@ export default function ProductsAdminPage() {
       }
       setSubGroupDialogOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(formatCatalogError(err, 'Save failed'))
     }
   }
 
@@ -537,7 +587,7 @@ export default function ProductsAdminPage() {
           await removeSubGroup(serviceId, groupId, optionId, subGroup.id)
           setDeleteDialogOpen(false)
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Delete failed')
+          toast.error(formatCatalogError(err, 'Delete failed'))
         }
       },
     })
@@ -572,6 +622,17 @@ export default function ProductsAdminPage() {
   }
 
   async function handleSaveSubOption() {
+    if (!editingSubOptionId) {
+      const parentSvc = services.find((s) => s.id === subOptionContext.serviceId)
+      const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subOptionContext.groupId)
+      const parentOpt = parentGroup?.options.find((o) => o.id === subOptionContext.optionId)
+      const parentSub = (parentOpt?.subGroups ?? []).find((sg) => sg.id === subOptionContext.subGroupId)
+      if (parentSub?.options.some((so) => so.id === subOptionForm.id)) {
+        toast.error(`Sub-option ID "${subOptionForm.id}" already exists in this sub-menu. Choose a different ID.`)
+        return
+      }
+    }
+
     try {
       if (editingSubOptionId) {
         await updateSubOption(
@@ -602,7 +663,7 @@ export default function ProductsAdminPage() {
       }
       setSubOptionDialogOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(formatCatalogError(err, 'Save failed'))
     }
   }
 
@@ -621,7 +682,7 @@ export default function ProductsAdminPage() {
           await removeSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
           setDeleteDialogOpen(false)
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Delete failed')
+          toast.error(formatCatalogError(err, 'Delete failed'))
         }
       },
     })
@@ -1262,7 +1323,7 @@ export default function ProductsAdminPage() {
                   id="svc-id"
                   placeholder="e.g. solar_panels"
                   value={serviceForm.id}
-                  onChange={(e) => setServiceForm((f) => ({ ...f, id: e.target.value }))}
+                  onChange={(e) => setServiceForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
                 />
               </div>
             )}
@@ -1391,7 +1452,7 @@ export default function ProductsAdminPage() {
                   id="grp-id"
                   placeholder="e.g. panel_type"
                   value={groupForm.id}
-                  onChange={(e) => setGroupForm((f) => ({ ...f, id: e.target.value }))}
+                  onChange={(e) => setGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
                 />
               </div>
             )}
@@ -1453,7 +1514,7 @@ export default function ProductsAdminPage() {
                 id="opt-id"
                 placeholder="e.g. monocrystalline"
                 value={optionForm.id}
-                onChange={(e) => setOptionForm((f) => ({ ...f, id: e.target.value }))}
+                onChange={(e) => setOptionForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
               />
             </div>
             )}
@@ -1530,7 +1591,7 @@ export default function ProductsAdminPage() {
                 id="subgrp-id"
                 placeholder="e.g. color_options"
                 value={subGroupForm.id}
-                onChange={(e) => setSubGroupForm((f) => ({ ...f, id: e.target.value }))}
+                onChange={(e) => setSubGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
               />
             </div>
             )}
@@ -1609,7 +1670,7 @@ export default function ProductsAdminPage() {
                 id="subopt-id"
                 placeholder="e.g. matte_black"
                 value={subOptionForm.id}
-                onChange={(e) => setSubOptionForm((f) => ({ ...f, id: e.target.value }))}
+                onChange={(e) => setSubOptionForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
               />
             </div>
             )}

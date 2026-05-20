@@ -1,6 +1,15 @@
 import { supabase } from '@/lib/supabase'
 import type { ServiceConfig, OptionGroup, ServiceOption } from '@/types'
 
+export class CatalogMutationError extends Error {
+  code: string | null
+  constructor(action: string, error: { message: string; code?: string | null }) {
+    super(`${action}: ${error.message}`)
+    this.name = 'CatalogMutationError'
+    this.code = error.code ?? null
+  }
+}
+
 /*
  * Service Catalog API — Phase 2 commerce-layer wiring.
  *
@@ -179,7 +188,7 @@ export async function fetchServiceCatalog(): Promise<ServiceConfig[]> {
     .select(NESTED_SELECT)
     .order('sort_order', { ascending: true })
 
-  if (error) throw new Error(`fetchServiceCatalog: ${error.message}`)
+  if (error) throw new CatalogMutationError('fetchServiceCatalog', error)
   if (!data) return []
   return (data as unknown as DbService[]).map(serviceFromRow)
 }
@@ -203,7 +212,7 @@ export async function createService(service: ServiceConfig): Promise<void> {
     stat_value: service.stat.value,
     sort_order: 999,
   })
-  if (error) throw new Error(`createService: ${error.message}`)
+  if (error) throw new CatalogMutationError('createService', error)
 }
 
 export async function updateService(
@@ -227,12 +236,12 @@ export async function updateService(
   }
 
   const { error } = await supabase.from('services').update(dbPatch).eq('id', id)
-  if (error) throw new Error(`updateService: ${error.message}`)
+  if (error) throw new CatalogMutationError('updateService', error)
 }
 
 export async function deleteService(id: string): Promise<void> {
   const { error } = await supabase.from('services').delete().eq('id', id)
-  if (error) throw new Error(`deleteService: ${error.message}`)
+  if (error) throw new CatalogMutationError('deleteService', error)
 }
 
 /* ---------------------------------------------------------------- */
@@ -253,7 +262,7 @@ export async function createOptionGroup(
     reveals_on_equals: group.revealsOn?.equals ?? null,
     sort_order: 999,
   })
-  if (error) throw new Error(`createOptionGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('createOptionGroup', error)
 }
 
 export async function updateOptionGroup(
@@ -275,7 +284,7 @@ export async function updateOptionGroup(
     .update(dbPatch)
     .eq('service_id', serviceId)
     .eq('group_id', groupId)
-  if (error) throw new Error(`updateOptionGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('updateOptionGroup', error)
 }
 
 export async function deleteOptionGroup(
@@ -287,7 +296,7 @@ export async function deleteOptionGroup(
     .delete()
     .eq('service_id', serviceId)
     .eq('group_id', groupId)
-  if (error) throw new Error(`deleteOptionGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('deleteOptionGroup', error)
 }
 
 /* ---------------------------------------------------------------- */
@@ -304,7 +313,7 @@ async function resolveGroupUuid(
     .eq('service_id', serviceId)
     .eq('group_id', groupId)
     .maybeSingle()
-  if (error) throw new Error(`resolveGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('resolveGroup', error)
   if (!data) throw new Error(`resolveGroup: no match for ${serviceId}/${groupId}`)
   return data.id as string
 }
@@ -323,7 +332,7 @@ export async function createOption(
     price_unit: option.priceUnit ?? null,
     sort_order: 999,
   })
-  if (error) throw new Error(`createOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('createOption', error)
 }
 
 export async function updateOption(
@@ -342,7 +351,7 @@ export async function updateOption(
     .update(dbPatch)
     .eq('option_group_id', groupUuid)
     .eq('option_id', optionId)
-  if (error) throw new Error(`updateOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('updateOption', error)
 }
 
 export async function deleteOption(
@@ -356,7 +365,7 @@ export async function deleteOption(
     .delete()
     .eq('option_group_id', groupUuid)
     .eq('option_id', optionId)
-  if (error) throw new Error(`deleteOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('deleteOption', error)
 }
 
 /* ---------------------------------------------------------------- */
@@ -375,7 +384,7 @@ async function resolveOptionUuid(
     .eq('option_group_id', groupUuid)
     .eq('option_id', optionId)
     .maybeSingle()
-  if (error) throw new Error(`resolveOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('resolveOption', error)
   if (!data) throw new Error(`resolveOption: no match for ${serviceId}/${groupId}/${optionId}`)
   return data.id as string
 }
@@ -393,7 +402,7 @@ async function resolveSubGroupUuid(
     .eq('option_id', optionUuid)
     .eq('sub_group_id', subGroupId)
     .maybeSingle()
-  if (error) throw new Error(`resolveSubGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('resolveSubGroup', error)
   if (!data)
     throw new Error(`resolveSubGroup: no match for ${serviceId}/${groupId}/${optionId}/${subGroupId}`)
   return data.id as string
@@ -415,7 +424,7 @@ export async function createSubGroup(
     type: subGroup.type,
     sort_order: 999,
   })
-  if (error) throw new Error(`createSubGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('createSubGroup', error)
 }
 
 export async function updateSubGroup(
@@ -436,7 +445,7 @@ export async function updateSubGroup(
     .update(dbPatch)
     .eq('option_id', optionUuid)
     .eq('sub_group_id', subGroupId)
-  if (error) throw new Error(`updateSubGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('updateSubGroup', error)
 }
 
 export async function deleteSubGroup(
@@ -451,7 +460,7 @@ export async function deleteSubGroup(
     .delete()
     .eq('option_id', optionUuid)
     .eq('sub_group_id', subGroupId)
-  if (error) throw new Error(`deleteSubGroup: ${error.message}`)
+  if (error) throw new CatalogMutationError('deleteSubGroup', error)
 }
 
 export async function createSubOption(
@@ -470,7 +479,7 @@ export async function createSubOption(
     price_unit: subOption.priceUnit ?? null,
     sort_order: 999,
   })
-  if (error) throw new Error(`createSubOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('createSubOption', error)
 }
 
 export async function updateSubOption(
@@ -491,7 +500,7 @@ export async function updateSubOption(
     .update(dbPatch)
     .eq('sub_group_id', subGroupUuid)
     .eq('sub_option_id', subOptionId)
-  if (error) throw new Error(`updateSubOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('updateSubOption', error)
 }
 
 export async function deleteSubOption(
@@ -507,5 +516,5 @@ export async function deleteSubOption(
     .delete()
     .eq('sub_group_id', subGroupUuid)
     .eq('sub_option_id', subOptionId)
-  if (error) throw new Error(`deleteSubOption: ${error.message}`)
+  if (error) throw new CatalogMutationError('deleteSubOption', error)
 }
