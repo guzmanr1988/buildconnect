@@ -518,3 +518,89 @@ export async function deleteSubOption(
     .eq('sub_option_id', subOptionId)
   if (error) throw new CatalogMutationError('deleteSubOption', error)
 }
+
+async function bulkSortOrder(
+  table: 'option_groups' | 'options' | 'sub_groups' | 'sub_options',
+  parentColumn: string,
+  parentUuid: string,
+  childIdColumn: 'group_id' | 'option_id' | 'sub_group_id' | 'sub_option_id',
+  orderedIds: string[],
+  action: string,
+): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, idx) =>
+      supabase
+        .from(table)
+        .update({ sort_order: idx })
+        .eq(parentColumn, parentUuid)
+        .eq(childIdColumn, id),
+    ),
+  )
+  const firstError = results.find((r) => r.error)?.error
+  if (firstError) throw new CatalogMutationError(action, firstError)
+}
+
+export async function reorderOptionGroupsApi(
+  serviceId: string,
+  orderedGroupIds: string[],
+): Promise<void> {
+  await bulkSortOrder(
+    'option_groups',
+    'service_id',
+    serviceId,
+    'group_id',
+    orderedGroupIds,
+    'reorderOptionGroups',
+  )
+}
+
+export async function reorderOptionsApi(
+  serviceId: string,
+  groupId: string,
+  orderedOptionIds: string[],
+): Promise<void> {
+  const groupUuid = await resolveGroupUuid(serviceId, groupId)
+  await bulkSortOrder(
+    'options',
+    'option_group_id',
+    groupUuid,
+    'option_id',
+    orderedOptionIds,
+    'reorderOptions',
+  )
+}
+
+export async function reorderSubGroupsApi(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  orderedSubGroupIds: string[],
+): Promise<void> {
+  const optionUuid = await resolveOptionUuid(serviceId, groupId, optionId)
+  await bulkSortOrder(
+    'sub_groups',
+    'option_id',
+    optionUuid,
+    'sub_group_id',
+    orderedSubGroupIds,
+    'reorderSubGroups',
+  )
+}
+
+export async function reorderSubOptionsApi(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subGroupId: string,
+  orderedSubOptionIds: string[],
+): Promise<void> {
+  const subGroupUuid = await resolveSubGroupUuid(serviceId, groupId, optionId, subGroupId)
+  await bulkSortOrder(
+    'sub_options',
+    'sub_group_id',
+    subGroupUuid,
+    'sub_option_id',
+    orderedSubOptionIds,
+    'reorderSubOptions',
+  )
+}

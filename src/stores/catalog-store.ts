@@ -92,29 +92,24 @@ interface CatalogState {
     subOptionId: string
   ) => Promise<void>
 
-  // Ship #175 (Rodolfo-direct 2026-04-21) — reorder via long-press-and-drag
-  // on admin/products. All four nested levels are reorderable; top-level
-  // services are intentionally NOT reorderable (per Rodolfos "only menus
-  // under the services" scope). fromIndex/toIndex are positions in the
-  // current array, not sort_order values. Local-only today — the Supabase
-  // sort_order column is read on hydrate but bulk-reorder write API is
-  // Tranche-2 (needs a per-table batch-update endpoint); for now the
-  // zustand persist middleware survives the reorder across reloads, which
-  // matches the mock-as-test-harness pattern for other admin edits.
-  reorderOptionGroups: (serviceId: string, fromIndex: number, toIndex: number) => void
+  // Reorder via long-press-and-drag on admin/products. All four nested
+  // levels are reorderable; top-level services are intentionally NOT
+  // reorderable. Optimistic-local-update first, then Supabase bulk
+  // sort_order writes; on error, rollback to prior order and re-throw.
+  reorderOptionGroups: (serviceId: string, fromIndex: number, toIndex: number) => Promise<void>
   reorderOptions: (
     serviceId: string,
     groupId: string,
     fromIndex: number,
     toIndex: number
-  ) => void
+  ) => Promise<void>
   reorderSubGroups: (
     serviceId: string,
     groupId: string,
     optionId: string,
     fromIndex: number,
     toIndex: number
-  ) => void
+  ) => Promise<void>
   reorderSubOptions: (
     serviceId: string,
     groupId: string,
@@ -122,7 +117,8 @@ interface CatalogState {
     subGroupId: string,
     fromIndex: number,
     toIndex: number
-  ) => void
+  ) => Promise<void>
+  saveService: (serviceId: string) => Promise<void>
 }
 
 /* ---------------------------------------------------------------- */
@@ -700,20 +696,32 @@ export const useCatalogStore = create<CatalogState>()(
         )
       },
 
-      // Ship #175 — reorder actions. Pure local-state updates; no api.*
-      // call because vendor_option_prices / option-groups bulk-reorder
-      // endpoints aren't wired yet. zustand persist middleware keeps the
-      // reorder across reloads, matching the mock-as-test-harness pattern.
-      reorderOptionGroups: (serviceId, fromIndex, toIndex) =>
+      // Reorder actions — optimistic local update, then await Supabase
+      // bulk sort_order write. On error, rollback to prior order so the
+      // store stays in sync with what the DB actually has.
+      reorderOptionGroups: async (serviceId, fromIndex, toIndex) => {
+        const prevServices = get().services
         set((state) => ({
           services: state.services.map((s) =>
             s.id === serviceId
               ? { ...s, optionGroups: arrayMove(s.optionGroups, fromIndex, toIndex) }
               : s
           ),
-        })),
+        }))
+        try {
+          const updated = get().services.find((s) => s.id === serviceId)?.optionGroups ?? []
+          await api.reorderOptionGroupsApi(
+            serviceId,
+            updated.map((g) => g.id),
+          )
+        } catch (err) {
+          set({ services: prevServices })
+          throw err
+        }
+      },
 
-      reorderOptions: (serviceId, groupId, fromIndex, toIndex) =>
+      reorderOptions: async (serviceId, groupId, fromIndex, toIndex) => {
+        const prevServices = get().services
         set((state) => ({
           services: state.services.map((s) =>
             s.id !== serviceId
@@ -727,9 +735,25 @@ export const useCatalogStore = create<CatalogState>()(
                   ),
                 }
           ),
-        })),
+        }))
+        try {
+          const updated =
+            get().services
+              .find((s) => s.id === serviceId)
+              ?.optionGroups.find((g) => g.id === groupId)?.options ?? []
+          await api.reorderOptionsApi(
+            serviceId,
+            groupId,
+            updated.map((o) => o.id),
+          )
+        } catch (err) {
+          set({ services: prevServices })
+          throw err
+        }
+      },
 
-      reorderSubGroups: (serviceId, groupId, optionId, fromIndex, toIndex) =>
+      reorderSubGroups: async (serviceId, groupId, optionId, fromIndex, toIndex) => {
+        const prevServices = get().services
         set((state) => ({
           services: state.services.map((s) =>
             s.id !== serviceId
@@ -753,9 +777,26 @@ export const useCatalogStore = create<CatalogState>()(
                   ),
                 }
           ),
-        })),
+        }))
+        try {
+          const updatedOpt = get()
+            .services.find((s) => s.id === serviceId)
+            ?.optionGroups.find((g) => g.id === groupId)
+            ?.options.find((o) => o.id === optionId)
+          await api.reorderSubGroupsApi(
+            serviceId,
+            groupId,
+            optionId,
+            (updatedOpt?.subGroups ?? []).map((sg) => sg.id),
+          )
+        } catch (err) {
+          set({ services: prevServices })
+          throw err
+        }
+      },
 
-      reorderSubOptions: (serviceId, groupId, optionId, subGroupId, fromIndex, toIndex) =>
+      reorderSubOptions: async (serviceId, groupId, optionId, subGroupId, fromIndex, toIndex) => {
+        const prevServices = get().services
         set((state) => ({
           services: state.services.map((s) =>
             s.id !== serviceId
@@ -783,7 +824,66 @@ export const useCatalogStore = create<CatalogState>()(
                   ),
                 }
           ),
-        })),
+        }))
+        try {
+          const updatedSub = get()
+            .services.find((s) => s.id === serviceId)
+            ?.optionGroups.find((g) => g.id === groupId)
+            ?.options.find((o) => o.id === optionId)
+            ?.subGroups?.find((sg) => sg.id === subGroupId)
+          await api.reorderSubOptionsApi(
+            serviceId,
+            groupId,
+            optionId,
+            subGroupId,
+            (updatedSub?.options ?? []).map((so) => so.id),
+          )
+        } catch (err) {
+          set({ services: prevServices })
+          throw err
+        }
+      },
+
+      // Idempotent re-fire of the service's nested sort_order to Supabase.
+      // Powers the per-service "Save Changes" button that gives admin a
+      // confirmation handle for any pending reorder fires.
+      saveService: async (serviceId) => {
+        const svc = get().services.find((s) => s.id === serviceId)
+        if (!svc) throw new Error(`saveService: no service ${serviceId}`)
+        await api.reorderOptionGroupsApi(
+          serviceId,
+          svc.optionGroups.map((g) => g.id),
+        )
+        for (const group of svc.optionGroups) {
+          await api.reorderOptionsApi(
+            serviceId,
+            group.id,
+            group.options.map((o) => o.id),
+          )
+          for (const opt of group.options) {
+            const subGroups = opt.subGroups ?? []
+            if (subGroups.length > 0) {
+              await api.reorderSubGroupsApi(
+                serviceId,
+                group.id,
+                opt.id,
+                subGroups.map((sg) => sg.id),
+              )
+              for (const sg of subGroups) {
+                if (sg.options.length > 0) {
+                  await api.reorderSubOptionsApi(
+                    serviceId,
+                    group.id,
+                    opt.id,
+                    sg.id,
+                    sg.options.map((so) => so.id),
+                  )
+                }
+              }
+            }
+          }
+        }
+      },
 
       removeSubOption: async (serviceId, groupId, optionId, subGroupId, subOptionId) => {
         await api.deleteSubOption(
