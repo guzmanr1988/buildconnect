@@ -679,22 +679,37 @@ export function ServiceDetailPage() {
 
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
 
+  // Radio-across resolver: choiceId may be either a sub_group id (Cabinet
+  // multi-section mode where each sub_group acts as both label and chip) or
+  // an option id under sub_groups[0].options (Stone flat-chip mode where
+  // sub_groups[0].options are the choices). Walks all sub_groups looking for
+  // either match — sub_group ids and child option ids share a global UUID
+  // space, so the first-match-wins walk is unambiguous.
   function resolveSubChoiceLabel(
     option: { subGroups?: OptionGroup[] | null },
-    subGroupId: string,
     choiceId: string,
   ): string | null {
-    const sg = (option.subGroups ?? []).find((g) => g.id === subGroupId)
-    if (!sg) return null
-    if (sg.options.length > 0) {
+    for (const sg of option.subGroups ?? []) {
+      if (sg.id === choiceId) return sg.label
       const found = sg.options.find((o) => o.id === choiceId)
-      return found?.label ?? null
+      if (found) return found.label
     }
-    return sg.id === choiceId ? sg.label : null
+    return null
   }
 
-  function handleSubChoiceSelect(parentOptionId: string, subGroupId: string, choiceId: string) {
-    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub-${subGroupId}`]: [choiceId] }))
+  function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
+    setSelections((prev) => {
+      const key = `${parentOptionId}-sub`
+      const current = prev[key]?.[0]
+      if (current === choiceId) {
+        // Toggle off when the same chip is tapped — radio-across allows
+        // clearing a pick by re-tapping the active chip.
+        const next = { ...prev }
+        delete next[key]
+        return next
+      }
+      return { ...prev, [key]: [choiceId] }
+    })
   }
 
   function handleSubLinearFeetChange(parentOptionId: string, value: string) {
@@ -1289,10 +1304,9 @@ export function ServiceDetailPage() {
                           return <ColorCircle color={color} size={8} />
                         })()}
                         {optionLabel}
-                        {serviceId === 'kitchen' && (option.subGroups?.length ?? 0) === 1 && (() => {
-                          const sg = option.subGroups![0]
-                          const subPickId = selections[`${option.id}-sub-${sg.id}`]?.[0]
-                          const subPickLabel = subPickId ? resolveSubChoiceLabel(option, sg.id, subPickId) : null
+                        {serviceId === 'kitchen' && (option.subGroups?.length ?? 0) > 0 && (() => {
+                          const subPickId = selections[`${option.id}-sub`]?.[0]
+                          const subPickLabel = subPickId ? resolveSubChoiceLabel(option, subPickId) : null
                           return subPickLabel ? (
                             <span
                               data-testid="config-parent-sub-pick-badge"

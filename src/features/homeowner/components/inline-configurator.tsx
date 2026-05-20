@@ -80,8 +80,12 @@ export function InlineConfigurator({ service }: InlineConfiguratorProps) {
     }
   }
 
-  function handleSubChoiceSelect(parentOptionId: string, subGroupId: string, choiceId: string) {
-    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub-${subGroupId}`]: [choiceId] }))
+  // SubGroupChoices onSelect signature was simplified in PR-294 to
+  // (parentOptionId, choiceId) — radio-across semantics keyed per-parent.
+  // This dormant component (no imports) mirrors the signature so the new
+  // primitive props compile. Behavior here is unused at runtime.
+  function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
+    setSelections((prev) => ({ ...prev, [`${parentOptionId}-sub`]: [choiceId] }))
   }
 
   function handleSubLinearFeetChange(parentOptionId: string, value: string) {

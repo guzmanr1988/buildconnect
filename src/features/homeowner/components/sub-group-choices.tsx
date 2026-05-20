@@ -5,20 +5,9 @@ import { cn } from '@/lib/utils'
 interface SubGroupChoicesProps {
   parentOption: { id: string; label: string; subGroups?: OptionGroup[] | null }
   selections: Record<string, string[]>
-  onSelect: (parentOptionId: string, subGroupId: string, choiceId: string) => void
+  onSelect: (parentOptionId: string, choiceId: string) => void
   linearFeet: string
   onLinearFeetChange: (parentOptionId: string, value: string) => void
-}
-
-function buildChoices(sg: OptionGroup) {
-  if (sg.options.length > 0) {
-    return sg.options.map((o) => ({
-      id: o.id,
-      label: o.label,
-      description: o.description ?? null,
-    }))
-  }
-  return [{ id: sg.id, label: sg.label, description: sg.description ?? null }]
 }
 
 export function SubGroupChoices({
@@ -31,14 +20,31 @@ export function SubGroupChoices({
   const subGroups = parentOption.subGroups ?? []
   if (subGroups.length === 0) return null
 
-  // Single sub_group (Kitchen Cabinet pattern): preserve PR-290 flat-chip render
-  // + inline Linear feet input once a pick lands. Multi sub_group (Windows /
-  // Doors / Storm Front / Garage Doors pattern): restore pre-PR-290 per-section
-  // labeled chip rows, one independent pick per section, no Linear feet input.
-  const isMultiSubGroup = subGroups.length > 1
-  const hasPickForLinearFt =
-    !isMultiSubGroup &&
-    (selections[`${parentOption.id}-sub-${subGroups[0].id}`]?.length ?? 0) > 0
+  // Data-driven shape discriminator. Every sub_group with zero items renders
+  // multi-section labeled mode (Cabinet pattern — N labeled sections, the
+  // sub_group itself acts as both section label and the single chip choice).
+  // When at least one sub_group has items, render flat-chip mode (Stone
+  // pattern — sub_groups[0].options are the chip choices under a single
+  // implicit section).
+  const isMultiSectionMode = subGroups.every((sg) => sg.options.length === 0)
+
+  // Radio-across semantics: ONE selected choiceId per parent option, stored
+  // under key `${parentOption.id}-sub`. Tapping a chip in any section switches
+  // the pick. Tapping the same chip again toggles it off (handler-side).
+  const selectionKey = `${parentOption.id}-sub`
+  const selectedChoiceId = selections[selectionKey]?.[0]
+  const hasPick = Boolean(selectedChoiceId)
+
+  const chipClass = (isSelected: boolean) =>
+    cn(
+      'inline-flex max-w-[220px] flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150',
+      isSelected
+        ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+        : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+    )
+
+  const descClass = (isSelected: boolean) =>
+    cn('text-xs', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')
 
   return (
     <div
@@ -46,70 +52,92 @@ export function SubGroupChoices({
       data-testid="config-sub-menu-group"
       data-parent-option-id={parentOption.id}
       data-sub-group-count={subGroups.length}
+      data-multi-section-mode={String(isMultiSectionMode)}
+      role="radiogroup"
     >
-      {subGroups.map((sg) => {
-        const choices = buildChoices(sg)
-        const selectionKey = `${parentOption.id}-sub-${sg.id}`
-        const selected = selections[selectionKey] ?? []
-        return (
-          <div
-            key={sg.id}
-            className={isMultiSubGroup ? 'mb-3 last:mb-0' : ''}
-            data-testid="config-sub-menu-section"
-            data-sub-menu-id={sg.id}
-          >
-            {isMultiSubGroup && (
+      {isMultiSectionMode
+        ? subGroups.map((sg) => {
+            const isSelected = selectedChoiceId === sg.id
+            return (
               <div
-                className="mb-1.5 text-xs font-medium text-foreground"
-                data-testid="config-sub-menu-section-label"
+                key={sg.id}
+                className="mb-3 last:mb-0"
+                data-testid="config-sub-menu-section"
                 data-sub-menu-id={sg.id}
               >
-                {sg.label}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2" role="radiogroup">
-              {choices.map((choice) => {
-                const isSelected = selected.includes(choice.id)
-                return (
+                <div
+                  className="mb-1.5 text-xs font-medium text-foreground"
+                  data-testid="config-sub-menu-section-label"
+                  data-sub-menu-id={sg.id}
+                >
+                  {sg.label}
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={choice.id}
                     type="button"
                     role="radio"
                     data-testid="config-sub-menu-choice"
-                    data-choice-id={choice.id}
-                    data-choice-name={choice.label}
+                    data-choice-id={sg.id}
+                    data-choice-name={sg.label}
                     data-sub-menu-id={sg.id}
                     data-chip-state={isSelected ? 'active' : 'inactive'}
                     aria-checked={isSelected}
-                    onClick={() => onSelect(parentOption.id, sg.id, choice.id)}
-                    className={cn(
-                      'inline-flex max-w-[220px] flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150',
-                      isSelected
-                        ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
-                        : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
-                    )}
+                    onClick={() => onSelect(parentOption.id, sg.id)}
+                    className={chipClass(isSelected)}
                   >
-                    <span className="font-medium">{choice.label}</span>
-                    {choice.description && (
+                    <span className="font-medium">{sg.label}</span>
+                    {sg.description && (
                       <span
                         data-testid="config-sub-menu-choice-desc"
-                        className={cn(
-                          'text-xs',
-                          isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground',
-                        )}
+                        className={descClass(isSelected)}
                       >
-                        {choice.description}
+                        {sg.description}
                       </span>
                     )}
                   </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+                </div>
+              </div>
+            )
+          })
+        : (() => {
+            const sg = subGroups[0]
+            return (
+              <div data-testid="config-sub-menu-section" data-sub-menu-id={sg.id}>
+                <div className="flex flex-wrap gap-2">
+                  {sg.options.map((choice) => {
+                    const isSelected = selectedChoiceId === choice.id
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        role="radio"
+                        data-testid="config-sub-menu-choice"
+                        data-choice-id={choice.id}
+                        data-choice-name={choice.label}
+                        data-sub-menu-id={sg.id}
+                        data-chip-state={isSelected ? 'active' : 'inactive'}
+                        aria-checked={isSelected}
+                        onClick={() => onSelect(parentOption.id, choice.id)}
+                        className={chipClass(isSelected)}
+                      >
+                        <span className="font-medium">{choice.label}</span>
+                        {choice.description && (
+                          <span
+                            data-testid="config-sub-menu-choice-desc"
+                            className={descClass(isSelected)}
+                          >
+                            {choice.description}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
 
-      {hasPickForLinearFt && (
+      {hasPick && (
         <div className="mt-3 flex items-center gap-2">
           <label
             htmlFor={`sub-linear-feet-${parentOption.id}`}
