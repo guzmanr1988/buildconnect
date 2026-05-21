@@ -79,6 +79,7 @@ export function FinancingStatusPage() {
   // Grep `data-demo-control` to find all demo-control surfaces.
   const [acceptingTerms, setAcceptingTerms] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [advancingTo, setAdvancingTo] = useState<'pending' | 'approved' | null>(null)
   const [demoError, setDemoError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -136,6 +137,40 @@ export function FinancingStatusPage() {
       .maybeSingle()
     if (appRes) setApplication(appRes as ApplicationRow)
     setAcceptingTerms(false)
+  }
+
+  async function handleAdvance(target: 'pending' | 'approved') {
+    if (!applicationId) return
+    setDemoError(null)
+    setAdvancingTo(target)
+    const action = target === 'pending' ? 'advance_to_pending' : 'advance_to_approved'
+    const { data, error } = await supabase.functions.invoke('financing-demo-action', {
+      body: { action, applicationId },
+    })
+    if (error || !data?.ok) {
+      setDemoError(
+        (error?.message as string | undefined) ||
+          (data?.error as string | undefined) ||
+          'Could not advance application.'
+      )
+      setAdvancingTo(null)
+      return
+    }
+    const [{ data: appRes }, { data: profRes }] = await Promise.all([
+      supabase
+        .from('financing_applications')
+        .select('id,status,adapter,applied_at')
+        .eq('id', applicationId)
+        .maybeSingle(),
+      supabase
+        .from('customer_financing_profile')
+        .select('has_financing,last_known_status,last_known_amount_cents,approval_partner,approval_expires_at')
+        .eq('customer_id', profile?.id ?? '')
+        .maybeSingle(),
+    ])
+    if (appRes) setApplication(appRes as ApplicationRow)
+    if (profRes) setFinancingProfile(profRes as FinancingProfileRow)
+    setAdvancingTo(null)
   }
 
   async function handleResetFinancing() {
@@ -380,6 +415,48 @@ export function FinancingStatusPage() {
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
               Demo controls
             </p>
+            {application.status === 'applied' ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleAdvance('pending')}
+                disabled={advancingTo !== null}
+                className="self-start"
+                data-demo-control="advance-to-pending"
+                data-testid="financing-advance-to-pending"
+              >
+                {advancingTo === 'pending' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Advancing…
+                  </>
+                ) : (
+                  'Advance to Under Review (demo)'
+                )}
+              </Button>
+            ) : null}
+            {application.status === 'applied' || application.status === 'pending' ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleAdvance('approved')}
+                disabled={advancingTo !== null}
+                className="self-start"
+                data-demo-control="advance-to-approved"
+                data-testid="financing-advance-to-approved"
+              >
+                {advancingTo === 'approved' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Advancing…
+                  </>
+                ) : (
+                  'Advance to Approved (demo)'
+                )}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"

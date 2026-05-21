@@ -9,7 +9,19 @@
 //      src/features/financing/pages/status.tsx (grep `data-demo-control`)
 //   3. de-deploy the function via Mgmt API DELETE /v1/projects/<ref>/functions/financing-demo-action
 //
-// Two customer-side actions for the homeowner /home/financing/status page:
+// Four customer-side actions for the homeowner /home/financing/status page:
+//
+//   action='advance_to_pending' — applied -> pending. Required: applicationId.
+//     Customer must own the application. Demo-only step that mirrors the
+//     "Under Review" state vendors normally see before the lender returns
+//     a decision.
+//
+//   action='advance_to_approved' — applied|pending -> approved + upsert
+//     customer_financing_profile with demo-default envelope ($15k, partner
+//     from application.adapter, expires_at = now + 30 days). Required:
+//     applicationId. Customer must own the application. Mirrors what
+//     admin-create-approval writes in the production path so status.tsx
+//     renders the Approval Terms section.
 //
 //   action='accept_terms' — advance status approved -> terms_accepted.
 //     Required: applicationId. Customer must own the application.
@@ -30,9 +42,14 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+type AdvanceToPendingBody = { action: 'advance_to_pending'; applicationId: string }
+type AdvanceToApprovedBody = { action: 'advance_to_approved'; applicationId: string }
 type AcceptTermsBody = { action: 'accept_terms'; applicationId: string }
 type ResetBody = { action: 'reset' }
-type ActionBody = AcceptTermsBody | ResetBody
+type ActionBody = AdvanceToPendingBody | AdvanceToApprovedBody | AcceptTermsBody | ResetBody
+
+const DEMO_APPROVAL_AMOUNT_CENTS = 1_500_000
+const DEMO_APPROVAL_EXPIRY_DAYS = 30
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -91,6 +108,88 @@ serve(async (req: Request) => {
     body = (await req.json()) as ActionBody
   } catch {
     return jsonResponse(400, { error: 'invalid_json_body' })
+  }
+
+  if (body.action === 'advance_to_pending') {
+    if (typeof body.applicationId !== 'string' || body.applicationId.length === 0) {
+      return jsonResponse(400, { error: 'missing_application_id' })
+    }
+    const { data: appRow, error: appErr } = await admin
+      .from('financing_applications')
+      .select('id, homeowner_id, status')
+      .eq('id', body.applicationId)
+      .maybeSingle()
+    if (appErr) return jsonResponse(500, { error: 'application_lookup_failed' })
+    if (!appRow) return jsonResponse(404, { error: 'application_not_found' })
+    if (appRow.homeowner_id !== customerId) {
+      return jsonResponse(403, { error: 'not_application_owner' })
+    }
+    if (appRow.status !== 'applied') {
+      return jsonResponse(409, { error: 'application_not_in_applied_state', current_status: appRow.status })
+    }
+    const { error: updateErr } = await admin
+      .from('financing_applications')
+      .update({ status: 'pending' })
+      .eq('id', body.applicationId)
+    if (updateErr) {
+      return jsonResponse(500, { error: 'update_failed', detail: updateErr.message })
+    }
+    const { error: cfpErr } = await admin
+      .from('customer_financing_profile')
+      .update({ last_known_status: 'pending' })
+      .eq('customer_id', customerId)
+    void cfpErr
+    return jsonResponse(200, { ok: true, action: 'advance_to_pending', new_status: 'pending' })
+  }
+
+  if (body.action === 'advance_to_approved') {
+    if (typeof body.applicationId !== 'string' || body.applicationId.length === 0) {
+      return jsonResponse(400, { error: 'missing_application_id' })
+    }
+    const { data: appRow, error: appErr } = await admin
+      .from('financing_applications')
+      .select('id, homeowner_id, status, adapter')
+      .eq('id', body.applicationId)
+      .maybeSingle()
+    if (appErr) return jsonResponse(500, { error: 'application_lookup_failed' })
+    if (!appRow) return jsonResponse(404, { error: 'application_not_found' })
+    if (appRow.homeowner_id !== customerId) {
+      return jsonResponse(403, { error: 'not_application_owner' })
+    }
+    if (appRow.status !== 'applied' && appRow.status !== 'pending') {
+      return jsonResponse(409, { error: 'application_not_in_advanceable_state', current_status: appRow.status })
+    }
+    const { error: updateErr } = await admin
+      .from('financing_applications')
+      .update({ status: 'approved' })
+      .eq('id', body.applicationId)
+    if (updateErr) {
+      return jsonResponse(500, { error: 'update_failed', detail: updateErr.message })
+    }
+    const expiresAt = new Date(Date.now() + DEMO_APPROVAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    const { error: cfpErr } = await admin
+      .from('customer_financing_profile')
+      .upsert(
+        {
+          customer_id: customerId,
+          has_financing: true,
+          last_known_status: 'approved',
+          last_known_amount_cents: DEMO_APPROVAL_AMOUNT_CENTS,
+          approval_partner: appRow.adapter,
+          approval_expires_at: expiresAt,
+        },
+        { onConflict: 'customer_id' },
+      )
+    if (cfpErr) {
+      return jsonResponse(500, { error: 'cfp_upsert_failed', detail: cfpErr.message })
+    }
+    return jsonResponse(200, {
+      ok: true,
+      action: 'advance_to_approved',
+      new_status: 'approved',
+      approval_amount_cents: DEMO_APPROVAL_AMOUNT_CENTS,
+      approval_expires_at: expiresAt,
+    })
   }
 
   if (body.action === 'accept_terms') {
