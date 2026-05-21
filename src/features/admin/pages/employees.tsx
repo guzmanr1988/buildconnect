@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
-  Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar,
+  Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar, KeyRound, RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -91,6 +92,26 @@ function toInput(e: Employee): EmployeeInput {
   return rest
 }
 
+// Crypto-secure 16-char alphanumeric + 2 symbols. The Supabase signUp
+// path requires the password client-side at submit time; admin reads
+// the value off the success toast and hands it to the new employee
+// out-of-band. No persistence — local state only.
+function generateTempPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const symbols = '!@#$%&*'
+  const bytes = new Uint8Array(18)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  }
+  let out = ''
+  for (let i = 0; i < 16; i++) out += alphabet[bytes[i] % alphabet.length]
+  out += symbols[bytes[16] % symbols.length]
+  out += bytes[17] % 10
+  return out
+}
+
 export default function EmployeesPage() {
   const employees = useEmployeesStore((s) => s.employees)
   const addEmployee = useEmployeesStore((s) => s.addEmployee)
@@ -104,6 +125,12 @@ export default function EmployeesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EmployeeInput>(blankEmployee())
+  // Login provisioning fields — only consumed on the Add path. Kept as
+  // local state (NOT on EmployeeInput) so the temp password never lands
+  // in the zustand-persisted store.
+  const [loginEmail, setLoginEmail] = useState('')
+  const [tempPassword, setTempPassword] = useState('')
+  const [provisioningLogin, setProvisioningLogin] = useState(false)
   const [deactivateTarget, setDeactivateTarget] = useState<Employee | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
 
@@ -124,16 +151,31 @@ export default function EmployeesPage() {
   function openAdd() {
     setEditingId(null)
     setForm(blankEmployee())
+    setLoginEmail('')
+    setTempPassword(generateTempPassword())
     setFormOpen(true)
   }
 
   function openEdit(emp: Employee) {
     setEditingId(emp.id)
     setForm(toInput(emp))
+    setLoginEmail('')
+    setTempPassword('')
     setFormOpen(true)
   }
 
-  function submitForm() {
+  function friendlyAuthError(err: unknown): string {
+    const msg = err instanceof Error ? err.message : String(err)
+    const lower = msg.toLowerCase()
+    if (lower.includes('already') && (lower.includes('registered') || lower.includes('exists'))) {
+      return 'A user with this email already exists in Supabase Auth.'
+    }
+    if (lower.includes('password')) return 'Password rejected by Supabase (length / complexity).'
+    if (lower.includes('email')) return 'Email rejected by Supabase (format / domain).'
+    return msg
+  }
+
+  async function submitForm() {
     // Permissive validation — just first/last name required. Finance-app
     // UX doesn't gate on every field during add.
     if (!form.firstName.trim() || !form.lastName.trim()) {
@@ -143,12 +185,54 @@ export default function EmployeesPage() {
     if (editingId) {
       updateEmployee(editingId, form)
       toast.success('Employee updated.')
-    } else {
-      addEmployee(form)
-      toast.success('Employee added.')
+      setFormOpen(false)
+      setEditingId(null)
+      return
     }
-    setFormOpen(false)
-    setEditingId(null)
+
+    // Add path — local-store first so directory always reflects the new
+    // employee even if the Supabase signUp fails. Login provisioning is
+    // optional: empty login email skips signUp entirely.
+    addEmployee(form)
+
+    const email = loginEmail.trim()
+    if (!email) {
+      toast.success('Employee added. No login provisioned (login email blank).')
+      setFormOpen(false)
+      return
+    }
+    if (!tempPassword) {
+      toast.success('Employee added. No login provisioned (temp password blank).')
+      setFormOpen(false)
+      return
+    }
+
+    setProvisioningLogin(true)
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password: tempPassword,
+        options: {
+          data: {
+            name: `${form.firstName} ${form.lastName}`.trim(),
+            role: 'admin_employee',
+          },
+        },
+      })
+      if (error) throw error
+      toast.success(
+        `Employee added. Login: ${email} / temp pw: ${tempPassword}. Confirmation email sent — they must click the link before first sign-in, then change the password.`,
+        { duration: 20000 },
+      )
+    } catch (err) {
+      toast.error(
+        `Employee added, but login provisioning failed: ${friendlyAuthError(err)}`,
+        { duration: 15000 },
+      )
+    } finally {
+      setProvisioningLogin(false)
+      setFormOpen(false)
+    }
   }
 
   return (
@@ -517,6 +601,55 @@ export default function EmployeesPage() {
               </div>
             </section>
 
+            {/* Login Provisioning — Add path only. Edit path uses Supabase
+                admin pw-reset flow elsewhere (out of scope for this PR). */}
+            {!editingId && (
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Employee Login
+                </h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Optional. If provided, an admin_employee account is created in Supabase Auth.
+                  A confirmation email is sent — the employee must click the link before first sign-in, then change the password.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Login email</Label>
+                    <Input
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="h-10 text-sm"
+                      placeholder="employee@buildc.net"
+                      data-employee-login-email
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Temporary password</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={tempPassword}
+                        onChange={(e) => setTempPassword(e.target.value)}
+                        className="h-10 text-sm font-mono"
+                        data-employee-temp-password
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setTempPassword(generateTempPassword())}
+                        className="h-10 gap-1.5 shrink-0"
+                        data-employee-temp-password-regenerate
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Auto
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* Emergency Contact */}
             <section className="space-y-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emergency Contact</h4>
@@ -591,9 +724,9 @@ export default function EmployeesPage() {
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={submitForm} className="w-full sm:w-auto">
-              {editingId ? 'Save changes' : 'Add employee'}
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={provisioningLogin} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={submitForm} disabled={provisioningLogin} className="w-full sm:w-auto">
+              {editingId ? 'Save changes' : provisioningLogin ? 'Provisioning login...' : 'Add employee'}
             </Button>
           </DialogFooter>
         </DialogContent>
