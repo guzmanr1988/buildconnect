@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, Mail, FileText, CheckCircle2, AlertTriangle, ChevronRight, Ban, RotateCcw, Briefcase, Download, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Mail, FileText, CheckCircle2, AlertTriangle, ChevronRight, Ban, RotateCcw, Download, ShieldCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { deriveInitials } from '@/lib/initials'
 import { Card, CardContent } from '@/components/ui/card'
@@ -154,9 +154,12 @@ export default function AdminHomeownerDetail() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   // ALL Projects derivation (cross-vendor, sorted most-recent-first).
+  // vendor_id carries through so the nested per-project document section
+  // can heuristically match docs by vendor (schema has no lead_id yet —
+  // multi-project-per-same-vendor pre-launch tolerance per Rod scope).
   const allProjects = useMemo(() => {
     if (!resolvedHomeowner) return []
-    const rows: { id: string; date: string; project: string; vendor?: string; status: string; amount?: number; clickId: string | null }[] = []
+    const rows: { id: string; date: string; project: string; vendor?: string; vendor_id?: string; status: string; amount?: number; clickId: string | null }[] = []
 
     // sentProjects (cart-created) for THIS homeowner across all vendors.
     sentProjects
@@ -167,6 +170,7 @@ export default function AdminHomeownerDetail() {
           date: sp.sentAt,
           project: sp.item.serviceName,
           vendor: sp.contractor?.company,
+          vendor_id: sp.contractor?.vendor_id,
           status: sp.status,
           amount: sp.saleAmount,
           clickId: sp.id,
@@ -183,6 +187,7 @@ export default function AdminHomeownerDetail() {
           date: l.received_at ?? l.slot ?? new Date().toISOString(),
           project: l.project,
           vendor: v?.company,
+          vendor_id: l.vendor_id,
           status: l.status,
           clickId: l.id,
         })
@@ -208,6 +213,7 @@ export default function AdminHomeownerDetail() {
         date: cs.closed_at,
         project: cs.project,
         vendor: v?.company,
+        vendor_id: cs.vendor_id,
         status: 'sold',
         amount: cs.sale_amount,
         clickId: cs.lead_id, // ProjectDetailDialog dual-lookup via mockLeads.id (#279 same fix)
@@ -217,18 +223,16 @@ export default function AdminHomeownerDetail() {
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [resolvedHomeowner, homeownerEmail, sentProjects, mockLeads, mockClosedSales])
 
-  // Group docs by vendor for cross-vendor display.
-  const docsByVendor = useMemo(() => {
+  // Docs indexed by vendor_id for O(1) per-project lookup at render.
+  // Same heuristic-match boundary as the row shape above.
+  const docsByVendorId = useMemo(() => {
     const map = new Map<string, typeof allDocs>()
     allDocs.forEach((d) => {
       const list = map.get(d.vendor_id) ?? []
       list.push(d)
       map.set(d.vendor_id, list)
     })
-    return Array.from(map.entries()).map(([vendor_id, docs]) => {
-      const v = MOCK_VENDORS.find((mv) => mv.id === vendor_id)
-      return { vendor_id, vendorName: v?.company ?? vendor_id, docs }
-    })
+    return map
   }, [allDocs])
 
   // Homeowner-uploaded ID — first sentProject with idDocument set (one
@@ -318,55 +322,15 @@ export default function AdminHomeownerDetail() {
         }
       />
 
-      {/* Section 1: ALL Projects (cross-vendor) */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-primary" />
-          <h2 className="font-heading text-lg font-semibold">All Projects</h2>
-          <span className="text-sm text-muted-foreground">({allProjects.length})</span>
-        </div>
-        {allProjects.length === 0 ? (
-          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No projects yet for {resolvedHomeowner.name}.</CardContent></Card>
-        ) : (
-          <div className="space-y-2">
-            {allProjects.map((p) => (
-              <Card
-                key={p.id}
-                className="rounded-xl cursor-pointer hover:shadow-md transition"
-                onClick={() => p.clickId && setSelectedProjectId(p.clickId)}
-                data-admin-homeowner-project-row={p.id}
-              >
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{p.project}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span>{fmtDate(p.date)}</span>
-                      {p.vendor && <span>· {p.vendor}</span>}
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_CLASS[p.status] ?? 'bg-muted text-muted-foreground'}`}>{p.status}</span>
-                    </p>
-                  </div>
-                  {typeof p.amount === 'number' && p.amount > 0 && (
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(p.amount)}</p>
-                    </div>
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </CardContent>
-              </Card>
-            ))}
+      {/* Section: Personal Documents — homeowner-uploaded ID is cross-
+          project (one per session) so it lives above All Projects, not
+          nested inside any single project card. */}
+      {homeownerIdDocument && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <h2 className="font-heading text-lg font-semibold">Personal Documents</h2>
           </div>
-        )}
-      </section>
-
-      {/* Section 2: Documents (cross-vendor + cross-role) */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          <h2 className="font-heading text-lg font-semibold">Documents</h2>
-        </div>
-
-        {/* Subsection a: Homeowner-uploaded ID */}
-        {homeownerIdDocument && (
           <Card className="rounded-xl">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
@@ -379,6 +343,7 @@ export default function AdminHomeownerDetail() {
               <a
                 href={homeownerIdDocument}
                 download={`${resolvedHomeowner.name.replace(/\s/g, '-')}-id`}
+                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -386,46 +351,95 @@ export default function AdminHomeownerDetail() {
               </a>
             </CardContent>
           </Card>
-        )}
+        </section>
+      )}
 
-        {/* Subsection b: Vendor-uploaded docs grouped by vendor */}
-        {docsByVendor.length === 0 && !homeownerIdDocument ? (
-          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents on file for {resolvedHomeowner.name} yet.</CardContent></Card>
-        ) : null}
+      {/* Section: ALL Projects (cross-vendor) — each project card carries
+          its own nested documents block (heuristic match by vendor_id
+          since vendor_homeowner_documents has no lead_id yet). */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-primary" />
+          <h2 className="font-heading text-lg font-semibold">All Projects</h2>
+          <span className="text-sm text-muted-foreground">({allProjects.length})</span>
+        </div>
+        {allProjects.length === 0 ? (
+          <>
+            <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No projects yet for {resolvedHomeowner.name}.</CardContent></Card>
+            {allDocs.length === 0 && (
+              <p className="text-xs text-muted-foreground pl-1">No documents on file yet.</p>
+            )}
+          </>
+        ) : (
+          <div className="space-y-2">
+            {allProjects.map((p) => {
+              const projectDocs = p.vendor_id ? (docsByVendorId.get(p.vendor_id) ?? []) : []
+              return (
+                <Card
+                  key={p.id}
+                  className="rounded-xl cursor-pointer hover:shadow-md transition"
+                  onClick={() => p.clickId && setSelectedProjectId(p.clickId)}
+                  data-admin-homeowner-project-row={p.id}
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{p.project}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>{fmtDate(p.date)}</span>
+                          {p.vendor && <span>· {p.vendor}</span>}
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_CLASS[p.status] ?? 'bg-muted text-muted-foreground'}`}>{p.status}</span>
+                        </p>
+                      </div>
+                      {typeof p.amount === 'number' && p.amount > 0 && (
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmtCurrency(p.amount)}</p>
+                        </div>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
 
-        {docsByVendor.map((group) => (
-          <div key={group.vendor_id} className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-3 flex items-center gap-2">
-              <Briefcase className="h-3 w-3" />
-              {group.vendorName}
-            </h3>
-            {group.docs.map((d) => (
-              <Card key={d.id} className="rounded-xl">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <FileText className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{d.filename}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {d.category === 'other' && d.customLabel ? d.customLabel : VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[d.category]}
-                      {' · '}
-                      {fmtDate(d.uploadedAt)}
-                    </p>
-                  </div>
-                  <a
-                    href={d.dataUrl}
-                    download={d.filename}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download
-                  </a>
-                </CardContent>
-              </Card>
-            ))}
+                    {/* Nested documents block (heuristic vendor_id match) */}
+                    <div
+                      className="border-t pt-3"
+                      data-admin-homeowner-project-docs={p.id}
+                    >
+                      {projectDocs.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">No documents for this project yet.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {projectDocs.map((d) => (
+                            <div
+                              key={d.id}
+                              className="flex items-center gap-2 text-xs"
+                              data-admin-homeowner-project-doc={d.id}
+                            >
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <p className="text-foreground truncate flex-1">{d.filename}</p>
+                              <span className="text-muted-foreground shrink-0">
+                                {d.category === 'other' && d.customLabel ? d.customLabel : VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[d.category]}
+                                {' · '}
+                                {fmtDate(d.uploadedAt)}
+                              </span>
+                              <a
+                                href={d.dataUrl}
+                                download={d.filename}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-primary hover:underline shrink-0"
+                              >
+                                Download
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
-        ))}
+        )}
       </section>
 
       {/* Project detail dialog (#248 dual-lookup pattern) */}
