@@ -98,8 +98,9 @@ export interface Profile {
   noncircumvention_agreement_signed_name?: string
   noncircumvention_agreement_version?: string
   // Frozen body of the agreement at sign-time. Lets admin view show
-  // exactly what the vendor agreed to, even if AGREEMENT_TEXT later
-  // gets updated to a new version.
+  // exactly what the vendor agreed to, even if AGREEMENT_TEXT_TEMPLATE
+  // later gets updated to a new version. Stores the per-vendor rendered
+  // text (vendor company name substituted) as of sign-time.
   noncircumvention_agreement_text_snapshot?: string
   noncircumvention_agreement_signature_metadata?: {
     ip?: string

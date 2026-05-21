@@ -7,13 +7,18 @@
 // file. Same visibility-discipline applies to any future placeholders.
 //
 // Version-bump protocol: when the attorney returns final language,
-// (1) replace AGREEMENT_TEXT, (2) bump CURRENT_AGREEMENT_VERSION (e.g.
-// "v1.0" or "v2.0-final"), (3) all prior-signed vendors see the new
+// (1) replace AGREEMENT_TEXT_TEMPLATE, (2) bump CURRENT_AGREEMENT_VERSION
+// (e.g. "v1.0" or "v2.0-final"), (3) all prior-signed vendors see the new
 // version on their next /vendor route mount and the gate-modal
 // re-prompts. Snapshot stored at sign-time on the vendor's profile
 // preserves the signed-version body for audit.
+//
+// v1.1-draft (Rod-direct ship-now): vendor company name auto-populates
+// into the defining sentence via {VENDOR_COMPANY_NAME} placeholder.
+// Snapshot stores the rendered text per-vendor — audit view replays the
+// exact signed body.
 
-export const CURRENT_AGREEMENT_VERSION = 'v1.0-draft' as const
+export const CURRENT_AGREEMENT_VERSION = 'v1.1-draft' as const
 
 export const AGREEMENT_TITLE = 'Non-Circumvention Agreement'
 
@@ -23,7 +28,9 @@ export const AGREEMENT_DRAFT_BANNER =
 export const AGREEMENT_EMAIL_FOOTER =
   'A copy of this agreement will be sent to your email.'
 
-export const AGREEMENT_TEXT = `THIS AGREEMENT is entered into between BuildConnect ("Platform") and the undersigned vendor ("Vendor") as of the date of electronic signature below.
+const VENDOR_COMPANY_PLACEHOLDER = '{VENDOR_COMPANY_NAME}'
+
+export const AGREEMENT_TEXT_TEMPLATE = `THIS AGREEMENT is entered into between BuildConnect ("Platform") and ${VENDOR_COMPANY_PLACEHOLDER} ("Vendor") as of the date of electronic signature below.
 
 1. DEFINITIONS
 
@@ -63,14 +70,22 @@ If any provision of this Agreement is held unenforceable, the remaining provisio
 
 By typing my full legal name and clicking Submit below, I attest that I have read, understood, and agree to be bound by the terms of this Agreement. I acknowledge that this electronic signature constitutes a legally binding signature pursuant to the federal E-SIGN Act and the Uniform Electronic Transactions Act.`
 
+export function renderAgreementText(vendorCompany: string): string {
+  const trimmed = vendorCompany.trim()
+  if (!trimmed) {
+    throw new Error('renderAgreementText: vendorCompany is required')
+  }
+  return AGREEMENT_TEXT_TEMPLATE.split(VENDOR_COMPANY_PLACEHOLDER).join(trimmed)
+}
+
 export interface AgreementSnapshot {
   version: string
   text: string
 }
 
-export function getCurrentAgreementSnapshot(): AgreementSnapshot {
+export function getCurrentAgreementSnapshot(vendorCompany: string): AgreementSnapshot {
   return {
     version: CURRENT_AGREEMENT_VERSION,
-    text: AGREEMENT_TEXT,
+    text: renderAgreementText(vendorCompany),
   }
 }
