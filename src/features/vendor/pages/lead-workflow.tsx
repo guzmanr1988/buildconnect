@@ -514,6 +514,10 @@ export default function VendorLeadWorkflow() {
                 <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">
                   {lead.homeowner_name}
                 </p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 min-w-0" data-testid="lead-card-address">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{lead.address}</span>
+                </div>
                 <p className="text-sm font-bold text-foreground/90 mt-0.5 truncate">
                   {lead.project.split(' — ')[0]}
                 </p>
@@ -1536,9 +1540,9 @@ export default function VendorLeadWorkflow() {
                                 <span className="text-muted-foreground">Sale Total</span>
                                 <span className="font-bold">${sp.saleAmount.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                              <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400" data-testid="vendor-sold-your-share-row">
                                 <span>Your Share ({100 - vendor.commission_pct}%)</span>
-                                <span className="font-bold">${Math.round(sp.saleAmount * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
+                                <span className="text-2xl font-bold leading-none" data-testid="vendor-sold-your-share-amount">${Math.round(sp.saleAmount * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
                               </div>
                               <div className="flex justify-between text-amber-700 dark:text-amber-400">
                                 <span>Commission ({vendor.commission_pct}%)</span>
