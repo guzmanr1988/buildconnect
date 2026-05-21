@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Bug as BugIcon,
   Plus,
@@ -7,8 +8,11 @@ import {
   AlertCircle,
   Info,
   Calendar,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,7 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared/page-header'
-import { MOCK_BUGS } from '@/lib/mock-data'
 import type { Bug, BugPriority, BugStatus } from '@/types'
 
 const fadeUp = {
@@ -67,29 +70,77 @@ const STATUS_CONFIG: Record<BugStatus, { label: string; className: string }> = {
 }
 
 export default function BugsPage() {
-  const [bugs, setBugs] = useState<Bug[]>([...MOCK_BUGS])
+  // Supabase-wired per Rod-direct ship-now 2026-05-21. reporter_id = auth.uid()
+  // satisfies RLS migration 010 "Any role can submit bugs" WITH CHECK clause.
+  const sessionUserId = useAuthStore((s) => s.session?.user?.id ?? null)
+  const [bugs, setBugs] = useState<Bug[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [newDescription, setNewDescription] = useState('')
   const [newPriority, setNewPriority] = useState<BugPriority>('medium')
 
-  const handleSubmit = () => {
-    if (!newDescription.trim()) return
-    const newBug: Bug = {
-      id: `bug-${Date.now()}`,
-      reporter_id: 'admin-1',
-      description: newDescription.trim(),
-      priority: newPriority,
-      status: 'open',
-      created_at: new Date().toISOString(),
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('bugs')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) {
+        toast.error(`Load bugs failed: ${error.message}`)
+        setBugs([])
+      } else {
+        setBugs((data ?? []) as Bug[])
+      }
+      setLoading(false)
     }
-    setBugs((prev) => [newBug, ...prev])
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSubmit = async () => {
+    const description = newDescription.trim()
+    if (!description) return
+    if (!sessionUserId) {
+      toast.error('Not signed in — cannot submit bug')
+      return
+    }
+    setSubmitting(true)
+    const { data, error } = await supabase
+      .from('bugs')
+      .insert({
+        reporter_id: sessionUserId,
+        description,
+        priority: newPriority,
+      })
+      .select('*')
+      .single()
+    setSubmitting(false)
+    if (error || !data) {
+      toast.error(`Submit bug failed: ${error?.message ?? 'unknown_error'}`)
+      return
+    }
+    setBugs((prev) => [data as Bug, ...prev])
     setNewDescription('')
     setNewPriority('medium')
+    toast.success('Bug reported')
   }
 
-  const handleStatusChange = (bugId: string, newStatus: BugStatus) => {
-    setBugs((prev) =>
-      prev.map((b) => (b.id === bugId ? { ...b, status: newStatus } : b))
-    )
+  const handleStatusChange = async (bugId: string, newStatus: BugStatus) => {
+    const prevBugs = bugs
+    setBugs((prev) => prev.map((b) => (b.id === bugId ? { ...b, status: newStatus } : b)))
+    const { error } = await supabase
+      .from('bugs')
+      .update({ status: newStatus })
+      .eq('id', bugId)
+    if (error) {
+      setBugs(prevBugs)
+      toast.error(`Status update failed: ${error.message}`)
+    }
   }
 
   const openCount = bugs.filter((b) => b.status === 'open').length
@@ -100,13 +151,13 @@ export default function BugsPage() {
     <div className="space-y-6">
       <PageHeader title="Bug Tracker" description="Report and manage platform issues">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-400">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-400" data-testid="admin-bugs-open-count">
             {openCount} Open
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-400">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-400" data-testid="admin-bugs-in-progress-count">
             {inProgressCount} In Progress
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1.5 text-sm font-medium text-emerald-800 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1.5 text-sm font-medium text-emerald-800 dark:text-emerald-400" data-testid="admin-bugs-resolved-count">
             {resolvedCount} Resolved
           </span>
         </div>
@@ -130,6 +181,7 @@ export default function BugsPage() {
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   className="min-h-20"
+                  data-testid="admin-bugs-description-input"
                 />
               </div>
               <div className="sm:w-48 space-y-2">
@@ -138,7 +190,7 @@ export default function BugsPage() {
                   value={newPriority}
                   onValueChange={(val) => setNewPriority(val as BugPriority)}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full" data-testid="admin-bugs-priority-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -147,8 +199,13 @@ export default function BugsPage() {
                     <SelectItem value="low">Low</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button onClick={handleSubmit} className="w-full gap-2 mt-2">
-                  <BugIcon className="h-4 w-4" />
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting || !newDescription.trim() || !sessionUserId}
+                  className="w-full gap-2 mt-2"
+                  data-testid="admin-bugs-submit"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <BugIcon className="h-4 w-4" />}
                   Submit Bug
                 </Button>
               </div>
@@ -158,99 +215,113 @@ export default function BugsPage() {
       </motion.div>
 
       {/* Bug List */}
-      <div className="space-y-4">
-        {bugs.map((bug, i) => {
-          const priority = PRIORITY_CONFIG[bug.priority]
-          const PriorityIcon = priority.icon
-          return (
-            <motion.div key={bug.id} custom={i + 1} variants={fadeUp} initial="hidden" animate="visible">
-              <Card className="rounded-xl shadow-sm hover:shadow-md transition">
-                <CardContent className="p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    {/* Priority Icon */}
-                    <div
-                      className={cn(
-                        'rounded-lg p-2.5 shrink-0',
-                        bug.priority === 'high'
-                          ? 'bg-red-100 dark:bg-red-900/30'
-                          : bug.priority === 'medium'
-                          ? 'bg-amber-100 dark:bg-amber-900/30'
-                          : 'bg-blue-100 dark:bg-blue-900/30'
-                      )}
-                    >
-                      <PriorityIcon
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-muted-foreground" data-testid="admin-bugs-loading">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Loading bugs…
+        </div>
+      ) : bugs.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground" data-testid="admin-bugs-empty">
+            <BugIcon className="mx-auto mb-3 h-10 w-10 opacity-40" />
+            <div className="text-sm">No bugs reported yet. Submit one above to get started.</div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {bugs.map((bug, i) => {
+            const priority = PRIORITY_CONFIG[bug.priority]
+            const PriorityIcon = priority.icon
+            return (
+              <motion.div key={bug.id} custom={i + 1} variants={fadeUp} initial="hidden" animate="visible">
+                <Card className="rounded-xl shadow-sm hover:shadow-md transition" data-testid="admin-bugs-row" data-bug-id={bug.id}>
+                  <CardContent className="p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                      {/* Priority Icon */}
+                      <div
                         className={cn(
-                          'h-5 w-5',
+                          'rounded-lg p-2.5 shrink-0',
                           bug.priority === 'high'
-                            ? 'text-red-600 dark:text-red-400'
+                            ? 'bg-red-100 dark:bg-red-900/30'
                             : bug.priority === 'medium'
-                            ? 'text-amber-700 dark:text-amber-400'
-                            : 'text-blue-600 dark:text-blue-400'
+                            ? 'bg-amber-100 dark:bg-amber-900/30'
+                            : 'bg-blue-100 dark:bg-blue-900/30'
                         )}
-                      />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm leading-relaxed">{bug.description}</p>
-                      <div className="flex flex-wrap items-center gap-3 mt-3">
-                        {/* Priority Badge */}
-                        <span
+                      >
+                        <PriorityIcon
                           className={cn(
-                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                            priority.className
+                            'h-5 w-5',
+                            bug.priority === 'high'
+                              ? 'text-red-600 dark:text-red-400'
+                              : bug.priority === 'medium'
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-blue-600 dark:text-blue-400'
                           )}
+                        />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-relaxed">{bug.description}</p>
+                        <div className="flex flex-wrap items-center gap-3 mt-3">
+                          {/* Priority Badge */}
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                              priority.className
+                            )}
+                          >
+                            {priority.label}
+                          </span>
+
+                          {/* Date */}
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(bug.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+
+                          {/* Bug ID */}
+                          <span className="text-xs text-muted-foreground font-mono">{bug.id}</span>
+                        </div>
+                      </div>
+
+                      {/* Status Selector */}
+                      <div className="shrink-0 sm:w-40">
+                        <Select
+                          value={bug.status}
+                          onValueChange={(val) => handleStatusChange(bug.id, val as BugStatus)}
                         >
-                          {priority.label}
-                        </span>
-
-                        {/* Date */}
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(bug.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </span>
-
-                        {/* Bug ID */}
-                        <span className="text-xs text-muted-foreground font-mono">{bug.id}</span>
+                          <SelectTrigger className="w-full" data-testid="admin-bugs-status-select" data-bug-id={bug.id}>
+                            <SelectValue>
+                              <span
+                                className={cn(
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                  STATUS_CONFIG[bug.status].className
+                                )}
+                              >
+                                {STATUS_CONFIG[bug.status].label}
+                              </span>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="resolved">Resolved</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
-
-                    {/* Status Selector */}
-                    <div className="shrink-0 sm:w-40">
-                      <Select
-                        value={bug.status}
-                        onValueChange={(val) => handleStatusChange(bug.id, val as BugStatus)}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                STATUS_CONFIG[bug.status].className
-                              )}
-                            >
-                              {STATUS_CONFIG[bug.status].label}
-                            </span>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">Open</SelectItem>
-                          <SelectItem value="in_progress">In Progress</SelectItem>
-                          <SelectItem value="resolved">Resolved</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
-      </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
