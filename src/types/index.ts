@@ -1,4 +1,4 @@
-export type UserRole = 'homeowner' | 'vendor' | 'admin' | 'account_rep'
+export type UserRole = 'homeowner' | 'vendor' | 'admin' | 'account_rep' | 'admin_employee'
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
 // Ship #75 Phase A collapsed homeowner-cancellation-approved into the
