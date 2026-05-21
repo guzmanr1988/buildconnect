@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -57,7 +57,7 @@ const navItems: NavEntry[] = [
   { to: '/admin/activity', icon: ActivityIcon, label: 'Activity' },
   { to: '/admin/products', icon: Package, label: 'Products' },
   { to: '/admin/tutorials', icon: PlayCircle, label: 'Video Tutorials' },
-  { to: '/admin/bugs', icon: Bug, label: 'Bug Tracker' },
+  { to: '/admin/bugs', icon: BugIcon, label: 'Bug Tracker' },
 ]
 
 function isNavGroup(item: NavEntry): item is NavGroup {
