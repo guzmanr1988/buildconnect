@@ -91,15 +91,7 @@ export function FinancingApplyPage() {
       if (lenderErr) {
         setLenders([])
       } else {
-        // DEMO-ONLY (helios task_1779387367041_851): force GoodLeap-only lender
-        // tile for Rod's end-to-end financing demo walkthrough. Rip with the
-        // sibling demo controls on status.tsx at GA cleanup. Grep
-        // `data-demo-control` + `project_buildconnect_financing_demo_controls_pre_launch_only`.
-        setLenders(
-          ((lenderRows ?? []) as Lender[]).filter(
-            (l) => l.active && lenderSlug(l.name) === 'goodleap',
-          ),
-        )
+        setLenders(((lenderRows ?? []) as Lender[]).filter((l) => l.active))
       }
       if (flagErr) {
         setFlags({})
@@ -132,11 +124,7 @@ export function FinancingApplyPage() {
     const flagOn = flags[CATEGORY_FLAGS[category]] === true
     const rows = lenders.filter((l) => l.category === category)
     return { category, flagOn, rows }
-  })
-    // DEMO-ONLY (helios task_1779387367041_851): drop category-flag gate so the
-    // GoodLeap tile renders regardless of feature_flags state during Rod's
-    // demo walkthrough. Original gate: .filter((s) => s.flagOn && s.rows.length > 0)
-    .filter((s) => s.rows.length > 0)
+  }).filter((s) => s.flagOn && s.rows.length > 0)
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto" data-testid="financing-lender-catalog">
