@@ -58,9 +58,13 @@ function SignMode({ open }: { open: boolean }) {
   const [submitting, setSubmitting] = useState(false)
   // v1.1-draft — vendor company name is required to render + sign the
   // per-vendor agreement body. Gate-modal mounts only for role=vendor
-  // (vendor-layout), so profile.company should always be present; we
-  // still defend against empty/missing by blocking the sign button.
-  const vendorCompany = (profile?.company ?? '').trim()
+  // (vendor-layout). Apex-demo (and any vendor whose Supabase auth
+  // metadata lacks the `company` key) has profile.company === null
+  // while profile.name === "Apex Roofing & Solar" — same string the
+  // vendor-layout page header renders. Fall back to profile.name so
+  // the dialog can render + the sign button unblocks. Empty/missing
+  // still blocks via the canSubmit gate below.
+  const vendorCompany = ((profile?.company ?? profile?.name) ?? '').trim()
   const renderedText = vendorCompany ? renderAgreementText(vendorCompany) : null
   const canSubmit = typedName.trim().length > 0 && agreed && !submitting && vendorCompany.length > 0
 
@@ -216,7 +220,10 @@ function ViewMode({ open, onOpenChange, profile }: { open: boolean; onOpenChange
   const signedAt = profile.noncircumvention_agreement_signed_at
   const signedName = profile.noncircumvention_agreement_signed_name
   const version = profile.noncircumvention_agreement_version
-  const vendorCompany = (profile.company ?? '').trim()
+  // Same fallback chain as SignMode — covers admin-side audit preview
+  // on vendors whose Supabase profile.company is null but profile.name
+  // carries the company display value.
+  const vendorCompany = ((profile.company ?? profile.name) ?? '').trim()
   // Snapshot is the source-of-truth for the signed body (frozen per-vendor
   // at sign-time). Fallback to a live render only when no snapshot exists
   // — covers pre-snapshot signed rows and admin previews on unsigned
