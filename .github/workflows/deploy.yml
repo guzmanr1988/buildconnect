@@ -32,6 +32,15 @@ jobs:
           VITE_DEMO_VENDOR_PW: ${{ secrets.VITE_DEMO_VENDOR_PW }}
           VITE_DEMO_ADMIN_PW: ${{ secrets.VITE_DEMO_ADMIN_PW }}
           VITE_DEMO_ACCOUNT_REP_PW: ${{ secrets.VITE_DEMO_ACCOUNT_REP_PW }}
+          # PR-306 (2026-05-21) — admin_employee demo password mirrors the
+          # PR-256 VITE_FINANCING_ENABLED literal pattern. deploy.yml runs
+          # on every push to main and is the dominant deploy path (wrangler
+          # bypasses CF Pages git integration), so the CF env that hermes
+          # provisioned would have been ignored at apex build time. Hardcoded
+          # literal so the demo-button launch state is durable without out-
+          # of-band repo-secret configuration. Demo password is effectively
+          # public (clickable button with no entry) — no security cost.
+          VITE_DEMO_EMPLOYEE_PW: 'demo-employee-Spring2026!'
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           # PR-256 (2026-05-17) — financing-flag launch state. Pre-fix this
           # workflow lacked both vars in the build env, so every CF Pages
