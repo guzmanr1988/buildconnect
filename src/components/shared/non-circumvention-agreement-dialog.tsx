@@ -11,10 +11,10 @@ import { updateVendor } from '@/lib/api/vendors'
 import {
   AGREEMENT_DRAFT_BANNER,
   AGREEMENT_EMAIL_FOOTER,
-  AGREEMENT_TEXT,
   AGREEMENT_TITLE,
   CURRENT_AGREEMENT_VERSION,
   getCurrentAgreementSnapshot,
+  renderAgreementText,
 } from '@/lib/non-circumvention-agreement'
 import type { Profile } from '@/types'
 
@@ -56,11 +56,17 @@ function SignMode({ open }: { open: boolean }) {
   const [typedName, setTypedName] = useState('')
   const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const canSubmit = typedName.trim().length > 0 && agreed && !submitting
+  // v1.1-draft — vendor company name is required to render + sign the
+  // per-vendor agreement body. Gate-modal mounts only for role=vendor
+  // (vendor-layout), so profile.company should always be present; we
+  // still defend against empty/missing by blocking the sign button.
+  const vendorCompany = (profile?.company ?? '').trim()
+  const renderedText = vendorCompany ? renderAgreementText(vendorCompany) : null
+  const canSubmit = typedName.trim().length > 0 && agreed && !submitting && vendorCompany.length > 0
 
   const handleSubmit = async () => {
-    if (!canSubmit || !profile) return
-    const snapshot = getCurrentAgreementSnapshot()
+    if (!canSubmit || !profile || !vendorCompany) return
+    const snapshot = getCurrentAgreementSnapshot(vendorCompany)
     const signedAt = new Date().toISOString()
     const patch = {
       noncircumvention_agreement_signed_at: signedAt,
@@ -148,8 +154,14 @@ function SignMode({ open }: { open: boolean }) {
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-4 text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-          {AGREEMENT_TEXT}
+          {renderedText ?? ''}
         </div>
+
+        {!vendorCompany && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Vendor company name required — contact admin to set your company name before signing.
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>
@@ -161,6 +173,7 @@ function SignMode({ open }: { open: boolean }) {
               onChange={(e) => setTypedName(e.target.value)}
               placeholder="Full legal name"
               autoComplete="off"
+              disabled={!vendorCompany}
             />
           </div>
           <label className="flex items-start gap-2.5 cursor-pointer">
@@ -168,6 +181,7 @@ function SignMode({ open }: { open: boolean }) {
               checked={agreed}
               onCheckedChange={(v) => setAgreed(v === true)}
               className="mt-0.5"
+              disabled={!vendorCompany}
             />
             <span className="text-sm text-foreground">
               I have read and agree to the terms of this agreement.
@@ -202,7 +216,13 @@ function ViewMode({ open, onOpenChange, profile }: { open: boolean; onOpenChange
   const signedAt = profile.noncircumvention_agreement_signed_at
   const signedName = profile.noncircumvention_agreement_signed_name
   const version = profile.noncircumvention_agreement_version
-  const snapshot = profile.noncircumvention_agreement_text_snapshot ?? AGREEMENT_TEXT
+  const vendorCompany = (profile.company ?? '').trim()
+  // Snapshot is the source-of-truth for the signed body (frozen per-vendor
+  // at sign-time). Fallback to a live render only when no snapshot exists
+  // — covers pre-snapshot signed rows and admin previews on unsigned
+  // vendor profiles. If vendor company is also missing, show a stub.
+  const fallback = vendorCompany ? renderAgreementText(vendorCompany) : '—'
+  const snapshot = profile.noncircumvention_agreement_text_snapshot ?? fallback
   const isCurrent = version === CURRENT_AGREEMENT_VERSION
   const fmtSignedAt = signedAt
     ? new Date(signedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
