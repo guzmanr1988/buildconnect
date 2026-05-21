@@ -48,6 +48,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/shared/page-header'
 import { matchesSearch } from '@/lib/search-match'
 import { useUsersStore, type MockUser, type UserStatus } from '@/stores/users-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import type { UserRole } from '@/types'
 
@@ -80,6 +81,7 @@ function roleBadge(role: UserRole) {
     vendor: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
     homeowner: { className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
     account_rep: { className: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400' },
+    admin_employee: { className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
   }
   const cfg = map[role]
   return (
@@ -107,11 +109,24 @@ function statusBadge(status: UserStatus) {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+// Roles that admin_employee is allowed to see/manage: vendor, homeowner,
+// account_rep only. No admin, no admin_employee.
+const ADMIN_EMPLOYEE_VISIBLE_ROLES = new Set<UserRole>(['vendor', 'homeowner', 'account_rep'])
+
 export default function UsersPage() {
   const users = useUsersStore((s) => s.users)
   const addUserToStore = useUsersStore((s) => s.addUser)
   const updateUserInStore = useUsersStore((s) => s.updateUser)
   const toggleStatusInStore = useUsersStore((s) => s.toggleStatus)
+  const profile = useAuthStore((s) => s.profile)
+  const isAdminEmployee = profile?.role === 'admin_employee'
+  const visibleRoleTabs = useMemo(
+    () =>
+      isAdminEmployee
+        ? ROLE_TABS.filter((t) => t.value === 'all' || ADMIN_EMPLOYEE_VISIBLE_ROLES.has(t.value as UserRole))
+        : ROLE_TABS,
+    [isAdminEmployee],
+  )
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
 
@@ -248,6 +263,9 @@ export default function UsersPage() {
   /* ---- Filtered list ---- */
   const filtered = useMemo(() => {
     let list = users
+    if (isAdminEmployee) {
+      list = list.filter((u) => ADMIN_EMPLOYEE_VISIBLE_ROLES.has(u.role))
+    }
     if (roleFilter !== 'all') {
       list = list.filter((u) => u.role === roleFilter)
     }
@@ -261,7 +279,7 @@ export default function UsersPage() {
       )
     }
     return list
-  }, [users, search, roleFilter])
+  }, [users, search, roleFilter, isAdminEmployee])
 
   /* ---- Actions ---- */
   function toggleStatus(id: string) {
@@ -289,10 +307,13 @@ export default function UsersPage() {
 
   /* ---- Counts ---- */
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: users.length }
-    for (const u of users) c[u.role] = (c[u.role] ?? 0) + 1
+    const scoped = isAdminEmployee
+      ? users.filter((u) => ADMIN_EMPLOYEE_VISIBLE_ROLES.has(u.role))
+      : users
+    const c: Record<string, number> = { all: scoped.length }
+    for (const u of scoped) c[u.role] = (c[u.role] ?? 0) + 1
     return c
-  }, [users])
+  }, [users, isAdminEmployee])
 
   return (
     <div className="space-y-6">
@@ -318,7 +339,7 @@ export default function UsersPage() {
 
         {/* Role filter tabs */}
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter users by role">
-          {ROLE_TABS.map(({ value, label, icon: Icon }) => (
+          {visibleRoleTabs.map(({ value, label, icon: Icon }) => (
             <Button
               key={value}
               variant={roleFilter === value ? 'default' : 'outline'}
@@ -384,10 +405,12 @@ export default function UsersPage() {
                           })}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
+                          <div className="flex items-center justify-end gap-1" data-admin-employee-users-edit-hidden={isAdminEmployee ? 'true' : undefined}>
+                            {!isAdminEmployee && (
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -399,19 +422,21 @@ export default function UsersPage() {
                             >
                               <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => toggleStatus(user.id)}
-                              title={user.status === 'suspended' ? 'Activate' : 'Suspend'}
-                              aria-label={user.status === 'suspended' ? `Activate ${user.name}` : `Suspend ${user.name}`}
-                            >
-                              {user.status === 'suspended' ? (
-                                <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-                              ) : (
-                                <ShieldAlert className="h-4 w-4 text-red-500" />
-                              )}
-                            </Button>
+                            {!isAdminEmployee && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => toggleStatus(user.id)}
+                                title={user.status === 'suspended' ? 'Activate' : 'Suspend'}
+                                aria-label={user.status === 'suspended' ? `Activate ${user.name}` : `Suspend ${user.name}`}
+                              >
+                                {user.status === 'suspended' ? (
+                                  <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                                ) : (
+                                  <ShieldAlert className="h-4 w-4 text-red-500" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -524,7 +549,7 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {!isAdminEmployee && <SelectItem value="admin">Admin</SelectItem>}
                   <SelectItem value="vendor">Vendor</SelectItem>
                   <SelectItem value="homeowner">Homeowner</SelectItem>
                 </SelectContent>

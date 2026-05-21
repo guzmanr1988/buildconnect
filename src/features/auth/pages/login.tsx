@@ -16,6 +16,7 @@ import {
   Shield,
   ChevronRight,
   UserCheck,
+  UserCog,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -91,6 +92,15 @@ const demoAccounts = [
     icon: UserCheck,
     gradient: 'from-sky-500 to-sky-600',
   },
+  {
+    role: 'admin_employee' as const,
+    email: 'employee@buildc.net',
+    password: import.meta.env.VITE_DEMO_EMPLOYEE_PW as string | undefined,
+    label: 'Employee',
+    desc: 'Limited admin view',
+    icon: UserCog,
+    gradient: 'from-violet-500 to-violet-600',
+  },
 ]
 
 export function LoginPage() {
@@ -129,7 +139,7 @@ export function LoginPage() {
       // /vendor (with rep-scoped sidebar + render-layer dashboard
       // filter per banked CHAIN IS GOD).
       const dest =
-        profile.role === 'admin'
+        profile.role === 'admin' || profile.role === 'admin_employee'
           ? '/admin'
           : profile.role === 'vendor' || profile.role === 'account_rep'
             ? '/vendor'
@@ -170,7 +180,7 @@ export function LoginPage() {
     }
   }
 
-  async function demoLogin(email: string, password: string | undefined, role: 'homeowner' | 'vendor' | 'admin' | 'account_rep') {
+  async function demoLogin(email: string, password: string | undefined, role: 'homeowner' | 'vendor' | 'admin' | 'account_rep' | 'admin_employee') {
     if (!password) {
       toast.error('Demo credentials not configured for this build')
       return
