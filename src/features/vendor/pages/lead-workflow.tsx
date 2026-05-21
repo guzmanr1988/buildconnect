@@ -514,6 +514,10 @@ export default function VendorLeadWorkflow() {
                 <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">
                   {lead.homeowner_name}
                 </p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 min-w-0" data-testid="lead-card-address">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{lead.address}</span>
+                </div>
                 <p className="text-sm font-bold text-foreground/90 mt-0.5 truncate">
                   {lead.project.split(' — ')[0]}
                 </p>
