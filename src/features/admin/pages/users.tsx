@@ -550,7 +550,9 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {!isAdminEmployee && <SelectItem value="admin">Admin</SelectItem>}
+                  {!isAdminEmployee && <SelectItem value="admin_employee">Admin Employee</SelectItem>}
                   <SelectItem value="vendor">Vendor</SelectItem>
+                  <SelectItem value="account_rep">Account Rep</SelectItem>
                   <SelectItem value="homeowner">Homeowner</SelectItem>
                 </SelectContent>
               </Select>
