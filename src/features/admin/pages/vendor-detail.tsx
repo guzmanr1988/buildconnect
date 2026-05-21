@@ -96,6 +96,36 @@ export default function AdminVendorDetail() {
     [vendorId],
   )
 
+  // Group products by service category. Sorted most-items-first so the
+  // dominant vertical leads visually; alpha tiebreak on label for stable
+  // ordering when group sizes match.
+  const productGroups = useMemo(() => {
+    const buckets = new Map<ServiceCategory, typeof vendorCatalogItems>()
+    for (const item of vendorCatalogItems) {
+      const arr = buckets.get(item.category) ?? []
+      arr.push(item)
+      buckets.set(item.category, arr)
+    }
+    return Array.from(buckets.entries())
+      .map(([category, items]) => ({ category, items }))
+      .sort((a, b) => {
+        if (b.items.length !== a.items.length) return b.items.length - a.items.length
+        return (CATEGORY_LABELS[a.category] ?? a.category).localeCompare(
+          CATEGORY_LABELS[b.category] ?? b.category,
+        )
+      })
+  }, [vendorCatalogItems])
+
+  // Active-service count per category — priced options in the vendor's
+  // catalog-store entry for the matching serviceId. Closure-captures
+  // vendorCatalogServices so child render helpers can reuse it.
+  const getActiveCount = (category: ServiceCategory) => {
+    const svc = vendorCatalogServices.find((s) => s.serviceId === category)
+    return svc?.enabled
+      ? Object.values(svc.pricing).filter((cents) => cents > 0).length
+      : 0
+  }
+
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [agreementViewOpen, setAgreementViewOpen] = useState(false)
   const [repromptConfirmOpen, setRepromptConfirmOpen] = useState(false)
@@ -350,7 +380,13 @@ export default function AdminVendorDetail() {
       {/* Section: Products — PRODUCT-IS-GOD Phase A visibility (PR 1).
           Lists active CatalogItems for this vendor. Active-service count =
           priced options in vendor-catalog-store for the matching serviceId.
-          Click-action is TBD in PR 6; circle is a status indicator only. */}
+          Click-action is TBD in PR 6; circle is a status indicator only.
+
+          Group-by-category (Rod-direct): when a vendor crosses verticals
+          OR has > 5 items, sub-section per category (sorted most-items-
+          first with alpha tiebreak); each group collapses to 4 with a
+          "Show N more" inline expander. Single-category vendors with <= 5
+          items keep the flat grid (clean shape unchanged). */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Package className="h-5 w-5 text-primary" />
@@ -361,37 +397,26 @@ export default function AdminVendorDetail() {
           <Card className="rounded-xl">
             <CardContent className="p-5 text-sm text-muted-foreground">No products configured yet.</CardContent>
           </Card>
-        ) : (
+        ) : productGroups.length === 1 && vendorCatalogItems.length <= 5 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {vendorCatalogItems.map((ci) => {
-              const svc = vendorCatalogServices.find((s) => s.serviceId === ci.category)
-              const activeCount = svc?.enabled
-                ? Object.values(svc.pricing).filter((cents) => cents > 0).length
-                : 0
-              return (
-                <Card key={ci.id} className="rounded-xl" data-admin-vendor-product={ci.id}>
-                  <CardContent className="p-2.5 space-y-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="font-medium text-foreground text-sm truncate flex-1">{ci.name}</p>
-                      <span
-                        className={cn(
-                          'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
-                          activeCount > 0
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-                            : 'bg-muted text-muted-foreground',
-                        )}
-                        data-admin-vendor-product-active-count={ci.id}
-                      >
-                        {activeCount} active
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground capitalize truncate">
-                      {CATEGORY_LABELS[ci.category] ?? ci.category}
-                    </p>
-                  </CardContent>
-                </Card>
-              )
-            })}
+            {vendorCatalogItems.map((ci) => (
+              <ProductCard
+                key={ci.id}
+                item={ci}
+                activeCount={getActiveCount(ci.category)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {productGroups.map((group) => (
+              <ProductCategoryGroup
+                key={group.category}
+                category={group.category}
+                items={group.items}
+                getActiveCount={getActiveCount}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -742,6 +767,76 @@ export default function AdminVendorDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+type CatalogItem = (typeof MOCK_CATALOG)[number]
+
+function ProductCard({ item, activeCount }: { item: CatalogItem; activeCount: number }) {
+  return (
+    <Card className="rounded-xl" data-admin-vendor-product={item.id}>
+      <CardContent className="p-2.5 space-y-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="font-medium text-foreground text-sm truncate flex-1">{item.name}</p>
+          <span
+            className={cn(
+              'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
+              activeCount > 0
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                : 'bg-muted text-muted-foreground',
+            )}
+            data-admin-vendor-product-active-count={item.id}
+          >
+            {activeCount} active
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground capitalize truncate">
+          {CATEGORY_LABELS[item.category] ?? item.category}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+const PRODUCT_GROUP_COLLAPSE_THRESHOLD = 4
+
+function ProductCategoryGroup({
+  category,
+  items,
+  getActiveCount,
+}: {
+  category: ServiceCategory
+  items: CatalogItem[]
+  getActiveCount: (category: ServiceCategory) => number
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const visibleItems = expanded ? items : items.slice(0, PRODUCT_GROUP_COLLAPSE_THRESHOLD)
+  const hiddenCount = items.length - visibleItems.length
+  const canCollapse = items.length > PRODUCT_GROUP_COLLAPSE_THRESHOLD
+  const activeCount = getActiveCount(category)
+  const label = CATEGORY_LABELS[category] ?? category
+
+  return (
+    <div className="space-y-2" data-admin-vendor-product-group={category}>
+      <p className="text-sm font-medium text-muted-foreground">
+        {label} · {items.length}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {visibleItems.map((item) => (
+          <ProductCard key={item.id} item={item} activeCount={activeCount} />
+        ))}
+      </div>
+      {canCollapse && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-primary hover:underline"
+          data-admin-vendor-product-group-toggle={category}
+        >
+          {expanded ? 'Show less' : `Show ${hiddenCount} more`}
+        </button>
+      )}
     </div>
   )
 }
