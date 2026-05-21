@@ -1536,9 +1536,9 @@ export default function VendorLeadWorkflow() {
                                 <span className="text-muted-foreground">Sale Total</span>
                                 <span className="font-bold">${sp.saleAmount.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                              <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400" data-testid="vendor-sold-your-share-row">
                                 <span>Your Share ({100 - vendor.commission_pct}%)</span>
-                                <span className="font-bold">${Math.round(sp.saleAmount * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
+                                <span className="text-2xl font-bold leading-none" data-testid="vendor-sold-your-share-amount">${Math.round(sp.saleAmount * (1 - vendor.commission_pct / 100)).toLocaleString()}</span>
                               </div>
                               <div className="flex justify-between text-amber-700 dark:text-amber-400">
                                 <span>Commission ({vendor.commission_pct}%)</span>
