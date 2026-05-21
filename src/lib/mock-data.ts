@@ -1,4 +1,4 @@
-import type { Profile, Lead, ClosedSale, CatalogItem, Message, Transaction, Vendor, BankAccount, AppSettings, Bug } from '@/types'
+import type { Profile, Lead, ClosedSale, CatalogItem, Message, Transaction, Vendor, BankAccount, AppSettings } from '@/types'
 
 // ─── Users ───
 // Ship #246 — lat/lng seeded on demo fixtures for geo-match Phase 1
@@ -134,12 +134,6 @@ export const MOCK_SETTINGS: AppSettings = {
   phase2_enabled: false,
   financing_enabled: true,
 }
-
-export const MOCK_BUGS: Bug[] = [
-  { id: 'bug-1', reporter_id: 'admin-1', description: 'Vendor compare page sometimes shows stale pricing after catalog update', priority: 'high', status: 'open', created_at: '2026-04-07T09:00:00Z' },
-  { id: 'bug-2', reporter_id: 'v-1', description: 'Calendar slot picker not showing Saturday availability', priority: 'medium', status: 'in_progress', created_at: '2026-04-05T14:30:00Z' },
-  { id: 'bug-3', reporter_id: 'ho-1', description: 'Notification badge count doesn\'t reset after reading messages', priority: 'low', status: 'resolved', created_at: '2026-04-03T11:00:00Z' },
-]
 
 // ─── Available time slots (for calendar) ───
 // Dynamically generated relative to today so slots are always in the future.

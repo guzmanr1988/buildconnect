@@ -14,7 +14,8 @@ import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
-import { MOCK_BUGS } from '@/lib/mock-data'
+import { supabase } from '@/lib/supabase'
+import type { Bug } from '@/types'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { cn } from '@/lib/utils'
 
@@ -192,7 +193,25 @@ export function AdminLayout() {
   // sees ALL vendors + homeowners by design. To extend with future
   // event-types, add a filter-and-map block and concat into
   // `notifications`.
-  const openBugs = MOCK_BUGS.filter((b) => b.status === 'open')
+  // Bugs wired to Supabase 2026-05-21 (Rod-direct ship-now). Filter to
+  // status='open' on the server so the sidebar badge count is authoritative.
+  const [openBugs, setOpenBugs] = useState<Bug[]>([])
+  useEffect(() => {
+    let cancelled = false
+    async function loadOpenBugs() {
+      const { data } = await supabase
+        .from('bugs')
+        .select('*')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      setOpenBugs((data ?? []) as Bug[])
+    }
+    loadOpenBugs()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   // Ship #276 — non-circumvention agreement signings as cross-role
