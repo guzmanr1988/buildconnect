@@ -7,7 +7,6 @@ import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -32,6 +31,7 @@ import { ShingleRoofConfigurator, type ShingleRoofSelection } from '../component
 import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
 import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
 import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
+import { AddonLinearFtConfigurator } from '../components/addon-linear-ft-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SubGroupChoices } from '../components/sub-group-choices'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
@@ -379,6 +379,13 @@ export function ServiceDetailPage() {
     const persisted = (editItemForService?.gutterDropsConfig as { drops?: number } | undefined)?.drops
     return persisted && persisted >= 1 && persisted <= 5 ? persisted : 2
   })
+  // Per-addon configurator open/closed state for the 5 Class A linear-ft
+  // addons (gutters / soffit_wood / fascia_wood / soffit_metal / fascia_metal).
+  // Mirrors the xConfigOpen pattern used by ShingleRoofConfigurator and
+  // siblings — ephemeral UI state, not persisted. On chip-tap-add the
+  // configurator opens; on Save the configurator collapses and the chip
+  // shows an inline lin-ft summary badge.
+  const [addonConfigOpen, setAddonConfigOpen] = useState<Record<string, boolean>>({})
 
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
@@ -1432,10 +1439,26 @@ export function ServiceDetailPage() {
                           }
                           if (serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_IDS.includes(option.id)) {
                             const wasSelected = selected.includes(option.id)
-                            if (wasSelected) {
+                            const wasOpen = addonConfigOpen[option.id] ?? false
+                            if (wasSelected && !wasOpen) {
+                              // Re-tap of saved chip → reopen configurator for
+                              // edit. Preserve selection + values + return early
+                              // to PREEMPT handleSelect (which would deselect).
+                              // Mirrors Rod-direct spec "Re-tap card → reopens
+                              // configurator with values pre-filled".
+                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                              return
+                            }
+                            if (wasSelected && wasOpen) {
+                              // Tap during active edit (config still open, no
+                              // save yet) → deselect + clean state.
+                              // Fallthrough lets handleSelect remove from selected.
                               setAddonLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                              setAddonConfigOpen((prev) => { const next = { ...prev }; delete next[option.id]; return next })
                             } else {
+                              // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
+                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
                             }
                           }
                         }}
@@ -1563,6 +1586,37 @@ export function ServiceDetailPage() {
                         {serviceId === 'roofing' && option.id === 'flat_roof' && flatRoofSelection.membraneType && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {flatRoofSelection.roofSize ? `${Number(flatRoofSelection.roofSize).toLocaleString()} sq` : 'Configured'}
+                          </span>
+                        )}
+                        {/* Class A addon chip-summary badges — surface once
+                            configurator saved + collapsed. Mirrors the
+                            roofing-material "21 sq" precedent (same span
+                            shape + bg + text-size). Gutter shows the
+                            computed total (perimeter + floor-aware drops);
+                            others show the raw input lin-ft. */}
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'gutters' && !addonConfigOpen['gutters'] && gutterFloors && Number(addonLinearFt['gutters'] ?? 0) > 0 && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {computeGutterTotalLinFt(Number(addonLinearFt['gutters']) || 0, { floors: gutterFloors, drops: gutterDrops }).toLocaleString()} lin ft
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'soffit_wood' && !addonConfigOpen['soffit_wood'] && Number(addonLinearFt['soffit_wood'] ?? 0) > 0 && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {(Number(addonLinearFt['soffit_wood']) || 0).toLocaleString()} lin ft
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'fascia_wood' && !addonConfigOpen['fascia_wood'] && Number(addonLinearFt['fascia_wood'] ?? 0) > 0 && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {(Number(addonLinearFt['fascia_wood']) || 0).toLocaleString()} lin ft
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'soffit_metal' && !addonConfigOpen['soffit_metal'] && Number(addonLinearFt['soffit_metal'] ?? 0) > 0 && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {(Number(addonLinearFt['soffit_metal']) || 0).toLocaleString()} lin ft
+                          </span>
+                        )}
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'fascia_metal' && !addonConfigOpen['fascia_metal'] && Number(addonLinearFt['fascia_metal'] ?? 0) > 0 && (
+                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
+                            {(Number(addonLinearFt['fascia_metal']) || 0).toLocaleString()} lin ft
                           </span>
                         )}
                         {serviceId === 'pool' && option.id === 'led' && ledCount > 0 && (
@@ -1745,108 +1799,32 @@ export function ServiceDetailPage() {
                     </div>
                   )
                 })()}
-                {/* Linear ft inputs for gutters / soffit / fascia — roofing addons only.
-                    Floors + drops chips render inline ONLY when gutters chip is active
-                    (ported from wizard Step 7; cart payload shape gutterDropsConfig
-                    preserved so vendor inbox + lead-workflow + roof-spec-card readers
-                    pick it up unchanged). */}
-                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.some((c) => selected.includes(c.id)) && (() => {
-                  const showGutterDrops = selected.includes('gutters')
-                  const gutterPerimeter = Number(addonLinearFt['gutters'] ?? 0) || 0
-                  const perFloor = gutterFloors ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors] : 0
-                  const gutterTotal = computeGutterTotalLinFt(
-                    gutterPerimeter,
-                    gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
-                  )
-                  const floorsLabel = gutterFloors === 1 ? '1-story' : '2-story'
-                  return (
-                    <div className="mt-3 space-y-3">
-                      {showGutterDrops && (
-                        <>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">How many floors does the home have?</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                              {([1, 2] as const).map((n) => {
-                                const isSelected = gutterFloors === n
-                                return (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    data-chip-id={String(n)}
-                                    data-chip-group="gutter_floors"
-                                    data-chip-state={isSelected ? 'active' : 'inactive'}
-                                    onClick={() => setGutterFloors(n)}
-                                    className={cn(
-                                      'rounded-xl border p-3 text-center transition-all duration-150',
-                                      isSelected
-                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
-                                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
-                                    )}
-                                  >
-                                    <span className="text-sm">{n === 1 ? 'One story' : 'Two stories'}</span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">How many downspouts (drops)?</Label>
-                            <div className="grid grid-cols-5 gap-2">
-                              {[1, 2, 3, 4, 5].map((n) => {
-                                const isSelected = gutterDrops === n
-                                return (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    data-chip-id={String(n)}
-                                    data-chip-group="gutter_drops"
-                                    data-chip-state={isSelected ? 'active' : 'inactive'}
-                                    onClick={() => setGutterDrops(n)}
-                                    className={cn(
-                                      'rounded-xl border p-3 text-center transition-all duration-150',
-                                      isSelected
-                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
-                                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground'
-                                    )}
-                                  >
-                                    <span className="text-sm">{n}</span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">Most homes have 2 or 3 drops.</p>
-                          </div>
-                        </>
-                      )}
-                      <div className="space-y-2">
-                        {ADDON_LINEAR_FT_CONFIG.filter((c) => selected.includes(c.id)).map((c) => (
-                          <div key={c.id} className="flex items-center gap-3">
-                            <Label className="text-sm w-36 shrink-0">{c.label}</Label>
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              className="max-w-[140px]"
-                              placeholder="linear feet"
-                              value={addonLinearFt[c.id] ?? ''}
-                              onChange={(e) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      {showGutterDrops && gutterFloors && gutterPerimeter > 0 && (
-                        <div className="rounded-xl border bg-muted/40 p-3 space-y-1" data-roofing-gutter-breakdown="true">
-                          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total gutter lin ft</p>
-                          <p className="text-sm font-semibold text-foreground">
-                            {gutterTotal.toLocaleString()} lin ft
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {gutterPerimeter.toLocaleString()} perimeter + {gutterDrops} drop{gutterDrops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
+                {/* Per-addon configurator dispatch — one AnimatePresence per
+                    Class A linear-ft addon (5 total). Save-on-click collapses
+                    just that addon's configurator and surfaces an inline
+                    lin-ft summary badge on the chip (mirrors the roofing-
+                    material chip-tap → ShingleRoofConfigurator → "21 sq"
+                    badge pattern). Gutter slot embeds floors + drops chips
+                    and total breakdown inside its own configurator body. */}
+                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.map((c) => (
+                  <AnimatePresence key={c.id}>
+                    {selected.includes(c.id) && addonConfigOpen[c.id] && (
+                      <AddonLinearFtConfigurator
+                        id={c.id}
+                        label={c.label}
+                        value={addonLinearFt[c.id] ?? ''}
+                        onChange={(next) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: next }))}
+                        onSave={() => setAddonConfigOpen((prev) => ({ ...prev, [c.id]: false }))}
+                        gutterExtras={c.id === 'gutters' ? {
+                          floors: gutterFloors,
+                          drops: gutterDrops,
+                          onFloorsChange: setGutterFloors,
+                          onDropsChange: setGutterDrops,
+                        } : undefined}
+                      />
+                    )}
+                  </AnimatePresence>
+                ))}
                 {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
