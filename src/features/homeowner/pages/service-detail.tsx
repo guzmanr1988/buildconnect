@@ -1351,6 +1351,27 @@ export function ServiceDetailPage() {
                           if (hasSubGroups) {
                             setSubGroupExpanded((prev) => ({ ...prev, [option.id]: true }))
                           }
+                          // Re-tap of saved roofing-addon chip → reopen
+                          // configurator for edit; preserve selection +
+                          // values. PREEMPT handleSelect (which would
+                          // otherwise toggle off the selection) so the
+                          // chip stays selected and the configurator
+                          // renders pre-filled. Must run BEFORE handleSelect
+                          // because handleSelect mutates `selected` async and
+                          // the AnimatePresence render-gate downstream is
+                          // `selected.includes(c.id) && addonConfigOpen[c.id]`.
+                          if (
+                            serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            ADDON_LINEAR_FT_IDS.includes(option.id)
+                          ) {
+                            const wasSelected = selected.includes(option.id)
+                            const wasOpen = addonConfigOpen[option.id] ?? false
+                            if (wasSelected && !wasOpen) {
+                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                              return
+                            }
+                          }
                           handleSelect(group, option.id)
                           // Auto-close addon menu after size selection
                           if (group.id === 'spa_size') setActiveAddonMenu(null)
@@ -1440,15 +1461,9 @@ export function ServiceDetailPage() {
                           if (serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_IDS.includes(option.id)) {
                             const wasSelected = selected.includes(option.id)
                             const wasOpen = addonConfigOpen[option.id] ?? false
-                            if (wasSelected && !wasOpen) {
-                              // Re-tap of saved chip → reopen configurator for
-                              // edit. Preserve selection + values + return early
-                              // to PREEMPT handleSelect (which would deselect).
-                              // Mirrors Rod-direct spec "Re-tap card → reopens
-                              // configurator with values pre-filled".
-                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
-                              return
-                            }
+                            // Note: re-tap of saved-chip (wasSelected && !wasOpen)
+                            // is handled above the handleSelect call (preempt path);
+                            // this block only sees the two remaining cases.
                             if (wasSelected && wasOpen) {
                               // Tap during active edit (config still open, no
                               // save yet) → deselect + clean state.
