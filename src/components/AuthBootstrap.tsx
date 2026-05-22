@@ -143,6 +143,69 @@ export function AuthBootstrap() {
       }
     })
 
+    // Lane-4 RED-003 — defense-in-depth profile re-fetch on tab refocus.
+    // Supabase fires SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED on
+    // session-lifecycle events, but a direct `profiles.role` UPDATE from
+    // /admin/users (or a SQL grant/revoke) does NOT trigger any auth
+    // event — the FE auth-store keeps the stale role until the next
+    // token refresh (~1hr). PR-318 RequireRole and PR-319 dialog owner-
+    // checks ARE only as good as the cached profile.role they read, so
+    // this revalidates on visibilitychange + focus (user returns to the
+    // tab → fresh profile within 1 page-nav). Lightweight: getProfile-
+    // only path, no catalog/projects re-hydrate.
+    let lastRefetchAt = 0
+    const PROFILE_REFETCH_DEBOUNCE_MS = 5_000
+    async function refetchProfileIfStale() {
+      if (!mounted) return
+      if (isQaPersonaActive()) return
+      const now = Date.now()
+      if (now - lastRefetchAt < PROFILE_REFETCH_DEBOUNCE_MS) return
+      lastRefetchAt = now
+      const state = useAuthStore.getState()
+      const sessionUserId = state.session?.user?.id
+      if (!sessionUserId) return
+      try {
+        const profile = await Promise.race([
+          getProfile(sessionUserId),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('getProfile timed out after 10s')),
+              GET_PROFILE_TIMEOUT_MS,
+            ),
+          ),
+        ])
+        if (!mounted) return
+        const prior = useAuthStore.getState().profile
+        const merged: typeof profile = { ...profile }
+        if (!profile.additional_addresses && prior?.additional_addresses) {
+          merged.additional_addresses = prior.additional_addresses
+        }
+        if (!profile.noncircumvention_agreement_signed_at && prior?.noncircumvention_agreement_signed_at) {
+          merged.noncircumvention_agreement_signed_at = prior.noncircumvention_agreement_signed_at
+          merged.noncircumvention_agreement_signed_name = prior.noncircumvention_agreement_signed_name
+          merged.noncircumvention_agreement_version = prior.noncircumvention_agreement_version
+          merged.noncircumvention_agreement_text_snapshot = prior.noncircumvention_agreement_text_snapshot
+          merged.noncircumvention_agreement_signature_metadata = prior.noncircumvention_agreement_signature_metadata
+        }
+        useAuthStore.getState().setProfile(merged)
+      } catch (err) {
+        // Silent — stale profile remains; next token-refresh hydrate will retry.
+        console.error('[AuthBootstrap] refetchProfileIfStale failed:', err)
+      }
+    }
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void refetchProfileIfStale()
+      }
+    }
+    const onFocus = () => { void refetchProfileIfStale() }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onFocus)
+    }
+
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Ship #274 — diag telemetry on every auth listener fire so we
       // can see if a TOKEN_REFRESHED / USER_UPDATED interrupts the
@@ -178,6 +241,12 @@ export function AuthBootstrap() {
     return () => {
       mounted = false
       sub.subscription.unsubscribe()
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onFocus)
+      }
     }
   }, [])
 
