@@ -40,6 +40,7 @@ export const manualReferralAdapter: FinancingBankAdapter = {
       project_id: input.projectId ?? null,
       adapter: ADAPTER_KEY,
       adapter_application_id: input.bcApplicationId,
+      estimated_amount_cents: input.projectScope.estimated_amount_cents,
     })
 
     return {

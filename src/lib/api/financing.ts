@@ -131,6 +131,7 @@ export async function insertFinancingApplication(input: {
   project_id?: string | null
   adapter: string
   adapter_application_id?: string | null
+  estimated_amount_cents?: number | null
 }): Promise<FinancingApplicationRow> {
   const { data, error } = await supabase
     .from('financing_applications')
@@ -141,6 +142,7 @@ export async function insertFinancingApplication(input: {
       project_id: input.project_id ?? null,
       adapter: input.adapter,
       adapter_application_id: input.adapter_application_id ?? null,
+      estimated_amount_cents: input.estimated_amount_cents ?? null,
       status: 'applied',
     })
     .select()
