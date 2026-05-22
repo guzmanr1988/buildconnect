@@ -213,6 +213,7 @@ export function FinancingCard() {
   if (!loaded) return null
 
   const state = resolveState(cfp, app)
+  if (state === 'approved' || state === 'terms_accepted') return null
   const spec = specForState(state, app, cfp)
 
   return (
