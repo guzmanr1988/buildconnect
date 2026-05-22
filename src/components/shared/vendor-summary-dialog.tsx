@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import type { ClosedSale } from '@/types'
@@ -43,6 +44,7 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
   const navigate = useNavigate()
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
+  const profile = useAuthStore((s) => s.profile)
 
   const vendor = useMemo(
     () => (vendorId ? MOCK_VENDORS.find((v) => v.id === vendorId) : null),
@@ -121,6 +123,26 @@ export function VendorSummaryDialog({ open, onClose, vendorId, closedSales }: Ve
       effectivePct,
     }
   }, [vendor, closedSales, sentProjects, vendorCommissionOverrides])
+
+  // Lane-4 RED-002 — caller-side ownership gate. Vendor-summary
+  // surfaces aggregate GMV/commission/deals for a single vendor;
+  // admin/admin_employee bypass for /admin/revenue use, the vendor
+  // themselves can self-view (UUID match through DEMO_VENDOR_UUID_
+  // BY_MOCK_ID until real-vendor wiring lands), account_rep scopes
+  // via profile.account_rep_for_vendor_id. Non-matching: null-render.
+  const canViewVendor = (() => {
+    if (!vendor) return true
+    const role = profile?.role
+    if (role === 'admin' || role === 'admin_employee') return true
+    const uid = profile?.id
+    if (!uid) return false
+    const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendor.id] ?? vendor.id
+    if (vendorUuid === uid) return true
+    if (role === 'account_rep' && profile?.account_rep_for_vendor_id === vendorUuid) return true
+    return false
+  })()
+
+  if (vendor && !canViewVendor) return null
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
