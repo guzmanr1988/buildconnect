@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { useProjectsStore, fetchProjectIdDocument } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { deriveInitials } from '@/lib/initials'
@@ -74,6 +75,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
   const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
+  const profile = useAuthStore((s) => s.profile)
   const isAdminWorkflow = viewMode === 'admin-workflow'
   const [windowsExpanded, setWindowsExpanded] = useState(false)
   const [doorsExpanded, setDoorsExpanded] = useState(false)
@@ -233,6 +235,36 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
   }, [projectId, sentProjects, leadStatusOverrides, cancellationRequestsByLead, assignedRepByLead, transactionFallback, vendorCommissionOverrides, leadConfirmedAtByLead, repAssignedAtByLead, rescheduleRequestsByLead, mockLeads, mockClosedSales, fetchedIdDocument])
 
   const commissionPct = resolvePct(selectedItem?.vendor)
+
+  // Lane-4 RED-002 — caller-side ownership gate. Shared dialog opens
+  // from admin/vendor/homeowner trees; without this check any authed
+  // user reachable to a consumer could view any project_id passed in.
+  // Match against project_data {homeowner_id, vendor_id, contractor.
+  // vendor_id}; admin/admin_employee bypass; account_rep scopes via
+  // profile.account_rep_for_vendor_id. Non-matching: null-render
+  // silent (no toast — graceful per spec).
+  const canViewProject = (() => {
+    if (!selectedItem) return true
+    const role = profile?.role
+    if (role === 'admin' || role === 'admin_employee') return true
+    const uid = profile?.id
+    if (!uid) return false
+    const pd = selectedItem.project_data as
+      | { homeowner_id?: string; vendor_id?: string; contractor?: { vendor_id?: string } }
+      | undefined
+    if (!pd) return false
+    if (pd.homeowner_id && pd.homeowner_id === uid) return true
+    if (pd.vendor_id && pd.vendor_id === uid) return true
+    if (pd.contractor?.vendor_id && pd.contractor.vendor_id === uid) return true
+    if (role === 'account_rep' && profile?.account_rep_for_vendor_id) {
+      const repVendor = profile.account_rep_for_vendor_id
+      if (pd.vendor_id === repVendor) return true
+      if (pd.contractor?.vendor_id === repVendor) return true
+    }
+    return false
+  })()
+
+  if (selectedItem && !canViewProject) return null
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
