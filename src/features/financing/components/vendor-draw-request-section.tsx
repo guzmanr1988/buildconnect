@@ -81,6 +81,7 @@ function disputeWindowRemaining(iso: string | null): string {
   if (!iso) return ''
   const ms = new Date(iso).getTime() - Date.now()
   if (ms <= 0) return 'Window closed'
+  if (ms < 60 * 60 * 1000) return '<1h left'
   const h = Math.floor(ms / 1000 / 60 / 60)
   return `${h}h left`
 }
@@ -167,7 +168,7 @@ export function VendorDrawRequestSection({ sentProjectId, leadStatus }: Props) {
       const code = err instanceof Error ? err.message : 'draw_request_failed'
       if (code === 'amount_exceeds_remaining') {
         toast.error('Amount exceeds the remaining envelope.')
-      } else if (code === 'not_sold_active') {
+      } else if (code === 'sent_project_not_sold') {
         toast.error('Draws are only available on sold-active leads.')
       } else if (code === 'active_draw_pending') {
         toast.error('Another draw is already pending homeowner approval.')
@@ -175,6 +176,14 @@ export function VendorDrawRequestSection({ sentProjectId, leadStatus }: Props) {
         setDraws(refreshed)
       } else if (code === 'financing_disabled') {
         toast.error('Financing is currently disabled.')
+      } else if (code === 'no_approved_financing_application_for_project') {
+        toast.error('This project does not have an approved financing envelope.')
+      } else if (code === 'vendor_not_owner_of_sent_project' || code === 'sent_project_not_found') {
+        toast.error('You do not have access to this project.')
+      } else if (code === 'idempotency_key_amount_mismatch') {
+        toast.error('Submission state mismatch — please refresh and try again.')
+      } else if (code === 'invalid_amount_cents') {
+        toast.error('Enter a valid request amount.')
       } else {
         toast.error('Could not submit draw request.')
       }

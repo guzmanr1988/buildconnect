@@ -67,10 +67,14 @@ export function FinancingDrawApprovePage() {
       toast.success(decision === 'approve' ? 'Draw approved.' : 'Draw disputed.')
     } catch (err) {
       const code = err instanceof Error ? err.message : 'draw_request_approve_failed'
-      if (code === 'invalid_token') {
+      if (code === 'invalid_or_expired_token' || code === 'missing_sms_token') {
         toast.error('Approval link expired or already used.')
-      } else if (code === 'not_pending') {
+      } else if (code === 'draw_not_in_sms_pending_state') {
         toast.error('This draw is no longer pending.')
+      } else if (code === 'not_homeowner_of_draw') {
+        toast.error('This approval link does not belong to your account.')
+      } else if (code === 'invalid_decision') {
+        toast.error('Choose Approve or Dispute.')
       } else if (code === 'financing_disabled') {
         toast.error('Financing is currently disabled.')
       } else {
