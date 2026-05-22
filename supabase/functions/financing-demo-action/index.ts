@@ -17,10 +17,8 @@
 //     a decision.
 //
 //   action='advance_to_approved' — applied|pending -> approved + upsert
-//     customer_financing_profile with envelope = fa.estimated_amount_cents
-//     (customer-entered on apply page); falls back to $15k constant when the
-//     FA row has NULL/0 (legacy rows pre-amount-wire-up). Partner from
-//     application.adapter, expires_at = now + 30 days. Required:
+//     customer_financing_profile with demo-default envelope ($15k, partner
+//     from application.adapter, expires_at = now + 30 days). Required:
 //     applicationId. Customer must own the application. Mirrors what
 //     admin-create-approval writes in the production path so status.tsx
 //     renders the Approval Terms section.
@@ -150,7 +148,7 @@ serve(async (req: Request) => {
     }
     const { data: appRow, error: appErr } = await admin
       .from('financing_applications')
-      .select('id, homeowner_id, status, adapter, estimated_amount_cents')
+      .select('id, homeowner_id, status, adapter')
       .eq('id', body.applicationId)
       .maybeSingle()
     if (appErr) return jsonResponse(500, { error: 'application_lookup_failed' })
@@ -168,10 +166,6 @@ serve(async (req: Request) => {
     if (updateErr) {
       return jsonResponse(500, { error: 'update_failed', detail: updateErr.message })
     }
-    const approvedAmountCents =
-      typeof appRow.estimated_amount_cents === 'number' && appRow.estimated_amount_cents > 0
-        ? appRow.estimated_amount_cents
-        : DEMO_APPROVAL_AMOUNT_CENTS
     const expiresAt = new Date(Date.now() + DEMO_APPROVAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
     const { error: cfpErr } = await admin
       .from('customer_financing_profile')
@@ -180,7 +174,7 @@ serve(async (req: Request) => {
           customer_id: customerId,
           has_financing: true,
           last_known_status: 'approved',
-          last_known_amount_cents: approvedAmountCents,
+          last_known_amount_cents: DEMO_APPROVAL_AMOUNT_CENTS,
           approval_partner: appRow.adapter,
           approval_expires_at: expiresAt,
         },
@@ -193,7 +187,7 @@ serve(async (req: Request) => {
       ok: true,
       action: 'advance_to_approved',
       new_status: 'approved',
-      approval_amount_cents: approvedAmountCents,
+      approval_amount_cents: DEMO_APPROVAL_AMOUNT_CENTS,
       approval_expires_at: expiresAt,
     })
   }
