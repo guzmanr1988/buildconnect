@@ -382,7 +382,8 @@ export const useProjectsStore = create<ProjectsState>()(
           'homeowner_id, vendor_id, sent_at, sold_at, completed_at, sale_amount, ' +
           'rejection_reason, assigned_rep, account_rep_id, rep_acceptance, ' +
           'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
-          'reviewed_by, review_note, price_line_items, quoted_price_cents'
+          'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
+          'cancellation_request'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -443,6 +444,7 @@ export const useProjectsStore = create<ProjectsState>()(
           const newRepAcceptance: Record<string, 'pending' | 'accepted' | 'reschedule_requested'> = { ...state.repAcceptanceByLead }
           const newConfirmedAt: Record<string, string> = { ...state.leadConfirmedAtByLead }
           const newRepAssignedAt: Record<string, string> = { ...state.repAssignedAtByLead }
+          const newCancellationByLead: Record<string, CancellationRequest> = { ...state.cancellationRequestsByLead }
           for (const row of rows) {
             const rowId = row.id as string
             if (row.assigned_rep)   newAssignedRep[rowId]    = row.assigned_rep as VendorRep
@@ -450,14 +452,24 @@ export const useProjectsStore = create<ProjectsState>()(
             if (row.rep_acceptance) newRepAcceptance[rowId]  = row.rep_acceptance as 'pending' | 'accepted' | 'reschedule_requested'
             if (row.confirmed_at)   newConfirmedAt[rowId]    = row.confirmed_at as string
             if (row.rep_assigned_at)newRepAssignedAt[rowId]  = row.rep_assigned_at as string
+            // Hydrate cross-user cancellation visibility. Map is keyed by
+            // L-XXXX (first 4 of UUID upper) — same shape vendor/homeowner
+            // surfaces read with — so customer-side PATCH on
+            // sent_projects.cancellation_request surfaces in the vendor
+            // lead-workflow on next hydrate without same-browser session.
+            if (row.cancellation_request) {
+              const leadKey = `L-${rowId.slice(0, 4).toUpperCase()}`
+              newCancellationByLead[leadKey] = row.cancellation_request as CancellationRequest
+            }
           }
           return {
-            sentProjects:          merged,
-            assignedRepByLead:     newAssignedRep,
-            accountRepIdByLead:    newAccountRep,
-            repAcceptanceByLead:   newRepAcceptance,
-            leadConfirmedAtByLead: newConfirmedAt,
-            repAssignedAtByLead:   newRepAssignedAt,
+            sentProjects:                merged,
+            assignedRepByLead:           newAssignedRep,
+            accountRepIdByLead:          newAccountRep,
+            repAcceptanceByLead:         newRepAcceptance,
+            leadConfirmedAtByLead:       newConfirmedAt,
+            repAssignedAtByLead:         newRepAssignedAt,
+            cancellationRequestsByLead:  newCancellationByLead,
           }
         })
 
@@ -809,8 +821,16 @@ export const useProjectsStore = create<ProjectsState>()(
           },
         }))
         logEvent({ eventType: 'cancellation_requested', leadId, meta: { reason } })
-        if (get().sentProjects.find((p) => p.id === leadId)) {
-          updateProject(leadId, { cancellation_request: cancelReq })
+        // leadId is L-XXXX (first 4 of UUID upper) — map back to the real
+        // sent_projects.id before PATCH so the gate actually matches and
+        // the cross-user vendor visibility works. Apollo Step-9 finding A1:
+        // bare `id === leadId` compares L-XXXX to UUID → never matches →
+        // PATCH never fires.
+        const sp = get().sentProjects.find(
+          (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === leadId,
+        )
+        if (sp) {
+          updateProject(sp.id, { cancellation_request: cancelReq })
         }
       },
 
