@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -15,6 +15,8 @@ import { SERVICE_CATALOG } from '@/lib/constants'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import type { CartItem } from '@/stores/cart-store'
 import type { Lead, LeadStatus } from '@/types'
@@ -38,6 +40,46 @@ const statusPulse: Record<string, string> = {
 export function AppointmentStatusPage() {
   const { id } = useParams<{ id: string }>()
   const financingEnabled = useFeatureFlag('financing_enabled')
+  const profile = useAuthStore((s) => s.profile)
+  // Homeowner-level financing state — if cfp shows an active envelope OR
+  // any in-flight application, suppress the per-project Apply-CTA so the
+  // /home ApprovedAmountBanner stays the single source of truth. Without
+  // this, /home/leads/<id> renders "Apply for financing" while /home shows
+  // "You have $15,000 available from GoodLeap" — the two-surface confusion
+  // Rod flagged 2026-05-22.
+  const [homeownerHasFinancing, setHomeownerHasFinancing] = useState(false)
+  useEffect(() => {
+    if (!financingEnabled || !profile?.id) return
+    let cancelled = false
+    void Promise.allSettled([
+      supabase
+        .from('customer_financing_profile')
+        .select('has_financing,last_known_status')
+        .eq('customer_id', profile.id)
+        .maybeSingle(),
+      supabase
+        .from('financing_applications')
+        .select('id,status')
+        .eq('homeowner_id', profile.id)
+        .in('status', ['applied', 'pending', 'approved', 'terms_accepted'])
+        .limit(1)
+        .maybeSingle(),
+    ]).then(([cfpRes, appRes]) => {
+      if (cancelled) return
+      const cfpHit =
+        cfpRes.status === 'fulfilled' &&
+        !cfpRes.value.error &&
+        cfpRes.value.data?.has_financing === true &&
+        (cfpRes.value.data?.last_known_status === 'approved' ||
+          cfpRes.value.data?.last_known_status === 'terms_accepted')
+      const appHit =
+        appRes.status === 'fulfilled' && !appRes.value.error && !!appRes.value.data
+      if (cfpHit || appHit) setHomeownerHasFinancing(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [financingEnabled, profile?.id])
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
@@ -404,7 +446,7 @@ export function AppointmentStatusPage() {
         </div>
       )}
 
-      {financingEnabled === true && matchedSentProject && (
+      {financingEnabled === true && matchedSentProject && !lead.financing && !homeownerHasFinancing && (
         <Card data-testid="homeowner-project-financing-cta" data-financing-project-cta>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
