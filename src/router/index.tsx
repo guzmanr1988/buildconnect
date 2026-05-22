@@ -3,6 +3,7 @@ import { HomeownerLayout } from '@/components/layout/homeowner-layout'
 import { VendorLayout } from '@/components/layout/vendor-layout'
 import { AdminLayout } from '@/components/layout/admin-layout'
 import { RequireAuth } from '@/router/require-auth'
+import { RequireRole } from '@/router/require-role'
 import { RequireActiveMembership } from '@/router/require-active-membership'
 import { RootLayout } from '@/router/root-layout'
 
@@ -86,7 +87,13 @@ export const router = createBrowserRouter([
 
       {
         path: '/home',
-        element: <RequireAuth><HomeownerLayout /></RequireAuth>,
+        element: (
+          <RequireAuth>
+            <RequireRole roles={['homeowner']}>
+              <HomeownerLayout />
+            </RequireRole>
+          </RequireAuth>
+        ),
         handle: { title: 'Home' },
         children: [
           { index: true, element: <HomeownerHome /> },
@@ -119,9 +126,11 @@ export const router = createBrowserRouter([
         // membership page when status=cancelled.
         element: (
           <RequireAuth>
-            <RequireActiveMembership>
-              <VendorLayout />
-            </RequireActiveMembership>
+            <RequireRole roles={['vendor', 'account_rep']}>
+              <RequireActiveMembership>
+                <VendorLayout />
+              </RequireActiveMembership>
+            </RequireRole>
           </RequireAuth>
         ),
         handle: { title: 'Vendor · Dashboard' },
@@ -156,7 +165,13 @@ export const router = createBrowserRouter([
 
       {
         path: '/admin',
-        element: <RequireAuth><AdminLayout /></RequireAuth>,
+        element: (
+          <RequireAuth>
+            <RequireRole roles={['admin', 'admin_employee']}>
+              <AdminLayout />
+            </RequireRole>
+          </RequireAuth>
+        ),
         handle: { title: 'Admin · Overview' },
         children: [
           { index: true, element: <OverviewPage /> },
