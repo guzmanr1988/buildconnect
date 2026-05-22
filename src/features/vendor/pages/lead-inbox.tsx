@@ -392,7 +392,7 @@ export default function LeadInbox() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-bold" data-lead-value={lead.value}>{fmt(lead.value)}</span>
+                          <span className="text-lg font-bold tabular-nums text-foreground" data-lead-value={lead.value}>{fmt(lead.value)}</span>
                           {isExpanded ? (
                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
                           ) : (
