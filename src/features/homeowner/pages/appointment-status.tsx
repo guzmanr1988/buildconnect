@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -20,12 +20,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import type { CartItem } from '@/stores/cart-store'
 import type { Lead, LeadStatus } from '@/types'
-
-const statusTimeline: Record<string, { label: string; time: string; status: LeadStatus }[]> = {
-  'L-0001': [
-    { label: 'Lead submitted', time: 'Apr 7, 2:22 PM', status: 'pending' },
-  ],
-}
 
 const statusPulse: Record<string, string> = {
   pending: 'bg-amber-500 animate-pulse',
@@ -85,8 +79,6 @@ export function AppointmentStatusPage() {
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const leadConfirmedAtByLead = useProjectsStore((s) => s.leadConfirmedAtByLead)
-  const repAssignedAtByLead = useProjectsStore((s) => s.repAssignedAtByLead)
   // Ship #191 — reschedule negotiation state. Key lookup stays lean
   // (raw map-entry selector returns undefined or the entity — stable
   // either way per the banked zustand-selector-stable-reference rule).
@@ -199,55 +191,21 @@ export function AppointmentStatusPage() {
         : MOCK_VENDORS.find((v) => v.company === sentProject.contractor?.company))
     : MOCK_VENDORS.find((v) => v.id === lead.vendor_id)
   // Assigned rep (Phase C): vendor picks at Confirm, homeowner sees here.
-  // Must be declared BEFORE baseTimeline/dynamicTimeline consumer block —
-  // apollo caught TDZ on ship #72 when dynamicTimeline referenced assignedRep
-  // before its initializer. Declaration order matters for minified bundles.
   const assignedRep =
     assignedRepByLead[lead.id] ??
     sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)?.assignedRep
 
-  const baseTimeline = statusTimeline[lead.id] ?? [
-    { label: 'Lead submitted', time: 'Recently', status: 'pending' as LeadStatus },
-  ]
-  // Dynamic timeline entries appended when the lead is post-confirm AND has
-  // an assigned rep. Two entries (per kratos msg 1776660496402): "Vendor
-  // confirmed visit" and "Representative assigned — <name>." Timestamps
-  // resolved per ship #166: mock-lead path reads from leadConfirmedAtByLead
-  // + repAssignedAtByLead maps; sentProject path reads .confirmedAt +
-  // .repAssignedAt fields. Falls back to empty for pre-#166 persisted
-  // entries — renderer omits the time line when falsy.
   const matchedSentProject = sentProjects.find(
     (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
   )
-  const confirmedAtIso =
-    leadConfirmedAtByLead[lead.id] ?? matchedSentProject?.confirmedAt
-  const repAssignedAtIso =
-    repAssignedAtByLead[lead.id] ?? matchedSentProject?.repAssignedAt
-  function formatTimelineTime(iso: string | undefined): string {
-    if (!iso) return ''
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-  const dynamicTimeline: { label: string; time: string; status: LeadStatus }[] = []
-  if (lead.status === 'confirmed' && assignedRep) {
-    dynamicTimeline.push({
-      label: 'Vendor confirmed visit',
-      time: formatTimelineTime(confirmedAtIso),
-      status: 'confirmed',
-    })
-    dynamicTimeline.push({
-      label: `Representative assigned — ${assignedRep.name}`,
-      time: formatTimelineTime(repAssignedAtIso),
-      status: 'confirmed',
-    })
-  }
-  const timeline = [...baseTimeline, ...dynamicTimeline]
+
+  // Photo 314 polish — horizontal stepper happy-path lifecycle. Off-path
+  // statuses return null and the existing Status pill + reschedule banners
+  // carry the off-path semantics instead.
+  const statusSteps = deriveStatusSteps({
+    status: lead.status,
+    hasAssignedRep: !!assignedRep,
+  })
 
   function formatSlot(slot: string) {
     const d = new Date(slot)
@@ -469,54 +427,26 @@ export function AppointmentStatusPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Timeline */}
+      {/* Photo 314 polish — horizontal stepper renders only on happy-path
+          statuses (pending/confirmed/completed). For rejected/cancelled the
+          stepper hides and OffPathStatusBanner takes its place; rescheduled
+          uses the existing vendor/homeowner reschedule banners above. */}
+      {statusSteps && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-primary" />
-                Status Timeline
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="relative pl-6">
-                {/* Vertical line */}
-                <div className="absolute left-[7px] top-1.5 bottom-1.5 w-0.5 bg-border" />
-
-                <div className="flex flex-col gap-5">
-                  {timeline.map((event, i) => (
-                    <div key={i} className="relative flex items-start gap-3">
-                      <div
-                        className={cn(
-                          'absolute -left-6 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background',
-                          statusPulse[event.status]
-                        )}
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {event.label}
-                        </p>
-                        {event.time && (
-                          <p className="text-xs text-muted-foreground">{event.time}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <StatusStepper steps={statusSteps} />
         </motion.div>
+      )}
+      <OffPathStatusBanner status={lead.status} />
 
-        {/* Project Details — project-scoped fields (Project / Price / Vendor)
-            plus the Project Pack section. Split from Homeowner Info per Rod's
-            directive (kratos msg 1776650664847) so each card reads as one
-            coherent unit instead of 7 mixed fields. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        {/* Project Details — heavier card lives left col, balanced by the
+            stacked Homeowner Info + Representative on the right. Project Items
+            renders as section-grouped (Service Type / Materials / Add-Ons /
+            Roof Details / Permits / Attachments) per delta F. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -548,11 +478,10 @@ export function AppointmentStatusPage() {
               )}
 
               {/* Project Items — itemized breakdown of every wizard pick
-                  with quantity. Service-agnostic renderer (universal cases
-                  first, service-specific layered as opt-in). Falls back to
+                  with quantity. Section-grouped per delta F. Falls back to
                   legacy pack_items badge list for MOCK_LEADS fixtures. */}
               <div className="mt-2 border-t border-border pt-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <p className="mb-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Project Items
                 </p>
                 {sentProject?.item ? (
@@ -565,7 +494,7 @@ export function AppointmentStatusPage() {
                     {Object.entries(lead.pack_items).map(([, items]) =>
                       items.map((item) => (
                         <Badge key={item} variant="secondary" className="text-[10px]">
-                          {item.replace(/_/g, ' ')}
+                          {humanizeId(item)}
                         </Badge>
                       ))
                     )}
@@ -576,63 +505,77 @@ export function AppointmentStatusPage() {
           </Card>
         </motion.div>
 
-        {/* Representative — only shown once the vendor has assigned one.
-            Sits between Project Details and Homeowner Info — vendor-contact
-            info reads as a bridge between project-scoped and homeowner-scoped. */}
-        {assignedRep && (
+        {/* Right column — Homeowner Info on top + Representative below
+            (when assigned). Stacked in a flex column so the right col reads
+            as one logical "people + contact" unit, paired against the left
+            col Project Details "what + how much" unit. */}
+        <div className="flex flex-col gap-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
+            transition={{ duration: 0.3, delay: 0.22 }}
           >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-primary" />
-                  Representative
+                  <FileText className="h-4 w-4 text-primary" />
+                  Homeowner Info
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                <p className="text-base font-semibold text-foreground">{assignedRep.name}</p>
-                {assignedRep.role && (
-                  <p className="text-sm text-muted-foreground">{assignedRep.role}</p>
-                )}
-                {assignedRep.phone && (
-                  <DetailRow icon={Phone} label="Phone" value={assignedRep.phone} />
-                )}
-                {assignedRep.email && (
-                  <DetailRow icon={Mail} label="Email" value={assignedRep.email} />
-                )}
+              <CardContent className="flex flex-col gap-3">
+                <DetailRow
+                  icon={MapPin}
+                  label="Address"
+                  value={placeholderAware(lead.address, ADDRESS_PLACEHOLDERS)}
+                />
+                <DetailRow
+                  icon={Phone}
+                  label="Phone"
+                  value={placeholderAware(lead.phone, PHONE_PLACEHOLDERS)}
+                />
+                <DetailRow
+                  icon={Mail}
+                  label="Email"
+                  value={placeholderAware(lead.email, EMAIL_PLACEHOLDERS)}
+                />
+                <DetailRow
+                  icon={Shield}
+                  label="Permit required"
+                  value={lead.permit_choice ? 'Yes' : 'No'}
+                />
               </CardContent>
             </Card>
           </motion.div>
-        )}
 
-        {/* Homeowner Info — homeowner-scoped contact fields only. */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.22 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                Homeowner Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <DetailRow icon={MapPin} label="Address" value={lead.address} />
-              <DetailRow icon={Phone} label="Phone" value={lead.phone} />
-              <DetailRow icon={Mail} label="Email" value={lead.email} />
-              <DetailRow
-                icon={Shield}
-                label="Building Permit"
-                value={lead.permit_choice ? 'Yes' : 'No'}
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
+          {assignedRep && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.26 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-primary" />
+                    Representative
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  <p className="text-base font-semibold text-foreground">{assignedRep.name}</p>
+                  {assignedRep.role && (
+                    <p className="text-sm text-muted-foreground">{assignedRep.role}</p>
+                  )}
+                  {assignedRep.phone && (
+                    <DetailRow icon={Phone} label="Phone" value={assignedRep.phone} />
+                  )}
+                  {assignedRep.email && (
+                    <DetailRow icon={Mail} label="Email" value={assignedRep.email} />
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </div>
       </div>
 
       {/* Ship #191 — reschedule picker + counter picker mounted
@@ -690,6 +633,148 @@ export function AppointmentStatusPage() {
   )
 }
 
+// Photo 314 polish — placeholder discipline. Empty / sentinel-default values
+// render as italic muted "Not on file" instead of a blank slot or sentinel
+// leaking through (e.g. address "Pending site visit", phone "—", email
+// "homeowner@buildc.net"). Caller passes the sentinel list per field.
+const ADDRESS_PLACEHOLDERS = ['', 'Pending site visit']
+const PHONE_PLACEHOLDERS = ['', '—', '-']
+const EMAIL_PLACEHOLDERS = ['', 'homeowner@buildc.net']
+
+function placeholderAware(value: string | null | undefined, sentinels: readonly string[]): ReactNode {
+  const trimmed = (value ?? '').trim()
+  if (sentinels.includes(trimmed)) {
+    return <span className="italic text-muted-foreground/60">Not on file</span>
+  }
+  return trimmed
+}
+
+// Photo 314 polish — horizontal stepper. 4-step happy-path lifecycle. Past
+// steps render filled + check; current is filled + bold; future is hollow +
+// muted. Off-path statuses (rejected/cancelled/rescheduled) hide the
+// stepper entirely — the existing Status pill + reschedule banners carry
+// the off-path semantics; surfacing the stepper there would clutter.
+type StepState = 'done' | 'current' | 'upcoming'
+type StatusStep = { key: string; label: string; state: StepState }
+
+function deriveStatusSteps(args: {
+  status: LeadStatus
+  hasAssignedRep: boolean
+}): StatusStep[] | null {
+  const { status, hasAssignedRep } = args
+  if (status === 'rejected' || status === 'cancelled' || status === 'rescheduled') {
+    return null
+  }
+  const stepKeys = ['submitted', 'confirmed', 'rep_assigned', 'completed'] as const
+  const labels: Record<typeof stepKeys[number], string> = {
+    submitted: 'Lead submitted',
+    confirmed: 'Vendor confirmed',
+    rep_assigned: 'Representative assigned',
+    completed: 'Project completed',
+  }
+  const completedIndex = (() => {
+    if (status === 'completed') return 3
+    if (status === 'confirmed' && hasAssignedRep) return 2
+    if (status === 'confirmed') return 1
+    return 0
+  })()
+  return stepKeys.map((key, i) => ({
+    key,
+    label: labels[key],
+    state: i < completedIndex ? 'done' : i === completedIndex ? 'current' : 'upcoming',
+  }))
+}
+
+function StatusStepper({ steps }: { steps: StatusStep[] }) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-2">
+          {steps.map((step, i) => {
+            const isLast = i === steps.length - 1
+            const isDone = step.state === 'done'
+            const isCurrent = step.state === 'current'
+            const dotClass = cn(
+              'relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+              isDone && 'border-primary bg-primary text-primary-foreground',
+              isCurrent && 'border-primary bg-primary/15 text-primary',
+              !isDone && !isCurrent && 'border-border bg-background text-muted-foreground/50',
+            )
+            const labelClass = cn(
+              'mt-2 text-center text-[11px] leading-tight max-w-[110px]',
+              isCurrent && 'font-semibold text-foreground',
+              isDone && 'font-medium text-foreground',
+              !isDone && !isCurrent && 'text-muted-foreground/60',
+            )
+            const connectorClass = cn(
+              'absolute left-1/2 top-3.5 h-0.5 w-full',
+              isDone ? 'bg-primary' : 'bg-border',
+            )
+            return (
+              <div key={step.key} className="relative flex flex-1 flex-col items-center">
+                {!isLast && <div className={connectorClass} aria-hidden />}
+                <div className={dotClass}>
+                  {isDone ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : isCurrent ? (
+                    <Hourglass className="h-3.5 w-3.5" />
+                  ) : (
+                    <Circle className="h-2 w-2" />
+                  )}
+                </div>
+                <span className={labelClass}>{step.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Off-path banner — only renders for rejected/cancelled/rescheduled
+// terminal states. Reschedule-request banners (vendor-proposed /
+// homeowner-proposed) are separate surfaces already in the main render;
+// this banner covers the terminal-state cases that don't have a dedicated
+// banner.
+function OffPathStatusBanner({ status }: { status: LeadStatus }) {
+  if (status === 'rejected') {
+    return (
+      <Card className="border-red-300/60 bg-red-50/50 dark:bg-red-950/20 dark:border-red-700/40">
+        <CardContent className="flex items-start gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-400">
+            <X className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Vendor declined this lead</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              The vendor isn't able to take on this project. You can submit it to another vendor from your projects list.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (status === 'cancelled') {
+    return (
+      <Card className="border-zinc-300/60 bg-zinc-50/50 dark:bg-zinc-900/30 dark:border-zinc-700/40">
+        <CardContent className="flex items-start gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-500/15 text-zinc-700 dark:text-zinc-400">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Appointment cancelled</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              This appointment has been cancelled. Reach out to your vendor if you'd like to reschedule.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+  return null
+}
+
 function DetailRow({
   icon: Icon,
   label,
@@ -697,7 +782,7 @@ function DetailRow({
 }: {
   icon: typeof FileText
   label: string
-  value: string
+  value: ReactNode
 }) {
   return (
     <div className="flex items-start gap-2.5 text-sm">
@@ -710,10 +795,55 @@ function DetailRow({
   )
 }
 
-type ProjectItemRow = { label: string; detail?: string }
+// Photo 314 polish — section-grouped Project Items. Each row is tagged with
+// a category derived from the SERVICE_CATALOG group identity (selections
+// loop) or from a static map (universal/service-specific entries). Render
+// pass groups rows by `section` and emits uppercase-muted headers matching
+// the existing PRICE / PROJECT ITEMS treatment.
+type ProjectItemSection =
+  | 'Service Type'
+  | 'Materials'
+  | 'Repair Materials'
+  | 'Add-Ons'
+  | 'Roof Details'
+  | 'Site Dimensions'
+  | 'Permits'
+  | 'Attachments'
+
+type ProjectItemRow = { section: ProjectItemSection; label: string; detail?: string }
+
+const PROJECT_ITEM_SECTION_ORDER: ProjectItemSection[] = [
+  'Service Type',
+  'Materials',
+  'Repair Materials',
+  'Add-Ons',
+  'Roof Details',
+  'Site Dimensions',
+  'Permits',
+  'Attachments',
+]
 
 function humanizeId(id: string): string {
   return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// Group-id → section anchor. SERVICE_CATALOG group identity supplies the
+// natural category boundary; unknown groups fall back to Materials so new
+// catalog additions render somewhere reasonable until categorized.
+function sectionForGroup(groupId: string): ProjectItemSection {
+  switch (groupId) {
+    case 'service_type':
+      return 'Service Type'
+    case 'material':
+    case 'products':
+      return 'Materials'
+    case 'repair_materials':
+      return 'Repair Materials'
+    case 'addons':
+      return 'Add-Ons'
+    default:
+      return 'Materials'
+  }
 }
 
 function buildProjectItemRows(
@@ -725,9 +855,10 @@ function buildProjectItemRows(
 
   // Universal: humanize selections via SERVICE_CATALOG, attach quantity from
   // selectionQuantities / addonLinearFt / customSizeSqft. Pure-flag selections
-  // (no quantity) render as label-only.
+  // (no quantity) render as label-only. Section assigned by group identity.
   for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
     const group = service?.optionGroups.find((g) => g.id === groupId)
+    const section = sectionForGroup(groupId)
     for (const optId of optionIds) {
       const option = group?.options.find((o) => o.id === optId)
       const label = option?.label ?? humanizeId(optId)
@@ -749,34 +880,42 @@ function buildProjectItemRows(
       } else if (qty !== undefined && qty > 0) {
         detail = `Qty: ${qty}`
       }
-      rows.push({ label, detail })
+      rows.push({ section, label, detail })
     }
   }
 
   // Universal: satellite-measured area + perimeter (driveway/pergola/pool/fence).
   if (item.areaSqft !== undefined && item.areaSqft > 0) {
-    rows.push({ label: 'Area', detail: `${item.areaSqft.toLocaleString()} sqft` })
+    rows.push({ section: 'Site Dimensions', label: 'Area', detail: `${item.areaSqft.toLocaleString()} sqft` })
   }
   if (item.perimeterFt !== undefined && item.perimeterFt > 0) {
-    rows.push({ label: 'Perimeter', detail: `${item.perimeterFt.toLocaleString()} ft` })
+    rows.push({ section: 'Site Dimensions', label: 'Perimeter', detail: `${item.perimeterFt.toLocaleString()} ft` })
   }
 
   // Service-specific: roofing.
   if (item.roofMeasurement && item.roofMeasurement.areaSqft > 0) {
     const m = item.roofMeasurement
     rows.push({
+      section: 'Roof Details',
       label: 'Roof Area',
-      detail: `${m.areaSqft.toLocaleString()} sqft (Pitch ${m.pitch})`,
+      detail: `${m.areaSqft.toLocaleString()} sqft`,
+    })
+    rows.push({
+      section: 'Roof Details',
+      label: 'Pitch',
+      detail: m.pitch,
     })
   }
   // Project-level permit: prefer sentProject.projectPermit snapshot; fall
   // back to legacy per-item roofPermit for entries persisted pre-PR-140.
   // Permit is project-level not roofing-specific — render the row for any
-  // service when the choice is set.
+  // service when the choice is set. Q1-rename: "Permit pulled (vendor)" to
+  // disambiguate from homeowner-self-attest "Permit required" on lead row.
   const permitChoice = projectPermit ?? item.roofPermit
   if (permitChoice) {
     rows.push({
-      label: 'Permit Pulled',
+      section: 'Permits',
+      label: 'Permit pulled (vendor)',
       detail: permitChoice === 'yes' ? 'Yes' : 'No',
     })
   }
@@ -792,7 +931,7 @@ function buildProjectItemRows(
   for (const [key, label] of namedAddons) {
     const n = addonQty[key]
     if (typeof n === 'number' && n > 0) {
-      rows.push({ label, detail: `Qty: ${n}` })
+      rows.push({ section: 'Add-Ons', label, detail: `Qty: ${n}` })
     }
   }
 
@@ -802,8 +941,9 @@ function buildProjectItemRows(
     const w = winSel[i]
     if (w.quantity > 0) {
       rows.push({
+        section: 'Materials',
         label: `Window ${i + 1}`,
-        detail: `${w.size}, ${w.type} (Qty: ${w.quantity})`,
+        detail: `${w.size}, ${humanizeId(w.type)} (Qty: ${w.quantity})`,
       })
     }
   }
@@ -812,8 +952,9 @@ function buildProjectItemRows(
     const d = doorSel[i]
     if (d.quantity > 0) {
       rows.push({
+        section: 'Materials',
         label: `Door ${i + 1}`,
-        detail: `${d.size}, ${d.type} (Qty: ${d.quantity})`,
+        detail: `${d.size}, ${humanizeId(d.type)} (Qty: ${d.quantity})`,
       })
     }
   }
@@ -821,23 +962,34 @@ function buildProjectItemRows(
   // Service-specific: garage door config (single).
   if (item.garageDoorSelection) {
     const g = item.garageDoorSelection
-    if (g.type) rows.push({ label: 'Garage Door Type', detail: g.type })
-    if (g.size) rows.push({ label: 'Garage Door Size', detail: g.size })
-    if (g.color) rows.push({ label: 'Garage Door Color', detail: g.color })
-    if (g.glass) rows.push({ label: 'Garage Door Glass', detail: g.glass })
+    if (g.type) rows.push({ section: 'Materials', label: 'Garage Door Type', detail: humanizeId(g.type) })
+    if (g.size) rows.push({ section: 'Materials', label: 'Garage Door Size', detail: g.size })
+    if (g.color) rows.push({ section: 'Materials', label: 'Garage Door Color', detail: humanizeId(g.color) })
+    if (g.glass) rows.push({ section: 'Materials', label: 'Garage Door Glass', detail: humanizeId(g.glass) })
   }
 
-  // Service-specific: metal roof config.
+  // Service-specific: metal roof config. Q2 resolved via configurator
+  // source-read — roofSize is in squares (1 square = 100 sqft). Render
+  // singular "1 square" when count === 1.
   if (item.metalRoofSelection) {
     const mr = item.metalRoofSelection
-    if (mr.color) rows.push({ label: 'Metal Roof Color', detail: mr.color })
-    if (mr.roofSize) rows.push({ label: 'Metal Roof Size', detail: mr.roofSize })
+    if (mr.color) {
+      rows.push({ section: 'Materials', label: 'Metal Roof Color', detail: humanizeId(mr.color) })
+    }
+    if (mr.roofSize) {
+      const n = Number(mr.roofSize)
+      const detail = Number.isFinite(n) && n > 0
+        ? `${n.toLocaleString()} square${n === 1 ? '' : 's'}`
+        : mr.roofSize
+      rows.push({ section: 'Materials', label: 'Metal Roof Size', detail })
+    }
   }
 
   // Universal: photos count + notes (truncate ~120 chars).
   const photoCount = item.itemPhotos?.length ?? 0
   if (photoCount > 0) {
     rows.push({
+      section: 'Attachments',
       label: 'Photos',
       detail: `${photoCount} photo${photoCount === 1 ? '' : 's'} attached`,
     })
@@ -846,7 +998,7 @@ function buildProjectItemRows(
     const trimmed = item.itemNotes.trim()
     const trunc =
       trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed
-    rows.push({ label: 'Notes', detail: trunc })
+    rows.push({ section: 'Attachments', label: 'Notes', detail: trunc })
   }
 
   return rows
@@ -861,21 +1013,42 @@ function ProjectItemsList({
 }) {
   const rows = buildProjectItemRows(item, projectPermit)
   if (rows.length === 0) return null
+
+  const grouped = new Map<ProjectItemSection, ProjectItemRow[]>()
+  for (const row of rows) {
+    const bucket = grouped.get(row.section) ?? []
+    bucket.push(row)
+    grouped.set(row.section, bucket)
+  }
+
   return (
-    <ul className="flex flex-col gap-1.5">
-      {rows.map((r, i) => (
-        <li
-          key={`${r.label}-${i}`}
-          className="flex items-start justify-between gap-3 text-sm"
-        >
-          <span className="text-muted-foreground">{r.label}</span>
-          {r.detail && (
-            <span className="text-right font-medium text-foreground">
-              {r.detail}
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-4">
+      {PROJECT_ITEM_SECTION_ORDER.map((section) => {
+        const sectionRows = grouped.get(section)
+        if (!sectionRows || sectionRows.length === 0) return null
+        return (
+          <div key={section} className="flex flex-col gap-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {section}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {sectionRows.map((r, i) => (
+                <li
+                  key={`${r.label}-${i}`}
+                  className="flex items-start justify-between gap-3 text-sm"
+                >
+                  <span className="text-muted-foreground">{r.label}</span>
+                  {r.detail && (
+                    <span className="text-right font-medium text-foreground tabular-nums">
+                      {r.detail}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
   )
 }
