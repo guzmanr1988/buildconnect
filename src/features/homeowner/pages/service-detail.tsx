@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -46,34 +46,129 @@ import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
 // draw order; the ColorCircle on the chip is keyed to that order.
 const POLYGON_COLORS = ['#2563eb', '#d97706']
 
-// Rod-direct 2026-05-22 13:30Z: card-style tiles on Roofing canonical for
-// the three top-level group ids. Sub-row chips (material configurators,
-// Stone tight-row, Spa/Beach/Garage size, pergolas ColorCircle, etc.) keep
-// their existing chip pill render path.
-const ROOFING_TILE_ICONS: Record<string, Record<string, typeof Plus>> = {
-  service_type: {
-    replace: RefreshCw,
-    repair: Wrench,
-    addons: Plus,
+// Rod-direct 2026-05-22 13:30Z (Roofing canonical) + 13:51Z (mirror-all):
+// card-style tiles applied to every top-level optionGroup across all
+// services, EXCEPT (serviceId, groupId) pairs whose option set has an
+// intrinsically-different UI shape (size tight-row, swatch picker, etc.).
+// Sub-row chips inside material configurators (TileRoof color/size, Stone
+// tight-row, pergolas ColorCircle, etc.) keep their existing render path
+// via the parent-vs-sub-row separation — this map only feeds top-level
+// optionGroups in service-detail's own loop.
+const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Plus>>> = {
+  roofing: {
+    service_type: { replace: RefreshCw, repair: Wrench, addons: Plus },
+    material: {
+      shingle: Layers,
+      barrel_tile: Triangle,
+      terracotta: Triangle,
+      metal: Cog,
+      aluminum: PanelTop,
+      flat_roof: Square,
+    },
+    addons: {
+      gutters: Droplets,
+      insulation: Thermometer,
+      solar_prep: Sun,
+      soffit_wood: PaintRoller,
+      fascia_wood: PaintRoller,
+      soffit_metal: Hammer,
+      fascia_metal: Hammer,
+      extra_plywood: PanelTop,
+    },
+    repair_materials: {
+      repair_shingle: Layers,
+      repair_barrel_tile: Triangle,
+      repair_metal: Cog,
+      repair_aluminum: PanelTop,
+      repair_flat_roof: Square,
+    },
   },
-  material: {
-    shingle: Layers,
-    barrel_tile: Triangle,
-    terracotta: Triangle,
-    metal: Cog,
-    aluminum: PanelTop,
-    flat_roof: Square,
+  windows_doors: {
+    products: { windows: PanelTop, doors: DoorOpen, storm_front: Wind, garage_doors: Car },
+    installation: { new_construction: Home, retrofit: RefreshCw },
+    install_products: { glass: Layers, frames: Square, both: Layers3 },
+    payment: { cash: Briefcase, financing: Briefcase },
   },
-  addons: {
-    gutters: Droplets,
-    insulation: Thermometer,
-    solar_prep: Sun,
-    soffit_wood: PaintRoller,
-    fascia_wood: PaintRoller,
-    soffit_metal: Hammer,
-    fascia_metal: Hammer,
-    extra_plywood: PanelTop,
+  pool: {
+    project_type: { new_install: Plus, resurface: RefreshCw, repair: Wrench },
+    pool_size: { small: Square, medium: Square, large: Square, xlarge: Square },
+    pool_floor: { plaster: Layers, pebble: CircleDot, tile: Triangle },
+    addons: {
+      spa: Waves,
+      beach: Sun,
+      waterfall: Droplets,
+      led: Lightbulb,
+      bubbler: CircleDot,
+      heater: Flame,
+      pool_fence: Fence,
+    },
+    water_feature_units: { laminar_jet: Droplets, waterfall_unit: Waves },
   },
+  driveways: {
+    scope: { full: RefreshCw, overlay: Layers, repair: Wrench },
+    surface: { pavers: Grid3X3, stamped: Square, asphalt: Square, stone: Triangle, square_concrete: Square },
+    addons: { border: Square, lighting: Lightbulb, drainage: Droplets },
+  },
+  fencing: {
+    material: { wood: TreePine, vinyl: Square, aluminum: Cog, chain_link: Grid3X3, wrought_iron: Triangle },
+    height: { '4ft': ChevronsUp, '6ft': ChevronsUp, '8ft': ChevronsUp },
+    addons: { gates: DoorOpen, post_caps: CircleDot, privacy_slats: AlignJustify },
+  },
+  pergolas: {
+    structure: { aluminum_terrace: Square, aluminum_pergola: Tent },
+    size: { measured: ScanLine, custom: MoveDiagonal },
+    addons: { fans: Wind, screen: Grid3X3 },
+  },
+  air_conditioning: {
+    system: { central_2: Cog, central_3: Cog, central_4: Cog, mini_single: Wind, mini_multi: Wind },
+    addons: { thermostat: Gauge, ducts: Cog, purifier: Sparkles, maintenance: Wrench },
+  },
+  wall_paneling: {
+    style: { shiplap: AlignJustify, board_batten: AlignJustify, '3d': Move3D, wainscoting: PanelTop },
+    rooms: { living: Home, bedroom: Bath, dining: UtensilsCrossed, entryway: DoorClosed, office: Briefcase },
+  },
+  garage: {
+    rooms: {
+      living_family: Home,
+      bedroom: Bath,
+      office_den: Briefcase,
+      hallway_stairway: ArrowUpDown,
+      foyer_entry: DoorClosed,
+      dining: UtensilsCrossed,
+      whole_home: Building2,
+      other: Plus,
+    },
+    scope: { drywall: Square, ceiling: PanelTop, trim_molding: AlignJustify, interior_doors: DoorClosed, move_walls: Wrench },
+    size: { small: Square, medium: Square, large: Square, xlarge: Square, whole_home: Building2 },
+    addons: { crown_molding: PanelTop, popcorn_removal: Sparkles },
+  },
+  house_painting: {
+    height: { one_story: Home, two_story: Building2 },
+    scope: { exterior_only: Home, interior_only: DoorClosed, both: RefreshCw },
+    rooms: { one_room: Square, two_to_three: Layers, four_to_five: Layers, whole_interior: Building2 },
+    colors: { single_color: Palette, two_tone: Palette, multi_color: Palette, custom_palette: Sparkles },
+  },
+  blinds: {
+    type: { roller: Blinds, venetian: AlignJustify, roman: Layers, cellular: Grid3X3, vertical: AlignJustify, blackout: Square, motorized: Cog },
+    material: { fabric: Layers, vinyl: Square, faux_wood: PanelTop, real_wood: TreePine, aluminum: PanelTop, bamboo: Sailboat },
+    control: { cordless: Sparkles, traditional_cord: AlignJustify, wand: AlignJustify, motorized: Cog },
+    mount: { inside_mount: Square, outside_mount: PanelTop },
+    light_control: { blackout: Square, room_darkening: Layers, light_filtering: Sun, sheer: Sparkles },
+  },
+}
+
+// (serviceId, groupId) pairs that opt OUT of tile rendering because the
+// option-set has an intrinsically-different UI shape banked elsewhere
+// (size tight-row, swatch picker). Add to this set rather than re-gating
+// inline in the render loop.
+const TILE_EXCLUDED_GROUPS = new Set<string>([
+  'pool/spa_size',
+  'pool/beach_size',
+])
+
+function isTileModeGroup(serviceId: string | undefined, groupId: string): boolean {
+  if (!serviceId) return false
+  return !TILE_EXCLUDED_GROUPS.has(`${serviceId}/${groupId}`)
 }
 
 import { AnimatePresence } from 'framer-motion'
@@ -365,16 +460,8 @@ export function ServiceDetailPage() {
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter, includeFlatArea: result.includeFlatArea })
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
-    // Rod 2026-05-22 13:30Z: smooth-scroll to Service Type once measurement
-    // completes — the pre-measure gate (line 1145-1152) just unlocked, so we
-    // drop the user where the next decision lives. 80ms gives the chip-grid
-    // a frame to re-render with the unlocked state before the scroll fires.
     if (serviceId === 'roofing') {
-      window.setTimeout(() => {
-        document
-          .querySelector('[data-service-section="service_type"]')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 80)
+      scrollToFirstConfigSection()
     }
   }
 
@@ -649,6 +736,16 @@ export function ServiceDetailPage() {
 
   const services = useCatalogStore((s) => s.services)
   const service = services.find((s) => s.id === serviceId)
+
+  const scrollToFirstConfigSection = () => {
+    const firstGroupId = service?.optionGroups?.[0]?.id
+    if (!firstGroupId) return
+    window.setTimeout(() => {
+      document
+        .querySelector(`[data-service-section="${firstGroupId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+  }
 
   useDocumentTitle(service?.name)
 
@@ -1017,13 +1114,16 @@ export function ServiceDetailPage() {
                   // here). 2 is the hard cap regardless of prior picks.
                   // Other services leave maxPolygons undefined.
                   maxPolygons={serviceId === 'pergolas' ? 2 : undefined}
-                  onMeasure={(result) => setAreaMeasurement({
-                    areaSqft: result.areaSqft,
-                    perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined,
-                    address: result.address,
-                    mapUrl: result.mapUrl,
-                    polygons: result.polygons,
-                  })}
+                  onMeasure={(result) => {
+                    setAreaMeasurement({
+                      areaSqft: result.areaSqft,
+                      perimeterFt: result.measurements.type === 'fencing' ? result.measurements.perimeterFt : undefined,
+                      address: result.address,
+                      mapUrl: result.mapUrl,
+                      polygons: result.polygons,
+                    })
+                    scrollToFirstConfigSection()
+                  }}
                 />
               </div>
             </div>
@@ -1125,9 +1225,7 @@ export function ServiceDetailPage() {
                 data-service-type-selected={
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
-                data-service-section={
-                  serviceId === 'roofing' && group.id === 'service_type' ? 'service_type' : undefined
-                }
+                data-service-section={group.id}
               >
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
@@ -1142,19 +1240,16 @@ export function ServiceDetailPage() {
                   )}
                 </div>
                 <div className={cn(
-                  // Rod 2026-05-22: Roofing top-level groups render as card
-                  // tiles (2-col mobile / 3-col desktop). Sub-row chips +
-                  // non-roofing services keep the wrap-flex pill render.
-                  serviceId === 'roofing' && (group.id === 'service_type' || group.id === 'material' || group.id === 'addons')
+                  isTileModeGroup(serviceId, group.id)
                     ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
                     : 'flex flex-wrap gap-2'
                 )}>
                   {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
-                    const isCardTile =
-                      serviceId === 'roofing' &&
-                      (group.id === 'service_type' || group.id === 'material' || group.id === 'addons')
-                    const TileIcon = isCardTile ? ROOFING_TILE_ICONS[group.id]?.[option.id] : undefined
+                    const isCardTile = isTileModeGroup(serviceId, group.id)
+                    const TileIcon = isCardTile
+                      ? SERVICE_TILE_ICONS[serviceId ?? '']?.[group.id]?.[option.id]
+                      : undefined
                     // PR — roofing material primary lock. Once a non-flat material is
                     // picked, every OTHER non-flat chip becomes unclickable. Flat Roof
                     // is additive (coexists with non-flat sections per Granada walk
