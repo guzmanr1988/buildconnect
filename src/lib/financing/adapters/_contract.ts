@@ -39,6 +39,7 @@ export interface CreateApplicationInput {
   customerProfile: CustomerProfileInput;
   projectScope: ProjectScopeInput;
   bcApplicationId: string;
+  projectId?: string;
 }
 
 export interface CreateApplicationResult {

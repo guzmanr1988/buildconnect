@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronDown, ChevronUp, ExternalLink, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth-store'
@@ -62,6 +62,8 @@ function lenderState(l: Lender): LenderState {
 export function FinancingApplyPage() {
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('project_id') || undefined
   const financingEnabled = useFeatureFlagOnce('financing_enabled')
 
   const [lenders, setLenders] = useState<Lender[]>([])
@@ -294,6 +296,7 @@ export function FinancingApplyPage() {
           open={dialogLenderKey !== null}
           onOpenChange={(open) => !open && setDialogLenderKey(null)}
           lenderKey={dialogLenderKey}
+          projectId={projectId}
         />
       )}
     </div>

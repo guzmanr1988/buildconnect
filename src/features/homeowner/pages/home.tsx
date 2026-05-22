@@ -14,6 +14,7 @@ import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { FinancingCard } from '@/features/financing/components/financing-card'
 import { ApprovedAmountBanner } from '@/features/financing/components/approved-amount-banner'
+import { HomeownerPendingDrawsSection } from '@/features/financing/components/homeowner-pending-draws-section'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
@@ -256,6 +257,8 @@ export function HomeownerHome() {
           above the FinancingCard so the headline affordance lands first when
           a real offer is on the table. */}
       <ApprovedAmountBanner />
+
+      <HomeownerPendingDrawsSection />
 
       {/* Financing entry — renders only when feature_flags.financing_enabled
           is true (read via useFeatureFlag inside FinancingCard). Phase-2

@@ -36,9 +36,10 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   lenderKey: string
+  projectId?: string
 }
 
-export function FinancingAdapterDialog({ open, onOpenChange, lenderKey }: Props) {
+export function FinancingAdapterDialog({ open, onOpenChange, lenderKey, projectId }: Props) {
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
   const [amount, setAmount] = useState('')
@@ -78,6 +79,7 @@ export function FinancingAdapterDialog({ open, onOpenChange, lenderKey }: Props)
           estimated_amount_cents: amountCents,
         },
         bcApplicationId,
+        projectId,
       })
       toast.success('Application submitted. We will email you when there is an update.')
       onOpenChange(false)
