@@ -225,6 +225,35 @@ serve(async (req: Request) => {
   }
 
   if (body.action === 'reset') {
+    // CASCADE-CLEAN: commission_ledger.financing_application_id has ON DELETE
+    // RESTRICT (047_financing_core_tables.sql:294), so a bare DELETE on
+    // financing_applications throws 23503 once any milestone-draw arc has
+    // landed a commission_ledger row. Pre-clean the downstream rows in
+    // FK-safe order, then unblock the financing_applications DELETE.
+    const { data: appRows, error: appLookupErr } = await admin
+      .from('financing_applications')
+      .select('id')
+      .eq('homeowner_id', customerId)
+    if (appLookupErr) {
+      return jsonResponse(500, { error: 'application_lookup_failed', detail: appLookupErr.message })
+    }
+    const appIds = (appRows ?? []).map((r) => r.id)
+    if (appIds.length > 0) {
+      const { error: delLedgerErr } = await admin
+        .from('commission_ledger')
+        .delete()
+        .in('financing_application_id', appIds)
+      if (delLedgerErr) {
+        return jsonResponse(500, { error: 'delete_commission_ledger_failed', detail: delLedgerErr.message })
+      }
+      const { error: delDrawsErr } = await admin
+        .from('draw_requests')
+        .delete()
+        .in('financing_application_id', appIds)
+      if (delDrawsErr) {
+        return jsonResponse(500, { error: 'delete_draw_requests_failed', detail: delDrawsErr.message })
+      }
+    }
     const { error: delAppsErr } = await admin
       .from('financing_applications')
       .delete()
