@@ -890,7 +890,7 @@ export function CartPage() {
                   </div>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {viewItem.address && (
                     <div className="rounded-xl border bg-muted/30 p-4">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">
@@ -978,7 +978,7 @@ export function CartPage() {
                     </div>
                   )}
 
-                  <h3 className="text-sm font-semibold text-foreground">Project Summary</h3>
+                  <h3 className="text-base font-bold text-foreground">Project Summary</h3>
                   <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
                     {Object.entries(viewItem.selections)
                       .filter(([groupId]) => groupId !== 'spa_size' && groupId !== 'beach_size')

@@ -72,20 +72,20 @@ export function RoofSpecCard({
 
   return (
     <div className={cn('rounded-xl border p-4 space-y-2', className)}>
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Roof Spec</h4>
-      <div className="space-y-1.5 text-sm">
+      <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Roof Spec</h4>
+      <div className="space-y-3 text-sm">
         {rm && (
           <>
             {rm.address && (
-              <div className="flex items-start gap-2">
-                <span className="text-muted-foreground min-w-[72px]">Address</span>
-                <span className="font-medium text-xs leading-snug">{rm.address}</span>
+              <div className="flex items-start gap-4">
+                <span className="text-muted-foreground min-w-[88px]">Address</span>
+                <span className="font-semibold text-xs leading-snug">{rm.address}</span>
               </div>
             )}
             {!isAddonsOnly && includeMaterialOrder && (
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground min-w-[72px]">Area</span>
-                <span className="font-medium">
+              <div className="flex items-center gap-4">
+                <span className="text-muted-foreground min-w-[88px]">Area</span>
+                <span className="font-semibold">
                   {rm.areaSqft.toLocaleString()} sqft · {(() => {
                     const { pitchedAreaSqft, flatAreaSqft } = rm
                     if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
@@ -101,28 +101,28 @@ export function RoofSpecCard({
               </div>
             )}
             {!isAddonsOnly && includeMaterialOrder && rm.pitch && (
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground min-w-[72px]">Pitch</span>
-                <span className="font-medium">{rm.pitch}</span>
+              <div className="flex items-center gap-4">
+                <span className="text-muted-foreground min-w-[88px]">Pitch</span>
+                <span className="font-semibold">{rm.pitch}</span>
               </div>
             )}
             {rm.perimeterFt && includePerimeter && (
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground min-w-[72px]">Perimeter</span>
-                <span className="font-medium">~{rm.perimeterFt.toLocaleString()} lin ft</span>
+              <div className="flex items-center gap-4">
+                <span className="text-muted-foreground min-w-[88px]">Perimeter</span>
+                <span className="font-semibold">~{rm.perimeterFt.toLocaleString()} lin ft</span>
               </div>
             )}
             {!isAddonsOnly && hasSplit && (
               <>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground min-w-[72px]">Pitched</span>
-                  <span className="font-medium">
+                <div className="flex items-center gap-4">
+                  <span className="text-muted-foreground min-w-[88px]">Pitched</span>
+                  <span className="font-semibold">
                     {rm.pitchedAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground min-w-[72px]">Flat</span>
-                  <span className="font-medium">
+                <div className="flex items-center gap-4">
+                  <span className="text-muted-foreground min-w-[88px]">Flat</span>
+                  <span className="font-semibold">
                     {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)
                   </span>
                 </div>
@@ -131,15 +131,15 @@ export function RoofSpecCard({
           </>
         )}
         {metalColorLabel && (
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground min-w-[72px]">Color</span>
-            <span className="font-medium">{metalColorLabel}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-muted-foreground min-w-[88px]">Color</span>
+            <span className="font-semibold">{metalColorLabel}</span>
           </div>
         )}
         {metalSquares !== undefined && (
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground min-w-[72px]">Metal size</span>
-            <span className="font-medium">{metalSquares} squares</span>
+          <div className="flex items-center gap-4">
+            <span className="text-muted-foreground min-w-[88px]">Metal size</span>
+            <span className="font-semibold">{metalSquares} squares</span>
           </div>
         )}
         {includePerimeter && addonEntries.map(([id, ft]) => {
@@ -150,10 +150,10 @@ export function RoofSpecCard({
           const drops = gutterDropsConfig?.drops ?? 0
           const floorsLabel = gutterDropsConfig?.floors === 1 ? '1-story' : '2-story'
           return (
-            <div key={id} className="flex items-start gap-2">
-              <span className="text-muted-foreground min-w-[72px]">{ADDON_LABELS[id] ?? id}</span>
+            <div key={id} className="flex items-start gap-4">
+              <span className="text-muted-foreground min-w-[88px]">{ADDON_LABELS[id] ?? id}</span>
               <div className="flex flex-col">
-                <span className="font-medium">{totalFt.toLocaleString()} lin ft</span>
+                <span className="font-semibold">{totalFt.toLocaleString()} lin ft</span>
                 {showBreakdown && (
                   <span className="text-[11px] text-muted-foreground">
                     {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
