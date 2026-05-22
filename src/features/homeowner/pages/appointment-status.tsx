@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { cn } from '@/lib/utils'
 import type { CartItem } from '@/stores/cart-store'
 import type { Lead, LeadStatus } from '@/types'
@@ -36,6 +37,7 @@ const statusPulse: Record<string, string> = {
 
 export function AppointmentStatusPage() {
   const { id } = useParams<{ id: string }>()
+  const financingEnabled = useFeatureFlag('financing_enabled')
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
@@ -400,6 +402,29 @@ export function AppointmentStatusPage() {
             Request reschedule
           </Button>
         </div>
+      )}
+
+      {financingEnabled === true && matchedSentProject && (
+        <Card data-testid="homeowner-project-financing-cta" data-financing-project-cta>
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <DollarSign className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Need financing for this project?</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Apply with one of our partner lenders. Approvals typically come back within one business day.
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="shrink-0" data-testid="homeowner-project-financing-apply">
+              <Link to={`/home/financing/apply?project_id=${matchedSentProject.id}`}>
+                Apply for financing
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

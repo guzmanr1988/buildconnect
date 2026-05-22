@@ -40,6 +40,7 @@ import type { Lead, VendorRep } from '@/types'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
+import { VendorDrawRequestSection } from '@/features/financing/components/vendor-draw-request-section'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -1550,6 +1551,11 @@ export default function VendorLeadWorkflow() {
                               </div>
                             </div>
                           )}
+
+                          <VendorDrawRequestSection
+                            sentProjectId={sp.id}
+                            leadStatus={sp.completedAt ? 'completed' : sp.soldAt ? 'sold-active' : selected.status}
+                          />
 
                           {/* Ship #337 Phase A finishing-touch — Pricing
                               Breakdown moved out of sold-branch to a full-

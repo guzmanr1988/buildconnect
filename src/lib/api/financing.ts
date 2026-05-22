@@ -47,6 +47,34 @@ export interface CustomerFinancingProfileRow {
   updated_at: string
 }
 
+export type DrawRequestStatus =
+  | 'sms_pending'
+  | 'approved'
+  | 'disputed'
+  | 'paid'
+  | 'cancelled'
+  | 'expired'
+
+export interface DrawRequestRow {
+  id: string
+  financing_application_id: string
+  sent_project_id: string
+  vendor_id: string
+  homeowner_id: string
+  amount_cents: number
+  commission_cents: number
+  vendor_payout_cents: number
+  status: DrawRequestStatus
+  sms_token: string | null
+  sms_sent_at: string | null
+  sms_approved_at: string | null
+  dispute_window_ends_at: string | null
+  paid_at: string | null
+  idempotency_key: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CommissionLedgerRow {
   id: string
   financing_application_id: string
@@ -119,6 +147,79 @@ export async function insertFinancingApplication(input: {
     .single()
   if (error) throw error
   return data as FinancingApplicationRow
+}
+
+export async function listDrawRequestsBySentProject(sentProjectId: string): Promise<DrawRequestRow[]> {
+  const { data, error } = await supabase
+    .from('draw_requests')
+    .select('*')
+    .eq('sent_project_id', sentProjectId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as DrawRequestRow[]
+}
+
+export async function listDrawRequestsForHomeowner(homeownerId: string, status?: DrawRequestStatus): Promise<DrawRequestRow[]> {
+  let q = supabase
+    .from('draw_requests')
+    .select('*')
+    .eq('homeowner_id', homeownerId)
+  if (status) q = q.eq('status', status)
+  const { data, error } = await q.order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as DrawRequestRow[]
+}
+
+export async function getDrawRequestById(id: string): Promise<DrawRequestRow | null> {
+  const { data, error } = await supabase
+    .from('draw_requests')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data as DrawRequestRow | null
+}
+
+export interface DrawRequestCreateResponse {
+  draw_request_id: string
+  commission_cents: number
+  vendor_payout_cents: number
+  envelope_remaining_after_cents: number
+  status: 'sms_pending'
+  sms_status: 'stub_dispatched' | 'dispatched'
+}
+
+export interface DrawRequestApproveResponse {
+  status: 'approved' | 'disputed'
+  dispute_window_ends_at: string | null
+}
+
+export async function invokeDrawRequestCreate(input: {
+  sent_project_id: string
+  amount_cents: number
+  idempotency_key: string
+}): Promise<DrawRequestCreateResponse> {
+  const { data, error } = await supabase.functions.invoke('draw-request-create', { body: input })
+  if (error) {
+    const ctx = (error as { context?: { error?: string; message?: string } }).context
+    const code = ctx?.error ?? (error.message as string | undefined) ?? 'draw_request_create_failed'
+    throw new Error(code)
+  }
+  return data as DrawRequestCreateResponse
+}
+
+export async function invokeDrawRequestApprove(input: {
+  draw_request_id: string
+  sms_token: string
+  decision: 'approve' | 'dispute'
+}): Promise<DrawRequestApproveResponse> {
+  const { data, error } = await supabase.functions.invoke('draw-request-approve', { body: input })
+  if (error) {
+    const ctx = (error as { context?: { error?: string; message?: string } }).context
+    const code = ctx?.error ?? (error.message as string | undefined) ?? 'draw_request_approve_failed'
+    throw new Error(code)
+  }
+  return data as DrawRequestApproveResponse
 }
 
 export interface AdminFinancingStats {

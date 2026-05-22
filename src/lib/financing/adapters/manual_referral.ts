@@ -37,6 +37,7 @@ export const manualReferralAdapter: FinancingBankAdapter = {
     const row = await insertFinancingApplication({
       id: input.bcApplicationId,
       homeowner_id: user.id,
+      project_id: input.projectId ?? null,
       adapter: ADAPTER_KEY,
       adapter_application_id: input.bcApplicationId,
     })

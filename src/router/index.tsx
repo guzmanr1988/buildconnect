@@ -32,6 +32,7 @@ import { CartPage } from '@/features/homeowner/pages/cart'
 // surface in production).
 import { FinancingApplyPage } from '@/features/financing/pages/apply'
 import { FinancingStatusPage } from '@/features/financing/pages/status'
+import { FinancingDrawApprovePage } from '@/features/financing/pages/draw-approve'
 
 // Vendor (default exports)
 import VendorDashboard from '@/features/vendor/pages/dashboard'
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
           // register so a flag-flip ship doesn't require a router code change.
           { path: 'financing/apply', element: <FinancingApplyPage />, handle: { title: 'Apply for financing' } },
           { path: 'financing/status/:applicationId', element: <FinancingStatusPage />, handle: { title: 'Application status' } },
+          { path: 'draws/:drawId/approve', element: <FinancingDrawApprovePage />, handle: { title: 'Approve draw' } },
         ],
       },
 
