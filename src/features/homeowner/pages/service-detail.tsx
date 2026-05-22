@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -45,6 +45,37 @@ import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
 // matches EXTRA_COLORS[0]. Pick-then-draw model: chip pick order = polygon
 // draw order; the ColorCircle on the chip is keyed to that order.
 const POLYGON_COLORS = ['#2563eb', '#d97706']
+
+// Rod-direct 2026-05-22 13:30Z: card-style tiles on Roofing canonical for
+// the three top-level group ids. Sub-row chips (material configurators,
+// Stone tight-row, Spa/Beach/Garage size, pergolas ColorCircle, etc.) keep
+// their existing chip pill render path.
+const ROOFING_TILE_ICONS: Record<string, Record<string, typeof Plus>> = {
+  service_type: {
+    replace: RefreshCw,
+    repair: Wrench,
+    addons: Plus,
+  },
+  material: {
+    shingle: Layers,
+    barrel_tile: Triangle,
+    terracotta: Triangle,
+    metal: Cog,
+    aluminum: PanelTop,
+    flat_roof: Square,
+  },
+  addons: {
+    gutters: Droplets,
+    insulation: Thermometer,
+    solar_prep: Sun,
+    soffit_wood: PaintRoller,
+    fascia_wood: PaintRoller,
+    soffit_metal: Hammer,
+    fascia_metal: Hammer,
+    extra_plywood: PanelTop,
+  },
+}
+
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
@@ -334,6 +365,17 @@ export function ServiceDetailPage() {
     setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter, includeFlatArea: result.includeFlatArea })
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
+    // Rod 2026-05-22 13:30Z: smooth-scroll to Service Type once measurement
+    // completes — the pre-measure gate (line 1145-1152) just unlocked, so we
+    // drop the user where the next decision lives. 80ms gives the chip-grid
+    // a frame to re-render with the unlocked state before the scroll fires.
+    if (serviceId === 'roofing') {
+      window.setTimeout(() => {
+        document
+          .querySelector('[data-service-section="service_type"]')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 80)
+    }
   }
 
   // PR-242 — Roof measurement PDF auto-save. Fires once the homeowner has a
@@ -1083,6 +1125,9 @@ export function ServiceDetailPage() {
                 data-service-type-selected={
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
+                data-service-section={
+                  serviceId === 'roofing' && group.id === 'service_type' ? 'service_type' : undefined
+                }
               >
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
@@ -1096,9 +1141,20 @@ export function ServiceDetailPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className={cn(
+                  // Rod 2026-05-22: Roofing top-level groups render as card
+                  // tiles (2-col mobile / 3-col desktop). Sub-row chips +
+                  // non-roofing services keep the wrap-flex pill render.
+                  serviceId === 'roofing' && (group.id === 'service_type' || group.id === 'material' || group.id === 'addons')
+                    ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
+                    : 'flex flex-wrap gap-2'
+                )}>
                   {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
+                    const isCardTile =
+                      serviceId === 'roofing' &&
+                      (group.id === 'service_type' || group.id === 'material' || group.id === 'addons')
+                    const TileIcon = isCardTile ? ROOFING_TILE_ICONS[group.id]?.[option.id] : undefined
                     // PR — roofing material primary lock. Once a non-flat material is
                     // picked, every OTHER non-flat chip becomes unclickable. Flat Roof
                     // is additive (coexists with non-flat sections per Granada walk
@@ -1289,14 +1345,37 @@ export function ServiceDetailPage() {
                           }
                         }}
                         className={cn(
-                          'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-base font-medium transition-all duration-150',
-                          isSelected
-                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                            : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+                          isCardTile
+                            ? 'flex flex-col items-start gap-2 rounded-2xl border p-4 min-h-[112px] text-left transition-all duration-150 hover:scale-[1.02] hover:shadow-md disabled:hover:scale-100 disabled:hover:shadow-none'
+                            : 'inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-4 py-2 text-base font-medium transition-all duration-150',
+                          isCardTile
+                            ? isSelected
+                              ? 'border-primary bg-primary/5 ring-2 ring-primary/30 shadow-sm'
+                              : 'border-border bg-background hover:border-primary/40'
+                            : isSelected
+                              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                              : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
                           'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-background'
                         )}
                       >
-                        {group.type === 'multi' && isSelected && (
+                        {isCardTile && (
+                          <div className="flex w-full items-center gap-2">
+                            {TileIcon ? (
+                              <div className={cn(
+                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                                isSelected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                              )}>
+                                <TileIcon className="h-5 w-5" strokeWidth={1.8} />
+                              </div>
+                            ) : null}
+                            {group.type === 'multi' && isSelected && (
+                              <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                <Check className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {!isCardTile && group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
                         {/* Pergolas multi-structure: ColorCircle binds chip to
@@ -1309,7 +1388,14 @@ export function ServiceDetailPage() {
                           const color = POLYGON_COLORS[idx] ?? POLYGON_COLORS[0]
                           return <ColorCircle color={color} size={8} />
                         })()}
-                        {optionLabel}
+                        {isCardTile ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            {option.description ? (
+                              <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
+                            ) : null}
+                          </div>
+                        ) : optionLabel}
                         {serviceId === 'kitchen' && (option.subGroups?.length ?? 0) > 0 && (() => {
                           const subPickId = selections[`${option.id}-sub`]?.[0]
                           const subPickLabel = subPickId ? resolveSubChoiceLabel(option, subPickId) : null
