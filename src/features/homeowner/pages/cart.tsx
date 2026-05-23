@@ -874,7 +874,7 @@ export function CartPage() {
           window/door projects). Close button at the bottom in
           DialogFooter per Rodolfo'\''s shape. */}
       <Dialog open={!!viewItem} onOpenChange={(open) => !open && setViewItem(null)}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md md:max-w-3xl max-h-[85vh] overflow-y-auto">
           {viewItem && (() => {
             const service = SERVICE_CATALOG.find((s) => s.id === viewItem.serviceId)
             const Icon = SERVICE_ICONS[viewItem.serviceId] || ShoppingCart
