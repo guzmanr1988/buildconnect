@@ -173,35 +173,66 @@ export function HomeownerDocumentsPage() {
 
   const projectGroups = useMemo<SentProjectGroup[]>(() => {
     const projectsById = new Map(sentProjects.map((p) => [p.id, p]))
+    // Arc-15 d2 — vendorId → company reverse-lookup from sentProjects.
+    // Used to attribute NULL-bucket docs (no resolvable sent_project) to
+    // their vendor when doc.vendorId is set. Same vendor across multiple
+    // NULL-bucket docs → one box per vendor; docs without vendorId are
+    // omitted (no Unattributed catch-all).
+    const vendorCompanyById = new Map<string, string>()
+    for (const sp of sentProjects) {
+      const vid = sp.contractor?.vendor_id ?? sp.vendor_id
+      const company = sp.contractor?.company
+      if (vid && company && !vendorCompanyById.has(vid)) {
+        vendorCompanyById.set(vid, company)
+      }
+    }
+
     const buckets = new Map<string, SentProjectGroup>()
-    const CUSTOMER_BUCKET_KEY = '__customer__'
+    const VENDOR_BUCKET_PREFIX = '__vendor__'
 
     for (const doc of myDocs) {
       const anchor = resolveAnchor(doc)
       const project = anchor ? projectsById.get(anchor) : undefined
-      const key = project ? project.id : CUSTOMER_BUCKET_KEY
+      if (project) {
+        const key = project.id
+        let bucket = buckets.get(key)
+        if (!bucket) {
+          bucket = {
+            sentProjectId: project.id,
+            serviceName: project.item.serviceName,
+            vendorCompany: project.contractor.company ?? null,
+            address:
+              project.homeowner?.address ?? doc.address ?? null,
+            sentAt: project.sentAt ?? null,
+            status: project.status ?? null,
+            docs: [],
+          }
+          buckets.set(key, bucket)
+        }
+        bucket.docs.push(doc)
+        continue
+      }
+      // Arc-15 d2 — NULL-bucket split-by-vendorId. Docs without a
+      // resolvable sent_project are grouped per vendor so each vendor's
+      // homeowner-level uploads land in their own box matching Rod's
+      // "separate boxes" intent. Docs with no vendorId are omitted from
+      // render (data-integrity issue surfaced backend-side, not here).
+      if (!doc.vendorId) continue
+      const key = `${VENDOR_BUCKET_PREFIX}${doc.vendorId}`
       let bucket = buckets.get(key)
       if (!bucket) {
-        bucket = project
-          ? {
-              sentProjectId: project.id,
-              serviceName: project.item.serviceName,
-              vendorCompany: project.contractor.company ?? null,
-              address:
-                project.homeowner?.address ?? doc.address ?? null,
-              sentAt: project.sentAt ?? null,
-              status: project.status ?? null,
-              docs: [],
-            }
-          : {
-              sentProjectId: null,
-              serviceName: 'Customer documents',
-              vendorCompany: null,
-              address: null,
-              sentAt: null,
-              status: null,
-              docs: [],
-            }
+        const vendorCompany = vendorCompanyById.get(doc.vendorId) ?? null
+        bucket = {
+          sentProjectId: null,
+          serviceName: vendorCompany
+            ? `Customer documents — ${vendorCompany}`
+            : 'Customer documents',
+          vendorCompany,
+          address: doc.address ?? null,
+          sentAt: null,
+          status: null,
+          docs: [],
+        }
         buckets.set(key, bucket)
       }
       bucket.docs.push(doc)
@@ -212,8 +243,8 @@ export function HomeownerDocumentsPage() {
     }
 
     return Array.from(buckets.values()).sort((a, b) => {
-      if (a.sentProjectId === null) return 1
-      if (b.sentProjectId === null) return -1
+      if (a.sentProjectId === null && b.sentProjectId !== null) return 1
+      if (b.sentProjectId === null && a.sentProjectId !== null) return -1
       const aLatest = a.sentAt ?? a.docs[0]?.createdAt ?? ''
       const bLatest = b.sentAt ?? b.docs[0]?.createdAt ?? ''
       return bLatest.localeCompare(aLatest)
