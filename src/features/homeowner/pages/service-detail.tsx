@@ -1527,6 +1527,29 @@ export function ServiceDetailPage() {
                             {option.description ? (
                               <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
                             ) : null}
+                            {/* Arc-20 — inside-box live-mirror lin-ft per Rod
+                                photo 325. Mirrors the typing in the outside-card
+                                linear-ft input so the user sees the value
+                                without scrolling to the input row. Distinct
+                                from the chip-summary span L1612+ (chip surfaces
+                                post-save outside the card; this span is live
+                                during input AND post-save, inside the card). */}
+                            {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_IDS.includes(option.id) && Number(addonLinearFt[option.id] ?? 0) > 0 && (
+                              <span
+                                className="text-[12px] leading-tight font-medium text-foreground/80"
+                                data-option-card-linear-ft-value={option.id}
+                              >
+                                {(Number(addonLinearFt[option.id]) || 0).toLocaleString()} lin ft
+                              </span>
+                            )}
+                            {serviceId === 'kitchen' && group.label.toLowerCase().includes('stone') && (option.subGroups?.length ?? 0) === 0 && Number(subGroupLinearFt[option.id] ?? 0) > 0 && (
+                              <span
+                                className="text-[12px] leading-tight font-medium text-foreground/80"
+                                data-option-card-linear-ft-value={option.id}
+                              >
+                                {(Number(subGroupLinearFt[option.id]) || 0).toLocaleString()} lin ft
+                              </span>
+                            )}
                           </div>
                         ) : optionLabel}
                         {serviceId === 'kitchen' && (option.subGroups?.length ?? 0) > 0 && (() => {
