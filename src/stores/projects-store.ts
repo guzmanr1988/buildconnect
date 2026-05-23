@@ -1038,24 +1038,21 @@ export const useProjectsStore = create<ProjectsState>()(
     }),
     {
       name: 'buildconnect-projects',
-      version: 1,
-      // PR #191 partialize strips heavyweight base64 fields (itemPhotos,
-      // idDocument) on every WRITE — but legacy LS entries persisted before
-      // #191 keep the bloat forever and re-trigger QuotaExceededError on
-      // each new send. Bump persist version + run migrate-on-rehydrate to
-      // scrub existing sentProjects[] one time per device. Server-side is
-      // authoritative (hydrateFromSupabase backfills photos+ID into in-memory
-      // state on session start), so the migration is zero-data-loss.
-      // Idempotent: runs once per device on first reload after deploy.
+      version: 2,
+      // Arc-30 PR-#354 bumps version 1→2 to wipe sentProjects on rehydrate.
+      // Cause: persist-merge dedupe (L1098-L1099 below) seen-by-id-OR-item.id
+      // kept stale pre-Arc-17 LS entries that lacked applied_financing_*
+      // shape, blocking fresh DB rows from being picked up by downstream
+      // selectors (banner + status page both read applied_financing_amount_cents
+      // from sentProjects in-memory). hydrateFromSupabase (L443+) backfills
+      // sentProjects from authoritative DB rows on next session start, so the
+      // wipe is zero-data-loss for any state the server already owns.
+      // PR #191 photo/id scrub from the prior v<1 branch is subsumed by the
+      // v<2 wipe (everything in sentProjects goes; server re-supplies clean).
       migrate: (persistedState: unknown, version: number) => {
         const state = (persistedState ?? {}) as Partial<ProjectsState>
-        if (version < 1) {
-          const sentProjects = (state.sentProjects ?? []).map((sp) => ({
-            ...sp,
-            item: { ...sp.item, itemPhotos: undefined },
-            idDocument: undefined,
-          }))
-          return { ...state, sentProjects }
+        if (version < 2) {
+          return { ...state, sentProjects: [] }
         }
         return state
       },
