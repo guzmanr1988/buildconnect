@@ -48,7 +48,22 @@ type AdvanceToPendingBody = { action: 'advance_to_pending'; applicationId: strin
 type AdvanceToApprovedBody = { action: 'advance_to_approved'; applicationId: string }
 type AcceptTermsBody = { action: 'accept_terms'; applicationId: string }
 type ResetBody = { action: 'reset' }
-type ActionBody = AdvanceToPendingBody | AdvanceToApprovedBody | AcceptTermsBody | ResetBody
+// PR-330 — apply (or update) homeowner's financing allocation onto one
+// sent_project. Server re-checks envelope cap against the sum of OTHER
+// allocations on the same application_id; idempotent re-allocate is
+// fine because we exclude the target sent_project_id from the sum.
+type ApplyAllocationBody = {
+  action: 'apply_allocation'
+  applicationId: string
+  sentProjectId: string
+  amountCents: number
+}
+type ActionBody =
+  | AdvanceToPendingBody
+  | AdvanceToApprovedBody
+  | AcceptTermsBody
+  | ResetBody
+  | ApplyAllocationBody
 
 const DEMO_APPROVAL_AMOUNT_CENTS = 1_500_000
 const DEMO_APPROVAL_EXPIRY_DAYS = 30
@@ -281,6 +296,100 @@ serve(async (req: Request) => {
       return jsonResponse(500, { error: 'cfp_clear_failed', detail: cfpErr.message })
     }
     return jsonResponse(200, { ok: true, action: 'reset' })
+  }
+
+  if (body.action === 'apply_allocation') {
+    if (typeof body.applicationId !== 'string' || body.applicationId.length === 0) {
+      return jsonResponse(400, { error: 'missing_application_id' })
+    }
+    if (typeof body.sentProjectId !== 'string' || body.sentProjectId.length === 0) {
+      return jsonResponse(400, { error: 'missing_sent_project_id' })
+    }
+    if (typeof body.amountCents !== 'number' || !Number.isInteger(body.amountCents) || body.amountCents <= 0) {
+      return jsonResponse(400, { error: 'invalid_amount_cents' })
+    }
+
+    const { data: appRow, error: appErr } = await admin
+      .from('financing_applications')
+      .select('id, homeowner_id, status, estimated_amount_cents')
+      .eq('id', body.applicationId)
+      .maybeSingle()
+    if (appErr) return jsonResponse(500, { error: 'application_lookup_failed' })
+    if (!appRow) return jsonResponse(404, { error: 'application_not_found' })
+    if (appRow.homeowner_id !== customerId) {
+      return jsonResponse(403, { error: 'not_application_owner' })
+    }
+    if (appRow.status !== 'approved' && appRow.status !== 'terms_accepted') {
+      return jsonResponse(409, { error: 'application_not_approved', current_status: appRow.status })
+    }
+
+    const { data: cfpRow } = await admin
+      .from('customer_financing_profile')
+      .select('last_known_amount_cents')
+      .eq('customer_id', customerId)
+      .maybeSingle()
+    const envelopeCents =
+      (cfpRow?.last_known_amount_cents as number | null | undefined) ??
+      (appRow.estimated_amount_cents as number | null | undefined) ??
+      0
+    if (envelopeCents <= 0) {
+      return jsonResponse(409, { error: 'envelope_unavailable' })
+    }
+
+    const { data: spRow, error: spErr } = await admin
+      .from('sent_projects')
+      .select('id, homeowner_id')
+      .eq('id', body.sentProjectId)
+      .maybeSingle()
+    if (spErr) return jsonResponse(500, { error: 'sent_project_lookup_failed' })
+    if (!spRow) return jsonResponse(404, { error: 'sent_project_not_found' })
+    if (spRow.homeowner_id !== customerId) {
+      return jsonResponse(403, { error: 'not_sent_project_owner' })
+    }
+
+    const { data: otherRows, error: othersErr } = await admin
+      .from('sent_projects')
+      .select('id, applied_financing_amount_cents')
+      .eq('applied_financing_application_id', body.applicationId)
+      .neq('id', body.sentProjectId)
+    if (othersErr) return jsonResponse(500, { error: 'allocation_sum_failed' })
+    const otherAllocatedCents = (otherRows ?? []).reduce((sum, r: any) => {
+      const v = typeof r.applied_financing_amount_cents === 'number' ? r.applied_financing_amount_cents : 0
+      return sum + v
+    }, 0)
+    const remainingCents = envelopeCents - otherAllocatedCents
+    if (body.amountCents > remainingCents) {
+      return jsonResponse(409, {
+        error: 'exceeds_envelope_remaining',
+        envelope_cents: envelopeCents,
+        other_allocated_cents: otherAllocatedCents,
+        remaining_cents: remainingCents,
+        requested_cents: body.amountCents,
+      })
+    }
+
+    const { error: updErr } = await admin
+      .from('sent_projects')
+      .update({
+        applied_financing_amount_cents: body.amountCents,
+        applied_financing_application_id: body.applicationId,
+      })
+      .eq('id', body.sentProjectId)
+      .eq('homeowner_id', customerId)
+    if (updErr) {
+      return jsonResponse(500, { error: 'allocation_update_failed', detail: updErr.message })
+    }
+
+    return jsonResponse(200, {
+      ok: true,
+      action: 'apply_allocation',
+      sent_project_id: body.sentProjectId,
+      application_id: body.applicationId,
+      amount_cents: body.amountCents,
+      envelope_cents: envelopeCents,
+      other_allocated_cents: otherAllocatedCents,
+      remaining_cents: remainingCents - body.amountCents,
+    })
   }
 
   return jsonResponse(400, { error: 'unknown_action' })

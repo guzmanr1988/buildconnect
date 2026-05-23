@@ -168,6 +168,13 @@ export interface SentProject {
     signedName: string
     signedAt: string
   } | null
+  // PR-330 — homeowner-allocated financing for this sent_project. Both
+  // NULL pre-allocation; both set together via the Edge Fn apply_allocation
+  // path (writes are gated server-side by envelope-cap re-check). Slot-
+  // availability (NULL) is the FE CTA gate, NOT status — homeowner can
+  // allocate to pending + approved + sold projects after approval.
+  applied_financing_amount_cents?: number | null
+  applied_financing_application_id?: string | null
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -383,7 +390,8 @@ export const useProjectsStore = create<ProjectsState>()(
           'rejection_reason, assigned_rep, account_rep_id, rep_acceptance, ' +
           'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
           'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
-          'cancellation_request'
+          'cancellation_request, applied_financing_amount_cents, ' +
+          'applied_financing_application_id'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -428,6 +436,8 @@ export const useProjectsStore = create<ProjectsState>()(
           reviewNote:      row.review_note ?? undefined,
           priceLineItems:  row.price_line_items as PriceLineItem[] | undefined,
           quotedPriceCents:row.quoted_price_cents ?? undefined,
+          applied_financing_amount_cents:    row.applied_financing_amount_cents ?? null,
+          applied_financing_application_id:  row.applied_financing_application_id ?? null,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))

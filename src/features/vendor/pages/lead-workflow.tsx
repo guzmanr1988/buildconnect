@@ -7,7 +7,7 @@ import {
   Inbox, CalendarCheck, MapPin,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Info, Upload, FileText, Send,
+  UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1203,6 +1203,25 @@ export default function VendorLeadWorkflow() {
                       )
                     })()}
                   </div>
+                  {(() => {
+                    const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                    const appliedCents = sp?.applied_financing_amount_cents ?? 0
+                    if (financingEnabled !== true || !sp?.applied_financing_application_id || appliedCents <= 0) {
+                      return null
+                    }
+                    return (
+                      <div
+                        className="flex items-center gap-2 text-foreground/90"
+                        data-vendor-financing-applied-badge
+                        data-applied-cents={appliedCents}
+                      >
+                        <DollarSign className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-700 font-medium">
+                          Financing applied: ${Math.round(appliedCents / 100).toLocaleString()}
+                        </span>
+                      </div>
+                    )
+                  })()}
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <Badge variant="secondary" className="text-[10px] capitalize">
                       {selected.service_category.replace(/_/g, ' ')}
