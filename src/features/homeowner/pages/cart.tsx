@@ -68,6 +68,33 @@ function stripSubSuffix(label: string): string {
   return label.replace(/-sub(?:-[^\s]+)?$/, '').trim()
 }
 
+// Arc-22 — mirrors PR-332 Arc-14 hoist-common-spec for the Project Summary
+// modal's Windows + Doors configurator blocks. When every selection in the
+// list shares the same (type, frameColor, glassColor, glassType) tuple, we
+// lift the chips to a single section-header row and suppress per-card
+// chips; size + ×qty stays per-card since size is the discriminator. Drift
+// from photo 320 / Arc-14 (single-col Project Summary modal despite PR-332
+// applying 2-col to /home/appointments/:id) flagged by Rod photo file_329.
+type ConfiguratorSelection = {
+  type: string
+  frameColor: string
+  glassColor: string
+  glassType: string
+}
+function hoistedConfiguratorChips<T extends ConfiguratorSelection>(items: T[]): ConfiguratorSelection | null {
+  if (items.length === 0) return null
+  const first = items[0]
+  const allSame = items.every((it) =>
+    it.type === first.type &&
+    it.frameColor === first.frameColor &&
+    it.glassColor === first.glassColor &&
+    it.glassType === first.glassType
+  )
+  return allSame
+    ? { type: first.type, frameColor: first.frameColor, glassColor: first.glassColor, glassType: first.glassType }
+    : null
+}
+
 const ICON_GRADIENTS: Record<string, string> = {
   roofing: 'from-orange-400 to-red-500',
   windows_doors: 'from-sky-400 to-blue-500',
@@ -1043,57 +1070,95 @@ export function CartPage() {
                     })}
                   </div>
 
-                  {/* Window selections */}
-                  {viewItem.windowSelections && viewItem.windowSelections.length > 0 && (
-                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-foreground">Windows</p>
-                        <span className="text-sm font-bold text-primary">
-                          Total: {viewItem.windowSelections.reduce((s, w) => s + w.quantity, 0)}
-                        </span>
-                      </div>
-                      {viewItem.windowSelections.map((w) => (
-                        <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-base font-bold">{w.size.replace('x', '" × ')}"</span>
-                            <span className="text-base font-bold text-primary">×{w.quantity}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge variant="secondary" className="text-xs">{w.type}</Badge>
-                            <Badge variant="outline" className="text-xs">Frame: {w.frameColor}</Badge>
-                            <Badge variant="outline" className="text-xs">Glass: {w.glassColor}</Badge>
-                            <Badge variant="outline" className="text-xs">{w.glassType}</Badge>
-                          </div>
+                  {/* Window selections — 2-col grid + hoist-common-spec
+                      mirrors PR-332 Arc-14 appointment-status treatment.
+                      When all window cards share the same spec tuple
+                      (type / frameColor / glassColor / glassType), the
+                      shared chips lift to a single header row and per-card
+                      chips are suppressed. Size + ×qty stays per-card
+                      since size is the discriminator. */}
+                  {viewItem.windowSelections && viewItem.windowSelections.length > 0 && (() => {
+                    const hoistedChips = hoistedConfiguratorChips(viewItem.windowSelections)
+                    return (
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="windows">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">Windows</p>
+                          <span className="text-sm font-bold text-primary">
+                            Total: {viewItem.windowSelections.reduce((s, w) => s + w.quantity, 0)}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {hoistedChips && (
+                          <div className="flex flex-wrap items-center gap-1.5" data-project-summary-hoisted-chips>
+                            <span className="text-xs text-muted-foreground">All windows:</span>
+                            <Badge variant="secondary" className="text-xs">{hoistedChips.type}</Badge>
+                            <Badge variant="outline" className="text-xs">Frame: {hoistedChips.frameColor}</Badge>
+                            <Badge variant="outline" className="text-xs">Glass: {hoistedChips.glassColor}</Badge>
+                            <Badge variant="outline" className="text-xs">{hoistedChips.glassType}</Badge>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-summary-grid>
+                          {viewItem.windowSelections.map((w) => (
+                            <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-bold">{w.size.replace('x', '" × ')}"</span>
+                                <span className="text-base font-bold text-primary">×{w.quantity}</span>
+                              </div>
+                              {!hoistedChips && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <Badge variant="secondary" className="text-xs">{w.type}</Badge>
+                                  <Badge variant="outline" className="text-xs">Frame: {w.frameColor}</Badge>
+                                  <Badge variant="outline" className="text-xs">Glass: {w.glassColor}</Badge>
+                                  <Badge variant="outline" className="text-xs">{w.glassType}</Badge>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
-                  {/* Door selections */}
-                  {viewItem.doorSelections && viewItem.doorSelections.length > 0 && (
-                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-foreground">Doors</p>
-                        <span className="text-sm font-bold text-primary">
-                          Total: {viewItem.doorSelections.reduce((s, d) => s + d.quantity, 0)}
-                        </span>
-                      </div>
-                      {viewItem.doorSelections.map((d) => (
-                        <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-base font-bold">{d.size.replace('x', '" × ')}"</span>
-                            <span className="text-base font-bold text-primary">×{d.quantity}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge variant="secondary" className="text-xs">{d.type}</Badge>
-                            <Badge variant="outline" className="text-xs">Frame: {d.frameColor}</Badge>
-                            <Badge variant="outline" className="text-xs">Glass: {d.glassColor}</Badge>
-                            <Badge variant="outline" className="text-xs">{d.glassType}</Badge>
-                          </div>
+                  {/* Door selections — same 2-col + hoist treatment. */}
+                  {viewItem.doorSelections && viewItem.doorSelections.length > 0 && (() => {
+                    const hoistedChips = hoistedConfiguratorChips(viewItem.doorSelections)
+                    return (
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="doors">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">Doors</p>
+                          <span className="text-sm font-bold text-primary">
+                            Total: {viewItem.doorSelections.reduce((s, d) => s + d.quantity, 0)}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {hoistedChips && (
+                          <div className="flex flex-wrap items-center gap-1.5" data-project-summary-hoisted-chips>
+                            <span className="text-xs text-muted-foreground">All doors:</span>
+                            <Badge variant="secondary" className="text-xs">{hoistedChips.type}</Badge>
+                            <Badge variant="outline" className="text-xs">Frame: {hoistedChips.frameColor}</Badge>
+                            <Badge variant="outline" className="text-xs">Glass: {hoistedChips.glassColor}</Badge>
+                            <Badge variant="outline" className="text-xs">{hoistedChips.glassType}</Badge>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-summary-grid>
+                          {viewItem.doorSelections.map((d) => (
+                            <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-bold">{d.size.replace('x', '" × ')}"</span>
+                                <span className="text-base font-bold text-primary">×{d.quantity}</span>
+                              </div>
+                              {!hoistedChips && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <Badge variant="secondary" className="text-xs">{d.type}</Badge>
+                                  <Badge variant="outline" className="text-xs">Frame: {d.frameColor}</Badge>
+                                  <Badge variant="outline" className="text-xs">Glass: {d.glassColor}</Badge>
+                                  <Badge variant="outline" className="text-xs">{d.glassType}</Badge>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
                 <DialogFooter>
                   <Button
