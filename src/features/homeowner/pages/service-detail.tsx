@@ -32,6 +32,7 @@ import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../
 import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
 import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
 import { AddonLinearFtConfigurator } from '../components/addon-linear-ft-configurator'
+import { PoolFloorSqftConfigurator } from '../components/pool-floor-sqft-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SubGroupChoices } from '../components/sub-group-choices'
 import { SatelliteMeasure } from '@/components/satellite-measure/SatelliteMeasure'
@@ -90,9 +91,25 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     payment: { cash: Briefcase, financing: Briefcase },
   },
   pool: {
-    project_type: { new_install: Plus, resurface: RefreshCw, repair: Wrench },
-    pool_size: { small: Square, medium: Square, large: Square, xlarge: Square },
-    pool_floor: { plaster: Layers, pebble: CircleDot, tile: Triangle },
+    // Arc-19 — icon-set realigned to constants.ts option_ids (the prior
+    // map referenced legacy ids that never matched the catalog, so no
+    // icon was rendered on /home/service/pool tiles).
+    project_type: { new_pool: Plus, remodel: RefreshCw },
+    pool_size: {
+      '10x20': Ruler,
+      '12x24': Ruler,
+      '15x30': Ruler,
+      '20x40': Ruler,
+      custom: MoveDiagonal,
+    },
+    pool_floor: {
+      travertine: Grid3X3,
+      pavers: Grid3X3,
+      stamped_concrete: Square,
+      cement_floor: Square,
+      square_concrete: Square,
+      artificial_turf: TreePine,
+    },
     addons: {
       spa: Waves,
       beach: Sun,
@@ -187,6 +204,18 @@ const ADDON_LINEAR_FT_CONFIG = [
   { id: 'fascia_metal', label: 'Fascia Metal linear feet' },
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
+
+// Arc-19 — pool_floor options that prompt for square footage when tapped.
+// N/A is excluded; tapping it does not open the configurator.
+const POOL_FLOOR_SQFT_CONFIG = [
+  { id: 'travertine', label: 'Travertine square footage' },
+  { id: 'pavers', label: 'Pavers square footage' },
+  { id: 'stamped_concrete', label: 'Stamped Concrete square footage' },
+  { id: 'cement_floor', label: 'Cement Floor square footage' },
+  { id: 'square_concrete', label: 'Square Concrete square footage' },
+  { id: 'artificial_turf', label: 'Artificial Turf square footage' },
+] as const
+const POOL_FLOOR_SQFT_IDS: string[] = POOL_FLOOR_SQFT_CONFIG.map((c) => c.id)
 
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
@@ -386,6 +415,21 @@ export function ServiceDetailPage() {
   // configurator opens; on Save the configurator collapses and the chip
   // shows an inline lin-ft summary badge.
   const [addonConfigOpen, setAddonConfigOpen] = useState<Record<string, boolean>>({})
+  // Arc-19 — per-pool-floor-option sqft + open/closed configurator state.
+  // Single-select group at runtime, but the Record-key-by-option-id shape
+  // mirrors the Roofing addon pattern and preserves the entered sqft if the
+  // homeowner switches floors back-and-forth before saving. Seeded from any
+  // persisted customSizeSqft entry on the edited cart item.
+  const [poolFloorSqft, setPoolFloorSqft] = useState<Record<string, string>>(() => {
+    const persisted = (editItemForService?.customSizeSqft ?? {}) as Record<string, number>
+    const seed: Record<string, string> = {}
+    for (const id of POOL_FLOOR_SQFT_IDS) {
+      const n = persisted[id]
+      if (typeof n === 'number' && n > 0) seed[id] = String(n)
+    }
+    return seed
+  })
+  const [poolFloorConfigOpen, setPoolFloorConfigOpen] = useState<Record<string, boolean>>({})
 
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
@@ -1372,6 +1416,23 @@ export function ServiceDetailPage() {
                               return
                             }
                           }
+                          // Arc-19 — pool_floor re-tap preempt. Re-tapping the
+                          // already-selected floor with the configurator
+                          // collapsed re-opens it for edit instead of letting
+                          // handleSelect deselect the option. Mirrors the
+                          // Roofing addon preempt path above.
+                          if (
+                            serviceId === 'pool' &&
+                            group.id === 'pool_floor' &&
+                            POOL_FLOOR_SQFT_IDS.includes(option.id)
+                          ) {
+                            const wasSelected = selected.includes(option.id)
+                            const wasOpen = poolFloorConfigOpen[option.id] ?? false
+                            if (wasSelected && !wasOpen) {
+                              setPoolFloorConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                              return
+                            }
+                          }
                           handleSelect(group, option.id)
                           // Auto-close addon menu after size selection
                           if (group.id === 'spa_size') setActiveAddonMenu(null)
@@ -1474,6 +1535,25 @@ export function ServiceDetailPage() {
                               // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
                               setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                            }
+                          }
+                          // Arc-19 — pool_floor tap-handler. POOL_FLOOR_SQFT_IDS
+                          // excludes 'na' so tapping N/A short-circuits to a
+                          // plain selection with no configurator. First tap on
+                          // a sqft-eligible floor opens the configurator; tap-
+                          // during-active-edit deselects + clears state.
+                          if (
+                            serviceId === 'pool' &&
+                            group.id === 'pool_floor' &&
+                            POOL_FLOOR_SQFT_IDS.includes(option.id)
+                          ) {
+                            const wasSelected = selected.includes(option.id)
+                            const wasOpen = poolFloorConfigOpen[option.id] ?? false
+                            if (wasSelected && wasOpen) {
+                              setPoolFloorSqft((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                              setPoolFloorConfigOpen((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                            } else if (!wasSelected) {
+                              setPoolFloorConfigOpen((prev) => ({ ...prev, [option.id]: true }))
                             }
                           }
                         }}
@@ -1655,6 +1735,21 @@ export function ServiceDetailPage() {
                         {serviceId === 'roofing' && group.id === 'addons' && option.id === 'fascia_metal' && !addonConfigOpen['fascia_metal'] && Number(addonLinearFt['fascia_metal'] ?? 0) > 0 && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {(Number(addonLinearFt['fascia_metal']) || 0).toLocaleString()} lin ft
+                          </span>
+                        )}
+                        {/* Arc-19 — Pool Floor sqft chip badge surfaces the
+                            saved sqft once the configurator collapses. Mirrors
+                            the Roofing Class A "lin ft" badge pattern. */}
+                        {serviceId === 'pool' &&
+                          group.id === 'pool_floor' &&
+                          POOL_FLOOR_SQFT_IDS.includes(option.id) &&
+                          !poolFloorConfigOpen[option.id] &&
+                          Number(poolFloorSqft[option.id] ?? 0) > 0 && (
+                          <span
+                            className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold"
+                            data-pool-floor-chip-sqft={option.id}
+                          >
+                            {(Number(poolFloorSqft[option.id]) || 0).toLocaleString()} sqft
                           </span>
                         )}
                         {serviceId === 'pool' && option.id === 'led' && ledCount > 0 && (
@@ -1859,6 +1954,24 @@ export function ServiceDetailPage() {
                           onFloorsChange: setGutterFloors,
                           onDropsChange: setGutterDrops,
                         } : undefined}
+                      />
+                    )}
+                  </AnimatePresence>
+                ))}
+                {/* Arc-19 — Pool Floor sqft configurator dispatch. One
+                    AnimatePresence per sqft-eligible floor; only the
+                    selected option's configurator renders since pool_floor
+                    is a single-select group. Save collapses the configurator
+                    and the chip badge below surfaces the entered sqft. */}
+                {serviceId === 'pool' && group.id === 'pool_floor' && POOL_FLOOR_SQFT_CONFIG.map((c) => (
+                  <AnimatePresence key={c.id}>
+                    {selected.includes(c.id) && poolFloorConfigOpen[c.id] && (
+                      <PoolFloorSqftConfigurator
+                        id={c.id}
+                        label={c.label}
+                        value={poolFloorSqft[c.id] ?? ''}
+                        onChange={(next) => setPoolFloorSqft((prev) => ({ ...prev, [c.id]: next }))}
+                        onSave={() => setPoolFloorConfigOpen((prev) => ({ ...prev, [c.id]: false }))}
                       />
                     )}
                   </AnimatePresence>
@@ -2410,6 +2523,18 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
                   gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
                 }),
+                // Arc-19 — snapshot the entered Pool Floor sqft into the
+                // canonical customSizeSqft map (keyed by option_id) at add-
+                // to-project time, matching the pool-wizard.tsx persistence
+                // path. Only the currently-selected pool_floor option is
+                // written so a switched-away-then-back entry isn't carried.
+                ...(serviceId === 'pool' && (() => {
+                  const floorId = (selections['pool_floor'] ?? [])[0]
+                  if (!floorId || !POOL_FLOOR_SQFT_IDS.includes(floorId)) return {}
+                  const n = Number(poolFloorSqft[floorId] ?? 0)
+                  if (!(n > 0)) return {}
+                  return { customSizeSqft: { [floorId]: n } }
+                })()),
                 ...(addonQuantities && { addonQuantities }),
                 ...(itemAddress && { address: itemAddress }),
                 ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),
