@@ -203,7 +203,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 7,
+      version: 8,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -221,123 +221,26 @@ export const useCartStore = create<CartState>()(
           itemPhotos: undefined,
         })),
       }),
-      // v1 migrate: lift first non-null per-item roofPermit/waiver onto
-      // project-level state for pre-PR1 legacy carts.
-      // v2 migrate (PR #196): scrub heavy base64 fields from any existing
-      // persisted state on first hydrate post-deploy. Without this,
-      // Rodolfo's already-bloated cart-store sits fat in LS until next
-      // write — multi-send-blocked users would stay blocked indefinitely.
+      // Pre-launch hygiene policy (v8): treat any v<7 entry as a stale
+      // demo/test artifact and drop entirely on first mount rather than
+      // running a multi-step migration chain that may not align with the
+      // current CartItem interface anymore. Since BuildConnect is still
+      // pre-launch, there are no real-user carts to preserve at v<7 —
+      // safe to fresh-mount. v7 → v8 is a no-op cache-invalidation bump.
       migrate: (persistedState: unknown, version: number) => {
-        let state = (persistedState ?? {}) as Partial<CartState> & {
-          items?: CartItem[]
-        }
-        if (version < 1) {
-          const items = state.items ?? []
-          const firstPermit = items.find((i) => i.roofPermit)?.roofPermit ?? null
-          const firstWaiver =
-            items.find((i) => i.permitWaiver)?.permitWaiver ?? null
-          state = {
-            ...state,
-            projectPermit: firstPermit,
-            projectPermitWaiver: firstWaiver,
-          }
-        }
-        if (version < 2) {
-          state = {
-            ...state,
-            idDocument: null,
-            photos: [],
-            items: (state.items ?? []).map((item) => ({
-              ...item,
-              itemPhotos: undefined,
-            })),
-          }
-        }
-        if (version < 3) {
-          // PR-212: introduce roofMeasurement.includeFlatArea (default true).
-          // Existing persisted items predate the toggle; on first hydrate
-          // post-deploy default to true so behavior matches PR-211 (flat
-          // included whenever Material Order is ON).
-          state = {
-            ...state,
-            items: (state.items ?? []).map((item) => {
-              if (!item.roofMeasurement) return item
-              return {
-                ...item,
-                roofMeasurement: {
-                  ...item.roofMeasurement,
-                  includeFlatArea: item.roofMeasurement.includeFlatArea ?? true,
-                },
-              }
-            }),
-          }
-        }
-        if (version < 4) {
-          // PR-219: roofing SERVICE_CATALOG.service_type adds a third option
-          // ('addons'). Existing persisted carts hold service_type ='replace'
-          // or 'repair' values which remain valid (the add does not remove or
-          // rename any existing id). No data transform required — bump exists
-          // to invalidate hydrated caches per feedback_persist_version_bump_-
-          // with_constants_change + feedback_pair_persist_bump_with_constants_-
-          // change so any stale memoization keyed on SERVICE_CATALOG identity
-          // re-evaluates.
-        }
-        if (version < 5) {
-          // PR-220: pergolas SERVICE_CATALOG reshape (Rod 17:58Z directive).
-          // - structure: 'aluminum'/'wood'/'louvered' -> 'aluminum_terrace' only
-          // - size: '10x12'/'12x16' removed; 'measured' added + 'custom' kept
-          // - addons: 'kitchen' + 'deck' removed; 'fans' + 'screen' kept
-          // Drop persisted selections referencing removed option ids so a
-          // stale cart item doesn't render an invisible chip selection that
-          // blocks the required-group gate (allRequiredDone stays satisfied
-          // only when the chip is still in the catalog). Selections that
-          // hold valid ids pass through untouched.
-          const PERGOLAS_REMOVED = new Set([
-            'aluminum', 'wood', 'louvered',
-            '10x12', '12x16',
-            'kitchen', 'deck',
-          ])
-          state = {
-            ...state,
-            items: (state.items ?? []).map((item) => {
-              if (item.serviceId !== 'pergolas' || !item.selections) return item
-              const cleaned: Record<string, string[]> = {}
-              for (const [groupId, optionIds] of Object.entries(item.selections)) {
-                cleaned[groupId] = (optionIds ?? []).filter((id) => !PERGOLAS_REMOVED.has(id))
-              }
-              return { ...item, selections: cleaned }
-            }),
-          }
-        }
-        if (version < 6) {
-          // Rod 22:38Z directive: remove 'Terracotta Clay' from roofing
-          // material + repair_materials (Barrel Tile covers the Mediterranean
-          // tile-roof flow; terracotta is a duplicate). Strip 'terracotta'
-          // from selections.material and 'repair_terracotta' from
-          // selections.repair_materials so stale carts don't render invisible
-          // chip selections blocking the required-group gate. Mirrors v4->v5
-          // PERGOLAS_REMOVED strip pattern.
-          const ROOFING_REMOVED = new Set(['terracotta', 'repair_terracotta'])
-          state = {
-            ...state,
-            items: (state.items ?? []).map((item) => {
-              if (item.serviceId !== 'roofing' || !item.selections) return item
-              const cleaned: Record<string, string[]> = {}
-              for (const [groupId, optionIds] of Object.entries(item.selections)) {
-                cleaned[groupId] = (optionIds ?? []).filter((id) => !ROOFING_REMOVED.has(id))
-              }
-              return { ...item, selections: cleaned }
-            }),
-          }
-        }
         if (version < 7) {
-          // Rod 18:37Z directive: pergolas multi-structure (max 2). New
-          // optional fields measurementMapUrls + structureMeasurements
-          // require no data migration — legacy single-polygon items keep
-          // working via scalar areaSqft + measurementMapUrl reads. Bump
-          // exists to invalidate hydrated caches per
-          // feedback_persist_version_bump_with_constants_change (structure
-          // type single → multi shape change on SERVICE_CATALOG).
+          return {
+            items: [],
+            projectTitle: '',
+            notes: '',
+            photos: [],
+            idDocument: null,
+            projectPermit: null,
+            projectPermitWaiver: null,
+          } as Partial<CartState>
+        }
+        const state = (persistedState ?? {}) as Partial<CartState> & {
+          items?: CartItem[]
         }
         return state
       },
