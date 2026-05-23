@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, ChevronRight, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -903,7 +903,17 @@ type ProjectItemSection =
   | 'Permits'
   | 'Attachments'
 
-type ProjectItemRow = { section: ProjectItemSection; label: string; detail?: string }
+type ProjectItemRow = {
+  section: ProjectItemSection
+  label: string
+  detail?: string
+  // PR-333 — structured chip-attrs for hoist-common-spec detection.
+  // When every row in a section shares the same chip-tuple, the
+  // renderer lifts them to a single section-header row ("All
+  // Windows: Single Hung • White Frame • ...") and omits per-row
+  // chips. If chips diverge, per-row chips render unhoisted.
+  chips?: string[]
+}
 
 const PROJECT_ITEM_SECTION_ORDER: ProjectItemSection[] = [
   'Service Type',
@@ -1029,14 +1039,31 @@ function buildProjectItemRows(
   }
 
   // Service-specific: windows / doors configurator entries — count each line.
+  // PR-333 — split chip-attrs onto row.chips for hoist-common-spec polish.
+  // Identity-key for hoist detection is the SPEC SUBSET (type + frame +
+  // glass + glassType). Size is the per-card discriminator (every
+  // window/door is a different size/location, that's what makes the row
+  // unique) and is rendered into the row label instead — it never
+  // participates in identity-detect, so two windows with the same spec
+  // but different sizes still hoist correctly. Per Rod photo 320 ruling
+  // 2026-05-23 (axis-owner directive via apollo + kratos).
+  const buildConfiguratorChips = (e: { type: string; frameColor: string; glassColor: string; glassType: string }): string[] => {
+    const chips: string[] = []
+    if (e.type) chips.push(humanizeId(e.type))
+    if (e.frameColor) chips.push(`${humanizeId(e.frameColor)} Frame`)
+    if (e.glassColor) chips.push(`${humanizeId(e.glassColor)} Glass`)
+    if (e.glassType) chips.push(humanizeId(e.glassType))
+    return chips
+  }
   const winSel = item.windowSelections ?? []
   for (let i = 0; i < winSel.length; i++) {
     const w = winSel[i]
     if (w.quantity > 0) {
       rows.push({
         section: 'Materials',
-        label: `Window ${i + 1}`,
-        detail: `${w.size}, ${humanizeId(w.type)} (Qty: ${w.quantity})`,
+        label: w.size ? `Window ${i + 1} (${w.size})` : `Window ${i + 1}`,
+        detail: `Qty: ${w.quantity}`,
+        chips: buildConfiguratorChips(w),
       })
     }
   }
@@ -1046,8 +1073,9 @@ function buildProjectItemRows(
     if (d.quantity > 0) {
       rows.push({
         section: 'Materials',
-        label: `Door ${i + 1}`,
-        detail: `${d.size}, ${humanizeId(d.type)} (Qty: ${d.quantity})`,
+        label: d.size ? `Door ${i + 1} (${d.size})` : `Door ${i + 1}`,
+        detail: `Qty: ${d.quantity}`,
+        chips: buildConfiguratorChips(d),
       })
     }
   }
@@ -1097,6 +1125,20 @@ function buildProjectItemRows(
   return rows
 }
 
+// PR-333 — section identity for the chip-tuple hoist. When every row in a
+// section has the same `chips` array, return that array so the renderer
+// can lift it into a single hoisted header row. Returns null when chips
+// diverge (or when no row carries chips) so the renderer falls back to
+// per-row chip display.
+function hoistedChipsForSection(rows: ProjectItemRow[]): string[] | null {
+  if (rows.length === 0) return null
+  const withChips = rows.filter((r) => r.chips && r.chips.length > 0)
+  if (withChips.length === 0 || withChips.length !== rows.length) return null
+  const sig = JSON.stringify(withChips[0].chips)
+  const allSame = withChips.every((r) => JSON.stringify(r.chips) === sig)
+  return allSame ? (withChips[0].chips ?? null) : null
+}
+
 function ProjectItemsList({
   item,
   projectPermit,
@@ -1105,6 +1147,11 @@ function ProjectItemsList({
   projectPermit?: 'yes' | 'no'
 }) {
   const rows = buildProjectItemRows(item, projectPermit)
+  // PR-333 — folder-pattern collapse per section. Default-expanded so
+  // scannability matches pre-photo-320 behavior; tap section header to
+  // toggle. Keyed by ProjectItemSection so state survives between rows
+  // without touching parent state shape.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   if (rows.length === 0) return null
 
   const grouped = new Map<ProjectItemSection, ProjectItemRow[]>()
@@ -1115,30 +1162,85 @@ function ProjectItemsList({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-items-grid>
       {PROJECT_ITEM_SECTION_ORDER.map((section) => {
         const sectionRows = grouped.get(section)
         if (!sectionRows || sectionRows.length === 0) return null
+        const hoisted = hoistedChipsForSection(sectionRows)
+        const isCollapsed = collapsed[section] === true
         return (
-          <div key={section} className="flex flex-col gap-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {section}
-            </p>
-            <ul className="flex flex-col gap-1">
-              {sectionRows.map((r, i) => (
-                <li
-                  key={`${r.label}-${i}`}
-                  className="flex items-start justify-between gap-3 text-sm"
-                >
-                  <span className="text-muted-foreground">{r.label}</span>
-                  {r.detail && (
-                    <span className="text-right font-medium text-foreground tabular-nums">
-                      {r.detail}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
+          <div
+            key={section}
+            className="flex flex-col gap-1.5"
+            data-project-items-section={section}
+          >
+            <button
+              type="button"
+              className="flex items-center gap-1.5 self-start text-left"
+              onClick={() => setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }))}
+              aria-expanded={!isCollapsed}
+              data-project-items-section-toggle
+            >
+              <ChevronRight
+                className={cn(
+                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+                  !isCollapsed && 'rotate-90',
+                )}
+              />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {section}
+                {sectionRows.length > 1 && (
+                  <span className="ml-1 text-muted-foreground/70">({sectionRows.length})</span>
+                )}
+              </p>
+            </button>
+            {!isCollapsed && (
+              <>
+                {hoisted && hoisted.length > 0 && (
+                  <div
+                    className="flex flex-wrap items-center gap-1"
+                    data-project-items-hoisted-chips
+                  >
+                    <span className="text-[11px] text-muted-foreground">All {section.toLowerCase()}:</span>
+                    {hoisted.map((c) => (
+                      <Badge key={c} variant="secondary" className="text-[10px] font-normal">
+                        {c}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <ul className="flex flex-col gap-1">
+                  {sectionRows.map((r, i) => (
+                    <li
+                      key={`${r.label}-${i}`}
+                      className="flex flex-col gap-0.5 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                    >
+                      <div className="flex flex-1 flex-wrap items-center gap-1">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        {!hoisted && r.chips && r.chips.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {r.chips.map((c) => (
+                              <Badge
+                                key={c}
+                                variant="secondary"
+                                className="text-[10px] font-normal"
+                              >
+                                {c}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {r.detail && (
+                        <span className="text-right font-medium text-foreground tabular-nums">
+                          {r.detail}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         )
       })}
