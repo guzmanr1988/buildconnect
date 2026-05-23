@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
+import { useProjectsStore } from '@/stores/projects-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { adapterDisplayName } from '@/lib/financing/display'
 
@@ -31,6 +32,7 @@ function formatDate(iso: string): string {
 export function ApprovedAmountBanner() {
   const profile = useAuthStore((s) => s.profile)
   const enabled = useFeatureFlag('financing_enabled')
+  const sentProjects = useProjectsStore((s) => s.sentProjects)
   const [cfp, setCfp] = useState<CfpRow | null>(null)
   const [app, setApp] = useState<LatestApp | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -81,12 +83,22 @@ export function ApprovedAmountBanner() {
     if (Number.isFinite(exp) && exp < Date.now()) return null
   }
 
-  const amount = formatCents(cfp.last_known_amount_cents)
-  if (!amount) return null
+  const envelopeCents = cfp.last_known_amount_cents
+  const allocatedCents = app
+    ? sentProjects.reduce((acc, sp) => {
+        if (sp.applied_financing_application_id !== app.id) return acc
+        return acc + (sp.applied_financing_amount_cents ?? 0)
+      }, 0)
+    : 0
+  const remainingCents = Math.max(0, envelopeCents - allocatedCents)
+  const remaining = formatCents(remainingCents)
+  const envelope = formatCents(envelopeCents)
+  if (!remaining || !envelope) return null
   const partner = cfp.approval_partner ? adapterDisplayName(cfp.approval_partner) : null
   const expiresText = cfp.approval_expires_at
     ? `Approved through ${formatDate(cfp.approval_expires_at)}`
     : null
+  const hasAllocations = allocatedCents > 0
 
   return (
     <motion.div
@@ -101,9 +113,17 @@ export function ApprovedAmountBanner() {
       </p>
       <p className="text-xl sm:text-2xl font-bold font-heading text-foreground leading-tight">
         You have{' '}
-        <span data-financing-banner-amount={cfp.last_known_amount_cents}>{amount}</span>
+        <span data-financing-banner-amount={remainingCents}>{remaining}</span>
         {partner ? <> available from {partner}</> : <> available</>}
       </p>
+      {hasAllocations && (
+        <p
+          className="text-sm text-muted-foreground"
+          data-financing-banner-envelope={envelopeCents}
+        >
+          {envelope} approved total
+        </p>
+      )}
       {expiresText && (
         <p className="text-sm text-muted-foreground">{expiresText}</p>
       )}
