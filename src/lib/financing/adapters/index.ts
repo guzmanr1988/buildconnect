@@ -1,6 +1,8 @@
-// Adapter registry. Reads VITE_FINANCING_BANK to select which adapter is
-// active. Unknown values fail LOUD (throw) rather than silent-falling-back
-// to manual_referral — silent-fallback masks misconfiguration in CI.
+// Adapter registry. Bank choice is DB-runtime (feature_flags row
+// financing_bank_active.value) read by callers via useFlagValue hook —
+// see lib/financing/hooks/use-feature-flag.ts. Unknown values fail LOUD
+// at the call site (throw) rather than silent-falling-back to
+// manual_referral — silent-fallback masks misconfiguration in CI.
 
 import type { FinancingBankAdapter } from './_contract';
 import { goodleapAdapter } from './goodleap';
@@ -14,17 +16,6 @@ const REGISTRY: Record<string, FinancingBankAdapter> = {
   momnt: momntAdapter,
   upgrade: upgradeAdapter,
 };
-
-export function getActiveAdapter(): FinancingBankAdapter {
-  const key = (import.meta.env.VITE_FINANCING_BANK as string | undefined) ?? 'manual_referral';
-  const adapter = REGISTRY[key];
-  if (!adapter) {
-    throw new Error(
-      `unknown VITE_FINANCING_BANK adapter: ${key}. registered: ${Object.keys(REGISTRY).join(', ')}`,
-    );
-  }
-  return adapter;
-}
 
 export function getAdapterByKey(key: string): FinancingBankAdapter | undefined {
   return REGISTRY[key];

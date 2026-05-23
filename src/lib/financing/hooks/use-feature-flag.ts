@@ -41,6 +41,17 @@ async function fetchFlag(key: string): Promise<boolean> {
   return data.enabled === true
 }
 
+async function fetchFlagValue(key: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('feature_flags')
+    .select('enabled, value')
+    .eq('key', key)
+    .maybeSingle()
+  if (error || !data) return null
+  if (data.enabled !== true) return null
+  return (data.value as string | null) ?? null
+}
+
 export function useFeatureFlag(key: string): boolean | undefined {
   const [enabled, setEnabled] = useState<boolean | undefined>(undefined)
 
@@ -103,6 +114,67 @@ export function useFeatureFlag(key: string): boolean | undefined {
   }, [key])
 
   return enabled
+}
+
+// Sibling of useFeatureFlag that returns the nullable `value text` column
+// (added migration 06X — T+3a widen for runtime string-valued flags). Used by
+// financing_bank_active where the flag itself is the gate (enabled boolean)
+// AND the bank-adapter key is the string value. Re-renders on flag flip
+// (admin toggling bank choice live propagates). Returns:
+//   undefined → loading
+//   null      → flag disabled OR value column is NULL OR fetch errored
+//   string    → flag enabled, value present
+export function useFlagValue(key: string): string | null | undefined {
+  const [value, setValue] = useState<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const reconcile = () => {
+      void fetchFlagValue(key).then((v) => {
+        if (!cancelled) setValue(v)
+      })
+    }
+
+    reconcile()
+
+    const channel = supabase
+      .channel(`feature_flag_value:${key}:${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'feature_flags', filter: `key=eq.${key}` },
+        (payload) => {
+          if (cancelled) return
+          const next = payload.new as { enabled?: boolean; value?: string | null } | null
+          if (next && typeof next.enabled === 'boolean') {
+            setValue(next.enabled === true ? (next.value ?? null) : null)
+          } else {
+            reconcile()
+          }
+        },
+      )
+      .subscribe()
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') reconcile()
+    }
+    const onOnline = () => reconcile()
+
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('online', onOnline)
+
+    const timeout = setTimeout(reconcile, SUBSCRIBE_TIMEOUT_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
+      void supabase.removeChannel(channel)
+    }
+  }, [key])
+
+  return value
 }
 
 export function useFeatureFlagOnce(key: string): boolean | undefined {
