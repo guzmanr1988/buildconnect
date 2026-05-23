@@ -1256,7 +1256,7 @@ function ProjectItemsList({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-items-grid>
+    <div className="flex flex-col gap-4" data-project-items-grid>
       {PROJECT_ITEM_SECTION_ORDER.map((section) => {
         const sectionRows = grouped.get(section)
         if (!sectionRows || sectionRows.length === 0) return null
@@ -1303,13 +1303,14 @@ function ProjectItemsList({
                     ))}
                   </div>
                 )}
-                <ul className="flex flex-col gap-1">
+                <ul className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
                   {sectionRows.map((r, i) => (
                     <li
                       key={`${r.label}-${i}`}
-                      className="flex flex-col gap-0.5 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                      className="contents text-sm"
+                      data-project-items-label-value-pair
                     >
-                      <div className="flex flex-1 flex-wrap items-center gap-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1">
                         <span className="text-muted-foreground">{r.label}</span>
                         {!hoisted && r.chips && r.chips.length > 0 && (
                           <div className="flex flex-wrap gap-1">
@@ -1325,11 +1326,9 @@ function ProjectItemsList({
                           </div>
                         )}
                       </div>
-                      {r.detail && (
-                        <span className="text-right font-medium text-foreground tabular-nums">
-                          {r.detail}
-                        </span>
-                      )}
+                      <span className="break-words text-right font-medium text-foreground tabular-nums">
+                        {r.detail ?? ''}
+                      </span>
                     </li>
                   ))}
                 </ul>
