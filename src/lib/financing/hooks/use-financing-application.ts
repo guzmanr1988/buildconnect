@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { getActiveAdapter } from '@/lib/financing/adapters'
+import { getAdapterByKey } from '@/lib/financing/adapters'
+import { useFlagValue } from '@/lib/financing/hooks/use-feature-flag'
 import { getFinancingApplicationByProject } from '@/lib/api/financing'
 import type { ApprovalStatusResult } from '@/lib/financing/adapters/_contract'
 
@@ -12,16 +13,28 @@ import type { ApprovalStatusResult } from '@/lib/financing/adapters/_contract'
 // their own useFeatureFlag / useFeatureFlagOnce call. Entry-class callers
 // (badges) pass useFeatureFlag so the query re-runs on flag-flip; in-flight
 // callers pass useFeatureFlagOnce so the query is locked at mount.
+//
+// Bank-adapter selection: feature_flags row financing_bank_active.value
+// (DB-runtime per T+3a — replaces VITE_FINANCING_BANK env-bake). Query
+// stays disabled while the flag value is loading (bankKey === undefined)
+// so we never dispatch against the wrong adapter mid-flip.
 export function useFinancingApplication(
   bcApplicationId: string | null | undefined,
   financingEnabled: boolean | undefined,
 ) {
+  const bankKey = useFlagValue('financing_bank_active')
+  const resolvedKey = bankKey ?? 'manual_referral'
   return useQuery<ApprovalStatusResult | null>({
-    queryKey: ['financing-application', bcApplicationId],
-    enabled: financingEnabled === true && !!bcApplicationId,
+    queryKey: ['financing-application', bcApplicationId, resolvedKey],
+    enabled: financingEnabled === true && !!bcApplicationId && bankKey !== undefined,
     queryFn: async () => {
       if (!bcApplicationId) return null
-      const adapter = getActiveAdapter()
+      const adapter = getAdapterByKey(resolvedKey)
+      if (!adapter) {
+        throw new Error(
+          `unknown financing_bank_active adapter: ${resolvedKey}. flag value must match a registered adapter key.`,
+        )
+      }
       return adapter.getApprovalStatus({ partnerApplicationId: bcApplicationId })
     },
   })
