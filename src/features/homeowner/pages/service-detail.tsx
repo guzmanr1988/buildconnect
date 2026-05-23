@@ -508,7 +508,7 @@ export function ServiceDetailPage() {
       setFlatRoofSelection((prev) => ({ ...prev, roofSize: flatSquares }))
       setFlatRoofConfigOpen(true)
     }
-    setRoofMeasurement({ areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft, includeMaterialOrder: result.includeMaterialOrder, includePerimeter: result.includePerimeter, includeFlatArea: result.includeFlatArea })
+    setRoofMeasurement((prev) => ({ ...prev, areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft }))
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
     if (serviceId === 'roofing') {
