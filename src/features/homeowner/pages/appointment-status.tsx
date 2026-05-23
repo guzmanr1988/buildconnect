@@ -230,6 +230,19 @@ export function AppointmentStatusPage() {
     (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
   )
 
+  // Arc-17 — 1-project-at-a-time allocation rule. Find any sent_project the
+  // homeowner has already allocated financing to (across the entire scope,
+  // not just this page's matched project). If that other project holds the
+  // allocation, the Apply CTA on THIS page is suppressed and replaced with
+  // a note pointing back to the bound project.
+  const existingAllocationProject = sentProjects.find(
+    (p) => !!p.applied_financing_application_id && (p.applied_financing_amount_cents ?? 0) > 0,
+  )
+  const isThisProjectAllocated =
+    !!matchedSentProject && existingAllocationProject?.id === matchedSentProject.id
+  const otherProjectHoldsAllocation =
+    !!existingAllocationProject && !isThisProjectAllocated
+
   // Photo 314 polish — horizontal stepper happy-path lifecycle. Off-path
   // statuses return null and the existing Status pill + reschedule banners
   // carry the off-path semantics instead.
@@ -272,6 +285,39 @@ export function AppointmentStatusPage() {
           Lead {lead.id} — {lead.project}
         </p>
       </div>
+
+      {/* Arc-17 — top-of-page Financing applied banner. Renders only when
+          this project is the one holding the homeowner's active allocation
+          so the applied amount is visible above-the-fold, separate from the
+          mid-page Update Allocation CTA. */}
+      {financingEnabled === true && isThisProjectAllocated && matchedSentProject && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card
+            className="border-emerald-300/60 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-700/40"
+            data-testid="appointment-financing-applied-banner"
+            data-appointment-financing-applied
+            data-applied-amount-cents={matchedSentProject.applied_financing_amount_cents ?? 0}
+          >
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                <DollarSign className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">
+                  Financing applied: ${((matchedSentProject.applied_financing_amount_cents ?? 0) / 100).toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  This project is funded by your approved financing envelope.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Status header */}
       <motion.div
@@ -458,7 +504,39 @@ export function AppointmentStatusPage() {
         </Card>
       )}
 
-      {financingEnabled === true && matchedSentProject && approvedAppId && (
+      {/* Arc-17 D2 — 1-project-at-a-time rule. When another sent_project
+          already holds the homeowner's allocation, hide the Apply CTA on
+          THIS page and surface a blocked-note pointing back to the bound
+          project. The Update Allocation path remains on the bound project's
+          own appointment-status page. */}
+      {financingEnabled === true && matchedSentProject && approvedAppId && otherProjectHoldsAllocation && existingAllocationProject && (
+        <Card
+          data-testid="homeowner-project-apply-financing-cta-blocked"
+          data-apply-financing-cta-blocked
+          aria-disabled="true"
+        >
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <DollarSign className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Financing already applied to another project
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your approved envelope is allocated to{' '}
+                <span className="font-medium text-foreground">
+                  {existingAllocationProject.item?.serviceName ?? 'another project'}
+                </span>
+                {existingAllocationProject.homeowner?.address ? ` at ${existingAllocationProject.homeowner.address}` : ''}
+                . You can only apply financing to one project at a time.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {financingEnabled === true && matchedSentProject && approvedAppId && !otherProjectHoldsAllocation && (
         <Card
           data-testid="homeowner-project-apply-financing-cta"
           data-apply-financing-cta
