@@ -1059,7 +1059,7 @@ export function CartPage() {
                           Total: {viewItem.windowSelections.reduce((s, w) => s + w.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
                         {viewItem.windowSelections.map((w) => (
                           <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -1087,7 +1087,7 @@ export function CartPage() {
                           Total: {viewItem.doorSelections.reduce((s, d) => s + d.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
                         {viewItem.doorSelections.map((d) => (
                           <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
