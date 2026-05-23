@@ -730,40 +730,6 @@ export function ServiceDetailPage() {
     }
   }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
 
-  // PR-219 — auto-select service_type=['addons'] when entering perimeter-only
-  // mode. The Service Type chooser shows all 3 chips (Full Replacement /
-  // Repair / Add-ons) in every mode; perimeter-only mode pre-selects Add-ons
-  // because the user has explicitly opted out of the material-order portion
-  // (Material Order OFF + Perimeter ON), so add-on work is the canonical
-  // context. Same dep array as the configurator-close effect above so the
-  // two corrective layers fire on the same transition. Transitioning OUT of
-  // perimeter mode is intentionally a no-op — user keeps the addons selection
-  // or re-picks via the chip; no forced reset.
-  useEffect(() => {
-    const inPerimeterOnly =
-      serviceId === 'roofing' &&
-      roofMeasurement?.includeMaterialOrder === false &&
-      roofMeasurement?.includePerimeter === true
-    if (inPerimeterOnly) {
-      setSelections((prev) => ({ ...prev, service_type: ['addons'] }))
-    }
-  }, [serviceId, roofMeasurement?.includeMaterialOrder, roofMeasurement?.includePerimeter])
-
-  // Perimeter excluded + addons previously selected: clear the service_type
-  // selection so the user re-picks Full Replacement or Repair. Pairs with the
-  // isLocked clause that disables the Add-ons chip when Perimeter is OFF.
-  // Step-3 advance gate re-prompts the user; conscious re-pick > surprising
-  // auto-pick.
-  useEffect(() => {
-    if (
-      serviceId === 'roofing' &&
-      roofMeasurement?.includePerimeter === false &&
-      selections.service_type?.[0] === 'addons'
-    ) {
-      setSelections((prev) => ({ ...prev, service_type: [] }))
-    }
-  }, [serviceId, roofMeasurement?.includePerimeter, selections.service_type])
-
   // PR-220 — pergolas size auto-select. When the user confirms a polygon
   // measurement on a pergolas service, default the required Size group to
   // the synthetic 'measured' chip (label reads the measured sqft live in
@@ -913,6 +879,25 @@ export function ServiceDetailPage() {
   }
 
   function handleSelect(group: OptionGroup, optionId: string) {
+    // Arc-31 — Service Type chip-tap drives roof-measurement state.
+    // Replaces the prior PR-219 toggle→service_type reverse-coupling
+    // useEffects. Mapping (Rod-locked 2026-05-23):
+    //   replace → M=true  / P=true  / F=true
+    //   addons  → M=false / P=true  / F=false  (matches isRoofingPerimeterOnly)
+    //   repair  → M=true  / P=true  / F=true  (default; future-config follow-up)
+    if (serviceId === 'roofing' && group.id === 'service_type') {
+      const mapping: Record<string, { includeMaterialOrder: boolean; includePerimeter: boolean; includeFlatArea: boolean }> = {
+        replace: { includeMaterialOrder: true,  includePerimeter: true, includeFlatArea: true  },
+        addons:  { includeMaterialOrder: false, includePerimeter: true, includeFlatArea: false },
+        repair:  { includeMaterialOrder: true,  includePerimeter: true, includeFlatArea: true  },
+      }
+      const next = mapping[optionId]
+      if (next) {
+        setRoofMeasurement((prev) => (prev ? { ...prev, ...next } : prev))
+      }
+      // Fall through to default single-select behavior below.
+    }
+
     // For pool add-ons: enforce one-at-a-time for items with configurators
     if (serviceId === 'pool' && group.id === 'addons') {
       const current = selections[group.id] ?? []
@@ -1112,9 +1097,6 @@ export function ServiceDetailPage() {
                 includeFlatArea={roofMeasurement.includeFlatArea ?? true}
                 pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                 source="service-detail"
-                onToggleMaterialOrder={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeMaterialOrder: on } : prev)}
-                onTogglePerimeter={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includePerimeter: on } : prev)}
-                onToggleFlatArea={(on) => setRoofMeasurement((prev) => prev ? { ...prev, includeFlatArea: on } : prev)}
               />
             )}
 
@@ -1241,6 +1223,16 @@ export function ServiceDetailPage() {
             if (group.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) {
               return false
             }
+            // Arc-31 — Material section hidden when service_type=addons. Add-ons
+            // mode skips the material-order step (M=false, P=true, F=false) so
+            // the material chooser is moot. Render-gate per sibling-pattern above.
+            if (
+              serviceId === 'roofing' &&
+              group.id === 'material' &&
+              (selections.service_type ?? []).includes('addons')
+            ) {
+              return false
+            }
             // Hide water_feature_units chip group on homeowner side; the
             // canonical UI is the count-stepper waterfall configurator
             // (Laminar Jets + Waterfalls counts) further down. The
@@ -1324,9 +1316,6 @@ export function ServiceDetailPage() {
                         group.id === 'size' &&
                         option.id === 'measured' &&
                         !areaMeasurement) ||
-                      // Perimeter-only mode: PR-219 auto-selects service_type=['addons'];
-                      // lock all Service Type chips so the auto-selection cannot be changed.
-                      (group.id === 'service_type' && isRoofingPerimeterOnly) ||
                       // Perimeter excluded: lock the Add-ons chip — without perimeter
                       // there is no gutter/fascia/soffit work to add on, so Add-ons
                       // is no longer a valid Service Type. Full Replacement and Repair
