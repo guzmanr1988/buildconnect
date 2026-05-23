@@ -1039,12 +1039,16 @@ function buildProjectItemRows(
   }
 
   // Service-specific: windows / doors configurator entries — count each line.
-  // PR-333 — split chip-attrs onto row.chips for hoist-common-spec polish:
-  // when every line in the section shares the same spec, the renderer
-  // hoists chips to a single header row. quantity stays on the label.
-  const buildConfiguratorChips = (e: { size: string; type: string; frameColor: string; glassColor: string; glassType: string }): string[] => {
+  // PR-333 — split chip-attrs onto row.chips for hoist-common-spec polish.
+  // Identity-key for hoist detection is the SPEC SUBSET (type + frame +
+  // glass + glassType). Size is the per-card discriminator (every
+  // window/door is a different size/location, that's what makes the row
+  // unique) and is rendered into the row label instead — it never
+  // participates in identity-detect, so two windows with the same spec
+  // but different sizes still hoist correctly. Per Rod photo 320 ruling
+  // 2026-05-23 (axis-owner directive via apollo + kratos).
+  const buildConfiguratorChips = (e: { type: string; frameColor: string; glassColor: string; glassType: string }): string[] => {
     const chips: string[] = []
-    if (e.size) chips.push(e.size)
     if (e.type) chips.push(humanizeId(e.type))
     if (e.frameColor) chips.push(`${humanizeId(e.frameColor)} Frame`)
     if (e.glassColor) chips.push(`${humanizeId(e.glassColor)} Glass`)
@@ -1057,7 +1061,7 @@ function buildProjectItemRows(
     if (w.quantity > 0) {
       rows.push({
         section: 'Materials',
-        label: `Window ${i + 1}`,
+        label: w.size ? `Window ${i + 1} (${w.size})` : `Window ${i + 1}`,
         detail: `Qty: ${w.quantity}`,
         chips: buildConfiguratorChips(w),
       })
@@ -1069,7 +1073,7 @@ function buildProjectItemRows(
     if (d.quantity > 0) {
       rows.push({
         section: 'Materials',
-        label: `Door ${i + 1}`,
+        label: d.size ? `Door ${i + 1} (${d.size})` : `Door ${i + 1}`,
         detail: `Qty: ${d.quantity}`,
         chips: buildConfiguratorChips(d),
       })
