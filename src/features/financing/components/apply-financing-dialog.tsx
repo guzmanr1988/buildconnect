@@ -5,7 +5,11 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+
+const DOWNPAYMENT_PCT_OPTIONS = [10, 20, 30, 40, 50] as const
+type DownpaymentPct = (typeof DOWNPAYMENT_PCT_OPTIONS)[number]
 
 // PR-330 — Apply Financing dialog. Lets the homeowner allocate part (or
 // all) of their approved envelope onto one sent_project. Server-side
@@ -99,6 +103,10 @@ export function ApplyFinancingDialog({
   const [inputValue, setInputValue] = useState<string>(
     isUpdate ? centsToDollarsInput(currentAllocationCents ?? 0) : '',
   )
+  // Arc-16 — user-selectable downpayment percentage (10/20/30/40/50).
+  // Replaces the prior hard-coded 10% so homeowners can pick a higher
+  // downpayment without falling back to the Custom amount path.
+  const [downpaymentPct, setDownpaymentPct] = useState<DownpaymentPct>(10)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -112,6 +120,7 @@ export function ApplyFinancingDialog({
       setMode('dollar')
       setInputValue('')
     }
+    setDownpaymentPct(10)
   }, [open, isUpdate, currentAllocationCents])
 
   // Derive cents from preset OR input depending on selection.
@@ -120,8 +129,7 @@ export function ApplyFinancingDialog({
       return Math.min(projectValueCents, remainingCents)
     }
     if (preset === 'downpayment') {
-      // 10% of project value, capped at remaining envelope.
-      return Math.min(clampInt(projectValueCents * 0.1), remainingCents)
+      return Math.min(clampInt((projectValueCents * downpaymentPct) / 100), remainingCents)
     }
     // Custom — interpret input based on mode toggle.
     if (mode === 'dollar') {
@@ -130,7 +138,7 @@ export function ApplyFinancingDialog({
     const pctNum = Number(inputValue.replace(/%/g, '').trim())
     if (!Number.isFinite(pctNum) || pctNum <= 0) return 0
     return clampInt((projectValueCents * pctNum) / 100)
-  }, [preset, mode, inputValue, projectValueCents, remainingCents])
+  }, [preset, mode, inputValue, projectValueCents, remainingCents, downpaymentPct])
 
   // Pre-submit validation. All checks mirror the server-side Edge Fn so
   // the client can render the same error before round-tripping.
@@ -244,7 +252,7 @@ export function ApplyFinancingDialog({
                 active={preset === 'downpayment'}
                 onClick={() => setPreset('downpayment')}
                 label="Downpayment"
-                sublabel="10% of project"
+                sublabel={`${downpaymentPct}% of project`}
                 dataAttr="apply-financing-preset-downpayment"
               />
               <PresetButton
@@ -263,6 +271,37 @@ export function ApplyFinancingDialog({
               />
             </div>
           </div>
+
+          {preset === 'downpayment' && (
+            <div className="space-y-2" data-testid="apply-financing-downpayment-picker">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Downpayment percentage
+              </p>
+              <Select
+                value={String(downpaymentPct)}
+                onValueChange={(v) => setDownpaymentPct(Number(v) as DownpaymentPct)}
+              >
+                <SelectTrigger
+                  className="h-10"
+                  data-testid="apply-financing-downpayment-trigger"
+                  data-downpayment-pct={downpaymentPct}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOWNPAYMENT_PCT_OPTIONS.map((pct) => (
+                    <SelectItem
+                      key={pct}
+                      value={String(pct)}
+                      data-testid={`apply-financing-downpayment-option-${pct}`}
+                    >
+                      {pct}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {preset === 'custom' && (
             <div className="space-y-2">
