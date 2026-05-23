@@ -15,6 +15,7 @@ import { SERVICE_CATALOG } from '@/lib/constants'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
+import { ApplyFinancingDialog } from '@/features/financing/components/apply-financing-dialog'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -42,43 +43,73 @@ export function AppointmentStatusPage() {
   // "You have $15,000 available from GoodLeap" — the two-surface confusion
   // Rod flagged 2026-05-22.
   const [homeownerHasFinancing, setHomeownerHasFinancing] = useState(false)
+  // PR-330 — envelope state for the Apply Financing dialog. approved
+  // applicationId + envelope cents + sum of allocations on OTHER projects
+  // (excluded from server-side cap re-check). Slot-availability is the
+  // CTA gate, not status.
+  const [approvedAppId, setApprovedAppId] = useState<string | null>(null)
+  const [envelopeCents, setEnvelopeCents] = useState<number>(0)
+  const [otherAllocatedCents, setOtherAllocatedCents] = useState<number>(0)
   useEffect(() => {
     if (!financingEnabled || !profile?.id) return
     let cancelled = false
     void Promise.allSettled([
       supabase
         .from('customer_financing_profile')
-        .select('has_financing,last_known_status')
+        .select('has_financing,last_known_status,last_known_amount_cents')
         .eq('customer_id', profile.id)
         .maybeSingle(),
       supabase
         .from('financing_applications')
-        .select('id,status')
+        .select('id,status,estimated_amount_cents')
         .eq('homeowner_id', profile.id)
         .in('status', ['applied', 'pending', 'approved', 'terms_accepted'])
+        .order('applied_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
     ]).then(([cfpRes, appRes]) => {
       if (cancelled) return
+      const cfpData = cfpRes.status === 'fulfilled' && !cfpRes.value.error ? cfpRes.value.data : null
+      const appData = appRes.status === 'fulfilled' && !appRes.value.error ? appRes.value.data : null
       const cfpHit =
-        cfpRes.status === 'fulfilled' &&
-        !cfpRes.value.error &&
-        cfpRes.value.data?.has_financing === true &&
-        (cfpRes.value.data?.last_known_status === 'approved' ||
-          cfpRes.value.data?.last_known_status === 'terms_accepted')
-      const appHit =
-        appRes.status === 'fulfilled' && !appRes.value.error && !!appRes.value.data
+        cfpData?.has_financing === true &&
+        (cfpData?.last_known_status === 'approved' || cfpData?.last_known_status === 'terms_accepted')
+      const appHit = !!appData
       if (cfpHit || appHit) setHomeownerHasFinancing(true)
+      if (appData && (appData.status === 'approved' || appData.status === 'terms_accepted')) {
+        setApprovedAppId(appData.id)
+        const envelope = (cfpData?.last_known_amount_cents as number | null) ?? (appData.estimated_amount_cents as number | null) ?? 0
+        setEnvelopeCents(envelope)
+      }
     })
     return () => {
       cancelled = true
     }
   }, [financingEnabled, profile?.id])
+
+  const [applyDialogOpen, setApplyDialogOpen] = useState(false)
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
   const assignedRepByLead = useProjectsStore((s) => s.assignedRepByLead)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const sentProjects = useProjectsStore((s) => s.sentProjects)
+
+  // PR-330 — sum of allocations under the approved application across the
+  // homeowner's OTHER sent_projects (excluded from envelope-cap math so
+  // update-allocation flows aren't blocked by their own existing entry).
+  useEffect(() => {
+    if (!approvedAppId) {
+      setOtherAllocatedCents(0)
+      return
+    }
+    const matchedSp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === id)
+    const sum = sentProjects.reduce((acc, sp) => {
+      if (sp.applied_financing_application_id !== approvedAppId) return acc
+      if (matchedSp && sp.id === matchedSp.id) return acc
+      return acc + (sp.applied_financing_amount_cents ?? 0)
+    }, 0)
+    setOtherAllocatedCents(sum)
+  }, [approvedAppId, sentProjects, id])
   // Ship #191 — reschedule negotiation state. Key lookup stays lean
   // (raw map-entry selector returns undefined or the entity — stable
   // either way per the banked zustand-selector-stable-reference rule).
@@ -427,6 +458,49 @@ export function AppointmentStatusPage() {
         </Card>
       )}
 
+      {financingEnabled === true && matchedSentProject && approvedAppId && (
+        <Card
+          data-testid="homeowner-project-apply-financing-cta"
+          data-apply-financing-cta
+          data-apply-financing-slot={matchedSentProject.applied_financing_application_id ? 'filled' : 'empty'}
+        >
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
+                <DollarSign className="h-4 w-4" />
+              </div>
+              <div>
+                {matchedSentProject.applied_financing_application_id ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">
+                      Financing applied: ${((matchedSentProject.applied_financing_amount_cents ?? 0) / 100).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adjust how much of your approved envelope is allocated to this project.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">Apply financing to this project</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      You have an approved envelope. Allocate some or all of it to this project.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="shrink-0"
+              data-testid="homeowner-project-apply-financing-open"
+              onClick={() => setApplyDialogOpen(true)}
+            >
+              {matchedSentProject.applied_financing_application_id ? 'Update Allocation' : 'Apply Financing'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Photo 314 polish — horizontal stepper renders only on happy-path
           statuses (pending/confirmed/completed). For rejected/cancelled the
           stepper hides and OffPathStatusBanner takes its place; rescheduled
@@ -629,6 +703,25 @@ export function AppointmentStatusPage() {
           setCounterPickerOpen(false)
         }}
       />
+
+      {matchedSentProject && approvedAppId && (
+        <ApplyFinancingDialog
+          open={applyDialogOpen}
+          onOpenChange={setApplyDialogOpen}
+          sentProjectId={matchedSentProject.id}
+          sentProjectName={lead.project}
+          projectValueCents={Math.round((lead.value ?? 0) * 100)}
+          envelopeCents={envelopeCents}
+          otherAllocatedCents={otherAllocatedCents}
+          applicationId={approvedAppId}
+          currentAllocationCents={matchedSentProject.applied_financing_amount_cents ?? null}
+          onSuccess={() => {
+            if (profile?.id) {
+              void useProjectsStore.getState().hydrateFromSupabase(profile.id, 'homeowner')
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
