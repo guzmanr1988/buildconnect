@@ -75,6 +75,7 @@ type RenderSpec = {
   tone: Tone
   subtitle: string
   destination: string
+  partner: string | null
 }
 
 function specForState(
@@ -98,6 +99,7 @@ function specForState(
         tone: 'neutral',
         subtitle: 'See if your project qualifies — no credit-impacting check',
         destination: '/home/financing/apply',
+        partner,
       }
     case 'applied':
       return {
@@ -106,6 +108,7 @@ function specForState(
         tone: 'progress',
         subtitle: 'We received your application — view next steps',
         destination: statusUrl,
+        partner,
       }
     case 'pending':
       return {
@@ -114,6 +117,7 @@ function specForState(
         tone: 'progress',
         subtitle: 'Your lender is reviewing — view status',
         destination: statusUrl,
+        partner,
       }
     case 'approved':
       return {
@@ -127,6 +131,7 @@ function specForState(
         tone: 'success',
         subtitle: 'View offer details and accept terms',
         destination: statusUrl,
+        partner,
       }
     case 'terms_accepted':
       return {
@@ -140,6 +145,7 @@ function specForState(
         tone: 'success',
         subtitle: 'View offer details and project status',
         destination: statusUrl,
+        partner,
       }
     case 'denied':
       return {
@@ -148,6 +154,7 @@ function specForState(
         tone: 'neutral',
         subtitle: 'A denial from one lender does not change what is possible',
         destination: statusUrl,
+        partner,
       }
     case 'expired':
       return {
@@ -156,6 +163,7 @@ function specForState(
         tone: 'warning',
         subtitle: 'Start a fresh application to refresh your offer',
         destination: '/home/financing/apply',
+        partner,
       }
   }
 }
@@ -223,6 +231,7 @@ export function FinancingCard() {
       transition={{ delay: 0.06 }}
       data-testid="financing-card"
       data-financing-card-state={state}
+      data-financing-partner={spec.partner ?? ''}
     >
       <button
         type="button"
