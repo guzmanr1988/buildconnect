@@ -28,7 +28,7 @@ import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
-import { useVendorHomeownerDocsStore } from '@/stores/vendor-homeowner-documents-store'
+import { uploadDocAsVendor } from '@/lib/api/homeowner-documents'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
@@ -246,7 +246,9 @@ export default function VendorLeadWorkflow() {
   // Dialog-local state until Confirm Sale; cleared on close.
   const [contractAmount, setContractAmount] = useState('')
   const [contractFile, setContractFile] = useState<{ filename: string; dataUrl: string } | null>(null)
-  const addVendorHomeownerDoc = useVendorHomeownerDocsStore((s) => s.addDoc)
+  // PR-331 — contract docs now write to unified homeowner_documents table
+  // (uploaded_by='vendor', doc_type='contract', sent_project_id linkage).
+  // Homeowner sees these on /home/documents under the matching project box.
   // Ship #326 Phase A — flag-resolution thread + revised-contract upload state.
   const flagThreadsByProject = useFlagThreadStore((s) => s.threadsByProject)
   const appendThreadMessage = useFlagThreadStore((s) => s.appendMessage)
@@ -2078,18 +2080,29 @@ export default function VendorLeadWorkflow() {
                     // read sp.saleAmount; UI-only rename preserved).
                     markProjectSold(sp.id, Number(contractAmount))
                   }
-                  // Ship #313 — persist contract to vendor-homeowner-
-                  // documents-store under category='contract'. Existing
-                  // canonical doc-storage; admin god-view + vendor-
-                  // homeowner-detail page already render this.
-                  if (contractFile && vendor) {
-                    addVendorHomeownerDoc({
-                      vendor_id: vendor.id,
-                      homeowner_email: selected.email,
-                      category: 'contract',
-                      filename: contractFile.filename,
-                      dataUrl: contractFile.dataUrl,
-                    })
+                  // PR-331 — contract → unified homeowner_documents table
+                  // (uploaded_by=vendor, doc_type=contract, sent_project_id=sp.id).
+                  // Homeowner sees this on /home/documents under matching box.
+                  if (contractFile && vendor && sp?.homeowner_id) {
+                    void (async () => {
+                      try {
+                        const blob = await (await fetch(contractFile.dataUrl)).blob()
+                        const file = new File(
+                          [blob],
+                          contractFile.filename,
+                          { type: blob.type || 'application/pdf' },
+                        )
+                        await uploadDocAsVendor({
+                          vendorId: vendor.id,
+                          homeownerId: sp.homeowner_id!,
+                          sentProjectId: sp.id,
+                          docType: 'contract',
+                          file,
+                        })
+                      } catch (err) {
+                        console.error('[lead-workflow] contract upload failed:', err)
+                      }
+                    })()
                   }
                 }
                 setSoldDialogOpen(false)
@@ -2186,13 +2199,30 @@ export default function VendorLeadWorkflow() {
               disabled={!revisionContractFile || !revisionTargetProjectId}
               onClick={() => {
                 if (!revisionContractFile || !revisionTargetProjectId || !profile || !vendor || !selected) return
-                addVendorHomeownerDoc({
-                  vendor_id: vendor.id,
-                  homeowner_email: selected.email,
-                  category: 'contract',
-                  filename: revisionContractFile.filename,
-                  dataUrl: revisionContractFile.dataUrl,
-                })
+                // PR-331 — revised contract → unified homeowner_documents
+                // (uploaded_by=vendor, doc_type=contract, sent_project_id linkage).
+                const revisionSp = sentProjects.find((p) => p.id === revisionTargetProjectId)
+                if (revisionSp?.homeowner_id) {
+                  void (async () => {
+                    try {
+                      const blob = await (await fetch(revisionContractFile.dataUrl)).blob()
+                      const file = new File(
+                        [blob],
+                        revisionContractFile.filename,
+                        { type: blob.type || 'application/pdf' },
+                      )
+                      await uploadDocAsVendor({
+                        vendorId: vendor.id,
+                        homeownerId: revisionSp.homeowner_id!,
+                        sentProjectId: revisionSp.id,
+                        docType: 'contract',
+                        file,
+                      })
+                    } catch (err) {
+                      console.error('[lead-workflow] revised contract upload failed:', err)
+                    }
+                  })()
+                }
                 resetReviewStatus(revisionTargetProjectId)
                 appendThreadMessage({
                   projectId: revisionTargetProjectId,

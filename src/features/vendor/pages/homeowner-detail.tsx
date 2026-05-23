@@ -5,7 +5,6 @@ import { ArrowLeft, MessageSquare, Mail, FileText, Plus, Download, Trash2, Alert
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared/page-header'
@@ -17,11 +16,15 @@ import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import {
-  useVendorHomeownerDocsStore,
-  VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS,
-  type VendorHomeownerDoc,
-  type VendorHomeownerDocCategory,
-} from '@/stores/vendor-homeowner-documents-store'
+  uploadDocAsVendor,
+  listDocsForVendorHomeowner,
+  deleteDoc as deleteHomeownerDoc,
+  getSignedUrl as getHomeownerDocSignedUrl,
+} from '@/lib/api/homeowner-documents'
+import type {
+  HomeownerDoc,
+  HomeownerDocType,
+} from '@/stores/homeowner-documents-store'
 
 // Ship #278 — vendor-side per-homeowner detail page. Two sections:
 // (1) Sold Projects — sold sentProjects for this vendor×homeowner +
@@ -39,14 +42,30 @@ import {
 //   surface; Sold Projects + Documents are the two operational concerns
 //   vendor cares about per-homeowner
 
-const CATEGORY_OPTIONS: VendorHomeownerDocCategory[] = [
-  'driver_license',
+// PR-331 — 9-val doc_type set (banked w/ homeowner_documents.doc_type CHECK)
+const DOC_TYPE_OPTIONS: HomeownerDocType[] = [
+  'license',
   'permit',
+  'sketch',
+  'measurement',
+  'agreement',
   'contract',
   'quote',
   'photo',
   'other',
 ]
+
+const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
+  license: 'License',
+  permit: 'Permit',
+  sketch: 'Sketch',
+  measurement: 'Measurement',
+  agreement: 'Agreement',
+  contract: 'Contract',
+  quote: 'Quote',
+  photo: 'Photo',
+  other: 'Other',
+}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -69,26 +88,57 @@ export default function VendorHomeownerDetail() {
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
 
-  const docsStore = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
-  const hydrateForHomeowner = useVendorHomeownerDocsStore((s) => s.hydrateForHomeowner)
-  const addDoc = useVendorHomeownerDocsStore((s) => s.addDoc)
-  const removeDoc = useVendorHomeownerDocsStore((s) => s.removeDoc)
-  const docs = useMemo(
-    () => (vendor ? docsStore[vendor.id]?.[homeownerEmail] ?? [] : []),
-    [docsStore, vendor, homeownerEmail],
-  )
+  // PR-331 — vendor sent_projects scoped to this homeowner; drives the
+  // project-picker dropdown on upload + resolves homeowner_id (DB UUID,
+  // not email — homeowner_documents.homeowner_id is uuid FK).
+  const vendorSentProjectsForHomeowner = useMemo(() => {
+    if (!vendor) return []
+    return sentProjects.filter((sp) => {
+      const vendorMatch = sp.contractor?.vendor_id
+        ? sp.contractor.vendor_id === vendor.id
+        : sp.contractor?.company === vendor.company
+      return vendorMatch && sp.homeowner?.email === homeownerEmail
+    })
+  }, [vendor, sentProjects, homeownerEmail])
+
+  const resolvedHomeownerId = useMemo(() => {
+    return vendorSentProjectsForHomeowner.find((sp) => sp.homeowner_id)?.homeowner_id ?? null
+  }, [vendorSentProjectsForHomeowner])
+
+  // PR-331 — collapsed docs list reads through lib/api helper backed by
+  // public.homeowner_documents. Vendor RLS gates rows (vendor_id =
+  // auth.uid() OR sent_project_id IN vendor's sent_projects). Local
+  // state keeps insert/delete optimistic on top of the loaded baseline.
+  const [docs, setDocs] = useState<HomeownerDoc[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
 
   useEffect(() => {
-    if (vendor) hydrateForHomeowner(vendor.id, homeownerEmail)
-  }, [vendor, homeownerEmail, hydrateForHomeowner])
+    if (!vendor || !resolvedHomeownerId) {
+      setDocs([])
+      return
+    }
+    let cancelled = false
+    setDocsLoading(true)
+    listDocsForVendorHomeowner({ vendorId: vendor.id, homeownerId: resolvedHomeownerId })
+      .then((rows) => {
+        if (!cancelled) setDocs(rows)
+      })
+      .finally(() => {
+        if (!cancelled) setDocsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [vendor, resolvedHomeownerId])
 
-  // Upload UI state.
+  // Upload UI state — file kept as File (not data-URL) for direct Storage
+  // upload; project-picker resolves sent_project_id (NULL = homeowner-level).
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploadCategory, setUploadCategory] = useState<VendorHomeownerDocCategory>('permit')
-  const [customLabel, setCustomLabel] = useState('')
-  const [pendingFilename, setPendingFilename] = useState<string | null>(null)
-  const [pendingDataUrl, setPendingDataUrl] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<VendorHomeownerDoc | null>(null)
+  const [uploadDocType, setUploadDocType] = useState<HomeownerDocType>('permit')
+  const [uploadSentProjectId, setUploadSentProjectId] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<HomeownerDoc | null>(null)
   // Ship #279 — Sold Projects row click opens ProjectDetailDialog (#248
   // dual-lookup pattern: sentProjects.id OR mockLeads.id resolves the
   // canonical detail view, regardless of which source the row came from).
@@ -154,51 +204,71 @@ export default function VendorHomeownerDetail() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setPendingDataUrl(reader.result)
-        setPendingFilename(file.name)
-      }
-    }
-    reader.readAsDataURL(file)
+    setPendingFile(file)
     e.target.value = ''
   }
 
   const handleSubmitUpload = async () => {
-    if (!vendor || !pendingDataUrl || !pendingFilename) return
-    if (uploadCategory === 'other' && !customLabel.trim()) {
-      toast.error('Add a label for "Other" documents.')
+    if (!vendor || !pendingFile) return
+    if (!resolvedHomeownerId) {
+      toast.error('Cannot resolve homeowner ID. They may not have any projects with you yet.')
       return
     }
+    setUploading(true)
     try {
-      await addDoc({
-        vendor_id: vendor.id,
-        homeowner_email: homeownerEmail,
-        category: uploadCategory,
-        customLabel: uploadCategory === 'other' ? customLabel.trim() : undefined,
-        filename: pendingFilename,
-        dataUrl: pendingDataUrl,
+      const inserted = await uploadDocAsVendor({
+        vendorId: vendor.id,
+        homeownerId: resolvedHomeownerId,
+        sentProjectId: uploadSentProjectId,
+        docType: uploadDocType,
+        file: pendingFile,
       })
-      toast.success(`${VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[uploadCategory]} uploaded for ${homeowner.name}.`)
-      setPendingDataUrl(null)
-      setPendingFilename(null)
-      setCustomLabel('')
-      setUploadCategory('permit')
+      if (!inserted) {
+        toast.error('Upload failed. Please try again.')
+        return
+      }
+      setDocs((prev) => [inserted, ...prev.filter((d) => d.id !== inserted.id)])
+      toast.success(`${DOC_TYPE_LABEL[uploadDocType]} uploaded for ${homeowner.name}.`)
+      setPendingFile(null)
+      setUploadDocType('permit')
+      setUploadSentProjectId(null)
     } catch {
       toast.error('Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
     }
   }
 
   const handleConfirmDelete = async () => {
-    if (!confirmDelete || !vendor) return
+    if (!confirmDelete) return
     try {
-      await removeDoc(vendor.id, homeownerEmail, confirmDelete.id)
-      toast.success(`${confirmDelete.filename} removed.`)
+      const ok = await deleteHomeownerDoc(confirmDelete.id, confirmDelete.storagePath)
+      if (ok) {
+        setDocs((prev) => prev.filter((d) => d.id !== confirmDelete.id))
+        toast.success(`${confirmDelete.filename} removed.`)
+      } else {
+        toast.error('Failed to delete document. Please try again.')
+      }
     } catch {
       toast.error('Failed to delete document. Please try again.')
     }
     setConfirmDelete(null)
+  }
+
+  const handleDownload = async (doc: HomeownerDoc) => {
+    const url = await getHomeownerDocSignedUrl(doc.storagePath)
+    if (!url) {
+      toast.error('Failed to generate download link.')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = doc.filename
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   return (
@@ -280,7 +350,11 @@ export default function VendorHomeownerDetail() {
         )}
       </section>
 
-      {/* Section 2: Documents */}
+      {/* Section 2: Documents — PR-331 bidirectional view. Vendor sees
+          docs they uploaded AND docs homeowner uploaded for this
+          relationship (RLS-gated via vendor_id OR sent_project_id IN
+          vendor's sent_projects). Upload writes to homeowner_documents
+          unified table with sent_project_id linkage. */}
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -288,7 +362,13 @@ export default function VendorHomeownerDetail() {
             <h2 className="font-heading text-lg font-semibold">Documents</h2>
             <span className="text-sm text-muted-foreground">({docs.length})</span>
           </div>
-          <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()}>
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!resolvedHomeownerId}
+            data-vendor-doc-upload-trigger
+          >
             <Plus className="h-3.5 w-3.5" />
             Upload
           </Button>
@@ -302,83 +382,116 @@ export default function VendorHomeownerDetail() {
         </div>
 
         {/* Upload-pending picker (shown after file chosen, before submit) */}
-        {pendingDataUrl && pendingFilename && (
+        {pendingFile && (
           <Card className="rounded-xl border-primary/40">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-primary shrink-0" />
-                <span className="font-medium truncate">{pendingFilename}</span>
+                <span className="font-medium truncate">{pendingFile.name}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">Category</label>
-                  <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as VendorHomeownerDocCategory)}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <label className="text-xs font-semibold text-muted-foreground">Project</label>
+                  <Select
+                    value={uploadSentProjectId ?? '__none__'}
+                    onValueChange={(v) => setUploadSentProjectId(v === '__none__' ? null : v)}
+                  >
+                    <SelectTrigger className="h-9" data-vendor-doc-project-picker><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CATEGORY_OPTIONS.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[cat]}</SelectItem>
+                      <SelectItem value="__none__">No project — homeowner-level doc</SelectItem>
+                      {vendorSentProjectsForHomeowner.map((sp) => (
+                        <SelectItem key={sp.id} value={sp.id}>
+                          {sp.item.serviceName} · {fmtDate(sp.sentAt)}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                {uploadCategory === 'other' && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Label</label>
-                    <Input
-                      placeholder="e.g. Inspection report"
-                      value={customLabel}
-                      onChange={(e) => setCustomLabel(e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Document type</label>
+                  <Select value={uploadDocType} onValueChange={(v) => setUploadDocType(v as HomeownerDocType)}>
+                    <SelectTrigger className="h-9" data-vendor-doc-type-picker><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DOC_TYPE_OPTIONS.map((dt) => (
+                        <SelectItem key={dt} value={dt}>{DOC_TYPE_LABEL[dt]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => { setPendingDataUrl(null); setPendingFilename(null); setCustomLabel(''); setUploadCategory('permit') }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPendingFile(null); setUploadDocType('permit'); setUploadSentProjectId(null) }}
+                  disabled={uploading}
+                >
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleSubmitUpload}>
-                  Add to {homeowner.name}'s file
+                <Button size="sm" onClick={handleSubmitUpload} disabled={uploading}>
+                  {uploading ? 'Uploading...' : `Add to ${homeowner.name}'s file`}
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {docs.length === 0 && !pendingDataUrl ? (
-          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents yet. Upload permits, contracts, or other files for your records.</CardContent></Card>
+        {docsLoading ? (
+          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">Loading documents...</CardContent></Card>
+        ) : docs.length === 0 && !pendingFile ? (
+          <Card className="rounded-xl"><CardContent className="p-5 text-sm text-muted-foreground">No documents yet. Upload permits, contracts, sketches, or other files. You'll also see documents the homeowner uploads for projects you're working on.</CardContent></Card>
         ) : (
           <div className="space-y-2">
-            {docs.slice().reverse().map((d) => (
-              <motion.div key={d.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                <Card className="rounded-xl">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{d.filename}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {d.category === 'other' && d.customLabel ? d.customLabel : VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS[d.category]}
-                        {' · '}
-                        {fmtDate(d.uploadedAt)}
-                      </p>
-                    </div>
-                    <a
-                      href={d.dataUrl}
-                      download={d.filename}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </a>
-                    <Button variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10" onClick={() => setConfirmDelete(d)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+            {docs.map((d) => {
+              const isMine = d.vendorId === vendor?.id
+              const project = d.sentProjectId
+                ? vendorSentProjectsForHomeowner.find((sp) => sp.id === d.sentProjectId)
+                : null
+              const typeLabel = d.docType ? DOC_TYPE_LABEL[d.docType] : 'Document'
+              return (
+                <motion.div key={d.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <Card className="rounded-xl" data-vendor-doc-id={d.id} data-vendor-doc-mine={isMine ? 'true' : 'false'}>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{d.filename}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {typeLabel}
+                          {project ? ` · ${project.item.serviceName}` : ' · Homeowner-level'}
+                          {' · '}
+                          {fmtDate(d.createdAt)}
+                          {' · '}
+                          {isMine ? 'Uploaded by you' : 'Uploaded by homeowner'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => handleDownload(d)}
+                        data-vendor-doc-download={d.id}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                      {isMine && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:bg-destructive/10"
+                          onClick={() => setConfirmDelete(d)}
+                          data-vendor-doc-delete={d.id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
           </div>
         )}
       </section>

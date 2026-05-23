@@ -16,6 +16,18 @@ import { supabase } from '@/lib/supabase'
 
 export type HomeownerDocCategory = 'project-submission' | 'roof-measurement' | 'other'
 export type HomeownerDocUploadedBy = 'system' | 'homeowner' | 'vendor'
+// PR-331 — user-facing classification, orthogonal to system-lane `category`.
+// NULL on legacy rows pre-backfill; new uploads MUST set explicitly.
+export type HomeownerDocType =
+  | 'license'
+  | 'permit'
+  | 'sketch'
+  | 'measurement'
+  | 'agreement'
+  | 'contract'
+  | 'quote'
+  | 'photo'
+  | 'other'
 
 export interface HomeownerDoc {
   id: string
@@ -27,6 +39,13 @@ export interface HomeownerDoc {
   vendorCompany?: string
   serviceName?: string
   project_id?: string | null
+  // PR-331 — explicit FK to sent_projects.id. NULLABLE: vendor-uploaded
+  // homeowner-level docs (e.g. driver license copies) carry NULL and render
+  // under the "Customer documents" cross-project box on /home/documents.
+  sentProjectId?: string | null
+  // PR-331 — user-facing doc-type chip on Documents page rows. NULLABLE on
+  // legacy rows pre-backfill; new uploads pick one of HomeownerDocType.
+  docType?: HomeownerDocType | null
   address?: string | null
   uploadedBy?: HomeownerDocUploadedBy
   vendorId?: string | null
@@ -42,6 +61,8 @@ interface AddDocInput {
   vendorCompany?: string
   serviceName?: string
   project_id?: string | null
+  sentProjectId?: string | null
+  docType?: HomeownerDocType | null
   address?: string | null
   uploadedBy?: HomeownerDocUploadedBy
   vendorId?: string | null
@@ -68,6 +89,8 @@ interface DbRow {
   filename: string
   storage_path: string
   project_id: string | null
+  sent_project_id: string | null
+  doc_type: HomeownerDocType | null
   address: string | null
   uploaded_by: HomeownerDocUploadedBy
   vendor_id: string | null
@@ -85,6 +108,8 @@ function rowToDoc(row: DbRow): HomeownerDoc {
     storagePath: row.storage_path,
     createdAt: row.created_at,
     project_id: row.project_id,
+    sentProjectId: row.sent_project_id,
+    docType: row.doc_type,
     address: row.address,
     uploadedBy: row.uploaded_by,
     vendorId: row.vendor_id,
@@ -129,7 +154,12 @@ export const useHomeownerDocsStore = create<HomeownerDocsState>()((set, get) => 
     const ext = mimeType === 'image/png' ? 'png'
       : (mimeType === 'image/jpeg' || mimeType === 'image/jpg') ? 'jpg'
       : 'pdf'
-    const storagePath = `${input.homeownerId}/${docId}.${ext}`
+    // PR-331 — storage path discipline matches the 4 storage RLS policies
+    // hermes installed: <homeowner_id>/<sent_project_id|root>/<doc_type|other>/<doc_id>.<ext>
+    // First segment stays homeowner_id (RLS gate via storage.foldername[1]).
+    const sentProjectSeg = input.sentProjectId ?? 'root'
+    const docTypeSeg = input.docType ?? 'other'
+    const storagePath = `${input.homeownerId}/${sentProjectSeg}/${docTypeSeg}/${docId}.${ext}`
 
     const uploadRes = await supabase.storage
       .from(BUCKET)
@@ -151,6 +181,8 @@ export const useHomeownerDocsStore = create<HomeownerDocsState>()((set, get) => 
         filename: input.filename,
         storage_path: storagePath,
         project_id: input.project_id ?? null,
+        sent_project_id: input.sentProjectId ?? null,
+        doc_type: input.docType ?? null,
         address: input.address ?? null,
         uploaded_by: input.uploadedBy ?? 'system',
         vendor_id: input.vendorId ?? null,
