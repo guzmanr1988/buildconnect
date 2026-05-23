@@ -245,10 +245,13 @@ export function AppointmentStatusPage() {
 
   // Photo 314 polish — horizontal stepper happy-path lifecycle. Off-path
   // statuses return null and the existing Status pill + reschedule banners
-  // carry the off-path semantics instead.
+  // carry the off-path semantics instead. Arc-21 — `isSold` distinguishes
+  // active-project from truly-completed since sentProject.status='sold'
+  // is mapped to lead.status='completed' via sentProjectStatusMap.
+  const isSold = sentProject?.status === 'sold'
   const statusSteps = deriveStatusSteps({
     status: lead.status,
-    hasAssignedRep: !!assignedRep,
+    isSold,
   })
 
   function formatSlot(slot: string) {
@@ -820,33 +823,40 @@ function placeholderAware(value: string | null | undefined, sentinels: readonly 
   return trimmed
 }
 
-// Photo 314 polish — horizontal stepper. 4-step happy-path lifecycle. Past
-// steps render filled + check; current is filled + bold; future is hollow +
-// muted. Off-path statuses (rejected/cancelled/rescheduled) hide the
-// stepper entirely — the existing Status pill + reschedule banners carry
-// the off-path semantics; surfacing the stepper there would clutter.
+// Arc-21 — horizontal stepper. 5-step happy-path lifecycle per Rod photo
+// 328 directive: scheduled appointment (pending OR confirmed) advances to
+// "Representative assigned"; vendor-marked-sold (sentProject.status='sold')
+// advances to "Active project"; truly-completed (lead.status='completed'
+// without a sold sentProject) is the terminal step. Off-path statuses
+// (rejected/cancelled/rescheduled) hide the stepper entirely — the
+// existing Status pill + reschedule banners carry the off-path semantics.
 type StepState = 'done' | 'current' | 'upcoming'
 type StatusStep = { key: string; label: string; state: StepState }
 
 function deriveStatusSteps(args: {
   status: LeadStatus
-  hasAssignedRep: boolean
+  isSold: boolean
 }): StatusStep[] | null {
-  const { status, hasAssignedRep } = args
+  const { status, isSold } = args
   if (status === 'rejected' || status === 'cancelled' || status === 'rescheduled') {
     return null
   }
-  const stepKeys = ['submitted', 'confirmed', 'rep_assigned', 'completed'] as const
+  const stepKeys = ['submitted', 'confirmed', 'rep_assigned', 'active_project', 'completed'] as const
   const labels: Record<typeof stepKeys[number], string> = {
     submitted: 'Lead submitted',
     confirmed: 'Vendor confirmed',
     rep_assigned: 'Representative assigned',
+    active_project: 'Active project',
     completed: 'Project completed',
   }
+  // sentProjectStatusMap collapses sold→completed at the lead-status layer,
+  // so isSold must be checked first to land on active_project (3) rather
+  // than the terminal completed (4). A lead.status='completed' without
+  // isSold (mock fixture path) reaches step 4.
   const completedIndex = (() => {
-    if (status === 'completed') return 3
-    if (status === 'confirmed' && hasAssignedRep) return 2
-    if (status === 'confirmed') return 1
+    if (isSold) return 3
+    if (status === 'completed') return 4
+    if (status === 'pending' || status === 'confirmed') return 2
     return 0
   })()
   return stepKeys.map((key, i) => ({
@@ -858,7 +868,7 @@ function deriveStatusSteps(args: {
 
 function StatusStepper({ steps }: { steps: StatusStep[] }) {
   return (
-    <Card>
+    <Card data-testid="appointment-stepper" data-stepper-step-count={steps.length}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2">
           {steps.map((step, i) => {
@@ -882,7 +892,13 @@ function StatusStepper({ steps }: { steps: StatusStep[] }) {
               isDone ? 'bg-primary' : 'bg-border',
             )
             return (
-              <div key={step.key} className="relative flex flex-1 flex-col items-center">
+              <div
+                key={step.key}
+                className="relative flex flex-1 flex-col items-center"
+                data-stepper-step={step.key}
+                data-stepper-step-state={step.state}
+                data-stepper-step-index={i}
+              >
                 {!isLast && <div className={connectorClass} aria-hidden />}
                 <div className={dotClass}>
                   {isDone ? (
