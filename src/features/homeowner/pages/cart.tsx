@@ -1069,7 +1069,7 @@ export function CartPage() {
                               <span className="text-base font-bold">{w.size.replace('x', '" × ')}"</span>
                               <span className="text-base font-bold text-primary">×{w.quantity}</span>
                             </div>
-                            <div className="flex flex-wrap gap-1.5" data-project-summary-card-specs>
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
                               <Badge variant="secondary" className="text-xs">{w.type}</Badge>
                               <Badge variant="outline" className="text-xs">Frame: {w.frameColor}</Badge>
                               <Badge variant="outline" className="text-xs">Glass: {w.glassColor}</Badge>
@@ -1097,7 +1097,7 @@ export function CartPage() {
                               <span className="text-base font-bold">{d.size.replace('x', '" × ')}"</span>
                               <span className="text-base font-bold text-primary">×{d.quantity}</span>
                             </div>
-                            <div className="flex flex-wrap gap-1.5" data-project-summary-card-specs>
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
                               <Badge variant="secondary" className="text-xs">{d.type}</Badge>
                               <Badge variant="outline" className="text-xs">Frame: {d.frameColor}</Badge>
                               <Badge variant="outline" className="text-xs">Glass: {d.glassColor}</Badge>
