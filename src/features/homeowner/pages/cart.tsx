@@ -979,7 +979,10 @@ export function CartPage() {
                   )}
 
                   <h3 className="text-base font-bold text-foreground">Project Summary</h3>
-                  <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
+                  <div
+                    className="rounded-xl border bg-muted/30 p-4 grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-4"
+                    data-project-summary-products-grid
+                  >
                     {Object.entries(viewItem.selections)
                       .filter(([groupId]) => groupId !== 'spa_size' && groupId !== 'beach_size')
                       .map(([groupId, optionIds]) => {
@@ -992,7 +995,7 @@ export function CartPage() {
                       const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
                       const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
                       return (
-                        <div key={groupId}>
+                        <div key={groupId} data-project-summary-products-block>
                           <p className="text-sm font-semibold text-foreground mb-1.5" data-section-label-source={group ? 'group' : 'fallback'}>
                             {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
