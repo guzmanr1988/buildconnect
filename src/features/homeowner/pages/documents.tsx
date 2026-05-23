@@ -435,10 +435,35 @@ function ProjectBox({
     return m
   }, [group.docs])
 
+  // Arc-18 — Upload gate per Rod photo 323: "only add documents if project
+  // is assigned to a vendor and scheduled". status IN (approved, sold) is the
+  // canonical "scheduled" axis — booking.{date,time} exists from intake but is
+  // only LOCKED-IN at vendor-approval. NULL-bucket boxes have no project so
+  // they're always gate-blocked.
+  const uploadGate: {
+    allowed: boolean
+    reason: 'no-project' | 'not-scheduled' | 'inactive' | 'allowed'
+  } = !group.sentProjectId || !group.vendorCompany
+    ? { allowed: false, reason: 'no-project' }
+    : group.status === 'pending'
+      ? { allowed: false, reason: 'not-scheduled' }
+      : group.status === 'approved' || group.status === 'sold'
+        ? { allowed: true, reason: 'allowed' }
+        : { allowed: false, reason: 'inactive' }
+
+  const helperText: Record<typeof uploadGate.reason, string> = {
+    'no-project': 'Documents must be attached to a project',
+    'not-scheduled':
+      'Upload becomes available once your contractor confirms the appointment',
+    inactive: 'This project is no longer active',
+    allowed: '',
+  }
+
   const handlePickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    if (!uploadGate.allowed) return
     void onUpload(group, pickerDocType, file)
   }
 
@@ -497,35 +522,53 @@ function ProjectBox({
         })}
       </div>
 
-      <div className="flex items-center gap-2 pt-2 border-t">
-        <Select value={pickerDocType} onValueChange={(v) => setPickerDocType(v as HomeownerDocType)}>
-          <SelectTrigger className="h-8 w-[140px] text-xs" data-doc-type-picker>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {DOC_TYPE_ORDER.map((t) => (
-              <SelectItem key={t} value={t}>
-                {DOC_TYPE_LABEL[t]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          size="sm"
-          className="gap-1.5 h-8 text-xs"
-          onClick={() => fileInputRef.current?.click()}
-          data-upload-trigger
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Upload
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={handlePickFile}
-          className="hidden"
-        />
+      <div className="pt-2 border-t space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Select
+            value={pickerDocType}
+            onValueChange={(v) => setPickerDocType(v as HomeownerDocType)}
+            disabled={!uploadGate.allowed}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs" data-doc-type-picker>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DOC_TYPE_ORDER.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {DOC_TYPE_LABEL[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            className="gap-1.5 h-8 text-xs"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!uploadGate.allowed}
+            data-upload-trigger
+            data-upload-gated={!uploadGate.allowed}
+            data-gate-reason={uploadGate.reason}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Upload
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={handlePickFile}
+            disabled={!uploadGate.allowed}
+            className="hidden"
+          />
+        </div>
+        {!uploadGate.allowed && (
+          <p
+            className="text-[11px] text-muted-foreground"
+            data-testid="upload-gated-helper"
+          >
+            {helperText[uploadGate.reason]}
+          </p>
+        )}
       </div>
     </div>
   )
