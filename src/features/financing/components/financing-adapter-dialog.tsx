@@ -98,7 +98,11 @@ export function FinancingAdapterDialog({ open, onOpenChange, lenderKey, projectI
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="financing-adapter-dialog">
+      <DialogContent
+        data-testid="financing-adapter-dialog"
+        data-financing-partner={adapterDisplayName(lenderKey)}
+        data-financing-partner-key={lenderKey}
+      >
         <DialogHeader>
           <DialogTitle>Pre-fill application — {adapterDisplayName(lenderKey)}</DialogTitle>
           <DialogDescription>
