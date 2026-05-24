@@ -297,6 +297,19 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       hydrateFromSupabase: async (vendorUuid: string) => {
         set({ _vendorUuid: vendorUuid })
 
+        // Arc-43 — auth-bootstrap-race guard. RLS gates options/sub_options/
+        // vendor_*_prices on authenticated role. A fresh /vendor/catalog mount
+        // can fire hydrate before the Supabase session JWT is attached → anon
+        // SELECTs return [] → caches empty → every setPrice silent-drops at
+        // the L218 _subOptionDbIdCache lookup. Returning early when no session
+        // exists is safe — the module-scope onAuthStateChange listener below
+        // re-fires hydrate post-SIGNED_IN/INITIAL_SESSION with the same uuid.
+        const { data: { session: authSession } } = await supabase.auth.getSession()
+        if (!authSession) {
+          console.warn('[catalog] hydrate skipped — no auth session yet; will retry on SIGNED_IN')
+          return
+        }
+
         // 1. Load this vendor's existing prices from Supabase.
         const { data: priceRows, error: priceErr } = await supabase
           .from('vendor_option_prices')
@@ -443,6 +456,34 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
 
           set({ _migrationDone: true })
         }
+
+        // Arc-43 — (B) sub_option backfill arm. Un-gated by _migrationDone
+        // (which is single-shot and Carlos already passed it pre-Arc-41
+        // without touching sub_options). Idempotent via UPSERT ON CONFLICT
+        // (vendor_id, sub_option_id) + skip-pattern against the same
+        // priceBySvcOption map the option-arm above uses (the L387-392
+        // flat-fold seeds sub_option prices into the same map). Recovers
+        // the Carlos 21 sub_option keystrokes that silent-dropped pre-fix
+        // without requiring a re-type, and stays cheap on subsequent
+        // mounts (every row already-in-DB skips the push).
+        const subUpsertRows: { vendor_id: string; sub_option_id: string; price_cents: number; currency: string; active: boolean }[] = []
+        for (const svc of get().services) {
+          for (const [optId, priceCents] of Object.entries(svc.pricing)) {
+            if (!priceCents || priceCents <= 0) continue
+            const sbPrice = priceBySvcOption[svc.serviceId]?.[optId]
+            if (sbPrice !== undefined) continue
+            const subOptionDbId = subOptionDbIdCache[cacheKey(svc.serviceId, optId)]
+            if (!subOptionDbId) continue
+            subUpsertRows.push({ vendor_id: vendorUuid, sub_option_id: subOptionDbId, price_cents: priceCents, currency: 'USD', active: true })
+          }
+        }
+        if (subUpsertRows.length > 0) {
+          const { error: subMigErr } = await supabase
+            .from('vendor_sub_option_prices')
+            .upsert(subUpsertRows, { onConflict: 'vendor_id,sub_option_id' })
+          if (subMigErr) console.error('[catalog] sub_option backfill failed:', subMigErr.message)
+          else console.log(`[catalog] backfilled ${subUpsertRows.length} sub_option prices to Supabase`)
+        }
       },
     }),
     {
@@ -455,3 +496,21 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
     }
   )
 )
+
+// Arc-43 — auth-state-change re-fire. The hydrateFromSupabase entry guard
+// returns early when no session is attached at mount time. AuthBootstrap
+// fires SIGNED_IN / INITIAL_SESSION / TOKEN_REFRESHED once the session
+// resolves; this listener re-fires hydrate with the user's UUID so the
+// caches populate without requiring the catalog.tsx mount-effect to re-run
+// (profileId may already be set from a persisted profile across refresh,
+// so the useEffect dep-array won't change post-SIGNED_IN). Mirrors the
+// homeowner-documents-store.ts L237-255 pattern.
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    const uid = session?.user?.id
+    if (!uid) return
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      void useVendorCatalogStore.getState().hydrateFromSupabase(uid)
+    }
+  })
+}
