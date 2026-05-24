@@ -10,12 +10,15 @@ import { PageHeader } from '@/components/shared/page-header'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { cn } from '@/lib/utils'
 import type { OptionGroup } from '@/types'
 import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
 
 export default function VendorCatalog() {
   const adminServices = useCatalogStore((s) => s.services)
+  const refetchAdminCatalog = useCatalogStore((s) => s.hydrateFromServer)
+  useCatalogRealtime(refetchAdminCatalog)
   const {
     services: vendorServices,
     initFromAdmin,

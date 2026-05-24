@@ -48,6 +48,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ReorderableList } from '@/features/admin/components/reorderable-list'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { CatalogMutationError } from '@/lib/api/service-catalog'
 import type { ServiceConfig, OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
@@ -223,6 +224,12 @@ export default function ProductsAdminPage() {
   // Refresh when the admin switches back to this tab — picks up vendor edits
   // made in another client without requiring a manual reload.
   useRefetchOnFocus(hydrateFromServer)
+
+  // Arc-38c: live-sync this admin's view when another admin (or a back-end
+  // process) mutates any of the 5 catalog tables. Hephaestus added all 5 to
+  // the supabase_realtime publication; we refetch on any change rather than
+  // applying deltas because REPLICA IDENTITY = default(pk).
+  useCatalogRealtime(hydrateFromServer)
 
   // --- Search/filter + Collapse-all (PR #145 admin UX 5-pack) ---
   const [query, setQuery] = useState('')
