@@ -998,12 +998,12 @@ export function CartPage() {
                         <div
                           key={groupId}
                           data-project-summary-products-block
-                          className="rounded-lg bg-background border p-3 space-y-1.5"
+                          className="rounded-lg bg-background border p-3 space-y-1.5 min-w-0"
                         >
                           <p className="text-sm font-semibold text-foreground" data-section-label-source={group ? 'group' : 'fallback'}>
                             {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 min-w-0">
                             {optionIds.map((optId) => {
                               const option = group?.options.find((o) => o.id === optId)
                               const label = option?.label || optId.replace(/_/g, ' ')
