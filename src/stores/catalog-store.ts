@@ -483,87 +483,6 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
   return next
 }
 
-// Ship #261 — union-fill-gaps helper. Takes a services array from any
-// source (server fetch OR persisted-rehydrate) and APPENDS any SERVICE_CATALOG
-// bundled entries whose id is missing. Server/persisted entries win for
-// overlapping ids (admin edits, overrides). Bundled entries fill gaps for
-// newly-added code services that haven''t been propagated to Supabase yet.
-//
-// PR #114 — extended to recurse into optionGroups, options, subGroups, and
-// subOptions. Root cause for A4+A5 walk failures on PR #111: server-side
-// catalog is system-of-record once auth'd, and hydrateFromServer REPLACES the
-// bundled services with the server result. Service-level union-fill caught
-// new bundled services but not new bundled options/groups inside an existing
-// service. So pool_fence (added to existing pool service's addons group) and
-// square_concrete (added to existing pool/pool_floor + driveways/surface)
-// never surfaced for users hydrating from a pre-#111 server snapshot.
-//
-// This is the paired mechanism to persist-version-bump: version-bump forces
-// a one-time migrate, union-fill-gaps ensures the bundled-only entries stay
-// present at every nesting level after subsequent server fetches or persist-
-// rehydrates. Same intent applied at every layer of the tree.
-function unionOptions(
-  serverOptions: ServiceOption[],
-  bundledOptions: ServiceOption[]
-): ServiceOption[] {
-  const seenIds = new Set(serverOptions.map((o) => o.id))
-  const merged = serverOptions.map((o) => {
-    const bundled = bundledOptions.find((b) => b.id === o.id)
-    if (!bundled) return o
-    const serverSubGroups = o.subGroups ?? []
-    const bundledSubGroups = bundled.subGroups ?? []
-    if (serverSubGroups.length === 0 && bundledSubGroups.length === 0) return o
-    return { ...o, subGroups: unionSubGroups(serverSubGroups, bundledSubGroups) }
-  })
-  const missing = bundledOptions.filter((b) => !seenIds.has(b.id))
-  return missing.length > 0 ? [...merged, ...missing] : merged
-}
-
-// Spread order: bundled first, server second. Server fields win on overlap
-// (preserves SOURCE-OF-TRUTH for admin-edited fields), but bundle-only fields
-// (e.g. revealsOn, badge metadata) are preserved when server omits them.
-// Pre-fix variant `{ ...g, options: ... }` stripped bundled fields whenever
-// the server row didn't carry them — surfaced as the house_painting/rooms
-// revealsOn drop on chip-tap render path (apollo PR #154 walk).
-function unionSubGroups(
-  serverSubGroups: OptionGroup[],
-  bundledSubGroups: OptionGroup[]
-): OptionGroup[] {
-  const seenIds = new Set(serverSubGroups.map((sg) => sg.id))
-  const merged = serverSubGroups.map((sg) => {
-    const bundled = bundledSubGroups.find((b) => b.id === sg.id)
-    if (!bundled) return sg
-    return { ...bundled, ...sg, options: unionOptions(sg.options, bundled.options) }
-  })
-  const missing = bundledSubGroups.filter((b) => !seenIds.has(b.id))
-  return missing.length > 0 ? [...merged, ...missing] : merged
-}
-
-function unionOptionGroups(
-  serverGroups: OptionGroup[],
-  bundledGroups: OptionGroup[]
-): OptionGroup[] {
-  const seenIds = new Set(serverGroups.map((g) => g.id))
-  const merged = serverGroups.map((g) => {
-    const bundled = bundledGroups.find((b) => b.id === g.id)
-    if (!bundled) return g
-    return { ...bundled, ...g, options: unionOptions(g.options, bundled.options) }
-  })
-  const missing = bundledGroups.filter((b) => !seenIds.has(b.id))
-  return missing.length > 0 ? [...merged, ...missing] : merged
-}
-
-function unionBundledFillingGaps(services: ServiceConfig[]): ServiceConfig[] {
-  const seenIds = new Set(services.map((s) => s.id))
-  const merged = services.map((s) => {
-    const bundled = SERVICE_CATALOG.find((b) => b.id === s.id)
-    if (!bundled) return s
-    return { ...bundled, ...s, optionGroups: unionOptionGroups(s.optionGroups, bundled.optionGroups) }
-  })
-  const missing = SERVICE_CATALOG.filter((s) => !seenIds.has(s.id))
-  return missing.length > 0 ? [...merged, ...missing] : merged
-}
-
 /* ---------------------------------------------------------------- */
 /* Store                                                             */
 /* ---------------------------------------------------------------- */
@@ -580,16 +499,12 @@ export const useCatalogStore = create<CatalogState>()(
         if (get().isHydrating) return
         set({ isHydrating: true, lastFetchError: null })
         try {
-          const servers = await api.fetchServiceCatalog()
-          // Ship #261 — union bundled + server. Server wins for overlapping
-          // ids (admin edits persist); bundled fills gaps (newly-added code
-          // services surface even when Supabase hasn''t caught up yet).
-          // Root cause: #260 added Blinds to bundled SERVICE_CATALOG but
-          // Supabase services table still had 11 pre-Blinds entries. Users
-          // who hit /admin/products post-#260 got their state wiped of
-          // Blinds when fetch returned 11. Union-fills-gap semantics
-          // prevents recurrence for any future bundle-added service.
-          const services = unionBundledFillingGaps(servers)
+          // Server payload is the sole source of truth — admin add/edit/delete
+          // on /admin/products propagates realtime to the homeowner /quote surface
+          // because nothing locally re-fills the catalog from bundled defaults
+          // after fetch. SERVICE_CATALOG remains only as an offline-bootstrap
+          // fallback (initial state on first load before hydrate fires).
+          const services = await api.fetchServiceCatalog()
           set({ services, hasHydrated: true, isHydrating: false })
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'fetchServiceCatalog failed'
@@ -958,25 +873,14 @@ export const useCatalogStore = create<CatalogState>()(
       // catalogs would render the 5-option roofing list (no aluminum) until
       // re-hydration. Version bump forces migrate() reset to bundled.
       //
-      // Ship — version bump 16→17 one-shot eviction: v16 was bumped
-      // 2026-05-07 BEFORE migration 033 was applied 2026-05-08. Migration
-      // 033 flipped Supabase option_groups.type for roofing.material from
-      // 'single' to 'multi' to match the bundled SERVICE_CATALOG (Ship #255
-      // post-PR-162 alignment). Any client that visited prod between the
-      // v16 deploy and the migration-033 PAT update persisted services.
-      // services with roofing.material.type='single'. On reload,
-      // onRehydrateStorage runs unionBundledFillingGaps which uses
-      // server-wins-on-overlap spread `{...bundled, ...persisted}` —
-      // persisted 'single' beats bundled 'multi' until hydrateFromServer
-      // races the chip-tap renderer. Window of vulnerability surfaces as
-      // single-select chip-tap when user expects multi. Sibling pattern of
-      // Ship #259 (8→9) — same root recurrence because v16 was created
-      // pre-migration-033-application. Version bump forces one-time
-      // migrate() reset to bundled SERVICE_CATALOG (type:'multi' baked in
-      // since Ship #255); subsequent hydrateFromServer re-fetches
-      // post-migration-033 server data which is also type='multi'. Net:
-      // stale clients evict in one reload cycle.
-      version: 17,
+      // Ship — version bump 17→18 paired-edit with Arc-32 union-fill rip:
+      // server payload becomes sole source of truth for admin add/edit/delete
+      // → realtime homeowner propagation. Migrate evicts any persisted state
+      // that may have bundled-fill entries baked in from prior union-merge
+      // semantics; hydrateFromServer re-fetches authoritative catalog on
+      // next load. Initial-state SERVICE_CATALOG bootstrap stays as offline
+      // fallback for cold opens before hydrate fires.
+      version: 18,
       // Persist only the services array and the hasHydrated flag; transient
       // state (isHydrating, lastFetchError) stays in-memory only.
       partialize: (state) => ({
@@ -984,24 +888,11 @@ export const useCatalogStore = create<CatalogState>()(
         hasHydrated: state.hasHydrated,
       }),
       // Migrate resets to bundled SERVICE_CATALOG so existing users get a
-      // clean fallback; hydrateFromServer will overwrite on next auth'd load
-      // via union-fill-gaps (Ship #261).
+      // clean offline-fallback; hydrateFromServer overwrites on next load.
       migrate: () => ({
         services: SERVICE_CATALOG,
         hasHydrated: false,
       }),
-      // Ship #261 — apply union-fill-gaps on persist-rehydrate. If persisted
-      // state lacks any bundled SERVICE_CATALOG entries (because an earlier
-      // hydrateFromServer persisted a server-only subset), append them post-
-      // rehydrate. Silent no-op when persisted state already has all bundled
-      // entries.
-      onRehydrateStorage: () => (state) => {
-        if (!state) return
-        const patched = unionBundledFillingGaps(state.services)
-        if (patched.length !== state.services.length) {
-          state.services = patched
-        }
-      },
     }
   )
 )
