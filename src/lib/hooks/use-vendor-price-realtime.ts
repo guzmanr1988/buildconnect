@@ -24,8 +24,20 @@ export function useVendorPriceRealtime(refetch: () => void) {
       )
     }
     channel.subscribe()
+    // Arc-43 — auth-bootstrap-race re-fire. getVendorPriceMap's session-guard
+    // returns an empty Map when the loader fires before the JWT is attached.
+    // Subscribe to SIGNED_IN/INITIAL_SESSION/TOKEN_REFRESHED so the caller
+    // re-runs once the session resolves; otherwise the empty map stays
+    // memoized and the price columns render Contact-for-quote forever.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session?.user?.id) return
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        refetch()
+      }
+    })
     return () => {
       supabase.removeChannel(channel)
+      authSub?.subscription.unsubscribe()
     }
   }, [refetch])
 }
