@@ -474,6 +474,7 @@ export default function LeadInbox() {
                               projectPermit={sp.projectPermit}
                               showPricing
                               getPrice={getVendorPrice}
+                              resolvedLineItems={sp.priceLineItems}
                             />
                             {/* No-Permit Waiver */}
                             {(sp.item as any).permitWaiver?.acknowledged && (

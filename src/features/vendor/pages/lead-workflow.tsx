@@ -1701,6 +1701,7 @@ export default function VendorLeadWorkflow() {
                     projectPermit={sp.projectPermit}
                     showPricing
                     getPrice={getVendorPrice}
+                    resolvedLineItems={sp.priceLineItems}
                   />
                 )
               })()}
