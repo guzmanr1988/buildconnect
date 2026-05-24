@@ -22,17 +22,50 @@ const CATALOG_TABLES = [
 
 export function useCatalogRealtime(refetchCatalog: () => void) {
   useEffect(() => {
-    const channel = supabase.channel('catalog-changes')
-    for (const table of CATALOG_TABLES) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
-        () => refetchCatalog()
-      )
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    // Arc-32 v2 — auth-await guard for the WS subscribe. The Realtime client
+    // attaches anon claims if subscribe() fires before the user JWT is on the
+    // socket; under RLS-gated catalog tables (auth.role()=authenticated) the
+    // broker then silently drops events even though REST SELECT works. Pull
+    // the session first, push the token onto the Realtime socket via
+    // setAuth(), then subscribe. Sibling-class fix to PR-#378 hydrate-race —
+    // same race, WS surface this time. Mirror of
+    // use-vendor-price-realtime auth-state re-fire pattern.
+    async function subscribe() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      if (cancelled) return
+      supabase.realtime.setAuth(session.access_token)
+      channel = supabase.channel('catalog-changes')
+      for (const table of CATALOG_TABLES) {
+        channel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table },
+          () => refetchCatalog()
+        )
+      }
+      channel.subscribe()
     }
-    channel.subscribe()
+
+    void subscribe()
+
+    // Re-attach on session resolve / refresh so subscribers cold-mounted
+    // before the JWT arrives still pick up events once the session lands.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session?.access_token) return
+      if (event !== 'SIGNED_IN' && event !== 'TOKEN_REFRESHED' && event !== 'INITIAL_SESSION') return
+      supabase.realtime.setAuth(session.access_token)
+      if (!channel) {
+        void subscribe()
+      }
+    })
+
     return () => {
-      supabase.removeChannel(channel)
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+      authSub?.subscription.unsubscribe()
     }
   }, [refetchCatalog])
 }
