@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, ChevronRight, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -1094,255 +1094,323 @@ function DetailRow({
   )
 }
 
-// Photo 314 polish — section-grouped Project Items. Each row is tagged with
-// a category derived from the SERVICE_CATALOG group identity (selections
-// loop) or from a static map (universal/service-specific entries). Render
-// pass groups rows by `section` and emits uppercase-muted headers matching
-// the existing PRICE / PROJECT ITEMS treatment.
-type ProjectItemSection =
-  | 'Service Type'
-  | 'Materials'
-  | 'Repair Materials'
-  | 'Add-Ons'
-  | 'Roof Details'
-  | 'Site Dimensions'
-  | 'Permits'
-  | 'Attachments'
-
-type ProjectItemRow = {
-  section: ProjectItemSection
-  label: string
-  detail?: string
-  // PR-333 — structured chip-attrs for hoist-common-spec detection.
-  // When every row in a section shares the same chip-tuple, the
-  // renderer lifts them to a single section-header row ("All
-  // Windows: Single Hung • White Frame • ...") and omits per-row
-  // chips. If chips diverge, per-row chips render unhoisted.
-  chips?: string[]
-}
-
-const PROJECT_ITEM_SECTION_ORDER: ProjectItemSection[] = [
-  'Service Type',
-  'Materials',
-  'Repair Materials',
-  'Add-Ons',
-  'Roof Details',
-  'Site Dimensions',
-  'Permits',
-  'Attachments',
-]
-
 function humanizeId(id: string): string {
   return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// Group-id → section anchor. SERVICE_CATALOG group identity supplies the
-// natural category boundary; unknown groups fall back to Materials so new
-// catalog additions render somewhere reasonable until categorized.
-function sectionForGroup(groupId: string): ProjectItemSection {
-  switch (groupId) {
-    case 'service_type':
-      return 'Service Type'
-    case 'material':
-    case 'products':
-      return 'Materials'
-    case 'repair_materials':
-      return 'Repair Materials'
-    case 'addons':
-      return 'Add-Ons'
-    default:
-      return 'Materials'
-  }
+// Arc-34b canonical card-grid template — mirrors cart.tsx Project Summary
+// modal sections (windows / doors / garage-doors verbatim). One section
+// per logical category (Service Type / Materials / Add-Ons / etc); one
+// card per selection. Per-service builders below populate SummarySection[]
+// and a single renderer emits the canonical DOM with data-project-summary-*
+// anchors so the apollo walker stays green across all service types.
+type SummarySpec = { variant: 'outline' | 'secondary'; text: string }
+type SummaryCard = {
+  topLabel: string
+  primaryValue?: string
+  specs?: SummarySpec[]
+}
+type SummarySection = {
+  id: string
+  title: string
+  totalLabel?: string
+  cards: SummaryCard[]
 }
 
-function buildProjectItemRows(
+function SummarySectionView({ section }: { section: SummarySection }) {
+  if (section.cards.length === 0) return null
+  return (
+    <div
+      className="rounded-xl border bg-muted/30 p-4 space-y-3"
+      data-project-summary-section={section.id}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-foreground">{section.title}</p>
+        {section.totalLabel && (
+          <span className="text-sm font-bold text-primary">{section.totalLabel}</span>
+        )}
+      </div>
+      <div
+        className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4"
+        data-project-summary-grid
+      >
+        {section.cards.map((c, i) => (
+          <div
+            key={`${c.topLabel}-${i}`}
+            className="rounded-lg bg-background border p-3 space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-base font-bold">{c.topLabel}</span>
+              {c.primaryValue && (
+                <span className="text-base font-bold text-primary">{c.primaryValue}</span>
+              )}
+            </div>
+            {c.specs && c.specs.length > 0 && (
+              <div
+                className="flex flex-wrap gap-1.5 border-t border-border pt-2"
+                data-project-summary-card-specs
+              >
+                {c.specs.map((s, j) => (
+                  <Badge key={j} variant={s.variant} className="text-xs">
+                    {s.text}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Resolve a SERVICE_CATALOG option label by group + option ids. Falls
+// back to humanizeId when the catalog entry is absent (legacy items or
+// post-catalog-rename data).
+function resolveOptionLabel(serviceId: string, groupId: string, optionId: string): string {
+  const service = SERVICE_CATALOG.find((s) => s.id === serviceId)
+  const group = service?.optionGroups.find((g) => g.id === groupId)
+  const option = group?.options.find((o) => o.id === optionId)
+  return option?.label ?? humanizeId(optionId)
+}
+
+function chipsForOption(
   item: CartItem,
-  projectPermit?: 'yes' | 'no',
-): ProjectItemRow[] {
-  const rows: ProjectItemRow[] = []
-  const service = SERVICE_CATALOG.find((s) => s.id === item.serviceId)
-
-  // Universal: humanize selections via SERVICE_CATALOG, attach quantity from
-  // selectionQuantities / addonLinearFt / customSizeSqft. Pure-flag selections
-  // (no quantity) render as label-only. Section assigned by group identity.
-  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
-    const group = service?.optionGroups.find((g) => g.id === groupId)
-    const section = sectionForGroup(groupId)
-    for (const optId of optionIds) {
-      const option = group?.options.find((o) => o.id === optId)
-      const label = option?.label ?? humanizeId(optId)
-
-      const linearFt =
-        item.roofAddonLinearFt?.[optId] ?? item.addonLinearFt?.[optId]
-      const customSqft = item.customSizeSqft?.[optId]
-      const qty = item.selectionQuantities?.[optId]
-
-      let detail: string | undefined
-      if (linearFt !== undefined && linearFt > 0) {
-        detail = `${linearFt.toLocaleString()} ft`
-        if (optId === 'gutters' && item.gutterDropsConfig) {
-          const dc = item.gutterDropsConfig
-          detail += ` (+ ${dc.drops} drop${dc.drops === 1 ? '' : 's'} over ${dc.floors}fl)`
-        }
-      } else if (customSqft !== undefined && customSqft > 0) {
-        detail = `${customSqft.toLocaleString()} sqft`
-      } else if (qty !== undefined && qty > 0) {
-        detail = `Qty: ${qty}`
-      }
-      rows.push({ section, label, detail })
+  optionId: string,
+): SummarySpec[] {
+  const specs: SummarySpec[] = []
+  const linearFt =
+    item.roofAddonLinearFt?.[optionId] ?? item.addonLinearFt?.[optionId]
+  if (linearFt !== undefined && linearFt > 0) {
+    let text = `${linearFt.toLocaleString()} ft`
+    if (optionId === 'gutters' && item.gutterDropsConfig) {
+      const dc = item.gutterDropsConfig
+      text += ` (+${dc.drops} drop${dc.drops === 1 ? '' : 's'} ${dc.floors}fl)`
     }
+    specs.push({ variant: 'outline', text })
   }
+  const sub = item.subGroupLinearFt?.[optionId]
+  if (sub !== undefined && sub > 0) {
+    specs.push({ variant: 'outline', text: `${sub.toLocaleString()} ft` })
+  }
+  const customSqft = item.customSizeSqft?.[optionId]
+  if (customSqft !== undefined && customSqft > 0) {
+    specs.push({ variant: 'outline', text: `${customSqft.toLocaleString()} sqft` })
+  }
+  const qty = item.selectionQuantities?.[optionId]
+  if (qty !== undefined && qty > 0) {
+    specs.push({ variant: 'outline', text: `Qty: ${qty}` })
+  }
+  return specs
+}
 
-  // Universal: satellite-measured area + perimeter (driveway/pergola/pool/fence).
-  if (item.areaSqft !== undefined && item.areaSqft > 0) {
-    rows.push({ section: 'Site Dimensions', label: 'Area', detail: `${item.areaSqft.toLocaleString()} sqft` })
-  }
-  if (item.perimeterFt !== undefined && item.perimeterFt > 0) {
-    rows.push({ section: 'Site Dimensions', label: 'Perimeter', detail: `${item.perimeterFt.toLocaleString()} ft` })
-  }
+// Generic per-group section — one card per selected option, label from
+// SERVICE_CATALOG, chips from linearFt / customSqft / quantity. Used by
+// every service for selection groups not handled by a service-specific
+// builder.
+function genericGroupSection(
+  item: CartItem,
+  groupId: string,
+  sectionId: string,
+  title: string,
+): SummarySection | null {
+  const optionIds = item.selections?.[groupId] ?? []
+  if (optionIds.length === 0) return null
+  const cards: SummaryCard[] = optionIds.map((optId) => ({
+    topLabel: resolveOptionLabel(item.serviceId, groupId, optId),
+    specs: chipsForOption(item, optId),
+  }))
+  return { id: sectionId, title, cards }
+}
 
-  // Service-specific: roofing.
-  if (item.roofMeasurement && item.roofMeasurement.areaSqft > 0) {
-    const m = item.roofMeasurement
-    rows.push({
-      section: 'Roof Details',
-      label: 'Roof Area',
-      detail: `${m.areaSqft.toLocaleString()} sqft`,
-    })
-    rows.push({
-      section: 'Roof Details',
-      label: 'Pitch',
-      detail: m.pitch,
-    })
-  }
-  // Project-level permit: prefer sentProject.projectPermit snapshot; fall
-  // back to legacy per-item roofPermit for entries persisted pre-PR-140.
-  // Permit is project-level not roofing-specific — render the row for any
-  // service when the choice is set. Q1-rename: "Permit pulled (vendor)" to
-  // disambiguate from homeowner-self-attest "Permit required" on lead row.
-  const permitChoice = projectPermit ?? item.roofPermit
-  if (permitChoice) {
-    rows.push({
-      section: 'Permits',
-      label: 'Permit pulled (vendor)',
-      detail: permitChoice === 'yes' ? 'Yes' : 'No',
-    })
-  }
+function buildRoofingSections(item: CartItem): SummarySection[] {
+  const sections: SummarySection[] = []
+  const scope = genericGroupSection(item, 'service_type', 'roofing-scope', 'Scope')
+  if (scope) sections.push(scope)
 
-  // Service-specific: pool addon counts (named keys, not option-id keyed).
-  const addonQty = item.addonQuantities ?? {}
-  const namedAddons: Array<[keyof typeof addonQty, string]> = [
-    ['ledCount', 'LED Lights'],
-    ['bubblerCount', 'Bubblers'],
-    ['laminarJets', 'Laminar Jets'],
-    ['waterfalls', 'Waterfalls'],
-  ]
-  for (const [key, label] of namedAddons) {
-    const n = addonQty[key]
-    if (typeof n === 'number' && n > 0) {
-      rows.push({ section: 'Add-Ons', label, detail: `Qty: ${n}` })
-    }
-  }
-
-  // Service-specific: windows / doors configurator entries — count each line.
-  // PR-333 — split chip-attrs onto row.chips for hoist-common-spec polish.
-  // Identity-key for hoist detection is the SPEC SUBSET (type + frame +
-  // glass + glassType). Size is the per-card discriminator (every
-  // window/door is a different size/location, that's what makes the row
-  // unique) and is rendered into the row label instead — it never
-  // participates in identity-detect, so two windows with the same spec
-  // but different sizes still hoist correctly. Per Rod photo 320 ruling
-  // 2026-05-23 (axis-owner directive via apollo + kratos).
-  const buildConfiguratorChips = (e: { type: string; frameColor: string; glassColor: string; glassType: string }): string[] => {
-    const chips: string[] = []
-    if (e.type) chips.push(humanizeId(e.type))
-    if (e.frameColor) chips.push(`${humanizeId(e.frameColor)} Frame`)
-    if (e.glassColor) chips.push(`${humanizeId(e.glassColor)} Glass`)
-    if (e.glassType) chips.push(humanizeId(e.glassType))
-    return chips
-  }
-  const winSel = item.windowSelections ?? []
-  for (let i = 0; i < winSel.length; i++) {
-    const w = winSel[i]
-    if (w.quantity > 0) {
-      rows.push({
-        section: 'Materials',
-        label: w.size ? `Window ${i + 1} (${w.size})` : `Window ${i + 1}`,
-        detail: `Qty: ${w.quantity}`,
-        chips: buildConfiguratorChips(w),
-      })
-    }
-  }
-  const doorSel = item.doorSelections ?? []
-  for (let i = 0; i < doorSel.length; i++) {
-    const d = doorSel[i]
-    if (d.quantity > 0) {
-      rows.push({
-        section: 'Materials',
-        label: d.size ? `Door ${i + 1} (${d.size})` : `Door ${i + 1}`,
-        detail: `Qty: ${d.quantity}`,
-        chips: buildConfiguratorChips(d),
-      })
-    }
-  }
-
-  // Service-specific: garage door config (single).
-  if (item.garageDoorSelection) {
-    const g = item.garageDoorSelection
-    if (g.type) rows.push({ section: 'Materials', label: 'Garage Door Type', detail: humanizeId(g.type) })
-    if (g.size) rows.push({ section: 'Materials', label: 'Garage Door Size', detail: g.size })
-    if (g.color) rows.push({ section: 'Materials', label: 'Garage Door Color', detail: humanizeId(g.color) })
-    if (g.glass) rows.push({ section: 'Materials', label: 'Garage Door Glass', detail: humanizeId(g.glass) })
-  }
-
-  // Service-specific: metal roof config. Q2 resolved via configurator
-  // source-read — roofSize is in squares (1 square = 100 sqft). Render
-  // singular "1 square" when count === 1.
-  if (item.metalRoofSelection) {
+  // Material card — combine roofMeasurement + per-material selection
+  // (metal/shingle/tile/aluminum/flat) into a single Materials section.
+  const matCards: SummaryCard[] = []
+  if (item.metalRoofSelection?.color) {
     const mr = item.metalRoofSelection
-    if (mr.color) {
-      rows.push({ section: 'Materials', label: 'Metal Roof Color', detail: humanizeId(mr.color) })
-    }
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Color: ${humanizeId(mr.color)}` }]
     if (mr.roofSize) {
       const n = Number(mr.roofSize)
-      const detail = Number.isFinite(n) && n > 0
-        ? `${n.toLocaleString()} square${n === 1 ? '' : 's'}`
-        : mr.roofSize
-      rows.push({ section: 'Materials', label: 'Metal Roof Size', detail })
+      specs.push({
+        variant: 'outline',
+        text: Number.isFinite(n) && n > 0 ? `${n} sq${n === 1 ? '' : 's'}` : mr.roofSize,
+      })
     }
+    matCards.push({ topLabel: 'Standing Seam Metal', specs })
   }
-
-  // Universal: photos count + notes (truncate ~120 chars).
-  const photoCount = item.itemPhotos?.length ?? 0
-  if (photoCount > 0) {
-    rows.push({
-      section: 'Attachments',
-      label: 'Photos',
-      detail: `${photoCount} photo${photoCount === 1 ? '' : 's'} attached`,
+  if (item.shingleSelection?.color) {
+    const sh = item.shingleSelection
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Color: ${humanizeId(sh.color)}` }]
+    if (sh.roofSize) specs.push({ variant: 'outline', text: `${sh.roofSize} sqft` })
+    matCards.push({ topLabel: 'Architectural Shingle', specs })
+  } else if (item.shingleColor) {
+    matCards.push({
+      topLabel: 'Architectural Shingle',
+      specs: [{ variant: 'outline', text: `Color: ${humanizeId(item.shingleColor)}` }],
     })
   }
-  if (item.itemNotes && item.itemNotes.trim().length > 0) {
-    const trimmed = item.itemNotes.trim()
-    const trunc =
-      trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed
-    rows.push({ section: 'Attachments', label: 'Notes', detail: trunc })
+  if (item.tileSelection?.tileType) {
+    const t = item.tileSelection
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Type: ${humanizeId(t.tileType)}` }]
+    if (t.tileColor) specs.push({ variant: 'outline', text: `Color: ${humanizeId(t.tileColor)}` })
+    if (t.roofSize) specs.push({ variant: 'outline', text: `${t.roofSize} sqft` })
+    matCards.push({ topLabel: 'Barrel Tile', specs })
+  }
+  if (item.aluminumSelection?.color) {
+    const a = item.aluminumSelection
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Color: ${humanizeId(a.color)}` }]
+    if (a.roofSize) specs.push({ variant: 'outline', text: `${a.roofSize} sqft` })
+    matCards.push({ topLabel: 'Aluminum', specs })
+  }
+  if (item.flatRoofSelection?.membraneType) {
+    const f = item.flatRoofSelection
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Membrane: ${humanizeId(f.membraneType)}` }]
+    if (f.roofSize) specs.push({ variant: 'outline', text: `${f.roofSize} sqft` })
+    matCards.push({ topLabel: 'Flat Roof', specs })
+  }
+  // Fallback: material group selections without a per-material detail object
+  // (legacy items or partial-config). Render generic option chips so the
+  // material picks still surface.
+  if (matCards.length === 0) {
+    const matSelections = item.selections?.material ?? []
+    for (const optId of matSelections) {
+      matCards.push({
+        topLabel: resolveOptionLabel(item.serviceId, 'material', optId),
+        specs: chipsForOption(item, optId),
+      })
+    }
+  }
+  if (matCards.length > 0) {
+    sections.push({ id: 'roofing-materials', title: 'Materials', cards: matCards })
   }
 
-  return rows
+  // Roof measurement card — area + pitch + perimeter as a dedicated card.
+  if (item.roofMeasurement && item.roofMeasurement.areaSqft > 0) {
+    const m = item.roofMeasurement
+    const specs: SummarySpec[] = [{ variant: 'outline', text: `Pitch: ${m.pitch}` }]
+    if (m.perimeterFt && m.perimeterFt > 0) {
+      specs.push({ variant: 'outline', text: `Perimeter: ${m.perimeterFt.toLocaleString()} ft` })
+    }
+    sections.push({
+      id: 'roofing-measurement',
+      title: 'Roof Measurement',
+      cards: [
+        {
+          topLabel: 'Roof',
+          primaryValue: `${m.areaSqft.toLocaleString()} sqft`,
+          specs,
+        },
+      ],
+    })
+  }
+
+  // Repair materials section (when serviceType=repair).
+  const repair = genericGroupSection(item, 'repair_materials', 'roofing-repair', 'Repair Materials')
+  if (repair) sections.push(repair)
+
+  // Add-ons (gutters / soffit / fascia / insulation / etc).
+  const addons = genericGroupSection(item, 'addons', 'roofing-addons', 'Add-Ons')
+  if (addons) sections.push(addons)
+  return sections
 }
 
-// PR-333 — section identity for the chip-tuple hoist. When every row in a
-// section has the same `chips` array, return that array so the renderer
-// can lift it into a single hoisted header row. Returns null when chips
-// diverge (or when no row carries chips) so the renderer falls back to
-// per-row chip display.
-function hoistedChipsForSection(rows: ProjectItemRow[]): string[] | null {
-  if (rows.length === 0) return null
-  const withChips = rows.filter((r) => r.chips && r.chips.length > 0)
-  if (withChips.length === 0 || withChips.length !== rows.length) return null
-  const sig = JSON.stringify(withChips[0].chips)
-  const allSame = withChips.every((r) => JSON.stringify(r.chips) === sig)
-  return allSame ? (withChips[0].chips ?? null) : null
+function buildPoolSections(item: CartItem): SummarySection[] {
+  const sections: SummarySection[] = []
+  for (const [groupId, label] of [
+    ['service_type', 'Scope'],
+    ['products', 'Materials'],
+    ['addons', 'Add-Ons'],
+  ] as const) {
+    const s = genericGroupSection(item, groupId, `pool-${groupId}`, label)
+    if (s) sections.push(s)
+  }
+  // Named addon counts (LED / bubblers / jets / waterfalls).
+  const aq = item.addonQuantities
+  if (aq) {
+    const namedCards: SummaryCard[] = []
+    const named: Array<[keyof typeof aq, string]> = [
+      ['ledCount', 'LED Lights'],
+      ['bubblerCount', 'Bubblers'],
+      ['laminarJets', 'Laminar Jets'],
+      ['waterfalls', 'Waterfalls'],
+    ]
+    for (const [key, lbl] of named) {
+      const n = aq[key]
+      if (typeof n === 'number' && n > 0) {
+        namedCards.push({ topLabel: lbl, primaryValue: `×${n}` })
+      }
+    }
+    if (namedCards.length > 0) {
+      sections.push({ id: 'pool-feature-counts', title: 'Pool Features', cards: namedCards })
+    }
+  }
+  return sections
+}
+
+function buildGenericServiceSections(item: CartItem): SummarySection[] {
+  // Universal fallback — one section per selections group, one card per
+  // option. Adds a Site Dimensions section for satellite-measured area /
+  // perimeter when present.
+  const sections: SummarySection[] = []
+  const groupOrder = ['service_type', 'material', 'products', 'addons', 'repair_materials']
+  const groupTitles: Record<string, string> = {
+    service_type: 'Scope',
+    material: 'Materials',
+    products: 'Materials',
+    addons: 'Add-Ons',
+    repair_materials: 'Repair Materials',
+  }
+  const allGroupIds = new Set<string>([
+    ...groupOrder,
+    ...Object.keys(item.selections ?? {}),
+  ])
+  const orderedGroups: string[] = [
+    ...groupOrder.filter((g) => allGroupIds.has(g)),
+    ...Array.from(allGroupIds).filter((g) => !groupOrder.includes(g)),
+  ]
+  for (const groupId of orderedGroups) {
+    const title = groupTitles[groupId] ?? humanizeId(groupId)
+    const s = genericGroupSection(item, groupId, `generic-${groupId}`, title)
+    if (s) sections.push(s)
+  }
+  // Site dimensions card for satellite-measured services.
+  const dimCards: SummaryCard[] = []
+  if (item.areaSqft !== undefined && item.areaSqft > 0) {
+    dimCards.push({ topLabel: 'Area', primaryValue: `${item.areaSqft.toLocaleString()} sqft` })
+  }
+  if (item.perimeterFt !== undefined && item.perimeterFt > 0) {
+    dimCards.push({ topLabel: 'Perimeter', primaryValue: `${item.perimeterFt.toLocaleString()} ft` })
+  }
+  if (item.structureMeasurements) {
+    for (const [optId, sm] of Object.entries(item.structureMeasurements)) {
+      if (sm.sqft > 0) {
+        dimCards.push({
+          topLabel: resolveOptionLabel(item.serviceId, 'products', optId),
+          primaryValue: `${sm.sqft.toLocaleString()} sqft`,
+        })
+      }
+    }
+  }
+  if (dimCards.length > 0) {
+    sections.push({ id: 'site-dimensions', title: 'Site Dimensions', cards: dimCards })
+  }
+  return sections
+}
+
+function buildServiceSections(item: CartItem): SummarySection[] {
+  switch (item.serviceId) {
+    case 'roofing':
+      return buildRoofingSections(item)
+    case 'pool':
+      return buildPoolSections(item)
+    default:
+      return buildGenericServiceSections(item)
+  }
 }
 
 function ProjectItemsList({
@@ -1352,103 +1420,58 @@ function ProjectItemsList({
   item: CartItem
   projectPermit?: 'yes' | 'no'
 }) {
-  const rows = buildProjectItemRows(item, projectPermit)
-  // PR-333 — folder-pattern collapse per section. Default-expanded so
-  // scannability matches pre-photo-320 behavior; tap section header to
-  // toggle. Keyed by ProjectItemSection so state survives between rows
-  // without touching parent state shape.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  if (rows.length === 0) return null
+  const sections = buildServiceSections(item)
 
-  const grouped = new Map<ProjectItemSection, ProjectItemRow[]>()
-  for (const row of rows) {
-    const bucket = grouped.get(row.section) ?? []
-    bucket.push(row)
-    grouped.set(row.section, bucket)
+  // Permits — universal, surfaces project-level snapshot or legacy
+  // per-item roofPermit. Rendered as a chip card so it matches the
+  // canonical card-grid template.
+  const permitChoice = projectPermit ?? item.roofPermit
+  if (permitChoice) {
+    sections.push({
+      id: 'permits',
+      title: 'Permits',
+      cards: [
+        {
+          topLabel: 'Permit pulled (vendor)',
+          specs: [
+            {
+              variant: permitChoice === 'yes' ? 'secondary' : 'outline',
+              text: permitChoice === 'yes' ? 'Yes' : 'No',
+            },
+          ],
+        },
+      ],
+    })
   }
 
+  // Attachments — photos count + notes (truncated). Universal.
+  const attachCards: SummaryCard[] = []
+  const photoCount = item.itemPhotos?.length ?? 0
+  if (photoCount > 0) {
+    attachCards.push({
+      topLabel: 'Photos',
+      primaryValue: `×${photoCount}`,
+    })
+  }
+  if (item.itemNotes && item.itemNotes.trim().length > 0) {
+    const trimmed = item.itemNotes.trim()
+    const trunc = trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed
+    attachCards.push({
+      topLabel: 'Notes',
+      specs: [{ variant: 'outline', text: trunc }],
+    })
+  }
+  if (attachCards.length > 0) {
+    sections.push({ id: 'attachments', title: 'Attachments', cards: attachCards })
+  }
+
+  if (sections.length === 0) return null
+
   return (
-    <div className="flex flex-col gap-4" data-project-items-grid>
-      {PROJECT_ITEM_SECTION_ORDER.map((section) => {
-        const sectionRows = grouped.get(section)
-        if (!sectionRows || sectionRows.length === 0) return null
-        const hoisted = hoistedChipsForSection(sectionRows)
-        const isCollapsed = collapsed[section] === true
-        return (
-          <div
-            key={section}
-            className="flex flex-col gap-1.5"
-            data-project-items-section={section}
-          >
-            <button
-              type="button"
-              className="flex items-center gap-1.5 self-start text-left"
-              onClick={() => setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }))}
-              aria-expanded={!isCollapsed}
-              data-project-items-section-toggle
-            >
-              <ChevronRight
-                className={cn(
-                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
-                  !isCollapsed && 'rotate-90',
-                )}
-              />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {section}
-                {sectionRows.length > 1 && (
-                  <span className="ml-1 text-muted-foreground/70">({sectionRows.length})</span>
-                )}
-              </p>
-            </button>
-            {!isCollapsed && (
-              <>
-                {hoisted && hoisted.length > 0 && (
-                  <div
-                    className="flex flex-wrap items-center gap-1"
-                    data-project-items-hoisted-chips
-                  >
-                    <span className="text-[11px] text-muted-foreground">All {section.toLowerCase()}:</span>
-                    {hoisted.map((c) => (
-                      <Badge key={c} variant="secondary" className="text-[10px] font-normal">
-                        {c}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <ul className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
-                  {sectionRows.map((r, i) => (
-                    <li
-                      key={`${r.label}-${i}`}
-                      className="contents text-sm"
-                      data-project-items-label-value-pair
-                    >
-                      <div className="flex min-w-0 flex-wrap items-center gap-1">
-                        <span className="text-muted-foreground">{r.label}</span>
-                        {!hoisted && r.chips && r.chips.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {r.chips.map((c) => (
-                              <Badge
-                                key={c}
-                                variant="secondary"
-                                className="text-[10px] font-normal"
-                              >
-                                {c}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <span className="break-words text-right font-medium text-foreground tabular-nums">
-                        {r.detail ?? ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )
-      })}
+    <div className="flex flex-col gap-3" data-project-items-card-grid>
+      {sections.map((s) => (
+        <SummarySectionView key={s.id} section={s} />
+      ))}
     </div>
   )
 }
