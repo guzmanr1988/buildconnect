@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Dialog,
   DialogContent,
@@ -302,6 +303,15 @@ export default function ProductsAdminPage() {
   })
   const [editingSubGroupId, setEditingSubGroupId] = useState<string | null>(null)
   const [subGroupForm, setSubGroupForm] = useState<GroupFormData>(emptyGroupForm)
+  // Arc-38b: the "Add" dialog under an option now has two intents — adding a
+  // priceable item (default; produces a new ServiceOption sibling in the
+  // parent's options[]) or a Group container (current sub-menu OptionGroup,
+  // empty on create + items added inside afterward). Rod hit the trap of
+  // tapping "+ Sub-Menu" 4x to add plywood/MDF/etc as 4 empty containers
+  // instead of one Material sub-group with 4 priceable items inside; defaulting
+  // the radio to 'option' nudges priceable-first.
+  const [subGroupKind, setSubGroupKind] = useState<'option' | 'group'>('option')
+  const [subGroupOptionPriceUnit, setSubGroupOptionPriceUnit] = useState<PriceUnit>('flat')
 
   // --- Sub-option dialog ---
   const [subOptionDialogOpen, setSubOptionDialogOpen] = useState(false)
@@ -554,6 +564,8 @@ export default function ProductsAdminPage() {
     setSubGroupContext({ serviceId, groupId, optionId })
     setEditingSubGroupId(null)
     setSubGroupForm(emptyGroupForm)
+    setSubGroupKind('option')
+    setSubGroupOptionPriceUnit('flat')
     setSubGroupDialogOpen(true)
   }
 
@@ -572,10 +584,36 @@ export default function ProductsAdminPage() {
       required: subGroup.required,
       type: subGroup.type,
     })
+    setSubGroupKind('group')
     setSubGroupDialogOpen(true)
   }
 
   async function handleSaveSubGroup() {
+    // Arc-38b: priceable-item path branches before the sub-menu validation.
+    // The user picked "Priceable item" radio → save as a new ServiceOption
+    // added to the parent group's options[] (sibling of the option whose
+    // "+ Add" button was tapped). Editing always uses the sub-menu path.
+    if (!editingSubGroupId && subGroupKind === 'option') {
+      const parentSvc = services.find((s) => s.id === subGroupContext.serviceId)
+      const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subGroupContext.groupId)
+      if (parentGroup?.options.some((o) => o.id === subGroupForm.id)) {
+        toast.error(`Option ID "${subGroupForm.id}" already exists in this group. Choose a different ID.`)
+        return
+      }
+      try {
+        await addOption(subGroupContext.serviceId, subGroupContext.groupId, {
+          id: subGroupForm.id,
+          label: subGroupForm.label,
+          description: subGroupForm.description.trim() || undefined,
+          priceUnit: subGroupOptionPriceUnit,
+        })
+        setSubGroupDialogOpen(false)
+      } catch (err) {
+        toast.error(formatCatalogError(err, 'Save failed'))
+      }
+      return
+    }
+
     if (!editingSubGroupId) {
       const parentSvc = services.find((s) => s.id === subGroupContext.serviceId)
       const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subGroupContext.groupId)
@@ -1129,7 +1167,7 @@ export default function ProductsAdminPage() {
                                         onClick={() => openAddSubGroup(service.id, group.id, opt.id)}
                                       >
                                         <Plus className="h-2.5 w-2.5" />
-                                        Sub-Menu
+                                        Add
                                       </Button>
                                       <Button
                                         variant="ghost"
@@ -1641,32 +1679,69 @@ export default function ProductsAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ---- Sub-Group Dialog ---- */}
+      {/* ---- Sub-Group / Priceable Item Dialog ---- */}
       <Dialog open={subGroupDialogOpen} onOpenChange={setSubGroupDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingSubGroupId ? 'Edit Sub-Menu' : 'Add Sub-Menu'}</DialogTitle>
+            <DialogTitle>
+              {editingSubGroupId
+                ? 'Edit Sub-Menu'
+                : subGroupKind === 'option'
+                  ? 'Add Priceable Item'
+                  : 'Add Sub-Menu'}
+            </DialogTitle>
             <DialogDescription>
-              {editingSubGroupId ? 'Update the sub-menu label, required, and selection type.' : 'Create a new sub-menu group under this option.'}
+              {editingSubGroupId
+                ? 'Update the sub-menu label, required, and selection type.'
+                : subGroupKind === 'option'
+                  ? 'Adds a priceable item under this option.'
+                  : 'Creates an empty container; add items inside afterward.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {!editingSubGroupId && (
-            <div className="space-y-1.5">
-              <Label htmlFor="subgrp-id">Sub-Menu ID (snake_case)</Label>
-              <Input
-                id="subgrp-id"
-                placeholder="e.g. color_options"
-                value={subGroupForm.id}
-                onChange={(e) => setSubGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label>What are you adding?</Label>
+                <RadioGroup
+                  value={subGroupKind}
+                  onValueChange={(v) => setSubGroupKind((v as 'option' | 'group') ?? 'option')}
+                  className="gap-2"
+                >
+                  <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/50 data-[checked=true]:border-primary" data-checked={subGroupKind === 'option'}>
+                    <RadioGroupItem value="option" className="mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Priceable item</span>
+                      <span className="text-xs text-muted-foreground">A single item with its own price (most common).</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/50 data-[checked=true]:border-primary" data-checked={subGroupKind === 'group'}>
+                    <RadioGroupItem value="group" className="mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Sub-menu (group container)</span>
+                      <span className="text-xs text-muted-foreground">A category that holds multiple priceable items.</span>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+            )}
+            {!editingSubGroupId && (
+              <div className="space-y-1.5">
+                <Label htmlFor="subgrp-id">
+                  {subGroupKind === 'option' ? 'Item ID (snake_case)' : 'Sub-Menu ID (snake_case)'}
+                </Label>
+                <Input
+                  id="subgrp-id"
+                  placeholder={subGroupKind === 'option' ? 'e.g. plywood' : 'e.g. color_options'}
+                  value={subGroupForm.id}
+                  onChange={(e) => setSubGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
+                />
+              </div>
             )}
             <div className="space-y-1.5">
               <Label htmlFor="subgrp-label">Label</Label>
               <Input
                 id="subgrp-label"
-                placeholder="Color Options"
+                placeholder={subGroupKind === 'option' && !editingSubGroupId ? 'Plywood' : 'Color Options'}
                 value={subGroupForm.label}
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, label: e.target.value }))}
               />
@@ -1676,35 +1751,68 @@ export default function ProductsAdminPage() {
               <Textarea
                 id="subgrp-description"
                 data-testid="admin-sub-menu-description-input"
-                placeholder="What the homeowner sees under this sub-menu — e.g. 'Choose a cabinet material.'"
+                placeholder={
+                  subGroupKind === 'option' && !editingSubGroupId
+                    ? "Optional details vendors and homeowners see — e.g. 'Standard cabinet material.'"
+                    : "What the homeowner sees under this sub-menu — e.g. 'Choose a cabinet material.'"
+                }
                 value={subGroupForm.description}
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Selection Type</Label>
-              <Select
-                value={subGroupForm.type}
-                onValueChange={(v) => setSubGroupForm((f) => ({ ...f, type: v as 'single' | 'multi' }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">Single Select</SelectItem>
-                  <SelectItem value="multi">Multi Select</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="subgrp-required"
-                checked={subGroupForm.required}
-                onCheckedChange={(v) => setSubGroupForm((f) => ({ ...f, required: !!v }))}
-              />
-              <Label htmlFor="subgrp-required" className="text-sm font-normal">Required</Label>
-            </div>
+            {(editingSubGroupId || subGroupKind === 'group') && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Selection Type</Label>
+                  <Select
+                    value={subGroupForm.type}
+                    onValueChange={(v) => setSubGroupForm((f) => ({ ...f, type: v as 'single' | 'multi' }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Single Select</SelectItem>
+                      <SelectItem value="multi">Multi Select</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="subgrp-required"
+                    checked={subGroupForm.required}
+                    onCheckedChange={(v) => setSubGroupForm((f) => ({ ...f, required: !!v }))}
+                  />
+                  <Label htmlFor="subgrp-required" className="text-sm font-normal">Required</Label>
+                </div>
+              </>
+            )}
+            {!editingSubGroupId && subGroupKind === 'option' && (
+              <div className="space-y-1.5">
+                <Label>Pricing Unit</Label>
+                <Select
+                  value={subGroupOptionPriceUnit}
+                  onValueChange={(v) => setSubGroupOptionPriceUnit(v as PriceUnit)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      <span>{PRICE_UNIT_OPTIONS.find((p) => p.value === subGroupOptionPriceUnit)?.label ?? 'Flat ($)'}</span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRICE_UNIT_OPTIONS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        <div className="flex flex-col">
+                          <span className="text-sm">{p.label}</span>
+                          <span className="text-xs text-muted-foreground">{p.helper}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubGroupDialogOpen(false)}>
@@ -1714,7 +1822,11 @@ export default function ProductsAdminPage() {
               onClick={handleSaveSubGroup}
               disabled={!subGroupForm.label || (!editingSubGroupId && !subGroupForm.id)}
             >
-              {editingSubGroupId ? 'Save Changes' : 'Create Sub-Menu'}
+              {editingSubGroupId
+                ? 'Save Changes'
+                : subGroupKind === 'option'
+                  ? 'Add Item'
+                  : 'Create Sub-Menu'}
             </Button>
           </DialogFooter>
         </DialogContent>
