@@ -11,6 +11,7 @@ import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { getOptionMetadata } from '@/lib/option-metadata'
 import { cn } from '@/lib/utils'
+import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
 
 export default function VendorCatalog() {
   const adminServices = useCatalogStore((s) => s.services)
@@ -246,96 +247,17 @@ export default function VendorCatalog() {
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           {group.label}
                         </p>
-                        <div className="flex flex-col gap-1.5">
-                          {group.options.map((option) => {
-                            const optEnabled = isOptionEnabled(service.id, group.id, option.id)
-                            const price = getPrice(service.id, option.id)
-
-                            return (
-                              <div
-                                key={option.id}
-                                data-option-id={option.id}
-                                data-group-id={group.id}
-                                className={cn(
-                                  'flex items-center justify-between gap-3 rounded-lg border p-2.5 transition',
-                                  optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
-                                )}
-                              >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); toggleOption(service.id, group.id, option.id) }}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    className={cn(
-                                      'flex h-5 w-5 items-center justify-center rounded border shrink-0 transition',
-                                      optEnabled
-                                        ? 'bg-primary border-primary text-white'
-                                        : 'border-muted-foreground/30'
-                                    )}
-                                  >
-                                    {optEnabled && <Check className="h-3 w-3" />}
-                                  </button>
-                                  <span className={cn(
-                                    'text-lg truncate',
-                                    optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
-                                  )}>
-                                    {option.label}
-                                  </span>
-                                </div>
-                                {optEnabled && (
-                                  <div
-                                    className="flex flex-col items-end gap-1 shrink-0"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="flex items-center gap-1.5">
-                                      <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-                                      <Input
-                                        aria-label={`Price for ${option.label}`}
-                                        type="number"
-                                        value={price || ''}
-                                        onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
-                                        placeholder="0"
-                                        className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
-                                      />
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'square' && (
-                                        <div className="flex flex-col">
-                                          <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
-                                          <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
-                                        </div>
-                                      )}
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'sqft' && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
-                                      )}
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'linear_ft' && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
-                                      )}
-                                      {/* Top-level options can also opt into dual-pricing via
-                                          OPTION_METADATA.supportsPercentMarkup. Currently only
-                                          sub-options carry the flag (low_e + casement), but if a
-                                          future top-level option is flagged, the UX is ready. */}
-                                      {getOptionMetadata(option.id, service.id, option).supportsPercentMarkup && (
-                                        <>
-                                          <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
-                                          <Input
-                                            aria-label={`Percent markup for ${option.label}`}
-                                            type="number"
-                                            value={getPricePercent(service.id, option.id) || ''}
-                                            onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
-                                            placeholder="0"
-                                            className="h-10 w-20 text-base text-right md:h-12 md:w-28 md:text-lg md:px-4"
-                                          />
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
+                        <VendorCatalogOptionsCardGrid
+                          serviceId={service.id}
+                          groupId={group.id}
+                          options={group.options}
+                          isOptionEnabled={isOptionEnabled}
+                          getPrice={getPrice}
+                          getPricePercent={getPricePercent}
+                          onToggle={toggleOption}
+                          onPriceChange={setPrice}
+                          onPricePercentChange={setPricePercent}
+                        />
 
                         {/* Sub-groups for options that have them */}
                         {group.options.filter(o => o.subGroups && o.subGroups.length > 0 && isOptionEnabled(service.id, group.id, o.id)).map((option) => (
