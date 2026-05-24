@@ -11,6 +11,8 @@ import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useCartStore } from '@/stores/cart-store'
+import { useCatalogStore } from '@/stores/catalog-store'
+import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -32,6 +34,14 @@ export function HomeownerLayout() {
   const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
+
+  // Arc-32 — read-side catalog realtime. Admin/products + vendor/catalog
+  // already mount this; homeowner side relied on the one-shot AuthBootstrap
+  // hydrate, so admin edits didn't propagate until reload. Layout-level mount
+  // covers every /home/* route via Outlet; RequireRole=homeowner gates double-
+  // subscribe with admin/vendor sessions.
+  const refetchCatalog = useCatalogStore((s) => s.hydrateFromServer)
+  useCatalogRealtime(refetchCatalog)
 
   // Ship #262 / #265 — blinking indicator on Projects nav. Rodolfo-direct
   // task_1776795590596_638 (2026-04-21). Initial #262 only counted
