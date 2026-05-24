@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
-import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, priceKey } from '@/lib/api/pricing'
+import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionPriceKey } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
@@ -112,7 +112,7 @@ async function buildRoofingLineItems(
     // customer-facing breakdown per Rodolfo: "There is no replace cost just material"
     if (groupId === 'service_type') continue
     for (const optionId of optionIds) {
-      const key = priceKey('roofing', groupId, optionId)
+      const key = resolveOptionPriceKey(services, 'roofing', groupId, optionId, priceMap)
       const priceCents = priceMap.get(key)
       if (priceCents === undefined) continue
 

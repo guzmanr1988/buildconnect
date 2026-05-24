@@ -77,6 +77,47 @@ export function subOptionPriceKey(
   return `subopt:${serviceId}|${groupId}|${optionId}|${subOptionId}`
 }
 
+// Arc-32 close — cart-side selections are keyed by group.id on most paths,
+// but some toggle paths write selections[optionId] = [optionId] (collapsing
+// group + option to the same string). DB option_groups.group_id is then
+// distinct from the cart's stored key, priceMap.get(directKey) misses, and
+// the homeowner Compare page surfaces "Some services unpriced" even when
+// the vendor has explicitly priced the option.
+//
+// Strategy: try the cart's directKey first (preserves back-compat for
+// correctly-keyed cart writes), and on miss walk services[serviceId]
+// .optionGroups[*].options[*] to find the canonical group.id for optionId.
+// If exactly one group owns the optionId, retry with the resolved key.
+// If multiple groups own the same optionId within a service (soft-convention
+// violation — should never happen but cheap to defend), return the direct
+// key + console.warn so the bug surfaces in dev logs rather than mis-pricing.
+export function resolveOptionPriceKey(
+  services: ServiceConfig[] | undefined,
+  serviceId: string,
+  cartGroupId: string,
+  optionId: string,
+  priceMap: VendorPriceMap,
+): string {
+  const directKey = priceKey(serviceId, cartGroupId, optionId)
+  if (priceMap.has(directKey)) return directKey
+  if (!services) return directKey
+  const service = services.find((s) => s.id === serviceId)
+  if (!service) return directKey
+  const matchedGroupIds: string[] = []
+  for (const g of service.optionGroups ?? []) {
+    if ((g.options ?? []).some((o) => o.id === optionId)) {
+      matchedGroupIds.push(g.id)
+    }
+  }
+  if (matchedGroupIds.length === 0) return directKey
+  if (matchedGroupIds.length > 1) {
+    console.warn('[pricing] resolveOptionPriceKey ambiguous — multiple groups contain optionId; falling back to direct key', { serviceId, optionId, matchedGroupIds })
+    return directKey
+  }
+  const resolvedKey = priceKey(serviceId, matchedGroupIds[0], optionId)
+  return priceMap.has(resolvedKey) ? resolvedKey : directKey
+}
+
 export async function getVendorPriceMap(vendorUuid: string): Promise<VendorPriceMap> {
   // Arc-43 — auth-bootstrap-race guard. vendor_option_prices + vendor_sub_option_prices
   // RLS gates SELECT on authenticated role. /homeowner/vendor-compare and
@@ -208,7 +249,7 @@ export function computeVendorTotal(
       if (item.serviceId === 'roofing' && groupId === 'service_type') continue
       hasSelections = true
       for (const optionId of optionIds) {
-        const key = priceKey(item.serviceId, groupId, optionId)
+        const key = resolveOptionPriceKey(services, item.serviceId, groupId, optionId, priceMap)
         const basePrice = priceMap.get(key)
         if (basePrice === undefined) {
           missing.push(key)
