@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
@@ -25,6 +24,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorLeadStages, LEAD_STAGES, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
 import type { LeadStageKey, LeadExt } from '@/lib/vendor-lead-stages'
 import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
+import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
@@ -1251,123 +1251,27 @@ export default function VendorLeadWorkflow() {
                 </div>
               </div>
 
-              {/* Roof Measurements, No-Permit Waiver, Roof Add-ons */}
+              {/* No-Permit Waiver — vendor-only legal artifact, KEPT in
+                  left col (Arc-35: configurator selections moved to the
+                  full-width ProjectItemsCardGrid below the 2-col grid). */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                if (!sp) return null
-                const rm = sp.item?.roofMeasurement
-                const waiver = (sp.item as any)?.permitWaiver
-                const addons = sp.item?.roofAddonLinearFt
+                const waiver = (sp?.item as any)?.permitWaiver
+                if (!waiver?.acknowledged) return null
                 return (
-                  <>
-                    {rm && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Measurements</p>
-                        <div className="space-y-1 text-sm">
-                          {(rm.includeMaterialOrder ?? true) && rm.pitchedAreaSqft != null && (rm.pitchedAreaSqft ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Pitched area</span>
-                              <span className="font-medium">{rm.pitchedAreaSqft.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && (rm.includeFlatArea ?? true) && (rm.flatAreaSqft ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Flat area</span>
-                              <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Total</span>
-                              <span className="font-medium">{rm.areaSqft.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && rm.pitch && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Pitch</span>
-                              <span className="font-medium">{rm.pitch}</span>
-                            </div>
-                          )}
-                          {(rm.includePerimeter ?? true) && (rm.perimeterFt ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Perimeter</span>
-                              <span className="font-medium">{rm.perimeterFt!.toLocaleString()} ft</span>
-                            </div>
-                          )}
-                        </div>
+                  <div className="rounded-lg border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">No-Permit Waiver</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-800/70 dark:text-amber-200/70">Signed by</span>
+                        <span className="font-medium text-amber-900 dark:text-amber-100">{waiver.signedName}</span>
                       </div>
-                    )}
-                    {waiver?.acknowledged && (
-                      <div className="rounded-lg border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">No-Permit Waiver</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed by</span>
-                            <span className="font-medium text-amber-900 dark:text-amber-100">{waiver.signedName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed at</span>
-                            <span className="font-medium text-amber-900 dark:text-amber-100">{new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-800/70 dark:text-amber-200/70">Signed at</span>
+                        <span className="font-medium text-amber-900 dark:text-amber-100">{new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </div>
-                    )}
-                    {addons && Object.keys(addons).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Add-ons</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(addons).map(([key, ft]) => {
-                            const isGutters = key === 'gutters'
-                            const cfg = sp.item?.gutterDropsConfig
-                            const totalFt = isGutters ? computeGutterTotalLinFt(ft, cfg) : ft
-                            const showBreakdown = isGutters && !!cfg
-                            const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[cfg!.floors] : 0
-                            const drops = cfg?.drops ?? 0
-                            const floorsLabel = cfg?.floors === 1 ? '1-story' : '2-story'
-                            return (
-                              <div key={key} className="flex flex-col">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                  <span className="font-medium">{totalFt.toLocaleString()} ft</span>
-                                </div>
-                                {showBreakdown && (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {sp.item?.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Custom-size measurements</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
-                            <div key={key} className="flex items-center justify-between">
-                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="font-medium">{sqft.toLocaleString()} sqft</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {sp.item?.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Linear-ft add-ons</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
-                            <div key={key} className="flex items-center justify-between">
-                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="font-medium">{ft.toLocaleString()} ft</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                    </div>
+                  </div>
                 )
               })()}
 
@@ -1395,35 +1299,10 @@ export default function VendorLeadWorkflow() {
                   (PC uses column-gap to separate the info/ops sides). */}
               <Separator className="sm:hidden" />
 
-              {/* Ship #332 — Selections section (PC-only). Mobile keeps
-                  the chips inside the LEFT Project section (rendered
-                  inline below for mobile via a sibling sm:hidden block
-                  inside the Project section). On PC the chips render
-                  here so the right column has visual mass to balance
-                  the left column for confirmed/rejected/cancelled
-                  states (was 16/6 imbalance). */}
-              {(() => {
-                const selectionChips = Object.values(selected.pack_items ?? {})
-                  .flat()
-                  .filter((s) => s !== 'permit' && s !== 'financed' && s !== 'financing')
-                if (selectionChips.length === 0) return null
-                return (
-                  <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Selections</p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {selectionChips.map((s) => (
-                        <Badge
-                          key={s}
-                          variant="secondary"
-                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20"
-                        >
-                          {s.replace(/_/g, ' ')}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* Arc-35: Selections chips REPLACED by full-width
+                  ProjectItemsCardGrid below the 2-col grid (per-card
+                  pricing + section $Total badges supersede the flat
+                  Selections chips). */}
 
               {/* Pricing Breakdown — strict render: only when sp.priceLineItems is
                   populated at sendProject time. No PRESETS fallback, no reconciliation,
@@ -1810,6 +1689,21 @@ export default function VendorLeadWorkflow() {
               </div>
               </div>
               </div>
+              {/* Arc-35: Full-width per-card configurator selections grid
+                  with vendor per-unit catalog pricing + section $Total
+                  badges. Shared component mirrors appointment-status. */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp?.item) return null
+                return (
+                  <ProjectItemsCardGrid
+                    item={sp.item}
+                    projectPermit={sp.projectPermit}
+                    showPricing
+                    getPrice={getVendorPrice}
+                  />
+                )
+              })()}
             </div>
           )}
         </DialogContent>
