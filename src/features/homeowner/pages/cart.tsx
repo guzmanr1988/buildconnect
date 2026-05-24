@@ -1108,6 +1108,37 @@ export function CartPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Garage Door selection — single card (gd is 1 selection not array). */}
+                  {viewItem.garageDoorSelection?.type && (
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="garage-doors">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-foreground">Garage Door</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                        <div className="rounded-lg bg-background border p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-base font-bold">
+                              {viewItem.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                            </span>
+                          </div>
+                          {((viewItem.garageDoorSelection.type === 'double_garage' && viewItem.garageDoorSelection.size) || viewItem.garageDoorSelection.color || viewItem.garageDoorSelection.glass) && (
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                              {viewItem.garageDoorSelection.type === 'double_garage' && viewItem.garageDoorSelection.size && (
+                                <Badge variant="outline" className="text-xs">{viewItem.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                              )}
+                              {viewItem.garageDoorSelection.color && (
+                                <Badge variant="outline" className="text-xs">Color: {viewItem.garageDoorSelection.color.charAt(0).toUpperCase() + viewItem.garageDoorSelection.color.slice(1)}</Badge>
+                              )}
+                              {viewItem.garageDoorSelection.glass && (
+                                <Badge variant="outline" className="text-xs">Glass: {viewItem.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button
