@@ -252,31 +252,53 @@ export function VendorComparePage() {
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
           const isApex = vendor.id === APEX_REAL_UUID
-          // Availability-gap: Apex priced some-but-not-all cart services.
-          // computeVendorTotal already excludes missingOptionKeys from totalCents,
-          // so result.totalCents IS the deducted total. Surface the gap to the
-          // homeowner with a badge + small-letters note instead of hiding Apex
-          // or showing "Contact for quote".
+          // Arc-32 close — vendor offers a cart-service when its profile toggles
+          // Active for the category (vendor.service_categories) OR at least one
+          // priced VOP/VSOP row exists for that vendor+service. Vendor-offers
+          // gates the availability-gap UX: when the vendor offers EVERY
+          // cart-service, partial pricing is informational (show the total, no
+          // gap-badge, no IWD line-through). True-gap = at least one
+          // cart-service has neither Active toggle nor any priced row.
+          const offeredServices = new Set<string>(vendor.service_categories ?? [])
+          const vendorPriceMap = priceMaps[vendor.id]
+          if (vendorPriceMap) {
+            for (const key of vendorPriceMap.keys()) {
+              const m = key.match(/^(?:opt|subopt):([^|]+)\|/)
+              if (m) offeredServices.add(m[1])
+            }
+          }
+          const vendorOffersAllCartServices =
+            cartCategories.size === 0
+            || [...cartCategories].every((sid) => offeredServices.has(sid))
+          // Availability-gap: Apex priced some-but-not-all cart services AND
+          // does NOT offer at least one of the unpriced services. Vendor-offers
+          // suppresses the badge so Active-toggle-on + partial-row-pricing
+          // shows a clean total. computeVendorTotal already excludes
+          // missingOptionKeys from totalCents (per-row total preserved).
           const apexHasGap =
             isApex &&
             !!result &&
             result.hasSelections &&
+            !vendorOffersAllCartServices &&
             (!result.coversAllServices
               || result.missingOptionKeys.length > 0
               || result.missingSubOptionKeys.length > 0) &&
             result.totalCents > 0
           // Arc-42 — priceKey/subOptionPriceKey carry an 'opt:'/'subopt:' prefix
           // post-Arc-41; strip before splitting so services.find() resolves the
-          // raw service id (not 'opt:windows_doors').
+          // raw service id (not 'opt:windows_doors'). Arc-32 close — filter to
+          // services Apex does NOT offer (true gap-services only).
           const gapServiceNames = apexHasGap
             ? Array.from(
                 new Set(
                   [...result.missingOptionKeys, ...result.missingSubOptionKeys]
                     .map((k) => k.replace(/^(opt|subopt):/, '').split('|')[0]),
                 ),
-              ).map(
-                (sid) => services.find((s) => s.id === sid)?.name ?? sid,
               )
+                .filter((sid) => !offeredServices.has(sid))
+                .map(
+                  (sid) => services.find((s) => s.id === sid)?.name ?? sid,
+                )
             : []
 
           // Decide what to render in the Price slot.
@@ -289,6 +311,12 @@ export function VendorComparePage() {
             priceText = 'Configure to see price'
             priceTone = 'muted'
           } else if (apexHasGap) {
+            priceText = formatPriceCents(result.totalCents)
+            priceTone = 'strong'
+          } else if (isApex && vendorOffersAllCartServices && result.totalCents > 0) {
+            // Apex offers every cart-service (Active toggle OR any priced row)
+            // but some sub-options unpriced → show partial total clean (no
+            // gap-badge, no "Contact for quote").
             priceText = formatPriceCents(result.totalCents)
             priceTone = 'strong'
           } else if (
@@ -380,7 +408,7 @@ export function VendorComparePage() {
                   <div
                     className="rounded-lg bg-muted/50 p-3"
                     data-vendor-price={result?.totalCents ?? 0}
-                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
+                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : isApex && vendorOffersAllCartServices && (result?.totalCents ?? 0) > 0 ? 'quoted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">Price</p>
@@ -438,7 +466,12 @@ export function VendorComparePage() {
                     // Apex availability-gap exception: when Apex prices a subset,
                     // homeowner can still book against the deducted total; the
                     // unpriced services are surfaced via the gap badge + note.
-                    const unconfigured = result != null && result.hasSelections && !result.coversAllServices && !apexHasGap
+                    const unconfigured =
+                      result != null
+                      && result.hasSelections
+                      && !result.coversAllServices
+                      && !apexHasGap
+                      && !(isApex && vendorOffersAllCartServices && result.totalCents > 0)
                     const btn = (
                       <Button
                         size="lg"
