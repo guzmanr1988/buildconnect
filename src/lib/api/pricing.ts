@@ -8,7 +8,16 @@ import {
   FLAT_WASTE_FACTOR,
 } from '@/lib/roof-pricing'
 import { applyAreaWaste } from '@/lib/area-waste'
-import type { CartItem } from '@/stores/cart-store'
+import {
+  WINDOW_TYPE_IDS,
+  DOOR_TYPE_IDS,
+  FRAME_COLOR_IDS,
+  GLASS_COLOR_IDS,
+  GLASS_TYPE_IDS,
+  STORM_FRONT_TYPE_IDS,
+  STORM_FRONT_SIZE_IDS,
+} from '@/lib/configurator-catalog-price'
+import type { CartItem, ConfiguratorEntry } from '@/stores/cart-store'
 import type { ServiceConfig } from '@/types'
 
 /*
@@ -146,7 +155,11 @@ export function getPermitForItem(item: CartItem, permitMap: VendorPermitMap): nu
 export type VendorTotalResult = {
   hasSelections: boolean
   totalCents: number
-  missingOptionKeys: string[] // (serviceId|groupId|optionId) tuples the vendor has no price for
+  missingOptionKeys: string[] // 'opt:<service>|<group>|<option>' keys the vendor has no price for
+  // Arc-42: sub-option keys the homeowner picked (window type, frame color,
+  // glass type, size, etc.) that the vendor hasn't priced. Surfaced to UI so
+  // the "Some services unpriced" badge correctly reflects sub-option coverage.
+  missingSubOptionKeys: string[]
   coversAllServices: boolean
 }
 
@@ -173,6 +186,7 @@ export function computeVendorTotal(
   let hasSelections = false
   let totalCents = 0
   const missing: string[] = []
+  const missingSub: string[] = []
   const coveredServices = new Set<string>()
 
   for (const item of cartItems) {
@@ -280,13 +294,97 @@ export function computeVendorTotal(
     }
   }
 
+  // Arc-42 — sub-option iteration. windowSelections/doorSelections/
+  // stormFrontSelections/garageDoorSelection carry the homeowner's per-row
+  // sub-option picks (type, frame color, glass color, glass type, size).
+  // Pre-Arc-42, computeVendorTotal ignored these entirely, so sub-option
+  // prices (the bulk of vendor revenue on a windows_doors quote) were
+  // invisible — two distinct configurations summed identically. We map each
+  // sub-field's label/id to its DB sub_option_id, build a subopt-prefixed
+  // key, look up the price, and add basePrice × quantity.
+  for (const item of cartItems) {
+    const serviceId = item.serviceId
+    const products = 'products'
+
+    const accumulateSubOpts = (
+      parentOptionId: string,
+      subOptionIds: (string | undefined)[],
+      quantity: number,
+    ) => {
+      for (const subId of subOptionIds) {
+        if (!subId) continue
+        hasSelections = true
+        const key = subOptionPriceKey(serviceId, products, parentOptionId, subId)
+        const basePrice = priceMap.get(key)
+        if (basePrice === undefined) {
+          missingSub.push(key)
+          continue
+        }
+        coveredServices.add(serviceId)
+        totalCents += basePrice * quantity
+      }
+    }
+
+    for (const w of (item.windowSelections ?? []) as ConfiguratorEntry[]) {
+      accumulateSubOpts(
+        'windows',
+        [
+          w.size,
+          WINDOW_TYPE_IDS[w.type],
+          FRAME_COLOR_IDS[w.frameColor],
+          GLASS_COLOR_IDS[w.glassColor],
+          GLASS_TYPE_IDS[w.glassType],
+        ],
+        w.quantity,
+      )
+    }
+    for (const d of (item.doorSelections ?? []) as ConfiguratorEntry[]) {
+      accumulateSubOpts(
+        'doors',
+        [
+          d.size,
+          DOOR_TYPE_IDS[d.type],
+          FRAME_COLOR_IDS[d.frameColor],
+          GLASS_COLOR_IDS[d.glassColor],
+          GLASS_TYPE_IDS[d.glassType],
+        ],
+        d.quantity,
+      )
+    }
+    for (const sf of (item.stormFrontSelections ?? []) as ConfiguratorEntry[]) {
+      accumulateSubOpts(
+        'storm_front',
+        [
+          STORM_FRONT_SIZE_IDS[sf.size],
+          STORM_FRONT_TYPE_IDS[sf.type],
+          FRAME_COLOR_IDS[sf.frameColor],
+          GLASS_COLOR_IDS[sf.glassColor],
+          GLASS_TYPE_IDS[sf.glassType],
+        ],
+        sf.quantity,
+      )
+    }
+    const gd = item.garageDoorSelection
+    if (gd?.type) {
+      // GarageDoor fields store sub_option ids directly (no label→id map);
+      // single unit (quantity = 1 implicit).
+      accumulateSubOpts('garage_doors', [gd.type, gd.size, gd.color, gd.glass], 1)
+    }
+  }
+
   const cartServiceIds = new Set(cartItems.map((i) => i.serviceId))
   const coversAllServices =
     cartItems.length > 0 &&
     cartServiceIds.size > 0 &&
     Array.from(cartServiceIds).every((id) => coveredServices.has(id))
 
-  return { hasSelections, totalCents, missingOptionKeys: missing, coversAllServices }
+  return {
+    hasSelections,
+    totalCents,
+    missingOptionKeys: missing,
+    missingSubOptionKeys: missingSub,
+    coversAllServices,
+  }
 }
 
 export function formatPriceCents(cents: number): string {

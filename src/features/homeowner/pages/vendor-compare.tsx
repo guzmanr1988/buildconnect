@@ -198,7 +198,7 @@ export function VendorComparePage() {
     // Best price: lowest non-zero total among vendors that cover all services and have no missing options.
     const eligible = displayVendors.filter((v) => {
       const r = totalsByVendor[v.id]
-      return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.totalCents > 0
+      return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.missingSubOptionKeys.length === 0 && r.totalCents > 0
     })
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
@@ -261,11 +261,19 @@ export function VendorComparePage() {
             isApex &&
             !!result &&
             result.hasSelections &&
-            (!result.coversAllServices || result.missingOptionKeys.length > 0) &&
+            (!result.coversAllServices
+              || result.missingOptionKeys.length > 0
+              || result.missingSubOptionKeys.length > 0) &&
             result.totalCents > 0
+          // Arc-42 — priceKey/subOptionPriceKey carry an 'opt:'/'subopt:' prefix
+          // post-Arc-41; strip before splitting so services.find() resolves the
+          // raw service id (not 'opt:windows_doors').
           const gapServiceNames = apexHasGap
             ? Array.from(
-                new Set(result.missingOptionKeys.map((k) => k.split('|')[0])),
+                new Set(
+                  [...result.missingOptionKeys, ...result.missingSubOptionKeys]
+                    .map((k) => k.replace(/^(opt|subopt):/, '').split('|')[0]),
+                ),
               ).map(
                 (sid) => services.find((s) => s.id === sid)?.name ?? sid,
               )
@@ -283,7 +291,12 @@ export function VendorComparePage() {
           } else if (apexHasGap) {
             priceText = formatPriceCents(result.totalCents)
             priceTone = 'strong'
-          } else if (!result.coversAllServices || result.missingOptionKeys.length > 0 || result.totalCents === 0) {
+          } else if (
+            !result.coversAllServices
+            || result.missingOptionKeys.length > 0
+            || result.missingSubOptionKeys.length > 0
+            || result.totalCents === 0
+          ) {
             priceText = 'Contact for quote'
             priceTone = 'muted'
           } else {
