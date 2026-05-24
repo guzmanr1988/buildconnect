@@ -2474,7 +2474,13 @@ export function ServiceDetailPage() {
                 ...(serviceId === 'windows_doors' && windowSelections.length > 0 && { windowSelections }),
                 ...(serviceId === 'windows_doors' && doorSelections.length > 0 && { doorSelections }),
                 ...(serviceId === 'windows_doors' && stormFrontSelections.length > 0 && { stormFrontSelections }),
-                ...(serviceId === 'windows_doors' && garageDoorSelection.type && { garageDoorSelection }),
+                ...(serviceId === 'windows_doors' &&
+                  garageDoorSelection.type &&
+                  garageDoorSelection.color &&
+                  garageDoorSelection.glass &&
+                  (garageDoorSelection.type === 'single_garage' || garageDoorSelection.size) && {
+                    garageDoorSelection,
+                  }),
                 ...(serviceId === 'roofing' && metalRoofSelection.color && { metalRoofSelection }),
                 ...(serviceId === 'roofing' && shingleSelection.color && { shingleSelection }),
                 // Widen-reads-narrow-writes: persist shingleColor too so older
