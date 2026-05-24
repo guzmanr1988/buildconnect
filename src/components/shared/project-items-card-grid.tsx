@@ -132,22 +132,13 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
   const sections: SummarySection[] = []
   const pricing = opts.showPricing && opts.getPrice
   const getPrice = opts.getPrice
-  const resolved = opts.resolvedLineItems ?? []
 
-  // Arc-35c: per-card $ + section $Total restored via fallback shape that
-  // mirrors computeWindowsDoorsCatalogTotal — `catalogUnit ||
-  // wd-product-line.amount / totalUnits`. Vendor catalogs commonly leave
-  // size-option base prices unset (only upgrade fees populated), so the
-  // direct *CatalogUnitPrice helper returns 0; the wdProductLine
-  // distribution is the same baseline the project total uses.
-  const wdProductLine = resolved.find((l) => l.id === 'wd-product')
+  // Arc-39 hard-lock: pure catalog. No wd-product / install-line fallback.
+  // When catalogUnit == 0 in pricing mode, surface $0 so vendor sees they
+  // haven't priced the item in their catalog yet.
   const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
   const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
   const totalSFQty = item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-  const totalUnits = totalWQty + totalDQty + totalSFQty
-  const fallbackUnitCents = pricing && wdProductLine && totalUnits > 0
-    ? Math.round(wdProductLine.amount / totalUnits)
-    : 0
 
   // Windows
   if (item.windowSelections && item.windowSelections.length > 0) {
@@ -164,23 +155,18 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
         ],
       }
       if (pricing && getPrice) {
-        const catalogUnit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
-        const unit = catalogUnit > 0 ? catalogUnit : fallbackUnitCents
-        if (unit > 0) {
-          const total = unit * w.quantity
-          card.primaryValue = fmtPriceCents(total)
-          card.pricing = { unit, qty: w.quantity, total }
-          sectionTotal += total
-        }
+        const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
+        const total = unit * w.quantity
+        card.primaryValue = fmtPriceCents(total)
+        card.pricing = { unit, qty: w.quantity, total }
+        sectionTotal += total
       }
       return card
     })
     sections.push({
       id: 'windows',
       title: 'Windows',
-      totalLabel: pricing && sectionTotal > 0
-        ? fmtPriceCents(sectionTotal)
-        : `Total: ${totalWQty}`,
+      totalLabel: pricing ? fmtPriceCents(sectionTotal) : `Total: ${totalWQty}`,
       cards,
     })
   }
@@ -200,23 +186,18 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
         ],
       }
       if (pricing && getPrice) {
-        const catalogUnit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
-        const unit = catalogUnit > 0 ? catalogUnit : fallbackUnitCents
-        if (unit > 0) {
-          const total = unit * d.quantity
-          card.primaryValue = fmtPriceCents(total)
-          card.pricing = { unit, qty: d.quantity, total }
-          sectionTotal += total
-        }
+        const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
+        const total = unit * d.quantity
+        card.primaryValue = fmtPriceCents(total)
+        card.pricing = { unit, qty: d.quantity, total }
+        sectionTotal += total
       }
       return card
     })
     sections.push({
       id: 'doors',
       title: 'Doors',
-      totalLabel: pricing && sectionTotal > 0
-        ? fmtPriceCents(sectionTotal)
-        : `Total: ${totalDQty}`,
+      totalLabel: pricing ? fmtPriceCents(sectionTotal) : `Total: ${totalDQty}`,
       cards,
     })
   }
@@ -236,23 +217,18 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
         ],
       }
       if (pricing && getPrice) {
-        const catalogUnit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
-        const unit = catalogUnit > 0 ? catalogUnit : fallbackUnitCents
-        if (unit > 0) {
-          const total = unit * sf.quantity
-          card.primaryValue = fmtPriceCents(total)
-          card.pricing = { unit, qty: sf.quantity, total }
-          sectionTotal += total
-        }
+        const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
+        const total = unit * sf.quantity
+        card.primaryValue = fmtPriceCents(total)
+        card.pricing = { unit, qty: sf.quantity, total }
+        sectionTotal += total
       }
       return card
     })
     sections.push({
       id: 'storm-fronts',
       title: 'Storm Fronts',
-      totalLabel: pricing && sectionTotal > 0
-        ? fmtPriceCents(sectionTotal)
-        : `Total: ${totalSFQty}`,
+      totalLabel: pricing ? fmtPriceCents(sectionTotal) : `Total: ${totalSFQty}`,
       cards,
     })
   }
@@ -283,21 +259,15 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
     const card: SummaryCard = { topLabel, specs: specs.length > 0 ? specs : undefined }
     let gdTotal = 0
     if (pricing && getPrice) {
-      const catalogUnit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
-      const gdLine = resolved.find((l) => l.id === 'wd-garage-door')
-      const unit = catalogUnit > 0
-        ? catalogUnit
-        : (gdLine?.amount ?? fallbackUnitCents)
-      if (unit > 0) {
-        card.primaryValue = fmtPriceCents(unit)
-        card.pricing = { unit, qty: 1, total: unit }
-        gdTotal = unit
-      }
+      const unit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
+      card.primaryValue = fmtPriceCents(unit)
+      card.pricing = { unit, qty: 1, total: unit }
+      gdTotal = unit
     }
     sections.push({
       id: 'garage-doors',
       title: 'Garage Door',
-      totalLabel: pricing && gdTotal > 0 ? fmtPriceCents(gdTotal) : undefined,
+      totalLabel: pricing ? fmtPriceCents(gdTotal) : undefined,
       cards: [card],
     })
   }
@@ -305,39 +275,30 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
   // Install / Permit lines — surfaced only when showPricing=true (vendor
   // surfaces) so the homeowner card-grid stays product-only.
   if (pricing && getPrice) {
-    const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
-    const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
-    const totalSFQty = item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
     const installSpecs: SummaryCard[] = []
     if (totalWQty > 0) {
       const unit = getPrice(item.serviceId, 'install_windows')
-      if (unit > 0) {
-        installSpecs.push({
-          topLabel: 'Install Windows',
-          primaryValue: fmtPriceCents(unit * totalWQty),
-          pricing: { unit, qty: totalWQty, total: unit * totalWQty },
-        })
-      }
+      installSpecs.push({
+        topLabel: 'Install Windows',
+        primaryValue: fmtPriceCents(unit * totalWQty),
+        pricing: { unit, qty: totalWQty, total: unit * totalWQty },
+      })
     }
     if (totalDQty > 0) {
       const unit = getPrice(item.serviceId, 'install_doors')
-      if (unit > 0) {
-        installSpecs.push({
-          topLabel: 'Install Doors',
-          primaryValue: fmtPriceCents(unit * totalDQty),
-          pricing: { unit, qty: totalDQty, total: unit * totalDQty },
-        })
-      }
+      installSpecs.push({
+        topLabel: 'Install Doors',
+        primaryValue: fmtPriceCents(unit * totalDQty),
+        pricing: { unit, qty: totalDQty, total: unit * totalDQty },
+      })
     }
     if (totalSFQty > 0) {
       const unit = getPrice(item.serviceId, 'install_storm_front')
-      if (unit > 0) {
-        installSpecs.push({
-          topLabel: 'Install Storm Front',
-          primaryValue: fmtPriceCents(unit * totalSFQty),
-          pricing: { unit, qty: totalSFQty, total: unit * totalSFQty },
-        })
-      }
+      installSpecs.push({
+        topLabel: 'Install Storm Front',
+        primaryValue: fmtPriceCents(unit * totalSFQty),
+        pricing: { unit, qty: totalSFQty, total: unit * totalSFQty },
+      })
     }
     if (installSpecs.length > 0) {
       const sectionTotal = installSpecs.reduce((s, c) => s + (c.pricing?.total ?? 0), 0)
@@ -351,14 +312,12 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
     const hasPermit = item.selections && Object.values(item.selections).flat().includes('permit')
     if (hasPermit) {
       const permitUnit = getPrice(item.serviceId, 'permit')
-      if (permitUnit > 0) {
-        sections.push({
-          id: 'permit-fee',
-          title: 'Permit',
-          totalLabel: fmtPriceCents(permitUnit),
-          cards: [{ topLabel: 'Permit Fee', primaryValue: fmtPriceCents(permitUnit) }],
-        })
-      }
+      sections.push({
+        id: 'permit-fee',
+        title: 'Permit',
+        totalLabel: fmtPriceCents(permitUnit),
+        cards: [{ topLabel: 'Permit Fee', primaryValue: fmtPriceCents(permitUnit) }],
+      })
     }
   }
 

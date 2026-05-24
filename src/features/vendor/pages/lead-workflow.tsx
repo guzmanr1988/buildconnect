@@ -208,9 +208,10 @@ export default function VendorLeadWorkflow() {
       const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
       if (p.saleAmount && p.saleAmount > 0) {
         map[leadId] = p.saleAmount
-      } else if (p.quotedPriceCents && p.quotedPriceCents > 0) {
-        map[leadId] = Math.round(p.quotedPriceCents / 100)
       } else {
+        // Arc-39 hard-lock: pre-sale Price = catalog-sum only. Ripped
+        // quotedPriceCents fallback (homeowner /quote pre-stored amount)
+        // which was masking the catalog-sum and shadowing vendor-set prices.
         const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
           ? p.priceLineItems
           : (PRICE_LINE_ITEM_PRESETS[p.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
