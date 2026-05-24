@@ -86,13 +86,13 @@ export function RoofSpecCard({
   return (
     <div className={cn('rounded-xl border bg-muted/30 p-4 space-y-3', className)}>
       <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Roof Spec</h4>
+      {rm?.address && (
+        <SpecCard label="Address" value={rm.address} valueClass="text-xs leading-snug" />
+      )}
       <div
         className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4"
         data-project-summary-grid
       >
-        {rm?.address && (
-          <SpecCard label="Address" value={rm.address} valueClass="text-xs leading-snug" />
-        )}
         {areaValue && <SpecCard label="Area" value={areaValue} />}
         {rm && !isAddonsOnly && includeMaterialOrder && rm.pitch && (
           <SpecCard label="Pitch" value={rm.pitch} />
