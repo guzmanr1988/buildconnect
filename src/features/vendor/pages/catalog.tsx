@@ -91,8 +91,12 @@ export default function VendorCatalog() {
           setPrice(serviceId, optId, price)
         }
       }
-      if ((svc.permitCents ?? 0) > 0) {
-        setServicePermit(serviceId, svc.permitCents ?? 0)
+      // Rod-rule: 0 is canonical opt-out for service permits ("permit is
+      // default in every service unless vendor puts it at 0"), so the Save
+      // button must re-affirm the value regardless of magnitude. The old
+      // `> 0` guard silently skipped opt-out re-saves.
+      if (typeof svc.permitCents === 'number') {
+        setServicePermit(serviceId, svc.permitCents)
       }
     }
     await new Promise((r) => setTimeout(r, 350))
