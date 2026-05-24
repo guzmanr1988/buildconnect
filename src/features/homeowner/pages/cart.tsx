@@ -995,8 +995,12 @@ export function CartPage() {
                       const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
                       const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
                       return (
-                        <div key={groupId} data-project-summary-products-block>
-                          <p className="text-sm font-semibold text-foreground mb-1.5" data-section-label-source={group ? 'group' : 'fallback'}>
+                        <div
+                          key={groupId}
+                          data-project-summary-products-block
+                          className="rounded-lg bg-background border p-3 space-y-1.5"
+                        >
+                          <p className="text-sm font-semibold text-foreground" data-section-label-source={group ? 'group' : 'fallback'}>
                             {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
                           <div className="flex flex-wrap gap-2">
