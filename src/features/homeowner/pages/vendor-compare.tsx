@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Star, Clock, ShieldCheck, Banknote, Award, TrendingUp, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -22,6 +22,7 @@ import {
   type VendorPriceMap,
   type VendorTotalResult,
 } from '@/lib/api/pricing'
+import { useVendorPriceRealtime } from '@/lib/hooks/use-vendor-price-realtime'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
@@ -115,40 +116,49 @@ export function VendorComparePage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let mounted = true
-    async function load() {
-      setLoading(true)
-      setFetchError(null)
-      try {
-        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        const entries = await Promise.all(
-          featuredVendors.map(async (v) => {
-            // Demo vendors: look up UUID from mock-id map.
-            // Real vendors: their id IS already the UUID.
-            const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
-            // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
-            if (!UUID_RE.test(uuid)) return [v.id, new Map() as VendorPriceMap] as const
-            const map = await getVendorPriceMap(uuid)
-            return [v.id, map] as const
-          })
-        )
-        if (!mounted) return
-        setPriceMaps(Object.fromEntries(entries))
-      } catch (err) {
-        if (!mounted) return
-        setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
-      } finally {
-        if (mounted) setLoading(false)
-      }
+  // Stable vendor-id key — featuredVendors changes async when useRealVendors()
+  // resolves; without this stable dep, priceMaps would freeze to the mount-time
+  // mocks-only set and real vendors silently fall out of totalsByVendor[id].
+  // Also used by the realtime hook below so the refetch callback only rebinds
+  // when the vendor set actually changes (not every render).
+  const featuredVendorIdsKey = featuredVendors.map((v) => v.id).join('|')
+
+  const loadPriceMaps = useCallback(async () => {
+    setLoading(true)
+    setFetchError(null)
+    try {
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const entries = await Promise.all(
+        featuredVendors.map(async (v) => {
+          // Demo vendors: look up UUID from mock-id map.
+          // Real vendors: their id IS already the UUID.
+          const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
+          // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
+          if (!UUID_RE.test(uuid)) return [v.id, new Map() as VendorPriceMap] as const
+          const map = await getVendorPriceMap(uuid)
+          return [v.id, map] as const
+        })
+      )
+      setPriceMaps(Object.fromEntries(entries))
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
+    } finally {
+      setLoading(false)
     }
-    load()
-    return () => { mounted = false }
-    // Bug 3 fix: depend on stable vendor-id key. featuredVendors changes async
-    // when useRealVendors() returns; without this, priceMaps freezes to the
-    // mount-time mocks-only set and real vendors silently fall out of
-    // Compare Vendors via undefined totalsByVendor[id].
-  }, [featuredVendors.map((v) => v.id).join('|')])
+    // featuredVendors intentionally excluded — featuredVendorIdsKey is the
+    // stable identity used for the refetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredVendorIdsKey])
+
+  useEffect(() => {
+    loadPriceMaps().catch(() => {})
+  }, [loadPriceMaps])
+
+  // Arc-41: realtime listener on vendor_option_prices + vendor_sub_option_prices.
+  // Vendor edits a price → WAL event → refetch all priceMaps for the current
+  // vendor set. Low-frequency channel; per-vendor filtering happens implicitly
+  // because we refetch per-id in loadPriceMaps.
+  useVendorPriceRealtime(loadPriceMaps)
 
   const services = useCatalogStore((s) => s.services)
   const totalsByVendor = useMemo(() => {

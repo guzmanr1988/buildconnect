@@ -21,7 +21,10 @@ import type { ServiceConfig } from '@/types'
  * install_doors etc. per option-metadata.ts).
  */
 
-export type VendorPriceMap = Map<string, number> // key = `${serviceId}|${groupId}|${optionId}`
+// Arc-41: keys carry an 'opt:' / 'subopt:' prefix to disambiguate option-level
+// vs sub_option-level entries inside the same Map. Sub_options always belong
+// to a parent option, so the subopt key includes both.
+export type VendorPriceMap = Map<string, number> // see priceKey / subOptionPriceKey below
 
 type DbPriceRow = {
   price_cents: number
@@ -35,25 +38,71 @@ type DbPriceRow = {
   }
 }
 
-function priceKey(serviceId: string, groupId: string, optionId: string): string {
-  return `${serviceId}|${groupId}|${optionId}`
+type DbSubPriceRow = {
+  price_cents: number
+  active: boolean
+  sub_options: {
+    sub_option_id: string
+    sub_groups: {
+      options: {
+        option_id: string
+        option_groups: {
+          group_id: string
+          service_id: string
+        }
+      }
+    }
+  }
+}
+
+export function priceKey(serviceId: string, groupId: string, optionId: string): string {
+  return `opt:${serviceId}|${groupId}|${optionId}`
+}
+
+export function subOptionPriceKey(
+  serviceId: string,
+  groupId: string,
+  optionId: string,
+  subOptionId: string,
+): string {
+  return `subopt:${serviceId}|${groupId}|${optionId}|${subOptionId}`
 }
 
 export async function getVendorPriceMap(vendorUuid: string): Promise<VendorPriceMap> {
-  const { data, error } = await supabase
-    .from('vendor_option_prices')
-    .select('price_cents,active,options(option_id,option_groups(group_id,service_id))')
-    .eq('vendor_id', vendorUuid)
-    .eq('active', true)
-  if (error) throw new Error(`getVendorPriceMap: ${error.message}`)
+  // Parallel SELECTs against option-price and sub_option-price tables. Both
+  // tables share the same per-vendor active filter; merged into one Map so
+  // computeVendorTotal can hit a single lookup regardless of which level a
+  // selection lives at.
+  const [optionRes, subOptionRes] = await Promise.all([
+    supabase
+      .from('vendor_option_prices')
+      .select('price_cents,active,options(option_id,option_groups(group_id,service_id))')
+      .eq('vendor_id', vendorUuid)
+      .eq('active', true),
+    supabase
+      .from('vendor_sub_option_prices')
+      .select('price_cents,active,sub_options(sub_option_id,sub_groups(options(option_id,option_groups(group_id,service_id))))')
+      .eq('vendor_id', vendorUuid)
+      .eq('active', true),
+  ])
+  if (optionRes.error) throw new Error(`getVendorPriceMap: ${optionRes.error.message}`)
+  if (subOptionRes.error) throw new Error(`getVendorPriceMap(sub): ${subOptionRes.error.message}`)
   const map: VendorPriceMap = new Map()
-  for (const r of (data ?? []) as unknown as DbPriceRow[]) {
+  for (const r of (optionRes.data ?? []) as unknown as DbPriceRow[]) {
     if (!r.options || !r.options.option_groups) continue
     const k = priceKey(
       r.options.option_groups.service_id,
       r.options.option_groups.group_id,
       r.options.option_id
     )
+    map.set(k, r.price_cents)
+  }
+  for (const r of (subOptionRes.data ?? []) as unknown as DbSubPriceRow[]) {
+    const so = r.sub_options
+    const parentOpt = so?.sub_groups?.options
+    const og = parentOpt?.option_groups
+    if (!so || !parentOpt || !og) continue
+    const k = subOptionPriceKey(og.service_id, og.group_id, parentOpt.option_id, so.sub_option_id)
     map.set(k, r.price_cents)
   }
   return map
