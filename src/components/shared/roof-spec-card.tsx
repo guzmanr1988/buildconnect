@@ -70,77 +70,51 @@ export function RoofSpecCard({
       : Number(mrs.roofSize)
     : undefined
 
+  // Arc-40: each spec rendered as a bordered card in a 2/3-col grid (mirrors
+  // shared/project-items-card-grid windows/doors card layout). Section retains
+  // muted background; each cell is its own card with label + value.
+  const areaValue = rm && !isAddonsOnly && includeMaterialOrder
+    ? (() => {
+        const { pitchedAreaSqft, flatAreaSqft } = rm
+        const squares = pitchedAreaSqft !== undefined && flatAreaSqft !== undefined
+          ? computeRoofTotal({ pitchedAreaSqft, flatAreaSqft, includeMaterialOrder }).totalSquares
+          : sqftToSquares(Math.round(rm.areaSqft * PITCHED_WASTE_FACTOR))
+        return `${rm.areaSqft.toLocaleString()} sqft · ${squares} squares w/waste`
+      })()
+    : undefined
+
   return (
-    <div className={cn('rounded-xl border p-4 space-y-2', className)}>
+    <div className={cn('rounded-xl border bg-muted/30 p-4 space-y-3', className)}>
       <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Roof Spec</h4>
-      <div className="space-y-3 text-sm">
-        {rm && (
+      <div
+        className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4"
+        data-project-summary-grid
+      >
+        {rm?.address && (
+          <SpecCard label="Address" value={rm.address} valueClass="text-xs leading-snug" />
+        )}
+        {areaValue && <SpecCard label="Area" value={areaValue} />}
+        {rm && !isAddonsOnly && includeMaterialOrder && rm.pitch && (
+          <SpecCard label="Pitch" value={rm.pitch} />
+        )}
+        {rm?.perimeterFt && includePerimeter && (
+          <SpecCard label="Perimeter" value={`~${rm.perimeterFt.toLocaleString()} lin ft`} />
+        )}
+        {rm && !isAddonsOnly && hasSplit && (
           <>
-            {rm.address && (
-              <div className="flex items-start gap-4">
-                <span className="text-muted-foreground min-w-[88px]">Address</span>
-                <span className="font-semibold text-xs leading-snug">{rm.address}</span>
-              </div>
-            )}
-            {!isAddonsOnly && includeMaterialOrder && (
-              <div className="flex items-center gap-4">
-                <span className="text-muted-foreground min-w-[88px]">Area</span>
-                <span className="font-semibold">
-                  {rm.areaSqft.toLocaleString()} sqft · {(() => {
-                    const { pitchedAreaSqft, flatAreaSqft } = rm
-                    if (pitchedAreaSqft !== undefined && flatAreaSqft !== undefined) {
-                      return computeRoofTotal({
-                        pitchedAreaSqft,
-                        flatAreaSqft,
-                        includeMaterialOrder,
-                      }).totalSquares
-                    }
-                    return sqftToSquares(Math.round(rm.areaSqft * PITCHED_WASTE_FACTOR))
-                  })()} squares w/waste
-                </span>
-              </div>
-            )}
-            {!isAddonsOnly && includeMaterialOrder && rm.pitch && (
-              <div className="flex items-center gap-4">
-                <span className="text-muted-foreground min-w-[88px]">Pitch</span>
-                <span className="font-semibold">{rm.pitch}</span>
-              </div>
-            )}
-            {rm.perimeterFt && includePerimeter && (
-              <div className="flex items-center gap-4">
-                <span className="text-muted-foreground min-w-[88px]">Perimeter</span>
-                <span className="font-semibold">~{rm.perimeterFt.toLocaleString()} lin ft</span>
-              </div>
-            )}
-            {!isAddonsOnly && hasSplit && (
-              <>
-                <div className="flex items-center gap-4">
-                  <span className="text-muted-foreground min-w-[88px]">Pitched</span>
-                  <span className="font-semibold">
-                    {rm.pitchedAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-muted-foreground min-w-[88px]">Flat</span>
-                  <span className="font-semibold">
-                    {rm.flatAreaSqft!.toLocaleString()} sqft ({Math.ceil((rm.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)
-                  </span>
-                </div>
-              </>
-            )}
+            <SpecCard
+              label="Pitched"
+              value={`${rm.pitchedAreaSqft!.toLocaleString()} sqft (${Math.ceil((rm.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)`}
+            />
+            <SpecCard
+              label="Flat"
+              value={`${rm.flatAreaSqft!.toLocaleString()} sqft (${Math.ceil((rm.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)`}
+            />
           </>
         )}
-        {metalColorLabel && (
-          <div className="flex items-center gap-4">
-            <span className="text-muted-foreground min-w-[88px]">Color</span>
-            <span className="font-semibold">{metalColorLabel}</span>
-          </div>
-        )}
+        {metalColorLabel && <SpecCard label="Color" value={metalColorLabel} />}
         {metalSquares !== undefined && (
-          <div className="flex items-center gap-4">
-            <span className="text-muted-foreground min-w-[88px]">Metal size</span>
-            <span className="font-semibold">{metalSquares} squares</span>
-          </div>
+          <SpecCard label="Metal size" value={`${metalSquares} squares`} />
         )}
         {includePerimeter && addonEntries.map(([id, ft]) => {
           const isGutters = id === 'gutters'
@@ -150,20 +124,37 @@ export function RoofSpecCard({
           const drops = gutterDropsConfig?.drops ?? 0
           const floorsLabel = gutterDropsConfig?.floors === 1 ? '1-story' : '2-story'
           return (
-            <div key={id} className="flex items-start gap-4">
-              <span className="text-muted-foreground min-w-[88px]">{ADDON_LABELS[id] ?? id}</span>
-              <div className="flex flex-col">
-                <span className="font-semibold">{totalFt.toLocaleString()} lin ft</span>
-                {showBreakdown && (
-                  <span className="text-[11px] text-muted-foreground">
-                    {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
-                  </span>
-                )}
-              </div>
-            </div>
+            <SpecCard
+              key={id}
+              label={ADDON_LABELS[id] ?? id}
+              value={`${totalFt.toLocaleString()} lin ft`}
+              sub={showBreakdown
+                ? `${ft.toLocaleString()} perimeter + ${drops} drop${drops === 1 ? '' : 's'} × ${perFloor} ft for ${floorsLabel}`
+                : undefined}
+            />
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function SpecCard({
+  label,
+  value,
+  sub,
+  valueClass,
+}: {
+  label: string
+  value: string
+  sub?: string
+  valueClass?: string
+}) {
+  return (
+    <div className="rounded-lg bg-background border p-3 space-y-1.5">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn('text-sm font-semibold text-foreground', valueClass)}>{value}</p>
+      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   )
 }
