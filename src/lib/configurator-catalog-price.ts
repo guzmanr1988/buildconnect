@@ -17,7 +17,11 @@ export interface ConfigEntryLike {
   quantity: number
 }
 
-const WINDOW_TYPE_IDS: Record<string, string> = {
+// Arc-42: exported for pricing.ts computeVendorTotal sub-option iteration.
+// Same maps power both the legacy flat-key getPrice path (windowCatalogUnitPrice
+// etc.) and the new prefixed VendorPriceMap path (computeVendorTotal subopt
+// lookups). Single source of truth.
+export const WINDOW_TYPE_IDS: Record<string, string> = {
   'Single Hung': 'single_hung',
   'Casement': 'casement',
   'Awning': 'awning',
@@ -25,7 +29,7 @@ const WINDOW_TYPE_IDS: Record<string, string> = {
   'Picture': 'picture',
 }
 
-const DOOR_TYPE_IDS: Record<string, string> = {
+export const DOOR_TYPE_IDS: Record<string, string> = {
   'Entry Door': 'entry',
   'French Door': 'french',
   'Sliding Glass': 'sliding_glass',
@@ -34,13 +38,13 @@ const DOOR_TYPE_IDS: Record<string, string> = {
   'Pivot Door': 'pivot',
 }
 
-const FRAME_COLOR_IDS: Record<string, string> = {
+export const FRAME_COLOR_IDS: Record<string, string> = {
   'White': 'white',
   'Bronze': 'bronze',
   'Black': 'black',
 }
 
-const GLASS_COLOR_IDS: Record<string, string> = {
+export const GLASS_COLOR_IDS: Record<string, string> = {
   'Grey-White': 'grey_white',
   'Clear-White': 'clear_white',
   'Clear': 'clear',
@@ -48,7 +52,7 @@ const GLASS_COLOR_IDS: Record<string, string> = {
   'Green': 'green',
 }
 
-const GLASS_TYPE_IDS: Record<string, string> = {
+export const GLASS_TYPE_IDS: Record<string, string> = {
   'Impact Glass': 'impact_glass',
   'Low-E Glass': 'low_e',
 }
@@ -103,11 +107,11 @@ export function doorCatalogUnitPrice(
   )
 }
 
-const STORM_FRONT_TYPE_IDS: Record<string, string> = {
+export const STORM_FRONT_TYPE_IDS: Record<string, string> = {
   'Storm Front': 'storm_front_only',
 }
 
-const STORM_FRONT_SIZE_IDS: Record<string, string> = {
+export const STORM_FRONT_SIZE_IDS: Record<string, string> = {
   '24x80': 'sf_24x80',
   '24x96': 'sf_24x96',
   '36x80': 'sf_36x80',
