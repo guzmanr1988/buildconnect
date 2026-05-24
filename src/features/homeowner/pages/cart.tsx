@@ -1066,7 +1066,7 @@ export function CartPage() {
                           Total: {viewItem.windowSelections.reduce((s, w) => s + w.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
                         {viewItem.windowSelections.map((w) => (
                           <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -1094,7 +1094,7 @@ export function CartPage() {
                           Total: {viewItem.doorSelections.reduce((s, d) => s + d.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
                         {viewItem.doorSelections.map((d) => (
                           <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -1113,13 +1113,46 @@ export function CartPage() {
                     </div>
                   )}
 
+                  {/* Storm Front selections — same 2-col + per-card-specs as
+                      Doors. stormFrontSelections shape mirrors doorSelections
+                      (id, quantity, size, type, frameColor, glassColor,
+                      glassType). Section was previously omitted from this
+                      project-summary block even though "Install for" chips
+                      and project-items-card-grid both render storm_fronts. */}
+                  {viewItem.stormFrontSelections && viewItem.stormFrontSelections.length > 0 && (
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="storm-fronts">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-foreground">Storm Fronts</p>
+                        <span className="text-sm font-bold text-primary">
+                          Total: {viewItem.stormFrontSelections.reduce((s, sf) => s + sf.quantity, 0)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
+                        {viewItem.stormFrontSelections.map((sf) => (
+                          <div key={sf.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-base font-bold">{sf.size.replace('x', '" × ')}"</span>
+                              <span className="text-base font-bold text-primary">×{sf.quantity}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                              <Badge variant="secondary" className="text-xs">{sf.type}</Badge>
+                              <Badge variant="outline" className="text-xs">Frame: {sf.frameColor}</Badge>
+                              <Badge variant="outline" className="text-xs">Glass: {sf.glassColor}</Badge>
+                              <Badge variant="outline" className="text-xs">{sf.glassType}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Garage Door selection — single card (gd is 1 selection not array). */}
                   {viewItem.garageDoorSelection?.type && (
                     <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="garage-doors">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-foreground">Garage Door</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
                         <div className="rounded-lg bg-background border p-3 space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="text-base font-bold">
