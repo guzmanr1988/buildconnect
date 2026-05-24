@@ -164,89 +164,60 @@ export interface WindowsDoorsCatalogItem {
 
 /**
  * Computes the full catalog-first total for a windows_doors project.
- * Per-row: catalog price × quantity, falling back to averaged install-line when no catalog price.
- * Single-line items (Install Windows/Doors, Permit): catalog price × qty, falling back to preset line.
- * Used for pre-sale headline computation and Pricing Breakdown totals.
+ * Pure catalog: per-row catalog price × quantity. Items without a catalog
+ * price contribute $0 (surfaced as em-dash in card-grid). No preset-line or
+ * wd-product distribution fallback — vendors must set prices in catalog.
  */
 export function computeWindowsDoorsCatalogTotal(
   item: WindowsDoorsCatalogItem,
-  resolvedLineItems: Array<{ id: string; label?: string; amount: number }>,
+  _resolvedLineItems: Array<{ id: string; label?: string; amount: number }>,
   getPrice: GetPriceFn,
 ): number {
   let total = 0
 
-  const wInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-windows')
-  const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
-  const sfInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-storm-front')
-  const wdProductLine = resolvedLineItems.find((l) => l.id === 'wd-product')
+  for (const w of item.windowSelections ?? []) {
+    const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
+    if (unit > 0) total += unit * w.quantity
+  }
+
+  for (const d of item.doorSelections ?? []) {
+    const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
+    if (unit > 0) total += unit * d.quantity
+  }
+
+  for (const sf of item.stormFrontSelections ?? []) {
+    const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
+    if (unit > 0) total += unit * sf.quantity
+  }
+
+  const gd = item.garageDoorSelection
+  if (gd?.type) {
+    total += garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
+  }
+
   const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
   const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
   const totalSFQty = item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-  const totalUnits = totalWQty + totalDQty + totalSFQty
 
-  // Windows — product cost. Catalog-first; fallback to wd-product distributed
-  // across all window+door units (not install line — that's a separate cost).
-  for (const w of item.windowSelections ?? []) {
-    const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * w.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * w.quantity)
-    }
-  }
-
-  // Doors — product cost. Same distribution from wd-product.
-  for (const d of item.doorSelections ?? []) {
-    const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * d.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * d.quantity)
-    }
-  }
-
-  // Storm fronts — product cost. Same distribution from wd-product.
-  for (const sf of item.stormFrontSelections ?? []) {
-    const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * sf.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * sf.quantity)
-    }
-  }
-
-  // Garage door — product cost
-  const gd = item.garageDoorSelection
-  if (gd?.type) {
-    const gdUnit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
-    const gdLine = resolvedLineItems.find((l) => l.id === 'wd-garage-door')
-    total += gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
-  }
-
-  // Install Windows (labor, separate from product)
   if (totalWQty > 0) {
     const catalogInstallW = getPrice(item.serviceId, 'install_windows')
-    total += catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
+    if (catalogInstallW > 0) total += catalogInstallW * totalWQty
   }
 
-  // Install Doors (labor, separate from product)
   if (totalDQty > 0) {
     const catalogInstallD = getPrice(item.serviceId, 'install_doors')
-    total += catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+    if (catalogInstallD > 0) total += catalogInstallD * totalDQty
   }
 
-  // Install Storm Front (labor, separate from product)
   if (totalSFQty > 0) {
     const catalogInstallSF = getPrice(item.serviceId, 'install_storm_front')
-    total += catalogInstallSF > 0 ? catalogInstallSF * totalSFQty : (sfInstallLine?.amount ?? 0)
+    if (catalogInstallSF > 0) total += catalogInstallSF * totalSFQty
   }
 
-  // Permit
   const hasPermit = item.selections && Object.values(item.selections).flat().includes('permit')
   if (hasPermit) {
     const catalogPermit = getPrice(item.serviceId, 'permit')
-    const permitLine = resolvedLineItems.find((l) => l.label?.toLowerCase().includes('permit'))
-    total += catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
+    if (catalogPermit > 0) total += catalogPermit
   }
 
   return total
