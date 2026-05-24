@@ -29,6 +29,10 @@ interface VendorCatalogState {
   // Cache of (serviceId|optionId) -> options.id (DB UUID). Built during hydration
   // so setPrice can upsert by option DB UUID without a round-trip lookup.
   _optionDbIdCache: Record<string, string>
+  // Cache of (serviceId|subOptionId) -> sub_options.id (DB UUID). Parallel to
+  // _optionDbIdCache; populated in hydrateFromSupabase. setPrice routes to
+  // vendor_sub_option_prices when a price-input fires on a sub_option id.
+  _subOptionDbIdCache: Record<string, string>
   // One-time flag: have we migrated localStorage pricing to Supabase?
   _migrationDone: boolean
 
@@ -69,6 +73,30 @@ type DbOptionRow = {
   id: string
   option_id: string
   option_groups: { group_id: string; service_id: string }
+}
+
+type DbSubOptionRow = {
+  id: string
+  sub_option_id: string
+  sub_groups: {
+    options: {
+      option_groups: { service_id: string }
+    }
+  }
+}
+
+type DbSubPriceRow = {
+  price_cents: number
+  active: boolean
+  sub_options: {
+    id: string
+    sub_option_id: string
+    sub_groups: {
+      options: {
+        option_groups: { service_id: string }
+      }
+    }
+  }
 }
 
 function cacheKey(serviceId: string, optionId: string) {
@@ -113,6 +141,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       services: [],
       _vendorUuid: null,
       _optionDbIdCache: {},
+      _subOptionDbIdCache: {},
       _migrationDone: false,
 
       initFromAdmin: (adminServices) => {
@@ -172,20 +201,34 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           console.error('[catalog] setPrice: no vendor UUID available — write dropped', { serviceId, optionId })
           return
         }
-        const optionDbId = get()._optionDbIdCache[cacheKey(serviceId, optionId)]
-        if (!optionDbId) {
-          console.error('[catalog] setPrice: option not in DB cache — write dropped', { serviceId, optionId })
+        const ck = cacheKey(serviceId, optionId)
+        const optionDbId = get()._optionDbIdCache[ck]
+        if (optionDbId) {
+          supabase
+            .from('vendor_option_prices')
+            .upsert(
+              { vendor_id: vendorUuid, option_id: optionDbId, price_cents: price, currency: 'USD', active: true },
+              { onConflict: 'vendor_id,option_id' }
+            )
+            .then(({ error }) => {
+              if (error) console.error('[catalog] upsert option price failed:', error.message)
+            })
           return
         }
-        supabase
-          .from('vendor_option_prices')
-          .upsert(
-            { vendor_id: vendorUuid, option_id: optionDbId, price_cents: price, currency: 'USD', active: true },
-            { onConflict: 'vendor_id,option_id' }
-          )
-          .then(({ error }) => {
-            if (error) console.error('[catalog] upsert price failed:', error.message)
-          })
+        const subOptionDbId = get()._subOptionDbIdCache[ck]
+        if (subOptionDbId) {
+          supabase
+            .from('vendor_sub_option_prices')
+            .upsert(
+              { vendor_id: vendorUuid, sub_option_id: subOptionDbId, price_cents: price, currency: 'USD', active: true },
+              { onConflict: 'vendor_id,sub_option_id' }
+            )
+            .then(({ error }) => {
+              if (error) console.error('[catalog] upsert sub_option price failed:', error.message)
+            })
+          return
+        }
+        console.error('[catalog] setPrice: id not in option OR sub_option DB cache — write dropped', { serviceId, optionId })
       },
 
       setPricePercent: (serviceId, optionId, percent) => {
@@ -277,6 +320,17 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           console.error('[catalog] permit hydrate load failed:', permitErr.message)
         }
 
+        // 1c. Load this vendor's sub_option prices (Arc-41 — sub-option layer).
+        const { data: subPriceRows, error: subPriceErr } = await supabase
+          .from('vendor_sub_option_prices')
+          .select('price_cents,active,sub_options(id,sub_option_id,sub_groups(options(option_groups(service_id))))')
+          .eq('vendor_id', vendorUuid)
+          .eq('active', true)
+
+        if (subPriceErr) {
+          console.error('[catalog] sub_option price hydrate load failed:', subPriceErr.message)
+        }
+
         // 2. Load ALL options for the DB UUID cache (covers options not yet priced).
         const { data: allOptions, error: optErr } = await supabase
           .from('options')
@@ -286,12 +340,31 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           console.error('[catalog] options load failed:', optErr.message)
         }
 
+        // 2b. Load ALL sub_options for the sub_option DB UUID cache. Walks
+        // sub_groups → options → option_groups so each sub_option pairs with
+        // the same serviceId used as the cacheKey prefix for option rows.
+        const { data: allSubOptions, error: subOptErr } = await supabase
+          .from('sub_options')
+          .select('id,sub_option_id,sub_groups(options(option_groups(service_id)))')
+
+        if (subOptErr) {
+          console.error('[catalog] sub_options load failed:', subOptErr.message)
+        }
+
         // 3. Build option DB UUID cache from all options.
         const optionDbIdCache: Record<string, string> = {}
         for (const opt of (allOptions ?? []) as unknown as DbOptionRow[]) {
           const og = opt.option_groups
           if (!og) continue
           optionDbIdCache[cacheKey(og.service_id, opt.option_id)] = opt.id
+        }
+
+        // 3b. Build sub_option DB UUID cache from all sub_options.
+        const subOptionDbIdCache: Record<string, string> = {}
+        for (const so of (allSubOptions ?? []) as unknown as DbSubOptionRow[]) {
+          const svcId = so.sub_groups?.options?.option_groups?.service_id
+          if (!svcId) continue
+          subOptionDbIdCache[cacheKey(svcId, so.sub_option_id)] = so.id
         }
 
         // 4. Build pricing maps from Supabase rows (Supabase is canonical).
@@ -307,6 +380,20 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           if (!optionDbIdCache[ck]) optionDbIdCache[ck] = opt.id
         }
 
+        // 4a. Fold sub_option prices into the same pricing[] map keyed by
+        // sub_option_id. Cart/configurator selections that target a sub_option
+        // id hit getPrice with the sub_option_id; flat key shape mirrors the
+        // option-side fold so consumer code stays one-shape.
+        for (const row of (subPriceRows ?? []) as unknown as DbSubPriceRow[]) {
+          const so = row.sub_options
+          const svcId = so?.sub_groups?.options?.option_groups?.service_id
+          if (!so || !svcId) continue
+          if (!priceBySvcOption[svcId]) priceBySvcOption[svcId] = {}
+          priceBySvcOption[svcId][so.sub_option_id] = row.price_cents
+          const ck = cacheKey(svcId, so.sub_option_id)
+          if (!subOptionDbIdCache[ck]) subOptionDbIdCache[ck] = so.id
+        }
+
         // 4b. Build per-service permit map (PR #118).
         const permitByService: Record<string, number> = {}
         for (const row of (permitRows ?? []) as unknown as DbPermitRow[]) {
@@ -317,6 +404,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // 5. Merge Supabase prices into local store (Supabase wins).
         set((state) => ({
           _optionDbIdCache: optionDbIdCache,
+          _subOptionDbIdCache: subOptionDbIdCache,
           services: state.services.map((s) => {
             const sbPricing = priceBySvcOption[s.serviceId]
             const sbPermit = permitByService[s.serviceId]
