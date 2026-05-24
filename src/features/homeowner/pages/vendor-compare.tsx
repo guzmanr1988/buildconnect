@@ -19,7 +19,9 @@ import {
   computeVendorTotal,
   formatPriceCents,
   getVendorPriceMap,
+  getVendorPermitMap,
   type VendorPriceMap,
+  type VendorPermitMap,
   type VendorTotalResult,
 } from '@/lib/api/pricing'
 import { useVendorPriceRealtime } from '@/lib/hooks/use-vendor-price-realtime'
@@ -113,6 +115,11 @@ export function VendorComparePage() {
   }, [cartCategories, projectCoords, matchRadiusMiles, realVendors])
 
   const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
+  // Arc-32 PR-B — parallel to priceMaps. Rod-rule "permit is default in every
+  // service unless vendor puts it at 0" requires summing vendor_service_permits
+  // into the Compare-Vendors total. getVendorPermitMap filters zero/missing
+  // rows, so absence in the map = vendor opt-out for that service.
+  const [permitMaps, setPermitMaps] = useState<Record<string, VendorPermitMap>>({})
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -134,12 +141,20 @@ export function VendorComparePage() {
           // Real vendors: their id IS already the UUID.
           const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
           // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
-          if (!UUID_RE.test(uuid)) return [v.id, new Map() as VendorPriceMap] as const
-          const map = await getVendorPriceMap(uuid)
-          return [v.id, map] as const
+          if (!UUID_RE.test(uuid)) {
+            return [v.id, new Map() as VendorPriceMap, new Map() as VendorPermitMap] as const
+          }
+          // Parallel-fetch price + permit maps so a slow permit query doesn't
+          // serialize behind priceMap. computeVendorTotal sums both.
+          const [map, permits] = await Promise.all([
+            getVendorPriceMap(uuid),
+            getVendorPermitMap(uuid),
+          ])
+          return [v.id, map, permits] as const
         })
       )
-      setPriceMaps(Object.fromEntries(entries))
+      setPriceMaps(Object.fromEntries(entries.map(([id, map]) => [id, map])))
+      setPermitMaps(Object.fromEntries(entries.map(([id, , permits]) => [id, permits])))
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
     } finally {
@@ -166,10 +181,10 @@ export function VendorComparePage() {
     for (const v of featuredVendors) {
       const map = priceMaps[v.id]
       if (!map) continue
-      out[v.id] = computeVendorTotal(map, cartItems, services)
+      out[v.id] = computeVendorTotal(map, cartItems, services, permitMaps[v.id])
     }
     return out
-  }, [priceMaps, cartItems, services])
+  }, [priceMaps, permitMaps, cartItems, services])
 
   // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
   // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.
