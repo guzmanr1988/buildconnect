@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Package, DollarSign, ChevronDown } from 'lucide-react'
+import { Package, DollarSign, ChevronDown, Save, Loader2, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -42,6 +43,66 @@ export default function VendorCatalog() {
       else next.add(id)
       return next
     })
+  }
+
+  // Arc-37 per-service Save: store auto-saves on each input (setPrice +
+  // setServicePermit fire-and-forget upsert), so the Save button's job is
+  // (a) give Rod an explicit commit-acknowledged signal, and (b) re-flush
+  // the same upserts as a safety re-snapshot. dirtyServices tracks any
+  // mutation since the last Save click for this service so the button
+  // gates correctly when there's nothing pending.
+  const [dirtyServices, setDirtyServices] = useState<Set<string>>(new Set())
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const markDirty = (svcId: string) => {
+    setDirtyServices((prev) => {
+      if (prev.has(svcId)) return prev
+      const next = new Set(prev)
+      next.add(svcId)
+      return next
+    })
+  }
+  const wrappedToggleOption = (svcId: string, groupId: string, optId: string) => {
+    toggleOption(svcId, groupId, optId)
+    markDirty(svcId)
+  }
+  const wrappedSetPrice = (svcId: string, optId: string, price: number) => {
+    setPrice(svcId, optId, price)
+    markDirty(svcId)
+  }
+  const wrappedSetPricePercent = (svcId: string, optId: string, pct: number) => {
+    setPricePercent(svcId, optId, pct)
+    markDirty(svcId)
+  }
+  const wrappedSetServicePermit = (svcId: string, cents: number) => {
+    setServicePermit(svcId, cents)
+    markDirty(svcId)
+  }
+  async function handleSaveService(serviceId: string) {
+    setSavingId(serviceId)
+    const svc = useVendorCatalogStore.getState().services.find((s) => s.serviceId === serviceId)
+    if (svc) {
+      for (const [optId, price] of Object.entries(svc.pricing)) {
+        if (typeof price === 'number' && price > 0) {
+          setPrice(serviceId, optId, price)
+        }
+      }
+      if ((svc.permitCents ?? 0) > 0) {
+        setServicePermit(serviceId, svc.permitCents ?? 0)
+      }
+    }
+    await new Promise((r) => setTimeout(r, 350))
+    setSavingId(null)
+    setDirtyServices((prev) => {
+      if (!prev.has(serviceId)) return prev
+      const next = new Set(prev)
+      next.delete(serviceId)
+      return next
+    })
+    setSavedId(serviceId)
+    setTimeout(() => {
+      setSavedId((prev) => (prev === serviceId ? null : prev))
+    }, 1800)
   }
 
   // Sync with admin catalog on mount
@@ -179,8 +240,52 @@ export default function VendorCatalog() {
                         </Badge>
                       )}
                     </div>
-                    {/* Switch must not bubble its click up to the inner title-row collapse handler. */}
-                    <div onClick={(e) => e.stopPropagation()}>
+                    {/* Save button + Switch — both halt propagation so header-row
+                        clicks don't trigger the collapse handler. Save sits LEFT
+                        of the toggle per Rod directive (Arc-37 photo file_355). */}
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {enabled && (() => {
+                        const isSaving = savingId === service.id
+                        const isSaved = savedId === service.id
+                        const isDirty = dirtyServices.has(service.id)
+                        const disabled = isSaving || (!isDirty && !isSaved)
+                        return (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isSaved ? 'default' : 'outline'}
+                            disabled={disabled}
+                            onClick={() => handleSaveService(service.id)}
+                            aria-label={`Save ${service.name} changes`}
+                            className={cn(
+                              'h-8 gap-1.5 text-xs',
+                              isSaved && 'bg-emerald-600 hover:bg-emerald-600 text-white'
+                            )}
+                          >
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Saving
+                              </>
+                            ) : isSaved ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                Saved
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                Save
+                              </>
+                            )}
+                          </Button>
+                        )
+                      })()}
                       <Switch
                         checked={enabled}
                         onCheckedChange={() => toggleService(service.id)}
@@ -234,7 +339,7 @@ export default function VendorCatalog() {
                           aria-label={`Permit price for ${service.name}`}
                           type="number"
                           value={getServicePermit(service.id) || ''}
-                          onChange={(e) => setServicePermit(service.id, Number(e.target.value))}
+                          onChange={(e) => wrappedSetServicePermit(service.id, Number(e.target.value))}
                           placeholder="0"
                           className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
                         />
@@ -253,9 +358,9 @@ export default function VendorCatalog() {
                           isOptionEnabled={isOptionEnabled}
                           getPrice={getPrice}
                           getPricePercent={getPricePercent}
-                          onToggle={toggleOption}
-                          onPriceChange={setPrice}
-                          onPricePercentChange={setPricePercent}
+                          onToggle={wrappedToggleOption}
+                          onPriceChange={wrappedSetPrice}
+                          onPricePercentChange={wrappedSetPricePercent}
                         />
 
                         {/* Sub-groups for options that have them */}
@@ -272,9 +377,9 @@ export default function VendorCatalog() {
                                 isOptionEnabled={isOptionEnabled}
                                 getPrice={getPrice}
                                 getPricePercent={getPricePercent}
-                                onToggle={toggleOption}
-                                onPriceChange={setPrice}
-                                onPricePercentChange={setPricePercent}
+                                onToggle={wrappedToggleOption}
+                                onPriceChange={wrappedSetPrice}
+                                onPricePercentChange={wrappedSetPricePercent}
                               />
                             </div>
                           ))
