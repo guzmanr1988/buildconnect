@@ -1,11 +1,5 @@
 import { Badge } from '@/components/ui/badge'
 import { SERVICE_CATALOG } from '@/lib/constants'
-import {
-  windowCatalogUnitPrice,
-  doorCatalogUnitPrice,
-  stormFrontCatalogUnitPrice,
-  garageDoorCatalogUnitPrice,
-} from '@/lib/configurator-catalog-price'
 import type { CartItem } from '@/stores/cart-store'
 
 // Arc-35 shared component — extracted from appointment-status.tsx Project
@@ -130,104 +124,73 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
   const pricing = opts.showPricing && opts.getPrice
   const getPrice = opts.getPrice
 
+  // Arc-35b HOTFIX: per-card $ display REVERTED for W/D/storm/garage —
+  // *CatalogUnitPrice helpers return spec ADD-ON cost only (impact-glass
+  // upgrade etc), NOT full unit-with-base. Wrong values surface as
+  // $2/$5/$7/$12 on Rod's photo file_352. Cards revert to qty-only
+  // primary slot. Section $Total badges also dropped (computed from same
+  // broken helpers); section header reverts to qty totals. Install +
+  // Permit sections below KEEP $ (they use direct getPrice — correct).
+
   // Windows
   if (item.windowSelections && item.windowSelections.length > 0) {
-    let sectionTotal = 0
-    const cards: SummaryCard[] = item.windowSelections.map((w) => {
-      const card: SummaryCard = {
-        topLabel: `${w.size.replace('x', '" × ')}"`,
-        primaryValue: `×${w.quantity}`,
-        specs: [
-          { variant: 'secondary', text: w.type },
-          { variant: 'outline', text: `Frame: ${w.frameColor}` },
-          { variant: 'outline', text: `Glass: ${w.glassColor}` },
-          { variant: 'outline', text: w.glassType },
-        ],
-      }
-      if (pricing && getPrice) {
-        const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
-        if (unit > 0) {
-          const total = unit * w.quantity
-          card.pricing = { unit, qty: w.quantity, total }
-          card.primaryValue = fmtPriceCents(total)
-          sectionTotal += total
-        }
-      }
-      return card
-    })
+    const cards: SummaryCard[] = item.windowSelections.map((w) => ({
+      topLabel: `${w.size.replace('x', '" × ')}"`,
+      primaryValue: `×${w.quantity}`,
+      specs: [
+        { variant: 'secondary', text: w.type },
+        { variant: 'outline', text: `Frame: ${w.frameColor}` },
+        { variant: 'outline', text: `Glass: ${w.glassColor}` },
+        { variant: 'outline', text: w.glassType },
+      ],
+    }))
     const totalQty = item.windowSelections.reduce((s, w) => s + w.quantity, 0)
     sections.push({
       id: 'windows',
       title: 'Windows',
-      totalLabel: pricing && sectionTotal > 0 ? fmtPriceCents(sectionTotal) : `Total: ${totalQty}`,
+      totalLabel: `Total: ${totalQty}`,
       cards,
     })
   }
 
   // Doors
   if (item.doorSelections && item.doorSelections.length > 0) {
-    let sectionTotal = 0
-    const cards: SummaryCard[] = item.doorSelections.map((d) => {
-      const card: SummaryCard = {
-        topLabel: `${d.size.replace('x', '" × ')}"`,
-        primaryValue: `×${d.quantity}`,
-        specs: [
-          { variant: 'secondary', text: d.type },
-          { variant: 'outline', text: `Frame: ${d.frameColor}` },
-          { variant: 'outline', text: `Glass: ${d.glassColor}` },
-          { variant: 'outline', text: d.glassType },
-        ],
-      }
-      if (pricing && getPrice) {
-        const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
-        if (unit > 0) {
-          const total = unit * d.quantity
-          card.pricing = { unit, qty: d.quantity, total }
-          card.primaryValue = fmtPriceCents(total)
-          sectionTotal += total
-        }
-      }
-      return card
-    })
+    const cards: SummaryCard[] = item.doorSelections.map((d) => ({
+      topLabel: `${d.size.replace('x', '" × ')}"`,
+      primaryValue: `×${d.quantity}`,
+      specs: [
+        { variant: 'secondary', text: d.type },
+        { variant: 'outline', text: `Frame: ${d.frameColor}` },
+        { variant: 'outline', text: `Glass: ${d.glassColor}` },
+        { variant: 'outline', text: d.glassType },
+      ],
+    }))
     const totalQty = item.doorSelections.reduce((s, d) => s + d.quantity, 0)
     sections.push({
       id: 'doors',
       title: 'Doors',
-      totalLabel: pricing && sectionTotal > 0 ? fmtPriceCents(sectionTotal) : `Total: ${totalQty}`,
+      totalLabel: `Total: ${totalQty}`,
       cards,
     })
   }
 
   // Storm Fronts
   if (item.stormFrontSelections && item.stormFrontSelections.length > 0) {
-    let sectionTotal = 0
-    const cards: SummaryCard[] = item.stormFrontSelections.map((sf) => {
-      const card: SummaryCard = {
-        topLabel: `${sf.size.replace('x', '" × ')}"`,
-        primaryValue: `×${sf.quantity}`,
-        specs: [
-          { variant: 'secondary', text: sf.type },
-          { variant: 'outline', text: `Frame: ${sf.frameColor}` },
-          { variant: 'outline', text: `Glass: ${sf.glassColor}` },
-          { variant: 'outline', text: sf.glassType },
-        ],
-      }
-      if (pricing && getPrice) {
-        const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
-        if (unit > 0) {
-          const total = unit * sf.quantity
-          card.pricing = { unit, qty: sf.quantity, total }
-          card.primaryValue = fmtPriceCents(total)
-          sectionTotal += total
-        }
-      }
-      return card
-    })
+    const cards: SummaryCard[] = item.stormFrontSelections.map((sf) => ({
+      topLabel: `${sf.size.replace('x', '" × ')}"`,
+      primaryValue: `×${sf.quantity}`,
+      specs: [
+        { variant: 'secondary', text: sf.type },
+        { variant: 'outline', text: `Frame: ${sf.frameColor}` },
+        { variant: 'outline', text: `Glass: ${sf.glassColor}` },
+        { variant: 'outline', text: sf.glassType },
+      ],
+    }))
     const totalQty = item.stormFrontSelections.reduce((s, sf) => s + sf.quantity, 0)
     sections.push({
       id: 'storm-fronts',
       title: 'Storm Fronts',
-      totalLabel: pricing && sectionTotal > 0 ? fmtPriceCents(sectionTotal) : `Total: ${totalQty}`,
+      totalLabel: `Total: ${totalQty}`,
       cards,
     })
   }
@@ -255,24 +218,10 @@ function buildWindowsDoorsSections(item: CartItem, opts: BuildOpts): SummarySect
       })
     }
     const topLabel = gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'
-    const card: SummaryCard = {
-      topLabel,
-      specs: specs.length > 0 ? specs : undefined,
-    }
-    let sectionTotal = 0
-    if (pricing && getPrice) {
-      const unit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
-      if (unit > 0) {
-        card.pricing = { unit, qty: 1, total: unit }
-        card.primaryValue = fmtPriceCents(unit)
-        sectionTotal = unit
-      }
-    }
     sections.push({
       id: 'garage-doors',
       title: 'Garage Door',
-      totalLabel: pricing && sectionTotal > 0 ? fmtPriceCents(sectionTotal) : undefined,
-      cards: [card],
+      cards: [{ topLabel, specs: specs.length > 0 ? specs : undefined }],
     })
   }
 
