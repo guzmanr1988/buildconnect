@@ -648,12 +648,17 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
     {
       name: 'buildconnect-vendor-catalog',
       // Persist user-facing state only; internal cache is rebuilt on hydration.
-      // _pendingWrites is persisted so writes queued before a page refresh
-      // (cache-not-ready window) get replayed on the next hydrate.
+      // _pendingWrites is INTENTIONALLY NOT persisted (Arc-32 PR-D2). The
+      // queue's purpose is to bridge the cache-not-ready window WITHIN a
+      // single page lifecycle (_hydrationStatus 'idle' → 'complete'). Persisting
+      // it across sessions causes stale pre-fix-encoded writes to replay
+      // against post-migration DB rows on the next TOKEN_REFRESHED hydrate,
+      // overwriting fresh values with stored localStorage state. Same-session
+      // queue behaviour (typing during 'idle' → drain on hydrate-complete)
+      // is preserved because _pendingWrites remains in memory.
       partialize: (state) => ({
         services: state.services,
         _migrationDone: state._migrationDone,
-        _pendingWrites: state._pendingWrites,
       }),
     }
   )
