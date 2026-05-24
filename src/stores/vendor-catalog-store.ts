@@ -303,6 +303,27 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       },
 
       setPrice: (serviceId, optionId, price) => {
+        // Legacy phantom-key handling — pre-PR-#118 code stored service-level
+        // permit prices in svc.pricing["permit"]. Some vendor localStorage
+        // still holds this stale key; on Save the handleSaveService loop pipes
+        // it into setPrice and the option-catalog cache-miss assertion (PR-#383)
+        // toasts spuriously ("Could not save price for \"permit\" — option
+        // not in catalog"). Route to the canonical service-permit write-path
+        // and strip the stale pricing key inline so subsequent saves stop
+        // iterating it.
+        if (optionId === 'permit') {
+          set((state) => ({
+            services: state.services.map((s) => {
+              if (s.serviceId !== serviceId) return s
+              if (!('permit' in s.pricing)) return s
+              const cleanedPricing = { ...s.pricing }
+              delete cleanedPricing.permit
+              return { ...s, pricing: cleanedPricing }
+            }),
+          }))
+          get().setServicePermit(serviceId, price)
+          return
+        }
         // Sync local state first (fast, no await).
         set((state) => ({
           services: state.services.map((s) =>
