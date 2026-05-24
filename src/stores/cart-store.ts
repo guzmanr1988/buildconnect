@@ -203,7 +203,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'buildconnect-cart',
-      version: 8,
+      version: 9,
       // PR #196 — strip heavyweight base64 fields (idDocument, photos[],
       // items[].itemPhotos[]) from the persisted shape. PR #195 nuke
       // unblocked once but cart-store had no partialize, so first send
@@ -221,14 +221,15 @@ export const useCartStore = create<CartState>()(
           itemPhotos: undefined,
         })),
       }),
-      // Pre-launch hygiene policy (v8): treat any v<7 entry as a stale
+      // Pre-launch hygiene policy: treat any v<9 entry as a stale
       // demo/test artifact and drop entirely on first mount rather than
       // running a multi-step migration chain that may not align with the
       // current CartItem interface anymore. Since BuildConnect is still
-      // pre-launch, there are no real-user carts to preserve at v<7 —
-      // safe to fresh-mount. v7 → v8 is a no-op cache-invalidation bump.
+      // pre-launch, there are no real-user carts to preserve at v<9 —
+      // safe to fresh-mount. v9 wipes pre-Arc-33c carts that admitted
+      // incomplete garageDoorSelection via the type-only cart-add gate.
       migrate: (persistedState: unknown, version: number) => {
-        if (version < 7) {
+        if (version < 9) {
           return {
             items: [],
             projectTitle: '',
