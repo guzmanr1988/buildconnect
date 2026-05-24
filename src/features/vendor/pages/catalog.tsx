@@ -341,9 +341,13 @@ export default function VendorCatalog() {
                         <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
                         <Input
                           aria-label={`Permit price for ${service.name}`}
-                          type="number"
-                          value={getServicePermit(service.id) || ''}
-                          onChange={(e) => wrappedSetServicePermit(service.id, Number(e.target.value))}
+                          type="text"
+                          inputMode="numeric"
+                          value={getServicePermit(service.id) > 0 ? getServicePermit(service.id).toLocaleString('en-US') : ''}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/[^\d]/g, '')
+                            wrappedSetServicePermit(service.id, digits === '' ? 0 : Number(digits))
+                          }}
                           placeholder="0"
                           className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
                         />
