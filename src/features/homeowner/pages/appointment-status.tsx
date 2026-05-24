@@ -631,31 +631,6 @@ export function AppointmentStatusPage() {
                   value={vendor.company}
                 />
               )}
-
-              {/* Project Items — itemized breakdown of every wizard pick
-                  with quantity. Section-grouped per delta F. Falls back to
-                  legacy pack_items badge list for MOCK_LEADS fixtures. */}
-              <div className="mt-2 border-t border-border pt-3">
-                <p className="mb-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Project Items
-                </p>
-                {sentProject?.item ? (
-                  <ProjectItemsList
-                    item={sentProject.item}
-                    projectPermit={sentProject.projectPermit}
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(lead.pack_items).map(([, items]) =>
-                      items.map((item) => (
-                        <Badge key={item} variant="secondary" className="text-[10px]">
-                          {humanizeId(item)}
-                        </Badge>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -732,6 +707,143 @@ export function AppointmentStatusPage() {
           )}
         </div>
       </div>
+
+      {/* Project Items — detached from Project Details so it spans full
+          width below the 2-col grid. When sentProject.item carries
+          windowSelections / doorSelections / garageDoorSelection, mirror
+          the cart.tsx Project Summary modal sections (windows / doors /
+          garage-doors) verbatim so apollo Arc-33b walker anchors stay
+          green. Falls back to ProjectItemsList for legacy single-service
+          items, and to pack_items badges for MOCK_LEADS fixtures. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.24 }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Project Items
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const item = sentProject?.item
+              const hasW = !!item?.windowSelections && item.windowSelections.length > 0
+              const hasD = !!item?.doorSelections && item.doorSelections.length > 0
+              const hasG = !!item?.garageDoorSelection?.type
+              const hasCardSelections = hasW || hasD || hasG
+              if (hasCardSelections && item) {
+                return (
+                  <div className="flex flex-col gap-3">
+                    {hasW && item.windowSelections && (
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="windows">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">Windows</p>
+                          <span className="text-sm font-bold text-primary">
+                            Total: {item.windowSelections.reduce((s, w) => s + w.quantity, 0)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                          {item.windowSelections.map((w) => (
+                            <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-bold">{w.size.replace('x', '" × ')}"</span>
+                                <span className="text-base font-bold text-primary">×{w.quantity}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                                <Badge variant="secondary" className="text-xs">{w.type}</Badge>
+                                <Badge variant="outline" className="text-xs">Frame: {w.frameColor}</Badge>
+                                <Badge variant="outline" className="text-xs">Glass: {w.glassColor}</Badge>
+                                <Badge variant="outline" className="text-xs">{w.glassType}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {hasD && item.doorSelections && (
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="doors">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">Doors</p>
+                          <span className="text-sm font-bold text-primary">
+                            Total: {item.doorSelections.reduce((s, d) => s + d.quantity, 0)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                          {item.doorSelections.map((d) => (
+                            <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-bold">{d.size.replace('x', '" × ')}"</span>
+                                <span className="text-base font-bold text-primary">×{d.quantity}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                                <Badge variant="secondary" className="text-xs">{d.type}</Badge>
+                                <Badge variant="outline" className="text-xs">Frame: {d.frameColor}</Badge>
+                                <Badge variant="outline" className="text-xs">Glass: {d.glassColor}</Badge>
+                                <Badge variant="outline" className="text-xs">{d.glassType}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {hasG && item.garageDoorSelection?.type && (
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="garage-doors">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-foreground">Garage Door</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                          <div className="rounded-lg bg-background border p-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-base font-bold">
+                                {item.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                              </span>
+                            </div>
+                            {((item.garageDoorSelection.type === 'double_garage' && item.garageDoorSelection.size) || item.garageDoorSelection.color || item.garageDoorSelection.glass) && (
+                              <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                                {item.garageDoorSelection.type === 'double_garage' && item.garageDoorSelection.size && (
+                                  <Badge variant="outline" className="text-xs">{item.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                                )}
+                                {item.garageDoorSelection.color && (
+                                  <Badge variant="outline" className="text-xs">Color: {item.garageDoorSelection.color.charAt(0).toUpperCase() + item.garageDoorSelection.color.slice(1)}</Badge>
+                                )}
+                                {item.garageDoorSelection.glass && (
+                                  <Badge variant="outline" className="text-xs">Glass: {item.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              if (item) {
+                return (
+                  <ProjectItemsList
+                    item={item}
+                    projectPermit={sentProject?.projectPermit}
+                  />
+                )
+              }
+              return (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(lead.pack_items).map(([, items]) =>
+                    items.map((it) => (
+                      <Badge key={it} variant="secondary" className="text-[10px]">
+                        {humanizeId(it)}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Ship #191 — reschedule picker + counter picker mounted
           unconditionally per dialog-mount-in-every-return-branch
