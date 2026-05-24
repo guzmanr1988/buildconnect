@@ -731,6 +731,7 @@ export function AppointmentStatusPage() {
               <ProjectItemsCardGrid
                 item={sentProject.item}
                 projectPermit={sentProject?.projectPermit}
+                resolvedLineItems={sentProject?.priceLineItems}
               />
             ) : (
               <div className="flex flex-wrap gap-1.5">
