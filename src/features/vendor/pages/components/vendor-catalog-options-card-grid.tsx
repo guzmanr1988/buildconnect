@@ -109,10 +109,18 @@ export function VendorCatalogOptionsCardGrid({
                     aria-label={`Price for ${option.label}`}
                     type="text"
                     inputMode="numeric"
-                    value={price > 0 ? price.toLocaleString('en-US') : ''}
+                    // Arc-32 PR-D — input is dollars-encoded, DB columns
+                    // (vendor_option_prices.price_cents +
+                    // vendor_sub_option_prices.price_cents) are cents-encoded.
+                    // Convert at input boundary: ÷100 for display, ×100 on
+                    // save. Routes through onPriceChange → setPrice for both
+                    // VOP and VSOP (CatalogGroupRenderer recurses through
+                    // sub-groups using the same component).
+                    value={price > 0 ? Math.round(price / 100).toLocaleString('en-US') : ''}
                     onChange={(e) => {
                       const digits = e.target.value.replace(/[^\d]/g, '')
-                      onPriceChange(serviceId, option.id, digits === '' ? 0 : Number(digits))
+                      const dollars = digits === '' ? 0 : Number(digits)
+                      onPriceChange(serviceId, option.id, dollars * 100)
                     }}
                     placeholder="0"
                     className="h-9 w-24 text-sm text-right"
