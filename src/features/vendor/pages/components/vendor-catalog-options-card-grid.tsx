@@ -107,9 +107,13 @@ export function VendorCatalogOptionsCardGrid({
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                   <Input
                     aria-label={`Price for ${option.label}`}
-                    type="number"
-                    value={price || ''}
-                    onChange={(e) => onPriceChange(serviceId, option.id, Number(e.target.value))}
+                    type="text"
+                    inputMode="numeric"
+                    value={price > 0 ? price.toLocaleString('en-US') : ''}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^\d]/g, '')
+                      onPriceChange(serviceId, option.id, digits === '' ? 0 : Number(digits))
+                    }}
                     placeholder="0"
                     className="h-9 w-24 text-sm text-right"
                   />
