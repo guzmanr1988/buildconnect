@@ -2191,6 +2191,30 @@ export function ServiceDetailPage() {
                         />
                       )}
                     </AnimatePresence>
+                    {selected.includes('garage_doors') && !garageDoorConfigOpen && garageDoorSelection.type && (
+                      <div className="mt-3 rounded-lg bg-muted/50 p-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="text-[11px] bg-background rounded px-2 py-0.5 border font-medium">
+                            {garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                          </span>
+                          {garageDoorSelection.type === 'double_garage' && garageDoorSelection.size && (
+                            <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                              Size: {garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
+                            </span>
+                          )}
+                          {garageDoorSelection.color && (
+                            <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                              Color: {garageDoorSelection.color.charAt(0).toUpperCase() + garageDoorSelection.color.slice(1)}
+                            </span>
+                          )}
+                          {garageDoorSelection.glass && (
+                            <span className="text-[11px] bg-background rounded px-2 py-0.5 border">
+                              Glass: {garageDoorSelection.glass.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
