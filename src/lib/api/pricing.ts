@@ -234,6 +234,13 @@ export function computeVendorTotal(
   // back to flat. Optional for back-compat — when undefined, only the static
   // OPTION_METADATA map applies (legacy behavior).
   services?: ServiceConfig[],
+  // Arc-32 PR-B — vendor_service_permits roll-in. Rod-rule: "permit is
+  // default in every service unless vendor puts it at 0, therefor it needs
+  // to be accounted and added to the total." Sum per-service permit for
+  // every service the vendor covers (has at least one priced VOP/VSOP row).
+  // Vendors who set 0 are filtered out at getVendorPermitMap (zero/missing
+  // rows skipped), so absence = opt-out. Optional for back-compat.
+  permitMap?: VendorPermitMap,
 ): VendorTotalResult {
   let hasSelections = false
   let totalCents = 0
@@ -429,6 +436,13 @@ export function computeVendorTotal(
     cartItems.length > 0 &&
     cartServiceIds.size > 0 &&
     Array.from(cartServiceIds).every((id) => coveredServices.has(id))
+
+  if (permitMap) {
+    for (const serviceId of coveredServices) {
+      const permitCents = permitMap.get(serviceId) ?? 0
+      totalCents += permitCents
+    }
+  }
 
   return {
     hasSelections,
