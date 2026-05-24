@@ -347,10 +347,20 @@ export default function VendorCatalog() {
                           aria-label={`Permit price for ${service.name}`}
                           type="text"
                           inputMode="numeric"
-                          value={getServicePermit(service.id) > 0 ? getServicePermit(service.id).toLocaleString('en-US') : ''}
+                          // Arc-32 PR-D — input is dollars-encoded, DB column
+                          // permit_price_cents is cents-encoded. Convert at
+                          // the input boundary: divide by 100 for display,
+                          // multiply by 100 on save. Mirrors membership.tsx
+                          // /100 display pattern.
+                          value={(() => {
+                            const cents = getServicePermit(service.id)
+                            if (cents <= 0) return ''
+                            return Math.round(cents / 100).toLocaleString('en-US')
+                          })()}
                           onChange={(e) => {
                             const digits = e.target.value.replace(/[^\d]/g, '')
-                            wrappedSetServicePermit(service.id, digits === '' ? 0 : Number(digits))
+                            const dollars = digits === '' ? 0 : Number(digits)
+                            wrappedSetServicePermit(service.id, dollars * 100)
                           }}
                           placeholder="0"
                           className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
