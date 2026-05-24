@@ -1,7 +1,24 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
+
+// Arc-32 close — pending-write queue for the cache-not-ready window.
+// setPrice/setServicePermit fire from input onChange handlers, which can race
+// AHEAD of hydrateFromSupabase building _optionDbIdCache / _subOptionDbIdCache.
+// Pre-fix: cache miss + no UUID → console.error + silent drop → Rod's typed
+// price lived only in zustand-persist localStorage and never reached Supabase
+// (canonical class: Apex VSOP=0 entirely 2026-05-24 forensic). Fix: when the
+// cache isn't ready, queue the write; replay on hydrate-complete; toast only
+// on genuine post-replay failure (cache-miss after hydrate OR upsert error).
+type PendingWrite =
+  | { kind: 'option'; serviceId: string; optionId: string; cents: number }
+  | { kind: 'permit'; serviceId: string; cents: number }
+
+type HydrationStatus = 'idle' | 'in_flight' | 'complete'
+
+const WRITE_FAIL_TOAST = 'Could not save price — please retry'
 
 // Tracks which services and options a vendor has enabled, with their pricing
 export interface VendorServiceConfig {
@@ -35,6 +52,13 @@ interface VendorCatalogState {
   _subOptionDbIdCache: Record<string, string>
   // One-time flag: have we migrated localStorage pricing to Supabase?
   _migrationDone: boolean
+  // Arc-32 close — hydration lifecycle. setPrice queues if 'idle' | 'in_flight'.
+  _hydrationStatus: HydrationStatus
+  // Arc-32 close — writes queued while cache wasn't ready. Drained at the end
+  // of hydrateFromSupabase against the freshly built caches. Persisted across
+  // refresh so a vendor who types prices and immediately reloads doesn't lose
+  // them (zustand-pricing[] is the second safety; this is the first).
+  _pendingWrites: PendingWrite[]
 
   initFromAdmin: (adminServices: { id: string }[]) => void
   toggleService: (serviceId: string) => void
@@ -121,6 +145,100 @@ function resolveVendorUuid(stateUuid: string | null): string | null {
 // stays in sync with the vendor's catalog state. Without this write, a
 // vendor could enable Roofing in their catalog but never show up in the
 // homeowner Compare Vendors list because service_categories stayed empty.
+// Arc-32 close — enqueue a write when caches/auth aren't ready. Dedupes
+// against pending entries of the same shape so rapid typing on the same input
+// collapses to the latest cents value rather than replaying every keystroke.
+function enqueuePending(
+  setState: (
+    partial:
+      | Partial<VendorCatalogState>
+      | ((s: VendorCatalogState) => Partial<VendorCatalogState>),
+  ) => void,
+  write: PendingWrite,
+) {
+  setState((state) => {
+    const queue = state._pendingWrites.filter((w) => {
+      if (w.kind !== write.kind) return true
+      if (w.serviceId !== write.serviceId) return true
+      if (w.kind === 'option' && write.kind === 'option') {
+        return w.optionId !== write.optionId
+      }
+      return false
+    })
+    return { _pendingWrites: [...queue, write] }
+  })
+}
+
+// Arc-32 close — drain queued writes against now-built caches. Called at the
+// end of hydrateFromSupabase (caches populated, auth attached). Eagerly clears
+// the queue so re-entry from a parallel hydrate (auth state-change) doesn't
+// double-fire. Toasts only on genuine post-replay failure.
+async function drainPendingWrites(
+  vendorUuid: string,
+  getState: () => VendorCatalogState,
+  setState: (
+    partial:
+      | Partial<VendorCatalogState>
+      | ((s: VendorCatalogState) => Partial<VendorCatalogState>),
+  ) => void,
+) {
+  const queue = getState()._pendingWrites
+  if (queue.length === 0) return
+  setState({ _pendingWrites: [] })
+  for (const w of queue) {
+    if (w.kind === 'permit') {
+      const { error } = await supabase
+        .from('vendor_service_permits')
+        .upsert(
+          {
+            vendor_id: vendorUuid,
+            service_id: w.serviceId,
+            permit_price_cents: w.cents,
+            currency: 'USD',
+            active: true,
+          },
+          { onConflict: 'vendor_id,service_id' },
+        )
+      if (error) {
+        console.error('[catalog] drain permit upsert failed:', error.message)
+        toast.error('Could not save permit price — please retry')
+      }
+      continue
+    }
+    const ck = cacheKey(w.serviceId, w.optionId)
+    const optionDbId = getState()._optionDbIdCache[ck]
+    if (optionDbId) {
+      const { error } = await supabase
+        .from('vendor_option_prices')
+        .upsert(
+          { vendor_id: vendorUuid, option_id: optionDbId, price_cents: w.cents, currency: 'USD', active: true },
+          { onConflict: 'vendor_id,option_id' },
+        )
+      if (error) {
+        console.error('[catalog] drain option upsert failed:', error.message)
+        toast.error(WRITE_FAIL_TOAST)
+      }
+      continue
+    }
+    const subOptionDbId = getState()._subOptionDbIdCache[ck]
+    if (subOptionDbId) {
+      const { error } = await supabase
+        .from('vendor_sub_option_prices')
+        .upsert(
+          { vendor_id: vendorUuid, sub_option_id: subOptionDbId, price_cents: w.cents, currency: 'USD', active: true },
+          { onConflict: 'vendor_id,sub_option_id' },
+        )
+      if (error) {
+        console.error('[catalog] drain sub_option upsert failed:', error.message)
+        toast.error(WRITE_FAIL_TOAST)
+      }
+      continue
+    }
+    console.error('[catalog] drain: id not in cache after hydrate — write dropped', w)
+    toast.error(`Could not save price for "${w.optionId}" — option not in catalog`)
+  }
+}
+
 function syncServiceCategories(
   vendorUuid: string,
   services: VendorServiceConfig[],
@@ -143,6 +261,8 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       _optionDbIdCache: {},
       _subOptionDbIdCache: {},
       _migrationDone: false,
+      _hydrationStatus: 'idle',
+      _pendingWrites: [],
 
       initFromAdmin: (adminServices) => {
         const existing = get().services
@@ -191,14 +311,12 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               : s
           ),
         }))
-        // Bug 1 fix: explicit error logs instead of silent drops. Pre-fix
-        // the upsert was conditionally skipped on null _vendorUuid OR cache
-        // miss with no surface — pricing rows just never persisted. Now
-        // both branches log + surface root-cause; auth-store fallback
-        // closes the pre-hydration race.
+        // Arc-32 close — queue-and-replay when caches/auth aren't ready;
+        // toast only on genuine post-hydrate failures.
         const vendorUuid = resolveVendorUuid(get()._vendorUuid)
-        if (!vendorUuid) {
-          console.error('[catalog] setPrice: no vendor UUID available — write dropped', { serviceId, optionId })
+        const status = get()._hydrationStatus
+        if (!vendorUuid || status !== 'complete') {
+          enqueuePending(set, { kind: 'option', serviceId, optionId, cents: price })
           return
         }
         const ck = cacheKey(serviceId, optionId)
@@ -211,7 +329,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               { onConflict: 'vendor_id,option_id' }
             )
             .then(({ error }) => {
-              if (error) console.error('[catalog] upsert option price failed:', error.message)
+              if (error) {
+                console.error('[catalog] upsert option price failed:', error.message)
+                toast.error(WRITE_FAIL_TOAST)
+              }
             })
           return
         }
@@ -224,11 +345,16 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               { onConflict: 'vendor_id,sub_option_id' }
             )
             .then(({ error }) => {
-              if (error) console.error('[catalog] upsert sub_option price failed:', error.message)
+              if (error) {
+                console.error('[catalog] upsert sub_option price failed:', error.message)
+                toast.error(WRITE_FAIL_TOAST)
+              }
             })
           return
         }
-        console.error('[catalog] setPrice: id not in option OR sub_option DB cache — write dropped', { serviceId, optionId })
+        // Genuine cache miss post-hydrate: option id isn't in the catalog.
+        console.error('[catalog] setPrice: id not in option OR sub_option DB cache after hydrate', { serviceId, optionId })
+        toast.error(`Could not save price for "${optionId}" — option not in catalog`)
       },
 
       setPricePercent: (serviceId, optionId, percent) => {
@@ -248,8 +374,9 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           ),
         }))
         const vendorUuid = resolveVendorUuid(get()._vendorUuid)
-        if (!vendorUuid) {
-          console.error('[catalog] setServicePermit: no vendor UUID available — write dropped', { serviceId })
+        const status = get()._hydrationStatus
+        if (!vendorUuid || status !== 'complete') {
+          enqueuePending(set, { kind: 'permit', serviceId, cents })
           return
         }
         supabase
@@ -259,7 +386,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
             { onConflict: 'vendor_id,service_id' }
           )
           .then(({ error }) => {
-            if (error) console.error('[catalog] upsert service permit failed:', error.message)
+            if (error) {
+              console.error('[catalog] upsert service permit failed:', error.message)
+              toast.error('Could not save permit price — please retry')
+            }
           })
       },
 
@@ -295,7 +425,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       },
 
       hydrateFromSupabase: async (vendorUuid: string) => {
-        set({ _vendorUuid: vendorUuid })
+        set({ _vendorUuid: vendorUuid, _hydrationStatus: 'in_flight' })
 
         // Arc-43 — auth-bootstrap-race guard. RLS gates options/sub_options/
         // vendor_*_prices on authenticated role. A fresh /vendor/catalog mount
@@ -307,6 +437,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         const { data: { session: authSession } } = await supabase.auth.getSession()
         if (!authSession) {
           console.warn('[catalog] hydrate skipped — no auth session yet; will retry on SIGNED_IN')
+          set({ _hydrationStatus: 'idle' })
           return
         }
 
@@ -481,17 +612,27 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           const { error: subMigErr } = await supabase
             .from('vendor_sub_option_prices')
             .upsert(subUpsertRows, { onConflict: 'vendor_id,sub_option_id' })
-          if (subMigErr) console.error('[catalog] sub_option backfill failed:', subMigErr.message)
-          else console.log(`[catalog] backfilled ${subUpsertRows.length} sub_option prices to Supabase`)
+          if (subMigErr) {
+            console.error('[catalog] sub_option backfill failed:', subMigErr.message)
+            toast.error(WRITE_FAIL_TOAST)
+          } else console.log(`[catalog] backfilled ${subUpsertRows.length} sub_option prices to Supabase`)
         }
+
+        // Arc-32 close — caches are now built; mark hydration complete and
+        // drain any writes that queued while we were 'in_flight' or 'idle'.
+        set({ _hydrationStatus: 'complete' })
+        await drainPendingWrites(vendorUuid, get, set)
       },
     }),
     {
       name: 'buildconnect-vendor-catalog',
       // Persist user-facing state only; internal cache is rebuilt on hydration.
+      // _pendingWrites is persisted so writes queued before a page refresh
+      // (cache-not-ready window) get replayed on the next hydrate.
       partialize: (state) => ({
         services: state.services,
         _migrationDone: state._migrationDone,
+        _pendingWrites: state._pendingWrites,
       }),
     }
   )
