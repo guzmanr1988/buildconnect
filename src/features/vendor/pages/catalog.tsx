@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { cn } from '@/lib/utils'
+import type { OptionGroup } from '@/types'
 import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
 
 export default function VendorCatalog() {
@@ -347,44 +348,18 @@ export default function VendorCatalog() {
                     </div>
 
                     {service.optionGroups.map((group) => (
-                      <div key={group.id} className="space-y-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          {group.label}
-                        </p>
-                        <VendorCatalogOptionsCardGrid
-                          serviceId={service.id}
-                          groupId={group.id}
-                          options={group.options}
-                          isOptionEnabled={isOptionEnabled}
-                          getPrice={getPrice}
-                          getPricePercent={getPricePercent}
-                          onToggle={wrappedToggleOption}
-                          onPriceChange={wrappedSetPrice}
-                          onPricePercentChange={wrappedSetPricePercent}
-                        />
-
-                        {/* Sub-groups for options that have them */}
-                        {group.options.filter(o => o.subGroups && o.subGroups.length > 0 && isOptionEnabled(service.id, group.id, o.id)).map((option) => (
-                          option.subGroups?.map((subGroup) => (
-                            <div key={subGroup.id} className="ml-4 mt-2 space-y-1.5">
-                              <p className="text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider">
-                                {subGroup.label}
-                              </p>
-                              <VendorCatalogOptionsCardGrid
-                                serviceId={service.id}
-                                groupId={subGroup.id}
-                                options={subGroup.options}
-                                isOptionEnabled={isOptionEnabled}
-                                getPrice={getPrice}
-                                getPricePercent={getPricePercent}
-                                onToggle={wrappedToggleOption}
-                                onPriceChange={wrappedSetPrice}
-                                onPricePercentChange={wrappedSetPricePercent}
-                              />
-                            </div>
-                          ))
-                        ))}
-                      </div>
+                      <CatalogGroupRenderer
+                        key={group.id}
+                        serviceId={service.id}
+                        optionGroup={group}
+                        depth={0}
+                        isOptionEnabled={isOptionEnabled}
+                        getPrice={getPrice}
+                        getPricePercent={getPricePercent}
+                        onToggle={wrappedToggleOption}
+                        onPriceChange={wrappedSetPrice}
+                        onPricePercentChange={wrappedSetPricePercent}
+                      />
                     ))}
                   </CardContent>
                   </motion.div>
@@ -396,5 +371,82 @@ export default function VendorCatalog() {
         })}
       </div>
     </motion.div>
+  )
+}
+
+// Recursive sub-group renderer. Arc-38 fix: prior render only descended one
+// sub-group level, so Cabinet (Material > Plywood/MDF > prices) silently
+// dropped at depth=3+. This descends arbitrary nesting; depth controls
+// indent + label size so deeper sections read as nested visually.
+type CatalogGroupRendererProps = {
+  serviceId: string
+  optionGroup: OptionGroup
+  depth: number
+  isOptionEnabled: (serviceId: string, groupId: string, optionId: string) => boolean
+  getPrice: (serviceId: string, optionId: string) => number
+  getPricePercent: (serviceId: string, optionId: string) => number
+  onToggle: (serviceId: string, groupId: string, optionId: string) => void
+  onPriceChange: (serviceId: string, optionId: string, cents: number) => void
+  onPricePercentChange: (serviceId: string, optionId: string, pct: number) => void
+}
+
+function CatalogGroupRenderer({
+  serviceId,
+  optionGroup,
+  depth,
+  isOptionEnabled,
+  getPrice,
+  getPricePercent,
+  onToggle,
+  onPriceChange,
+  onPricePercentChange,
+}: CatalogGroupRendererProps) {
+  const indentClass = depth === 0 ? '' : depth === 1 ? 'ml-4' : depth === 2 ? 'ml-8' : 'ml-12'
+  const spacingClass = depth === 0 ? 'space-y-2' : 'mt-2 space-y-1.5'
+  const labelClass =
+    depth === 0
+      ? 'text-xs font-semibold text-muted-foreground uppercase tracking-wider'
+      : depth === 1
+        ? 'text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider'
+        : 'text-[10px] md:text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider'
+
+  return (
+    <div className={cn(indentClass, spacingClass)}>
+      <p className={labelClass}>{optionGroup.label}</p>
+      <VendorCatalogOptionsCardGrid
+        serviceId={serviceId}
+        groupId={optionGroup.id}
+        options={optionGroup.options}
+        isOptionEnabled={isOptionEnabled}
+        getPrice={getPrice}
+        getPricePercent={getPricePercent}
+        onToggle={onToggle}
+        onPriceChange={onPriceChange}
+        onPricePercentChange={onPricePercentChange}
+      />
+      {optionGroup.options
+        .filter(
+          (o) =>
+            o.subGroups &&
+            o.subGroups.length > 0 &&
+            isOptionEnabled(serviceId, optionGroup.id, o.id)
+        )
+        .map((option) =>
+          option.subGroups?.map((subGroup) => (
+            <CatalogGroupRenderer
+              key={subGroup.id}
+              serviceId={serviceId}
+              optionGroup={subGroup}
+              depth={depth + 1}
+              isOptionEnabled={isOptionEnabled}
+              getPrice={getPrice}
+              getPricePercent={getPricePercent}
+              onToggle={onToggle}
+              onPriceChange={onPriceChange}
+              onPricePercentChange={onPricePercentChange}
+            />
+          ))
+        )}
+    </div>
   )
 }
