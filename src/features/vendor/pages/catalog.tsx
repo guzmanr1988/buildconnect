@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
+import { Package, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -9,7 +9,6 @@ import { PageHeader } from '@/components/shared/page-header'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
-import { getOptionMetadata } from '@/lib/option-metadata'
 import { cn } from '@/lib/utils'
 import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
 
@@ -266,81 +265,17 @@ export default function VendorCatalog() {
                               <p className="text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider">
                                 {subGroup.label}
                               </p>
-                              {subGroup.options.map((subOpt) => {
-                                const subEnabled = isOptionEnabled(service.id, subGroup.id, subOpt.id)
-                                const subPrice = getPrice(service.id, subOpt.id)
-
-                                return (
-                                  <div
-                                    key={subOpt.id}
-                                    className={cn(
-                                      'flex items-center justify-between gap-3 rounded-lg border p-2 transition',
-                                      subEnabled ? 'border-primary/20 bg-primary/5' : 'border-border/50'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); toggleOption(service.id, subGroup.id, subOpt.id) }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                        className={cn(
-                                          'flex h-4 w-4 items-center justify-center rounded border shrink-0 transition',
-                                          subEnabled
-                                            ? 'bg-primary border-primary text-white'
-                                            : 'border-muted-foreground/30'
-                                        )}
-                                      >
-                                        {subEnabled && <Check className="h-2.5 w-2.5" />}
-                                      </button>
-                                      <span className={cn(
-                                        'text-base md:text-xl truncate',
-                                        subEnabled ? 'font-medium' : 'text-muted-foreground'
-                                      )}>
-                                        {subOpt.label}
-                                      </span>
-                                    </div>
-                                    {subEnabled && (
-                                      <div
-                                        className="flex flex-col items-end gap-1 shrink-0"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-sm md:text-lg text-muted-foreground">$</span>
-                                          <Input
-                                            aria-label={`Price for ${subOpt.label}`}
-                                            type="number"
-                                            value={subPrice || ''}
-                                            onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
-                                            placeholder="0"
-                                            className="h-9 w-20 text-sm text-right md:h-12 md:w-28 md:text-lg md:px-4"
-                                          />
-                                          {/* Dual $ / % pricing on sub-options flagged
-                                              supportsPercentMarkup in OPTION_METADATA.
-                                              Currently low_e + casement; add more by flag-flip,
-                                              not code branch. Rod directives kratos msgs
-                                              1776659189645 + 1776659949844. */}
-                                          {getOptionMetadata(subOpt.id, service.id, subOpt).supportsPercentMarkup && (
-                                            <>
-                                              <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
-                                              <Input
-                                                aria-label={`Percent markup for ${subOpt.label}`}
-                                                type="number"
-                                                value={getPricePercent(service.id, subOpt.id) || ''}
-                                                onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
-                                                placeholder="0"
-                                                className="h-9 w-16 text-sm text-right md:h-12 md:w-24 md:text-lg md:px-4"
-                                              />
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
+                              <VendorCatalogOptionsCardGrid
+                                serviceId={service.id}
+                                groupId={subGroup.id}
+                                options={subGroup.options}
+                                isOptionEnabled={isOptionEnabled}
+                                getPrice={getPrice}
+                                getPricePercent={getPricePercent}
+                                onToggle={toggleOption}
+                                onPriceChange={setPrice}
+                                onPricePercentChange={setPricePercent}
+                              />
                             </div>
                           ))
                         ))}
