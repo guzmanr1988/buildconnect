@@ -217,6 +217,21 @@ const POOL_FLOOR_SQFT_CONFIG = [
 ] as const
 const POOL_FLOOR_SQFT_IDS: string[] = POOL_FLOOR_SQFT_CONFIG.map((c) => c.id)
 
+// Services whose options render via dedicated bespoke configurators
+// (WindowConfigurator / DoorConfigurator / StormFrontConfigurator /
+// GarageDoorConfigurator at L2186-2223) and therefore must NOT also
+// double-render their DB-seeded sub_groups through the generic
+// SubGroupChoices path. Originally this was a kitchen-only allow-gate
+// (PR-289 era — see comment block below at L1849+). Flipping to a
+// deny-list lets new verticals (pool, roofing addons, etc.) author
+// sub_menus on /admin/products and have them surface realtime on the
+// homeowner wizard without per-vertical render branches.
+const DEDICATED_CONFIGURATOR_SERVICES: readonly string[] = ['windows_doors']
+
+function isDedicatedConfiguratorService(id: string | undefined): boolean {
+  return id != null && DEDICATED_CONFIGURATOR_SERVICES.includes(id)
+}
+
 const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   roofing: Home,
   windows_doors: Wind,
@@ -1392,18 +1407,23 @@ export function ServiceDetailPage() {
                         data-chip-state={isSelected ? 'active' : 'inactive'}
                         data-chip-locked={isLocked ? 'true' : 'false'}
                         data-service-type-option={group.id === 'service_type' ? option.id : undefined}
-                        data-sub-expanded={(option.subGroups?.length ?? 0) > 0 ? String(subGroupExpanded[option.id] ?? true) : undefined}
-                        aria-expanded={(option.subGroups?.length ?? 0) > 0 ? (subGroupExpanded[option.id] ?? true) : undefined}
+                        data-sub-expanded={(option.subGroups?.some((sg) => sg.options.length > 0) ?? false) ? String(subGroupExpanded[option.id] ?? true) : undefined}
+                        aria-expanded={(option.subGroups?.some((sg) => sg.options.length > 0) ?? false) ? (subGroupExpanded[option.id] ?? true) : undefined}
                         disabled={isLocked}
                         onClick={() => {
-                          // SubGroupChoices accordion expand/collapse only
-                          // applies in the kitchen vertical (Path A
-                          // vertical-gate). For non-kitchen verticals the
-                          // chip must toggle selection normally so the
-                          // pre-PR-289 deselect-by-clicking-chip behavior is
-                          // preserved on Windows / Doors / Storm / Garage.
+                          // SubGroupChoices accordion expand/collapse applies
+                          // for every vertical EXCEPT DEDICATED_CONFIGURATOR_SERVICES
+                          // (windows_doors), which surface options through
+                          // their own bespoke configurators and must keep the
+                          // pre-PR-289 deselect-by-clicking-chip behavior on
+                          // Windows / Doors / Storm Front / Garage Doors. Also
+                          // requires at least one non-empty sub_group so that
+                          // empty WIP sub_groups (e.g. admin authored "12x30"
+                          // under Pool Size with no sub_options yet) don't
+                          // hijack the chip into accordion mode.
                           const hasSubGroups =
-                            serviceId === 'kitchen' && (option.subGroups?.length ?? 0) > 0
+                            !isDedicatedConfiguratorService(serviceId) &&
+                            (option.subGroups?.some((sg) => sg.options.length > 0) ?? false)
                           if (hasSubGroups && isSelected) {
                             setSubGroupExpanded((prev) => ({
                               ...prev,
@@ -1846,25 +1866,28 @@ export function ServiceDetailPage() {
                         />
                       </div>
                     ))}
-                {/* Vertical-gated to serviceId==='kitchen' at consumer
-                    call-site (Path A, PR-windows-vertical-gate). Windows /
-                    Doors / Storm Front / Garage Doors verticals render the
-                    pre-existing WindowConfigurator / DoorConfigurator /
-                    StormFrontConfigurator / GarageDoorConfigurator +Add row
-                    list components below at L1815-1854 (their original UX
-                    matching Rod ground-truth screenshot). PR-289's
-                    SubGroupChoices chip-wall was bleeding alongside those
-                    configurators because Windows/Doors/Storm/Garage options
-                    have DB-seeded sub_groups; serviceId-gate restores the
-                    pre-PR-289 single-component render for non-kitchen
-                    verticals while preserving Kitchen Cabinet PR-290+PR-292
-                    flat-chip + linear-feet UX bit-identical. */}
-                {serviceId === 'kitchen' &&
+                {/* Generic SubGroupChoices render path. PR-289 originally
+                    introduced this for the kitchen Cabinet flat-chip +
+                    linear-feet UX and the call-site was vertical-gated to
+                    serviceId==='kitchen' to prevent double-render alongside
+                    the dedicated WindowConfigurator / DoorConfigurator /
+                    StormFrontConfigurator / GarageDoorConfigurator components
+                    at L2186-2223 (whose Windows/Doors/Storm/Garage options
+                    also carry DB-seeded sub_groups). Flipping to a deny-list
+                    (DEDICATED_CONFIGURATOR_SERVICES) lets every other vertical
+                    surface admin-authored sub_menus realtime — the original
+                    Rod spec of "realtime for vendor AND homeowner" was being
+                    violated by the kitchen-only allow-gate. Empty sub_groups
+                    (sub_options.length === 0) are skipped so admin WIP state
+                    (e.g. Rod's "12x30" under Pool Size 12x24 with no
+                    sub_options yet) renders nothing instead of an orphan
+                    label chip. */}
+                {!isDedicatedConfiguratorService(serviceId) &&
                   renderOptions
                     .filter(
                       (option) =>
                         selected.includes(option.id) &&
-                        (option.subGroups?.length ?? 0) > 0 &&
+                        (option.subGroups?.some((sg) => sg.options.length > 0) ?? false) &&
                         (subGroupExpanded[option.id] ?? true),
                     )
                     .map((option) => (
