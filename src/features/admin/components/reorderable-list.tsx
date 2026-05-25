@@ -64,6 +64,12 @@ export interface ReorderableListProps<T> {
   ) => ReactNode
   // Stops drag initiation on specific rows (e.g. ones currently editing).
   disableAt?: (index: number) => boolean
+  // 'list' (default) keeps the original Y-axis-only hit-testing. 'grid'
+  // switches to 2D point-in-rect hit-testing for multi-column layouts
+  // (admin/products cards view). The component itself still renders a
+  // flat fragment — the consumer wraps the children in their own grid
+  // container so the layout shape stays in the call site.
+  orientation?: 'list' | 'grid'
 }
 
 export function ReorderableList<T>({
@@ -72,8 +78,9 @@ export function ReorderableList<T>({
   onReorder,
   renderItem,
   disableAt,
+  orientation,
 }: ReorderableListProps<T>) {
-  const drag = useLongPressDrag({ onReorder, disableAt })
+  const drag = useLongPressDrag({ onReorder, disableAt, orientation })
   useEffect(() => {
     drag.setRowCount(items.length)
   }, [items.length, drag])
