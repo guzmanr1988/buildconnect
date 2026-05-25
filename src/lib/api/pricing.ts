@@ -384,51 +384,51 @@ export function computeVendorTotal(
       }
     }
 
-    // Arc-32 W4 — raw-value passthrough on label→id map lookups. If the cart
-    // entry carries an ID-shaped value (legacy persisted state, drift between
-    // configurator label-storage and ID-storage code paths) or a label not in
-    // the map dict, the raw value flows through resolveSubOptionPriceKey to
-    // priceMap.has — combined with the 8b4a055 sweep fallback, lookups can't
-    // silently drop a contribution.
+    // Arc-32 W4 — sub_groups.type semantics. Substrate sub_groups column
+    // gates billing intent: type=multi (window_sizes/door_sizes/storm_sizes)
+    // is per-row weighted by w.quantity; type=single (window_types,
+    // door_types, glass_colors, glass_types, frame_colors) is ONCE per
+    // cart-item regardless of how many configurator rows share the value.
+    // Pre-Arc-42 ignored sub-options entirely. Arc-42 first-pass charged
+    // every sub-option per-row, inflating single-type attrs N× the row count.
+    // Hermes locked substrate intent — attrs landed once per quote. Two
+    // passes: SIZE per-row (multi), ATTRS deduped once (single).
+    // Raw-value passthrough preserved on label→id map lookups (8b4a055).
     for (const w of (item.windowSelections ?? []) as ConfiguratorEntry[]) {
-      accumulateSubOpts(
-        'windows',
-        [
-          w.size,
-          WINDOW_TYPE_IDS[w.type] ?? w.type,
-          FRAME_COLOR_IDS[w.frameColor] ?? w.frameColor,
-          GLASS_COLOR_IDS[w.glassColor] ?? w.glassColor,
-          GLASS_TYPE_IDS[w.glassType] ?? w.glassType,
-        ],
-        w.quantity,
-      )
+      accumulateSubOpts('windows', [w.size], w.quantity)
     }
+    const windowAttrs = new Set<string>()
+    for (const w of (item.windowSelections ?? []) as ConfiguratorEntry[]) {
+      if (w.type) windowAttrs.add(WINDOW_TYPE_IDS[w.type] ?? w.type)
+      if (w.frameColor) windowAttrs.add(FRAME_COLOR_IDS[w.frameColor] ?? w.frameColor)
+      if (w.glassColor) windowAttrs.add(GLASS_COLOR_IDS[w.glassColor] ?? w.glassColor)
+      if (w.glassType) windowAttrs.add(GLASS_TYPE_IDS[w.glassType] ?? w.glassType)
+    }
+    if (windowAttrs.size > 0) accumulateSubOpts('windows', [...windowAttrs], 1)
+
     for (const d of (item.doorSelections ?? []) as ConfiguratorEntry[]) {
-      accumulateSubOpts(
-        'doors',
-        [
-          d.size,
-          DOOR_TYPE_IDS[d.type] ?? d.type,
-          FRAME_COLOR_IDS[d.frameColor] ?? d.frameColor,
-          GLASS_COLOR_IDS[d.glassColor] ?? d.glassColor,
-          GLASS_TYPE_IDS[d.glassType] ?? d.glassType,
-        ],
-        d.quantity,
-      )
+      accumulateSubOpts('doors', [d.size], d.quantity)
     }
+    const doorAttrs = new Set<string>()
+    for (const d of (item.doorSelections ?? []) as ConfiguratorEntry[]) {
+      if (d.type) doorAttrs.add(DOOR_TYPE_IDS[d.type] ?? d.type)
+      if (d.frameColor) doorAttrs.add(FRAME_COLOR_IDS[d.frameColor] ?? d.frameColor)
+      if (d.glassColor) doorAttrs.add(GLASS_COLOR_IDS[d.glassColor] ?? d.glassColor)
+      if (d.glassType) doorAttrs.add(GLASS_TYPE_IDS[d.glassType] ?? d.glassType)
+    }
+    if (doorAttrs.size > 0) accumulateSubOpts('doors', [...doorAttrs], 1)
+
     for (const sf of (item.stormFrontSelections ?? []) as ConfiguratorEntry[]) {
-      accumulateSubOpts(
-        'storm_front',
-        [
-          STORM_FRONT_SIZE_IDS[sf.size] ?? sf.size,
-          STORM_FRONT_TYPE_IDS[sf.type] ?? sf.type,
-          FRAME_COLOR_IDS[sf.frameColor] ?? sf.frameColor,
-          GLASS_COLOR_IDS[sf.glassColor] ?? sf.glassColor,
-          GLASS_TYPE_IDS[sf.glassType] ?? sf.glassType,
-        ],
-        sf.quantity,
-      )
+      accumulateSubOpts('storm_front', [STORM_FRONT_SIZE_IDS[sf.size] ?? sf.size], sf.quantity)
     }
+    const stormAttrs = new Set<string>()
+    for (const sf of (item.stormFrontSelections ?? []) as ConfiguratorEntry[]) {
+      if (sf.type) stormAttrs.add(STORM_FRONT_TYPE_IDS[sf.type] ?? sf.type)
+      if (sf.frameColor) stormAttrs.add(FRAME_COLOR_IDS[sf.frameColor] ?? sf.frameColor)
+      if (sf.glassColor) stormAttrs.add(GLASS_COLOR_IDS[sf.glassColor] ?? sf.glassColor)
+      if (sf.glassType) stormAttrs.add(GLASS_TYPE_IDS[sf.glassType] ?? sf.glassType)
+    }
+    if (stormAttrs.size > 0) accumulateSubOpts('storm_front', [...stormAttrs], 1)
     const gd = item.garageDoorSelection
     if (gd?.type) {
       // GarageDoor fields store sub_option ids directly (no label→id map);
