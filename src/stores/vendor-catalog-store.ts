@@ -660,6 +660,30 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         services: state.services,
         _migrationDone: state._migrationDone,
       }),
+      // Arc-32 PR-D2-followup — partialize alone does not defang LS
+      // entries written PRIOR to the deploy of PR-#390. Zustand persist
+      // shallow-merges the persisted JSON into default state on rehydrate,
+      // so an LS blob still carrying _pendingWrites (queued + persisted
+      // pre-PR-#390) gets merged back into the store and replays on the
+      // next hydrateFromSupabase drain — exactly the stale-LS-replay
+      // failure-mode the PR-D2 partialize-defang inline-block predicted.
+      //
+      // INVARIANT: _pendingWrites never survives a page rehydrate. Same-
+      // session enqueue/drain is preserved because this fires once at
+      // mount BEFORE any user typing can produce same-session entries;
+      // drainPendingWrites also runs after this on the now-empty queue
+      // (no-op, no spurious upserts).
+      //
+      // FAILURE-MODE it guards: stale pre-encoding-fix queue entries
+      // (e.g. dollars-as-cents from PR-#389-era LS) replaying against
+      // current substrate → WRITE_FAIL_TOAST ("Could not save price —
+      // please retry") on token-refresh hydrate. Apollo synthetic wire-
+      // walk non-repro confirmed application-axis, not substrate.
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state._pendingWrites = []
+        }
+      },
     }
   )
 )
