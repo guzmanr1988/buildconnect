@@ -1324,6 +1324,19 @@ export function ServiceDetailPage() {
                         option.id === 'addons' &&
                         serviceId === 'roofing' &&
                         roofMeasurement?.includePerimeter === false) ||
+                      // Arc-31 — Service Type mutex: when Add-ons is the picked
+                      // Service Type, Full Replacement + Repair render disabled
+                      // (greyed out + unclickable). User deselects Add-ons first
+                      // to re-enable them. Add-ons chip itself stays clickable
+                      // (no option.id === 'addons' here) so the deselect path
+                      // works — mirrors the !isSelected escape on material-mutex
+                      // L1310. Per Rod 2026-05-25 re-raise of task_..._334:
+                      // "if i select ADD-ONS full replacement and repair becomes
+                      // unavailable to select".
+                      (group.id === 'service_type' &&
+                        serviceId === 'roofing' &&
+                        option.id !== 'addons' &&
+                        (selections.service_type ?? []).includes('addons')) ||
                       // PR-240 — Perimeter excluded also locks every chip in the
                       // Add-Ons SECTION (gutters, soffit/fascia wood+metal, attic
                       // insulation, solar prep, extra plywood). Rod 14:51Z directive:
