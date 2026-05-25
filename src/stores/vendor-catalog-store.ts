@@ -677,6 +677,34 @@ if (typeof window !== 'undefined') {
     const uid = session?.user?.id
     if (!uid) return
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      // Arc-32 PR-#391-revert-followup (CANDIDATE-B-α) — clear stale
+      // _pendingWrites at the auth-event boundary BEFORE drainPendingWrites
+      // runs inside hydrateFromSupabase. Replaces the PR-#391 CANDIDATE-A
+      // onRehydrateStorage approach, which was reverted after the cross-
+      // store rehydrate seam broke Compare-Vendors (the rehydrate-callback
+      // timing disturbed cart-store rehydrate or downstream React commit,
+      // surfacing the "Add your address to your profile" empty-state with
+      // cart items present).
+      //
+      // INVARIANT: _pendingWrites is cleared at every auth-event boundary,
+      // never via the persist rehydrate seam. Eliminates cross-store
+      // rehydrate ordering as a failure surface entirely.
+      //
+      // FAILURE-MODE it guards: stale pre-PR-#390 LS entries (still
+      // carrying _pendingWrites in persisted JSON) replaying on the next
+      // hydrate → upserts against post-migration substrate with wrong
+      // cents/dollar encoding → WRITE_FAIL_TOAST ("Could not save price —
+      // please retry"). PR-#390 partialize-defang stops FUTURE LS-leaks;
+      // this handler-side clear neutralizes PRE-PR-#390 LS that already
+      // carries _pendingWrites in its persisted JSON.
+      //
+      // TRADE-OFF accepted: TOKEN_REFRESHED (hourly) also clears, which
+      // could drop a same-session pending write if the user is mid-typing
+      // at the exact moment a token refreshes. Accepted vs the alternative
+      // (silently leaving stale-LS replay live for any user with
+      // pre-PR-#390 LS) — stale-LS class is the broader Rod-visible hit
+      // than hourly-token-refresh-mid-typing.
+      useVendorCatalogStore.setState({ _pendingWrites: [] })
       void useVendorCatalogStore.getState().hydrateFromSupabase(uid)
     }
   })
