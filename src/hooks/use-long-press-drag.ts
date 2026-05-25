@@ -40,11 +40,17 @@ export interface UseLongPressDragOptions {
   // Opt-out per-row: e.g. a row that's showing an inline dialog should
   // not initiate drag. Receives the row index, returns true to disable.
   disableAt?: (index: number) => boolean
+  // 'list' (default) uses Y-axis midpoint hit-testing — the original Ship #175
+  // behavior. 'grid' uses 2D point-in-rect hit-testing with a
+  // closest-tile-by-distance fallback, so the same gesture works in a
+  // multi-column grid layout (admin/products cards view).
+  orientation?: 'list' | 'grid'
 }
 
 export function useLongPressDrag({
   onReorder,
   disableAt,
+  orientation = 'list',
 }: UseLongPressDragOptions) {
   const rowRefs = useRef<Array<HTMLElement | null>>([])
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
@@ -68,8 +74,40 @@ export function useLongPressDrag({
     setOverIndex(null)
   }, [])
 
-  const computeOverIndex = useCallback((clientY: number): number | null => {
+  const computeOverIndex = useCallback((clientX: number, clientY: number): number | null => {
     const nodes = rowRefs.current
+    if (orientation === 'grid') {
+      // 2D hit-testing: first pass finds the tile under the pointer.
+      // Second pass falls back to closest-tile-by-center-distance so the
+      // drop target stays sticky when the pointer crosses gaps between
+      // tiles (grid gutters) or hovers outside the grid bounds.
+      let bestIdx: number | null = null
+      let bestDist = Infinity
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i]
+        if (!n) continue
+        const rect = n.getBoundingClientRect()
+        if (
+          clientX >= rect.left &&
+          clientX <= rect.right &&
+          clientY >= rect.top &&
+          clientY <= rect.bottom
+        ) {
+          return i
+        }
+        const cx = rect.left + rect.width / 2
+        const cy = rect.top + rect.height / 2
+        const dx = clientX - cx
+        const dy = clientY - cy
+        const dist = dx * dx + dy * dy
+        if (dist < bestDist) {
+          bestDist = dist
+          bestIdx = i
+        }
+      }
+      return bestIdx
+    }
+    // List mode (original Ship #175): Y-axis midpoint scan.
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i]
       if (!n) continue
@@ -79,7 +117,7 @@ export function useLongPressDrag({
     // Past every midpoint → drop at the end.
     const last = nodes.length - 1
     return last >= 0 ? last : null
-  }, [])
+  }, [orientation])
 
   // Global listeners for move + up kick in only while a long-press is
   // pending or a drag is active. We don't want to leak pointer handlers
@@ -103,7 +141,7 @@ export function useLongPressDrag({
       // native scroll doesn't fight the drag visual.
       if (draggingIndex !== null) {
         e.preventDefault()
-        const over = computeOverIndex(e.clientY)
+        const over = computeOverIndex(e.clientX, e.clientY)
         setOverIndex(over)
       }
     }

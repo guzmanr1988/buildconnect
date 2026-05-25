@@ -9,6 +9,8 @@ import {
   GripVertical,
   Package,
   Layers,
+  LayoutGrid,
+  List as ListIcon,
   ListChecks,
   Search,
   X,
@@ -66,6 +68,39 @@ function formatCatalogError(err: unknown, fallback: string): string {
   }
   if (err instanceof Error) return err.message
   return fallback
+}
+
+/* ------------------------------------------------------------------ */
+/*  View-mode (cards / list) — LS-backed, Rod-iteration-v1            */
+/* ------------------------------------------------------------------ */
+
+type AdminProductsViewMode = 'list' | 'cards'
+
+const VIEW_MODE_LS_KEY = 'admin-products-view-mode'
+
+function readViewModeFromLS(): AdminProductsViewMode {
+  // Default to 'cards' for the Rod-iteration-v1 UX. Per kratos
+  // 2026-05-25: Rod is the only active admin user right now, so
+  // defaulting cross-admins to cards is the accepted surprise-tradeoff
+  // (vs reading 'list' on LS-null and gating cards behind explicit
+  // first-click).
+  if (typeof window === 'undefined') return 'cards'
+  try {
+    const raw = window.localStorage.getItem(VIEW_MODE_LS_KEY)
+    if (raw === 'list' || raw === 'cards') return raw
+  } catch {
+    // localStorage blocked (private mode / SSR shim) → fall through
+  }
+  return 'cards'
+}
+
+function writeViewModeToLS(mode: AdminProductsViewMode): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(VIEW_MODE_LS_KEY, mode)
+  } catch {
+    // localStorage blocked — silently skip; LS-default falls back next mount
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,6 +200,26 @@ export default function ProductsAdminPage() {
   } = useCatalogStore()
 
   const [savingServiceId, setSavingServiceId] = useState<string | null>(null)
+
+  // Cards / List view-mode toggle (Rod-iteration-v1). Persists choice to
+  // localStorage so the next visit lands on the same shape.
+  const [viewMode, setViewMode] = useState<AdminProductsViewMode>(() => readViewModeFromLS())
+  useEffect(() => {
+    writeViewModeToLS(viewMode)
+  }, [viewMode])
+
+  // Per-tile inline-expand state for cards-mode (key = `${serviceId}-${groupId}-${optionId}`).
+  // Stored as a Set so multiple tiles can be open at once — kratos
+  // 2026-05-25 constraint: "make sure inline-expand state is per-tile
+  // (not single-tile-globally) so Rod can open multiple at once".
+  const [expandedOptionTiles, setExpandedOptionTiles] = useState<Set<string>>(new Set())
+  const toggleOptionTile = (key: string) =>
+    setExpandedOptionTiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   async function handleReorderOptionGroups(serviceId: string, from: number, to: number) {
     try {
@@ -791,10 +846,45 @@ export default function ProductsAdminPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Product Catalog" description="Manage services, option groups, and options">
-        <Button onClick={openAddService} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Cards / List view-mode toggle (Rod-iteration-v1). Anchor
+              `data-admin-view-mode-toggle` for apollo walker. */}
+          <div
+            data-admin-view-mode-toggle="true"
+            className="inline-flex items-center rounded-md border bg-background p-0.5"
+            role="group"
+            aria-label="View mode"
+          >
+            <Button
+              type="button"
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              data-admin-view-mode-option="cards"
+              aria-pressed={viewMode === 'cards'}
+              onClick={() => setViewMode('cards')}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Cards
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              data-admin-view-mode-option="list"
+              aria-pressed={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+            >
+              <ListIcon className="h-3.5 w-3.5" />
+              List
+            </Button>
+          </div>
+          <Button onClick={openAddService} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Service
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Search + Collapse-all toolbar */}
@@ -988,10 +1078,286 @@ export default function ProductsAdminPage() {
                         <p className="text-sm text-muted-foreground italic pl-6">No option groups yet.</p>
                       )}
 
+                      {/* Rod-iteration-v1 — Cards-mode renderer. Option
+                          groups laid out as a 2/3-col grid; each opens to
+                          an inner grid of option tiles. Clicking a tile
+                          body expands its sub-groups inline (rendered via
+                          the same list-form JSX used at deeper levels).
+                          The existing list-mode block (Ship #175 long-
+                          press list) renders below when viewMode==='list'. */}
+                      {viewMode === 'cards' && (
+                        <div
+                          className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3"
+                          data-admin-products-cards-grid="true"
+                        >
+                          <ReorderableList
+                            items={service.optionGroups}
+                            keyFor={(g) => g.id}
+                            orientation="grid"
+                            onReorder={(from, to) => handleReorderOptionGroups(service.id, from, to)}
+                            renderItem={(group, _gi, dragProps, dragState) => {
+                              const groupKey = `${service.id}-${group.id}`
+                              const groupOpen = openGroups.has(groupKey)
+                              return (
+                                <Card
+                                  {...dragProps.row}
+                                  data-admin-option-group-card={group.id}
+                                  className={cn(
+                                    'rounded-lg border-dashed transition-all h-full',
+                                    dragState.isDragging && 'opacity-60 scale-[0.98] shadow-lg cursor-grabbing',
+                                    dragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                    dragState.anyDragging && 'select-none',
+                                  )}
+                                >
+                                  <CardContent className="p-3 space-y-2">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        {...dragProps.handle}
+                                        aria-label={`Drag to reorder ${group.label}`}
+                                        className="h-7 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                      >
+                                        <GripVertical className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleGroup(groupKey)}
+                                        aria-expanded={groupOpen}
+                                        className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                                      >
+                                        <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', groupOpen && 'rotate-90')} aria-hidden="true" />
+                                        <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm font-medium truncate">{group.label}</span>
+                                        <Badge variant="outline" className="text-xs shrink-0">
+                                          {group.options.length}
+                                        </Badge>
+                                      </button>
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => openEditGroup(service.id, group)}
+                                          aria-label={`Edit ${group.label}`}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-destructive hover:text-destructive"
+                                          onClick={() => confirmDeleteGroup(service.id, group)}
+                                          aria-label={`Delete ${group.label}`}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1 pl-6">
+                                      <Badge variant="outline" className="text-[11px]">
+                                        {group.type}
+                                      </Badge>
+                                      {group.required && (
+                                        <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                          Required
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {groupOpen && (
+                                      <div className="pt-2 space-y-2">
+                                        <div
+                                          className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2"
+                                          data-admin-options-cards-grid="true"
+                                        >
+                                          <ReorderableList
+                                            items={group.options}
+                                            keyFor={(o) => o.id}
+                                            orientation="grid"
+                                            onReorder={(from, to) => handleReorderOptions(service.id, group.id, from, to)}
+                                            renderItem={(opt, _oi, optDragProps, optDragState) => {
+                                              const tileKey = `${service.id}-${group.id}-${opt.id}`
+                                              const tileExpanded = expandedOptionTiles.has(tileKey)
+                                              return (
+                                                <Card
+                                                  {...optDragProps.row}
+                                                  data-admin-option-tile={opt.id}
+                                                  data-admin-option-tile-expanded={tileExpanded ? 'true' : 'false'}
+                                                  className={cn(
+                                                    'rounded-md border bg-card transition-all group/tile',
+                                                    tileExpanded && 'sm:col-span-2 ring-1 ring-primary/40',
+                                                    optDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
+                                                    optDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                                    optDragState.anyDragging && 'select-none',
+                                                  )}
+                                                >
+                                                  <CardContent className="p-2.5 space-y-2">
+                                                    <div className="flex items-start gap-1">
+                                                      <button
+                                                        type="button"
+                                                        {...optDragProps.handle}
+                                                        aria-label={`Drag to reorder ${opt.label}`}
+                                                        className="h-6 w-5 flex items-center justify-center text-muted-foreground/30 opacity-0 group-hover/tile:opacity-100 active:cursor-grabbing rounded shrink-0"
+                                                      >
+                                                        <GripVertical className="h-3.5 w-3.5" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => toggleOptionTile(tileKey)}
+                                                        aria-expanded={tileExpanded}
+                                                        className="flex-1 min-w-0 text-left"
+                                                      >
+                                                        <div className="text-sm font-medium truncate">{opt.label}</div>
+                                                        {opt.description && (
+                                                          <div className="text-xs text-muted-foreground line-clamp-2 pr-1">
+                                                            {opt.description}
+                                                          </div>
+                                                        )}
+                                                        {opt.subGroups && opt.subGroups.length > 0 && (
+                                                          <Badge variant="outline" className="text-[11px] mt-1">
+                                                            {opt.subGroups.length} sub-menu{opt.subGroups.length !== 1 && 's'}
+                                                          </Badge>
+                                                        )}
+                                                      </button>
+                                                      <div className="flex flex-col items-end gap-0.5 shrink-0 opacity-60 group-hover/tile:opacity-100 transition-opacity">
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-6 w-6"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            openEditOption(service.id, group.id, opt)
+                                                          }}
+                                                          aria-label={`Edit ${opt.label}`}
+                                                        >
+                                                          <Pencil className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-6 w-6 text-destructive hover:text-destructive"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            confirmDeleteOption(service.id, group.id, opt)
+                                                          }}
+                                                          aria-label={`Delete ${opt.label}`}
+                                                        >
+                                                          <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                      </div>
+                                                    </div>
+
+                                                    {tileExpanded && (
+                                                      <div className="border-t pt-2 space-y-2" data-admin-option-tile-body="true">
+                                                        {/* Sub-groups inside expanded tile — re-uses the
+                                                            list-form deeper-level renderer for first cut.
+                                                            Rod iterates after seeing v1 per kratos plan. */}
+                                                        {(!opt.subGroups || opt.subGroups.length === 0) && (
+                                                          <p className="text-xs text-muted-foreground italic">No sub-menus yet.</p>
+                                                        )}
+                                                        {opt.subGroups && opt.subGroups.length > 0 && (
+                                                          <div className="space-y-1.5">
+                                                            {opt.subGroups.map((subGroup) => (
+                                                              <div key={subGroup.id} className="rounded border bg-muted/30 p-2 space-y-1">
+                                                                <div className="flex items-center justify-between gap-1">
+                                                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                                    <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                                    <span className="text-xs font-medium truncate">{subGroup.label}</span>
+                                                                    <Badge variant="outline" className="text-[10px] shrink-0">
+                                                                      {subGroup.options.length}
+                                                                    </Badge>
+                                                                  </div>
+                                                                  <div className="flex items-center gap-0.5 shrink-0">
+                                                                    <Button
+                                                                      variant="ghost"
+                                                                      size="icon"
+                                                                      className="h-6 w-6"
+                                                                      onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                                      aria-label={`Edit ${subGroup.label}`}
+                                                                    >
+                                                                      <Pencil className="h-2.5 w-2.5" />
+                                                                    </Button>
+                                                                    <Button
+                                                                      variant="ghost"
+                                                                      size="icon"
+                                                                      className="h-6 w-6 text-destructive hover:text-destructive"
+                                                                      onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                                      aria-label={`Delete ${subGroup.label}`}
+                                                                    >
+                                                                      <Trash2 className="h-2.5 w-2.5" />
+                                                                    </Button>
+                                                                  </div>
+                                                                </div>
+                                                                <ul className="pl-5 text-xs text-muted-foreground space-y-0.5">
+                                                                  {subGroup.options.map((subOpt) => (
+                                                                    <li key={subOpt.id} className="flex items-center justify-between gap-1">
+                                                                      <span className="truncate">{subOpt.label}</span>
+                                                                      <button
+                                                                        type="button"
+                                                                        onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                                        className="opacity-50 hover:opacity-100 shrink-0"
+                                                                        aria-label={`Edit ${subOpt.label}`}
+                                                                      >
+                                                                        <Pencil className="h-2.5 w-2.5" />
+                                                                      </button>
+                                                                    </li>
+                                                                  ))}
+                                                                </ul>
+                                                                <Button
+                                                                  variant="ghost"
+                                                                  size="sm"
+                                                                  className="h-6 text-[11px] gap-0.5 text-muted-foreground"
+                                                                  onClick={() => openAddSubOption(service.id, group.id, opt.id, subGroup.id)}
+                                                                >
+                                                                  <Plus className="h-2.5 w-2.5" />
+                                                                  Add Item
+                                                                </Button>
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                        )}
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-7 text-xs gap-1 w-full"
+                                                          onClick={() => openAddSubGroup(service.id, group.id, opt.id)}
+                                                        >
+                                                          <Plus className="h-3 w-3" />
+                                                          Add Sub-Menu
+                                                        </Button>
+                                                      </div>
+                                                    )}
+                                                  </CardContent>
+                                                </Card>
+                                              )
+                                            }}
+                                          />
+                                          {/* Add-Option tile (Rod-spec: "'Add Option' tile as last card") */}
+                                          <button
+                                            type="button"
+                                            onClick={() => openAddOption(service.id, group.id)}
+                                            data-admin-add-option-tile="true"
+                                            className="rounded-md border-2 border-dashed border-muted-foreground/30 hover:border-primary/60 hover:bg-muted/40 transition-colors h-full min-h-[64px] flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                          >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Add Option
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              )
+                            }}
+                          />
+                        </div>
+                      )}
+
                       {/* Ship #175 — long-press + drag to reorder the option
                           groups under this service. Top-level services are
                           NOT wrapped per Rodolfos scope ("only menus under
                           the services"). */}
+                      {viewMode === 'list' && (
                       <ReorderableList
                         items={service.optionGroups}
                         keyFor={(g) => g.id}
@@ -1409,6 +1775,7 @@ export default function ProductsAdminPage() {
                         )
                       }}
                       />
+                      )}
                     </div>
                   </CardContent>
                 </AccordionContent>
