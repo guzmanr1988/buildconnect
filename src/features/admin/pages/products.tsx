@@ -221,6 +221,33 @@ export default function ProductsAdminPage() {
       return next
     })
 
+  // v2: ESC + outside-click collapse for all expanded option tiles
+  // (apollo finding off PR-#400 walk — green-light spec missed in v1).
+  // Listeners attach only while at least one tile is expanded so the page
+  // pays nothing for the feature when it's not active. Clicks inside any
+  // expanded tile (data-admin-option-tile-expanded="true") OR inside a
+  // Radix dialog (role="dialog" portal — Edit / Delete) keep the
+  // expansion open; anything else collapses ALL expanded tiles.
+  useEffect(() => {
+    if (expandedOptionTiles.size === 0) return
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Element | null
+      if (!target) return
+      if (target.closest('[data-admin-option-tile-expanded="true"]')) return
+      if (target.closest('[role="dialog"]')) return
+      setExpandedOptionTiles(new Set())
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpandedOptionTiles(new Set())
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [expandedOptionTiles])
+
   async function handleReorderOptionGroups(serviceId: string, from: number, to: number) {
     try {
       await reorderOptionGroups(serviceId, from, to)
@@ -1220,14 +1247,16 @@ export default function ProductsAdminPage() {
                                                         )}
                                                       </button>
                                                       <div className="flex flex-col items-end gap-0.5 shrink-0 opacity-60 group-hover/tile:opacity-100 transition-opacity">
+                                                        {/* v2 apollo-#4: dropped e.stopPropagation — Edit/Trash
+                                                            are SIBLINGS of the toggle <button>, not children,
+                                                            so propagation can't reach the toggle anyway, and
+                                                            the wrapper was suspect for the intermittent
+                                                            body-reclick lost-focus issue after edit-open. */}
                                                         <Button
                                                           variant="ghost"
                                                           size="icon"
                                                           className="h-6 w-6"
-                                                          onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            openEditOption(service.id, group.id, opt)
-                                                          }}
+                                                          onClick={() => openEditOption(service.id, group.id, opt)}
                                                           aria-label={`Edit ${opt.label}`}
                                                         >
                                                           <Pencil className="h-3 w-3" />
@@ -1236,10 +1265,7 @@ export default function ProductsAdminPage() {
                                                           variant="ghost"
                                                           size="icon"
                                                           className="h-6 w-6 text-destructive hover:text-destructive"
-                                                          onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            confirmDeleteOption(service.id, group.id, opt)
-                                                          }}
+                                                          onClick={() => confirmDeleteOption(service.id, group.id, opt)}
                                                           aria-label={`Delete ${opt.label}`}
                                                         >
                                                           <Trash2 className="h-3 w-3" />
@@ -1258,12 +1284,14 @@ export default function ProductsAdminPage() {
                                                         {opt.subGroups && opt.subGroups.length > 0 && (
                                                           <div className="space-y-1.5">
                                                             {opt.subGroups.map((subGroup) => (
-                                                              <div key={subGroup.id} className="rounded border bg-muted/30 p-2 space-y-1">
-                                                                <div className="flex items-center justify-between gap-1">
-                                                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                                    <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                                                    <span className="text-xs font-medium truncate">{subGroup.label}</span>
-                                                                    <Badge variant="outline" className="text-[10px] shrink-0">
+                                                              <div key={subGroup.id} className="rounded border bg-muted/30 p-2 space-y-2">
+                                                                <div className="flex items-start justify-between gap-1">
+                                                                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                                                                    <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                                                    {/* v2: drop truncate, allow wrap. The expanded-tile col-span-2 slot still squeezes label width
+                                                                        on narrow viewports and 'Windows'/'Window Sizes' was being clipped to 'Windo…'. */}
+                                                                    <span className="text-xs font-medium break-words whitespace-normal">{subGroup.label}</span>
+                                                                    <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
                                                                       {subGroup.options.length}
                                                                     </Badge>
                                                                   </div>
@@ -1288,21 +1316,33 @@ export default function ProductsAdminPage() {
                                                                     </Button>
                                                                   </div>
                                                                 </div>
-                                                                <ul className="pl-5 text-xs text-muted-foreground space-y-0.5">
-                                                                  {subGroup.options.map((subOpt) => (
-                                                                    <li key={subOpt.id} className="flex items-center justify-between gap-1">
-                                                                      <span className="truncate">{subOpt.label}</span>
-                                                                      <button
-                                                                        type="button"
-                                                                        onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                                        className="opacity-50 hover:opacity-100 shrink-0"
-                                                                        aria-label={`Edit ${subOpt.label}`}
+                                                                {/* v2: sub_options as compact tight grid (cols-2/3/4 by viewport).
+                                                                    Was a vertical column — 26-size Windows sub_group rendered as a
+                                                                    tall single-column tower. */}
+                                                                {subGroup.options.length > 0 && (
+                                                                  <div
+                                                                    className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4"
+                                                                    data-admin-sub-options-grid={subGroup.id}
+                                                                  >
+                                                                    {subGroup.options.map((subOpt) => (
+                                                                      <div
+                                                                        key={subOpt.id}
+                                                                        data-admin-sub-option-tile={subOpt.id}
+                                                                        className="flex items-center justify-between gap-1 rounded border bg-card px-1.5 py-1 text-[11px] hover:bg-muted/40 transition-colors"
                                                                       >
-                                                                        <Pencil className="h-2.5 w-2.5" />
-                                                                      </button>
-                                                                    </li>
-                                                                  ))}
-                                                                </ul>
+                                                                        <span className="break-words whitespace-normal flex-1 min-w-0">{subOpt.label}</span>
+                                                                        <button
+                                                                          type="button"
+                                                                          onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                                          className="opacity-50 hover:opacity-100 shrink-0"
+                                                                          aria-label={`Edit ${subOpt.label}`}
+                                                                        >
+                                                                          <Pencil className="h-2.5 w-2.5" />
+                                                                        </button>
+                                                                      </div>
+                                                                    ))}
+                                                                  </div>
+                                                                )}
                                                                 <Button
                                                                   variant="ghost"
                                                                   size="sm"
