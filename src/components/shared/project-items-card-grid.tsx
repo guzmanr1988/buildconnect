@@ -510,12 +510,24 @@ function buildServiceSections(item: CartItem, opts: BuildOpts): SummarySection[]
 
 function SummarySectionView({ section }: { section: SummarySection }) {
   if (section.cards.length === 0) return null
-  // Multi-card sections claim the full row at every breakpoint; single-card
-  // sections sit in one column of the outer 1/2/3-col responsive grid.
+  // Section wrapper col-span = min(cards.length, max-cols-at-breakpoint).
+  // Outer grid is 1/2/3-col at sm/md/lg; clamp keeps a 2-card section from
+  // wasting the 3rd col on lg, letting a trailing 1-card section slot in
+  // beside it. Tailwind needs literal classes — enumerate the 3 cases.
   const spanClass =
     section.cards.length === 1
       ? ''
-      : 'md:col-span-2 lg:col-span-3'
+      : section.cards.length === 2
+        ? 'md:col-span-2 lg:col-span-2'
+        : 'md:col-span-2 lg:col-span-3'
+  // Inner card grid columns match the same clamp so cards fill the wrapper
+  // without leaving an empty inner column.
+  const innerGridClass =
+    section.cards.length === 1
+      ? 'grid grid-cols-1 gap-3'
+      : section.cards.length === 2
+        ? 'grid grid-cols-2 gap-3'
+        : 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4'
   return (
     <div
       className={`rounded-xl border bg-muted/30 p-4 space-y-3${spanClass ? ' ' + spanClass : ''}`}
@@ -528,11 +540,7 @@ function SummarySectionView({ section }: { section: SummarySection }) {
         )}
       </div>
       <div
-        className={
-          section.cards.length === 1
-            ? 'grid grid-cols-1 gap-3'
-            : 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4'
-        }
+        className={innerGridClass}
         data-project-summary-grid
       >
         {section.cards.map((c, i) => (
