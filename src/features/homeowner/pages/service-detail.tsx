@@ -886,6 +886,23 @@ export function ServiceDetailPage() {
     //   addons  → M=false / P=true  / F=false  (matches isRoofingPerimeterOnly)
     //   repair  → M=true  / P=true  / F=true  (default; future-config follow-up)
     if (serviceId === 'roofing' && group.id === 'service_type') {
+      // Path A — toggle-off when chip already selected. Without this branch
+      // service_type is a one-way trap once the Add-ons mutex (L1336-1339)
+      // locks Full Replacement + Repair: user has no path to deselect
+      // Add-ons and pick a different Service Type. Rod 2026-05-25 re-raise
+      // off PR-#397. Reset roof-measurement flags to the neutral
+      // replace/repair defaults (M=P=F=true) so the next pick lands on a
+      // clean slate rather than the addons-leftover M=F=false state.
+      const current = selections[group.id] ?? []
+      if (current.includes(optionId)) {
+        setSelections((prev) => ({ ...prev, [group.id]: [] }))
+        setRoofMeasurement((prev) =>
+          prev
+            ? { ...prev, includeMaterialOrder: true, includePerimeter: true, includeFlatArea: true }
+            : prev,
+        )
+        return
+      }
       const mapping: Record<string, { includeMaterialOrder: boolean; includePerimeter: boolean; includeFlatArea: boolean }> = {
         replace: { includeMaterialOrder: true,  includePerimeter: true, includeFlatArea: true  },
         addons:  { includeMaterialOrder: false, includePerimeter: true, includeFlatArea: false },
