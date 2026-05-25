@@ -1428,12 +1428,24 @@ export function ServiceDetailPage() {
                     // PR-222 — multi-structure: when 2 polygons are drawn,
                     // the label shows the total only; per-structure breakdown
                     // renders under the size group with ColorCircles below.
+                    // PR-#404 — roofing+addons parent chip mirrors the picked
+                    // sub-variant label dynamically (e.g. "Soffit" → "Soffit
+                    // Wood"). Scoped to roofing+addons so kitchen Stone +
+                    // Cabinet flows keep their static parent-label + separate
+                    // sub-pick badge (L1710-1722) contract unchanged.
+                    const roofingAddonSubPickId =
+                      serviceId === 'roofing' && group.id === 'addons'
+                        ? selections[`${option.id}-sub`]?.[0]
+                        : undefined
+                    const roofingAddonSubPickLabel = roofingAddonSubPickId
+                      ? resolveSubChoiceLabel(option, roofingAddonSubPickId)
+                      : null
                     const optionLabel =
                       serviceId === 'pergolas' && group.id === 'size' && option.id === 'measured'
                         ? (areaMeasurement
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
-                        : option.label
+                        : roofingAddonSubPickLabel ?? option.label
                     return (
                       <button
                         key={option.id}
@@ -1927,24 +1939,50 @@ export function ServiceDetailPage() {
                         (subGroupExpanded[option.id] ?? true),
                     )
                     .map((option) => {
-                      // PR-#402 follow-up — roofing addons render a dedicated
-                      // AddonLinearFtConfigurator card below the SubGroupChoices
-                      // chips (Fascia-style mirror per Rod screenshot). In that
-                      // mode SubGroupChoices suppresses its inline Linear feet
-                      // pill so the dedicated card owns the input + Save button.
-                      // Kitchen + every other vertical keeps the existing
-                      // inline-input contract (hideInlineLinearFt defaults false).
+                      // PR-#404 — roofing addons fully delegate sub-variant
+                      // chips + Linear feet input + Save to AddonLinearFtConfigurator
+                      // (one consolidated box per Rod live-feedback on PR-#403:
+                      // duplicate Linear feet pill from SubGroupChoices was
+                      // surfacing above the dedicated card, and Rod wanted the
+                      // variant pills moved INSIDE the card). Skip SubGroupChoices
+                      // entirely for this mode. Card label uses option.label
+                      // (parent — e.g. "Soffit linear feet") not sub-pick label
+                      // because the dynamic parent-chip label (L1431-1450)
+                      // already mirrors the sub-pick; doubling it on the card
+                      // heading reads as redundant. Kitchen + every other
+                      // sub_group-bearing vertical keeps the existing
+                      // SubGroupChoices inline-input contract unchanged.
                       const useExternalConfigurator = serviceId === 'roofing' && group.id === 'addons'
                       const subPickId = selections[`${option.id}-sub`]?.[0]
-                      const subLabel: string | undefined = (() => {
-                        if (!subPickId) return undefined
-                        for (const sg of option.subGroups ?? []) {
-                          if (sg.id === subPickId) return sg.label
-                          const match = sg.options.find((o) => o.id === subPickId)
-                          if (match) return match.label
-                        }
-                        return undefined
-                      })()
+
+                      if (useExternalConfigurator) {
+                        const subGroups = option.subGroups ?? []
+                        const isMultiSectionMode = subGroups.every((sg) => sg.options.length === 0)
+                        const variants = isMultiSectionMode
+                          ? subGroups.map((sg) => ({ id: sg.id, label: sg.label }))
+                          : (subGroups[0]?.options ?? []).map((o) => ({ id: o.id, label: o.label }))
+                        return (
+                          <div key={`${group.id}-${option.id}-subgroups-wrap`}>
+                            <AddonLinearFtConfigurator
+                              id={`${option.id}-sub`}
+                              label={`${option.label} linear feet`}
+                              value={subGroupLinearFt[option.id] ?? ''}
+                              onChange={(next) =>
+                                setSubGroupLinearFt((prev) => ({ ...prev, [option.id]: next }))
+                              }
+                              onSave={() =>
+                                setSubGroupExpanded((prev) => ({ ...prev, [option.id]: false }))
+                              }
+                              inlineVariantSelector={{
+                                variants,
+                                selectedId: subPickId,
+                                onSelect: (id) => handleSubChoiceSelect(option.id, id),
+                              }}
+                            />
+                          </div>
+                        )
+                      }
+
                       return (
                         <div key={`${group.id}-${option.id}-subgroups-wrap`}>
                           <SubGroupChoices
@@ -1953,21 +1991,7 @@ export function ServiceDetailPage() {
                             onSelect={handleSubChoiceSelect}
                             linearFeet={subGroupLinearFt[option.id] ?? ''}
                             onLinearFeetChange={handleSubLinearFeetChange}
-                            hideInlineLinearFt={useExternalConfigurator}
                           />
-                          {useExternalConfigurator && subPickId && (
-                            <AddonLinearFtConfigurator
-                              id={`${option.id}-sub`}
-                              label={`${subLabel ?? option.label} linear feet`}
-                              value={subGroupLinearFt[option.id] ?? ''}
-                              onChange={(next) =>
-                                setSubGroupLinearFt((prev) => ({ ...prev, [option.id]: next }))
-                              }
-                              onSave={() =>
-                                setSubGroupExpanded((prev) => ({ ...prev, [option.id]: false }))
-                              }
-                            />
-                          )}
                         </div>
                       )
                     })}
