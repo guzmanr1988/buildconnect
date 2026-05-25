@@ -994,24 +994,6 @@ export function CartPage() {
                       const windowsTotal = viewItem.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
                       const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
                       const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-                      // Arc-32 PROD-A — windows_doors `products` group is
-                      // schema-level type:'single' (constants.ts), so
-                      // selections.products only carries the LAST-tapped
-                      // chip. The per-type detail arrays (windowSelections /
-                      // doorSelections / stormFrontSelections / garageDoorSelection)
-                      // persist independently across chip swaps. Derive the
-                      // Products-card badges from those arrays so all
-                      // configured product types surface — mirrors the
-                      // Install-for L1017-1019 *Total presence pattern.
-                      const effectiveOptionIds =
-                        viewItem.serviceId === 'windows_doors' && groupId === 'products'
-                          ? [
-                              ...(windowsTotal > 0 ? ['windows'] : []),
-                              ...(doorsTotal > 0 ? ['doors'] : []),
-                              ...(stormFrontsTotal > 0 ? ['storm_front'] : []),
-                              ...(viewItem.garageDoorSelection?.type ? ['garage_doors'] : []),
-                            ]
-                          : optionIds
                       return (
                         <div
                           key={groupId}
@@ -1022,7 +1004,7 @@ export function CartPage() {
                             {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
                           <div className="flex flex-wrap gap-2 min-w-0">
-                            {effectiveOptionIds.map((optId) => {
+                            {optionIds.map((optId) => {
                               const option = group?.options.find((o) => o.id === optId)
                               const label = option?.label || optId.replace(/_/g, ' ')
                               // Add quantity for add-ons that have them
