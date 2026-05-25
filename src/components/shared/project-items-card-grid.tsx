@@ -570,6 +570,26 @@ export interface ProjectItemsCardGridProps {
   resolvedLineItems?: ResolvedLineItem[]
 }
 
+// Pack sections into rows: adjacent single-card sections pair into a
+// 2-col row; sections with 2+ cards stay full-width; a trailing
+// unpaired single goes full-width. Mobile collapses to one column.
+function packRows(sections: SummarySection[]): SummarySection[][] {
+  const rows: SummarySection[][] = []
+  let i = 0
+  while (i < sections.length) {
+    const s = sections[i]
+    const next = sections[i + 1]
+    if (s.cards.length === 1 && next && next.cards.length === 1) {
+      rows.push([s, next])
+      i += 2
+    } else {
+      rows.push([s])
+      i += 1
+    }
+  }
+  return rows
+}
+
 export function ProjectItemsCardGrid({
   item,
   projectPermit,
@@ -617,11 +637,25 @@ export function ProjectItemsCardGrid({
 
   if (sections.length === 0) return null
 
+  const rows = packRows(sections)
+
   return (
     <div className="flex flex-col gap-3" data-project-items-card-grid>
-      {sections.map((s) => (
-        <SummarySectionView key={s.id} section={s} />
-      ))}
+      {rows.map((row) =>
+        row.length === 2 ? (
+          <div
+            key={`pair-${row[0].id}-${row[1].id}`}
+            className="grid grid-cols-1 gap-3 md:grid-cols-2"
+            data-project-items-row-pair
+          >
+            {row.map((s) => (
+              <SummarySectionView key={s.id} section={s} />
+            ))}
+          </div>
+        ) : (
+          <SummarySectionView key={row[0].id} section={row[0]} />
+        ),
+      )}
     </div>
   )
 }
