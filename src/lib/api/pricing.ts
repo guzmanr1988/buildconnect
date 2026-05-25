@@ -384,15 +384,21 @@ export function computeVendorTotal(
       }
     }
 
+    // Arc-32 W4 — raw-value passthrough on label→id map lookups. If the cart
+    // entry carries an ID-shaped value (legacy persisted state, drift between
+    // configurator label-storage and ID-storage code paths) or a label not in
+    // the map dict, the raw value flows through resolveSubOptionPriceKey to
+    // priceMap.has — combined with the 8b4a055 sweep fallback, lookups can't
+    // silently drop a contribution.
     for (const w of (item.windowSelections ?? []) as ConfiguratorEntry[]) {
       accumulateSubOpts(
         'windows',
         [
           w.size,
-          WINDOW_TYPE_IDS[w.type],
-          FRAME_COLOR_IDS[w.frameColor],
-          GLASS_COLOR_IDS[w.glassColor],
-          GLASS_TYPE_IDS[w.glassType],
+          WINDOW_TYPE_IDS[w.type] ?? w.type,
+          FRAME_COLOR_IDS[w.frameColor] ?? w.frameColor,
+          GLASS_COLOR_IDS[w.glassColor] ?? w.glassColor,
+          GLASS_TYPE_IDS[w.glassType] ?? w.glassType,
         ],
         w.quantity,
       )
@@ -402,10 +408,10 @@ export function computeVendorTotal(
         'doors',
         [
           d.size,
-          DOOR_TYPE_IDS[d.type],
-          FRAME_COLOR_IDS[d.frameColor],
-          GLASS_COLOR_IDS[d.glassColor],
-          GLASS_TYPE_IDS[d.glassType],
+          DOOR_TYPE_IDS[d.type] ?? d.type,
+          FRAME_COLOR_IDS[d.frameColor] ?? d.frameColor,
+          GLASS_COLOR_IDS[d.glassColor] ?? d.glassColor,
+          GLASS_TYPE_IDS[d.glassType] ?? d.glassType,
         ],
         d.quantity,
       )
@@ -414,11 +420,11 @@ export function computeVendorTotal(
       accumulateSubOpts(
         'storm_front',
         [
-          STORM_FRONT_SIZE_IDS[sf.size],
-          STORM_FRONT_TYPE_IDS[sf.type],
-          FRAME_COLOR_IDS[sf.frameColor],
-          GLASS_COLOR_IDS[sf.glassColor],
-          GLASS_TYPE_IDS[sf.glassType],
+          STORM_FRONT_SIZE_IDS[sf.size] ?? sf.size,
+          STORM_FRONT_TYPE_IDS[sf.type] ?? sf.type,
+          FRAME_COLOR_IDS[sf.frameColor] ?? sf.frameColor,
+          GLASS_COLOR_IDS[sf.glassColor] ?? sf.glassColor,
+          GLASS_TYPE_IDS[sf.glassType] ?? sf.glassType,
         ],
         sf.quantity,
       )
