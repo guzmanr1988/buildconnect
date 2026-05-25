@@ -522,7 +522,11 @@ function SummarySectionView({ section }: { section: SummarySection }) {
         )}
       </div>
       <div
-        className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4"
+        className={
+          section.cards.length === 1
+            ? 'grid grid-cols-1 gap-3'
+            : 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4'
+        }
         data-project-summary-grid
       >
         {section.cards.map((c, i) => (
@@ -645,7 +649,7 @@ export function ProjectItemsCardGrid({
         row.length === 2 ? (
           <div
             key={`pair-${row[0].id}-${row[1].id}`}
-            className="grid grid-cols-1 gap-3 md:grid-cols-2"
+            className="grid grid-cols-1 items-start gap-3 md:grid-cols-2"
             data-project-items-row-pair
           >
             {row.map((s) => (
