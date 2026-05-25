@@ -829,6 +829,18 @@ export function ServiceDetailPage() {
     flatAreaSqft: roofMeasurement?.flatAreaSqft ?? 0,
     hasPitchedMaterialSelected: (selections['material'] ?? []).some((m) => m !== 'flat_roof'),
   })
+  // PR-#402 follow-up — Rod-directed addon-only suppression. When the user
+  // selects at least one addon AND zero pitched materials, they are in
+  // intentional addon-only mode (perimeter-driven order; no main-roof
+  // material). The pitched-omitted warning at L2390-ish stops bugging them,
+  // the checkbox-opt-out is dropped, and the Add-to-Project gate treats it
+  // as implicit ack so cart-write strips pitched + sets pitchedExcludedAck.
+  // Same predicate-shape as evalPitchedOmittedTriggered's hasPitchedMaterial
+  // check ('flat_roof' is not pitched).
+  const isAddonOnlyMode =
+    serviceId === 'roofing' &&
+    (selections['addons']?.length ?? 0) >= 1 &&
+    !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
   const allRequiredDone = completedRequired === requiredGroups.length
 
   // PR-223 Option B — pergolas force-pick gate. Every drawn measurement
@@ -875,6 +887,11 @@ export function ServiceDetailPage() {
   }
 
   function handleSubChoiceSelect(parentOptionId: string, choiceId: string) {
+    // Capture toggle-off intent BEFORE setSelections mutates, so the seed
+    // branch below sees consistent state within this event handler.
+    const currentPick = selections[`${parentOptionId}-sub`]?.[0]
+    const isToggleOff = currentPick === choiceId
+
     setSelections((prev) => {
       const key = `${parentOptionId}-sub`
       const current = prev[key]?.[0]
@@ -887,6 +904,25 @@ export function ServiceDetailPage() {
       }
       return { ...prev, [key]: [choiceId] }
     })
+
+    // PR-#402 follow-up — inherit parent's computed linear-feet on first
+    // sub-pick. Parent addon (e.g. Soffit) seeds addonLinearFt[parentId]
+    // from roofMeasurement.perimeterFt at chip-tap (L1571-1575). When user
+    // picks a sub-option under that addon, mirror the parent value into
+    // subGroupLinearFt[parentId] so the dedicated AddonLinearFtConfigurator
+    // card opens pre-filled (Fascia-style mirror per Rod screenshot). Only
+    // seed when subGroupLinearFt is currently empty so user edits aren't
+    // clobbered on re-pick. Kitchen Stone path is unaffected: addonLinearFt
+    // is roofing-only state, so addonLinearFt[parentId] is undefined →
+    // setSubGroupLinearFt is a no-op for kitchen.
+    if (!isToggleOff) {
+      setSubGroupLinearFt((prev) => {
+        if (prev[parentOptionId]) return prev
+        const inherited = addonLinearFt[parentOptionId]
+        if (!inherited) return prev
+        return { ...prev, [parentOptionId]: inherited }
+      })
+    }
   }
 
   function handleSubLinearFeetChange(parentOptionId: string, value: string) {
@@ -1890,16 +1926,51 @@ export function ServiceDetailPage() {
                         (option.subGroups?.some((sg) => sg.options.length > 0) ?? false) &&
                         (subGroupExpanded[option.id] ?? true),
                     )
-                    .map((option) => (
-                      <SubGroupChoices
-                        key={`${group.id}-${option.id}-subgroups`}
-                        parentOption={option}
-                        selections={selections}
-                        onSelect={handleSubChoiceSelect}
-                        linearFeet={subGroupLinearFt[option.id] ?? ''}
-                        onLinearFeetChange={handleSubLinearFeetChange}
-                      />
-                    ))}
+                    .map((option) => {
+                      // PR-#402 follow-up — roofing addons render a dedicated
+                      // AddonLinearFtConfigurator card below the SubGroupChoices
+                      // chips (Fascia-style mirror per Rod screenshot). In that
+                      // mode SubGroupChoices suppresses its inline Linear feet
+                      // pill so the dedicated card owns the input + Save button.
+                      // Kitchen + every other vertical keeps the existing
+                      // inline-input contract (hideInlineLinearFt defaults false).
+                      const useExternalConfigurator = serviceId === 'roofing' && group.id === 'addons'
+                      const subPickId = selections[`${option.id}-sub`]?.[0]
+                      const subLabel: string | undefined = (() => {
+                        if (!subPickId) return undefined
+                        for (const sg of option.subGroups ?? []) {
+                          if (sg.id === subPickId) return sg.label
+                          const match = sg.options.find((o) => o.id === subPickId)
+                          if (match) return match.label
+                        }
+                        return undefined
+                      })()
+                      return (
+                        <div key={`${group.id}-${option.id}-subgroups-wrap`}>
+                          <SubGroupChoices
+                            parentOption={option}
+                            selections={selections}
+                            onSelect={handleSubChoiceSelect}
+                            linearFeet={subGroupLinearFt[option.id] ?? ''}
+                            onLinearFeetChange={handleSubLinearFeetChange}
+                            hideInlineLinearFt={useExternalConfigurator}
+                          />
+                          {useExternalConfigurator && subPickId && (
+                            <AddonLinearFtConfigurator
+                              id={`${option.id}-sub`}
+                              label={`${subLabel ?? option.label} linear feet`}
+                              value={subGroupLinearFt[option.id] ?? ''}
+                              onChange={(next) =>
+                                setSubGroupLinearFt((prev) => ({ ...prev, [option.id]: next }))
+                              }
+                              onSave={() =>
+                                setSubGroupExpanded((prev) => ({ ...prev, [option.id]: false }))
+                              }
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
                 {/* PR-223 Option B — pergolas per-square structure assignment.
                     For every measurement drawn, render a card with the sqft,
                     a ColorCircle that matches the polygon on the satellite map,
@@ -2382,7 +2453,7 @@ export function ServiceDetailPage() {
             Display-truth peer lives in the wizard Step 2 Pitched row (RED).
             Per banked project_buildconnect_quote_top_of_real (under-detection
             is launch-blocker — quotes err HIGH not LOW). */}
-        {pitchedOmittedTriggered && !alreadyInCart && (
+        {pitchedOmittedTriggered && !alreadyInCart && !isAddonOnlyMode && (
           <div
             data-pitched-not-included="true"
             role="alert"
@@ -2432,7 +2503,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -2495,7 +2566,7 @@ export function ServiceDetailPage() {
                 // Chip=flat-only with explicit ack: strip pitched (user opted-out via ack toggle).
                 // SoT-of-strip moved here from wizard handleComplete so the under-quote gate
                 // evaluator can read raw pitched on its read path.
-                if (pitchedOmittedTriggered && flatOnlyAck) {
+                if (pitchedOmittedTriggered && (flatOnlyAck || isAddonOnlyMode)) {
                   const flatOnly = roofMeasurement.flatAreaSqft ?? 0
                   return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
                 }
@@ -2557,7 +2628,7 @@ export function ServiceDetailPage() {
                   },
                 }),
                 ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
-                ...(serviceId === 'roofing' && pitchedOmittedTriggered && flatOnlyAck && { pitchedExcludedAck: true }),
+                ...(serviceId === 'roofing' && pitchedOmittedTriggered && (flatOnlyAck || isAddonOnlyMode) && { pitchedExcludedAck: true }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(areaMeasurement?.mapUrl && { measurementMapUrl: areaMeasurement.mapUrl }),
