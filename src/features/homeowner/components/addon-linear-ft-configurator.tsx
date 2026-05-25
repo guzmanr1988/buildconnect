@@ -17,6 +17,16 @@ interface AddonLinearFtConfiguratorProps {
     onFloorsChange: (n: 1 | 2) => void
     onDropsChange: (n: number) => void
   }
+  // PR-#404 — consolidate variant pills inside this card (Rod live-feedback
+  // on PR-#403 Soffit/Fascia: one box, not pills-row + card). When provided,
+  // renders the variant chips inline beside the Linear feet input and Save
+  // becomes available once both a variant is picked AND the lin-ft value is
+  // non-zero.
+  inlineVariantSelector?: {
+    variants: { id: string; label: string }[]
+    selectedId: string | undefined
+    onSelect: (id: string) => void
+  }
 }
 
 export function AddonLinearFtConfigurator({
@@ -26,12 +36,14 @@ export function AddonLinearFtConfigurator({
   onChange,
   onSave,
   gutterExtras,
+  inlineVariantSelector,
 }: AddonLinearFtConfiguratorProps) {
   const isGutter = id === 'gutters'
   const numericValue = Number(value) || 0
   const inputComplete = value.trim().length > 0 && numericValue > 0
   const gutterComplete = !isGutter || (gutterExtras && gutterExtras.floors !== null)
-  const isComplete = inputComplete && gutterComplete
+  const variantComplete = !inlineVariantSelector || Boolean(inlineVariantSelector.selectedId)
+  const isComplete = inputComplete && gutterComplete && variantComplete
 
   const gutterTotal =
     isGutter && gutterExtras && gutterExtras.floors
@@ -116,7 +128,7 @@ export function AddonLinearFtConfigurator({
           </>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Label className="text-sm w-36 shrink-0">
             {isGutter ? 'Gutter linear feet' : 'Linear feet'}
           </Label>
@@ -128,6 +140,39 @@ export function AddonLinearFtConfigurator({
             value={value}
             onChange={(e) => onChange(e.target.value)}
           />
+          {inlineVariantSelector && inlineVariantSelector.variants.length > 0 && (
+            <div
+              className="flex flex-wrap gap-2"
+              role="radiogroup"
+              data-testid="config-sub-menu-group"
+              data-inline-variant-selector={id}
+            >
+              {inlineVariantSelector.variants.map((variant) => {
+                const isSelected = inlineVariantSelector.selectedId === variant.id
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    data-testid="config-sub-menu-choice"
+                    data-choice-id={variant.id}
+                    data-choice-name={variant.label}
+                    data-chip-state={isSelected ? 'active' : 'inactive'}
+                    onClick={() => inlineVariantSelector.onSelect(variant.id)}
+                    className={cn(
+                      'inline-flex items-center rounded-lg border px-3 py-1.5 text-sm transition-all duration-150',
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+                    )}
+                  >
+                    {variant.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {isGutter && gutterExtras && gutterExtras.floors && numericValue > 0 && (
