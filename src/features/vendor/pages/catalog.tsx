@@ -516,20 +516,36 @@ function CatalogGroupRenderer({
       {optionGroup.options
         .filter((o) => o.subGroups && o.subGroups.length > 0)
         .map((option) =>
-          option.subGroups?.map((subGroup) => (
-            <CatalogGroupRenderer
-              key={subGroup.id}
-              serviceId={serviceId}
-              optionGroup={subGroup}
-              depth={depth + 1}
-              isOptionEnabled={isOptionEnabled}
-              getPrice={getPrice}
-              getPricePercent={getPricePercent}
-              onToggle={onToggle}
-              onPriceChange={onPriceChange}
-              onPricePercentChange={onPricePercentChange}
-            />
-          ))
+          option.subGroups?.map((subGroup) => {
+            // PR-#410 — FE-defensive compound groupId for ancestor-path
+            // uniqueness. Substrate may carry collision-prone literal
+            // sub_option_ids across sibling subgroups (Soffit's Wood
+            // subgroup AND Facia's Wood subgroup both naming their leaf
+            // 'metal'). Bare subGroup.id as groupId would collide in
+            // vendor-catalog-store enabledOptions[groupId] → toggling
+            // Soffit-Metal also lights Facia-Metal. Compose the parent
+            // option.id into a scoped groupId so every subgroup carries a
+            // unique namespace inherited from its ancestor chain (recursive
+            // adds compose further: `${ancestor.id}__${parent.id}__leaf`).
+            // Belt-and-suspenders complement to PR-#411 hermes substrate
+            // rename — survives even if a future substrate add reintroduces
+            // a bare sibling-id collision. Store contract unchanged.
+            const scopedId = `${option.id}__${subGroup.id}`
+            return (
+              <CatalogGroupRenderer
+                key={scopedId}
+                serviceId={serviceId}
+                optionGroup={{ ...subGroup, id: scopedId }}
+                depth={depth + 1}
+                isOptionEnabled={isOptionEnabled}
+                getPrice={getPrice}
+                getPricePercent={getPricePercent}
+                onToggle={onToggle}
+                onPriceChange={onPriceChange}
+                onPricePercentChange={onPricePercentChange}
+              />
+            )
+          })
         )}
     </div>
   )
