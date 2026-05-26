@@ -100,8 +100,8 @@ export function AddonLinearFtConfigurator({
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium">How many downspouts (drops)?</Label>
-              <div className="grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((n) => {
+              <div className="grid grid-cols-6 gap-2">
+                {[1, 2, 3, 4, 5, 6].map((n) => {
                   const isSelected = gutterExtras.drops === n
                   return (
                     <button
