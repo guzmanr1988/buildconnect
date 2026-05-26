@@ -664,20 +664,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
   )
 )
 
-// Arc-43 — auth-state-change re-fire. The hydrateFromSupabase entry guard
-// returns early when no session is attached at mount time. AuthBootstrap
-// fires SIGNED_IN / INITIAL_SESSION / TOKEN_REFRESHED once the session
-// resolves; this listener re-fires hydrate with the user's UUID so the
-// caches populate without requiring the catalog.tsx mount-effect to re-run
-// (profileId may already be set from a persisted profile across refresh,
-// so the useEffect dep-array won't change post-SIGNED_IN). Mirrors the
-// homeowner-documents-store.ts L237-255 pattern.
-if (typeof window !== 'undefined') {
-  supabase.auth.onAuthStateChange((event, session) => {
-    const uid = session?.user?.id
-    if (!uid) return
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-      void useVendorCatalogStore.getState().hydrateFromSupabase(uid)
-    }
-  })
-}
+// PR-#427 — removed Arc-43 onAuthStateChange listener. AuthBootstrap.tsx
+// already gates `useVendorCatalogStore.getState().hydrateFromSupabase(userId)`
+// on `merged.role === 'vendor'` (L100-102), called from its own listener for
+// SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED and from the initial
+// `supabase.auth.getSession()` path. The Arc-43 fallback was redundant for
+// vendors and harmful for homeowners (RLS-denied UPSERT throws the
+// "Could not save price — please retry" toast on homeowner login).
