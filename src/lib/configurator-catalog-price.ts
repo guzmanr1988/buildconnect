@@ -69,6 +69,19 @@ function sumOptionPrices(
     .reduce((sum, id) => sum + (getPrice(serviceId, id) || 0), 0)
 }
 
+// PR-#412 — parent-prefixed slug emitter. Hermes substrate rename moves
+// colliding sub_option_ids (white / black / clear / low_e / etc.) to
+// parent-prefixed literals (windows_white, doors_black, storm_front_low_e,
+// ...). FRAME_COLOR_IDS / GLASS_COLOR_IDS / GLASS_TYPE_IDS map LABEL → bare
+// slug for legacy compatibility; this helper concats the parent prefix at
+// each price-lookup call site so getPrice(serviceId, namespacedId) hits the
+// renamed substrate rows. Bare maps retained — calls from any legacy
+// consumer that hasn't been migrated still resolve bare IDs (which remain
+// in OPTION_METADATA for hot-swap safety).
+function prefixed(bare: string | undefined, prefix: string): string | undefined {
+  return bare ? `${prefix}${bare}` : undefined
+}
+
 /** Unit price for one window (before multiplying by quantity). */
 export function windowCatalogUnitPrice(
   entry: ConfigEntryLike,
@@ -79,9 +92,9 @@ export function windowCatalogUnitPrice(
     [
       entry.size,
       WINDOW_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'windows_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'windows_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'windows_'),
     ],
     getPrice,
     serviceId,
@@ -98,9 +111,9 @@ export function doorCatalogUnitPrice(
     [
       entry.size,
       DOOR_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'doors_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'doors_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'doors_'),
     ],
     getPrice,
     serviceId,
@@ -132,9 +145,9 @@ export function stormFrontCatalogUnitPrice(
     [
       STORM_FRONT_SIZE_IDS[entry.size],
       STORM_FRONT_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'storm_front_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'storm_front_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'storm_front_'),
     ],
     getPrice,
     serviceId,
