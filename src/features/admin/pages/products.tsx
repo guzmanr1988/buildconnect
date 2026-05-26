@@ -1321,14 +1321,14 @@ export default function ProductsAdminPage() {
                                                                     tall single-column tower. */}
                                                                 {subGroup.options.length > 0 && (
                                                                   <div
-                                                                    className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
+                                                                    className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4"
                                                                     data-admin-sub-options-grid={subGroup.id}
                                                                   >
                                                                     {subGroup.options.map((subOpt) => (
                                                                       <div
                                                                         key={subOpt.id}
                                                                         data-admin-sub-option-tile={subOpt.id}
-                                                                        className="flex items-center justify-between gap-2 rounded border bg-card px-2.5 py-1.5 text-sm hover:bg-muted/40 transition-colors"
+                                                                        className="flex items-center justify-between gap-1 rounded border bg-card px-2 py-1 text-xs hover:bg-muted/40 transition-colors"
                                                                       >
                                                                         <span className="truncate flex-1 min-w-0" title={subOpt.label}>{subOpt.label}</span>
                                                                         <button
@@ -1337,7 +1337,7 @@ export default function ProductsAdminPage() {
                                                                           className="opacity-60 hover:opacity-100 shrink-0"
                                                                           aria-label={`Edit ${subOpt.label}`}
                                                                         >
-                                                                          <Pencil className="h-3.5 w-3.5" />
+                                                                          <Pencil className="h-3 w-3" />
                                                                         </button>
                                                                         <button
                                                                           type="button"
@@ -1345,15 +1345,7 @@ export default function ProductsAdminPage() {
                                                                           className="opacity-60 hover:opacity-100 shrink-0 text-destructive"
                                                                           aria-label={`Delete ${subOpt.label}`}
                                                                         >
-                                                                          <Trash2 className="h-3.5 w-3.5" />
-                                                                        </button>
-                                                                        <button
-                                                                          type="button"
-                                                                          onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                                          className="opacity-50 hover:opacity-100 shrink-0 text-destructive"
-                                                                          aria-label={`Delete ${subOpt.label}`}
-                                                                        >
-                                                                          <Trash2 className="h-2.5 w-2.5" />
+                                                                          <Trash2 className="h-3 w-3" />
                                                                         </button>
                                                                       </div>
                                                                     ))}
