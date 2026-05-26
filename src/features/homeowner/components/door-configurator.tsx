@@ -1,10 +1,17 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Minus, Plus, PlusCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-const DOOR_CATEGORIES = [
+// PR-#428 — bundled fallbacks. The component derives its dropdown lists from
+// the catalog-store substrate (admin /admin/products edits propagate here),
+// but the fallbacks stay byte-identical to the pre-rewire literals so the
+// rendered list does NOT churn when the substrate hasn't hydrated yet
+// (cold open, RLS deny, unauth, network blip).
+const FALLBACK_DOOR_CATEGORIES = [
   {
     label: 'Single Doors',
     sizes: ['27x80', '27x96', '34x80', '34x96', '39x80', '39x96'],
@@ -19,7 +26,7 @@ const DOOR_CATEGORIES = [
   },
 ]
 
-const DOOR_TYPES = [
+const FALLBACK_DOOR_TYPES = [
   'Entry Door',
   'French Door',
   'Sliding Glass',
@@ -28,19 +35,54 @@ const DOOR_TYPES = [
   'Pivot Door',
 ]
 
-const FRAME_COLORS = [
+const FALLBACK_FRAME_COLORS = [
   { label: 'White', color: '#ffffff' },
   { label: 'Bronze', color: '#8B6914' },
   { label: 'Black', color: '#1a1a1a' },
 ]
-const GLASS_COLORS = [
+const FALLBACK_GLASS_COLORS = [
   { id: 'grey-white', label: 'Grey-White', note: 'Private Glass - front doors or bathroom' },
   { id: 'clear-white', label: 'Clear-White', note: 'Private but lighter look' },
   { id: 'clear', label: 'Clear', note: '' },
   { id: 'gray', label: 'Gray', note: '' },
   { id: 'green', label: 'Green', note: 'Low-E Color' },
 ]
-const GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+const FALLBACK_GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+
+// Substrate has only id+label; the visual hex + glass note copy stays in code
+// because the substrate doesn't carry those fields. Looked up by label/id and
+// falls back to neutral when the substrate adds a value we don't know yet.
+const FRAME_COLOR_HEX: Record<string, string> = {
+  White: '#ffffff',
+  Bronze: '#8B6914',
+  Black: '#1a1a1a',
+}
+const GLASS_COLOR_NOTE: Record<string, string> = {
+  grey_white: 'Private Glass - front doors or bathroom',
+  clear_white: 'Private but lighter look',
+  green: 'Low-E Color',
+}
+
+// Bucketize a flat substrate door_sizes list into the Single / Double / Triple
+// categories using the WxH width. Substrate door_sizes are a flat collection;
+// the categorization is consumer-side UX organization, not substrate data.
+function categorizeSizes(sizes: string[]): typeof FALLBACK_DOOR_CATEGORIES {
+  const single: string[] = []
+  const double: string[] = []
+  const triple: string[] = []
+  for (const s of sizes) {
+    const width = parseInt(s.split('x')[0] ?? '', 10)
+    if (!Number.isFinite(width)) continue
+    if (width <= 50) single.push(s)
+    else if (width <= 99) double.push(s)
+    else triple.push(s)
+  }
+  return [
+    { label: 'Single Doors', sizes: single },
+    { label: 'Double Doors', sizes: double },
+    { label: 'Triple Door / Sliding', sizes: triple },
+  ]
+}
 
 export interface DoorSelection {
   id: string
@@ -59,10 +101,56 @@ interface DoorConfiguratorProps {
 }
 
 export function DoorConfigurator({ selections, onChange, onSave }: DoorConfiguratorProps) {
-  function addEntry(size: string, type: string = 'Entry Door') {
+  const services = useCatalogStore((s) => s.services)
+
+  const { doorCategories, doorTypes, frameColors, glassColors, glassTypes } = useMemo(() => {
+    const svc = services.find((s) => s.id === 'windows_doors')
+    const products = svc?.optionGroups?.find((g) => g.id === 'products')
+    const doors = products?.options?.find((o) => o.id === 'doors')
+    const findSub = (id: string) => doors?.subGroups?.find((sg) => sg.id === id)
+
+    const sizesSub = findSub('door_sizes')?.options
+    const typesSub = findSub('door_types')?.options
+    const frameSub = findSub('door_frame_colors')?.options
+    const glassColorsSub = findSub('door_glass_colors')?.options
+    const glassTypesSub = findSub('door_glass_types')?.options
+
+    return {
+      doorCategories:
+        sizesSub && sizesSub.length > 0
+          ? categorizeSizes(sizesSub.map((o) => o.id))
+          : FALLBACK_DOOR_CATEGORIES,
+      doorTypes:
+        typesSub && typesSub.length > 0
+          ? typesSub.map((o) => o.label)
+          : FALLBACK_DOOR_TYPES,
+      frameColors:
+        frameSub && frameSub.length > 0
+          ? frameSub.map((o) => ({ label: o.label, color: FRAME_COLOR_HEX[o.label] ?? '#cccccc' }))
+          : FALLBACK_FRAME_COLORS,
+      glassColors:
+        glassColorsSub && glassColorsSub.length > 0
+          ? glassColorsSub.map((o) => ({ id: o.id, label: o.label, note: GLASS_COLOR_NOTE[o.id] ?? '' }))
+          : FALLBACK_GLASS_COLORS,
+      glassTypes:
+        glassTypesSub && glassTypesSub.length > 0
+          ? glassTypesSub.map((o) => o.label)
+          : FALLBACK_GLASS_TYPES,
+    }
+  }, [services])
+
+  function addEntry(size: string, type: string = doorTypes[0] ?? 'Entry Door') {
     onChange([
       ...selections,
-      { id: crypto.randomUUID(), size, type, frameColor: 'White', glassColor: 'Clear-White', glassType: 'Impact Glass', quantity: 1 },
+      {
+        id: crypto.randomUUID(),
+        size,
+        type,
+        frameColor: frameColors[0]?.label ?? 'White',
+        glassColor: glassColors.find((g) => g.label === 'Clear-White')?.label ?? glassColors[0]?.label ?? 'Clear-White',
+        glassType: glassTypes[0] ?? 'Impact Glass',
+        quantity: 1,
+      },
     ])
   }
 
@@ -102,7 +190,7 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
       <h4 className="text-base font-semibold text-foreground mb-4">Select Door Sizes</h4>
 
       <div className="flex flex-col gap-1">
-        {DOOR_CATEGORIES.map((category) => (
+        {doorCategories.map((category) => (
           <div key={category.label} className="flex flex-col">
             <div className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pt-3 pb-1">
               {category.label}
@@ -150,7 +238,7 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {DOOR_TYPES.map((type) => (
+                            {doorTypes.map((type) => (
                               <SelectItem key={type} value={type} className="text-xs py-2.5 justify-center pl-4 pr-4 text-center">
                                 {type}
                               </SelectItem>
@@ -180,7 +268,7 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
                             <SelectValue placeholder="Frame" />
                           </SelectTrigger>
                           <SelectContent>
-                            {FRAME_COLORS.map((c) => (
+                            {frameColors.map((c) => (
                               <SelectItem key={c.label} value={c.label} className="text-xs py-2 pl-3 pr-4">
                                 <div className="flex items-center gap-2">
                                   <div className="w-4 h-4 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
@@ -198,7 +286,7 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
                             <SelectValue placeholder="Glass" />
                           </SelectTrigger>
                           <SelectContent className="min-w-[280px]">
-                            {GLASS_COLORS.map((c) => (
+                            {glassColors.map((c) => (
                               <SelectItem key={c.id} value={c.label} className="text-xs py-2.5 pl-4 pr-4">
                                 <div className="flex flex-col">
                                   <span>{c.label}</span>
@@ -216,7 +304,7 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                           <SelectContent>
-                            {GLASS_TYPES.map((t) => (
+                            {glassTypes.map((t) => (
                               <SelectItem key={t} value={t} className="text-xs py-2 text-center justify-center pl-4 pr-4">{t}</SelectItem>
                             ))}
                           </SelectContent>
