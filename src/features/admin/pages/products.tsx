@@ -1321,14 +1321,14 @@ export default function ProductsAdminPage() {
                                                                     tall single-column tower. */}
                                                                 {subGroup.options.length > 0 && (
                                                                   <div
-                                                                    className="flex flex-wrap gap-1.5"
+                                                                    className="flex flex-wrap gap-2"
                                                                     data-admin-sub-options-grid={subGroup.id}
                                                                   >
                                                                     {subGroup.options.map((subOpt) => (
                                                                       <div
                                                                         key={subOpt.id}
                                                                         data-admin-sub-option-tile={subOpt.id}
-                                                                        className="flex items-center gap-2 rounded border bg-card px-2.5 py-1.5 text-sm hover:bg-muted/40 transition-colors"
+                                                                        className="flex items-center gap-2.5 rounded border bg-card px-3 py-2 text-base hover:bg-muted/40 transition-colors"
                                                                       >
                                                                         <span title={subOpt.label}>{subOpt.label}</span>
                                                                         <button
@@ -1337,7 +1337,7 @@ export default function ProductsAdminPage() {
                                                                           className="opacity-60 hover:opacity-100 shrink-0"
                                                                           aria-label={`Edit ${subOpt.label}`}
                                                                         >
-                                                                          <Pencil className="h-3.5 w-3.5" />
+                                                                          <Pencil className="h-4 w-4" />
                                                                         </button>
                                                                         <button
                                                                           type="button"
@@ -1345,7 +1345,7 @@ export default function ProductsAdminPage() {
                                                                           className="opacity-60 hover:opacity-100 shrink-0 text-destructive"
                                                                           aria-label={`Delete ${subOpt.label}`}
                                                                         >
-                                                                          <Trash2 className="h-3.5 w-3.5" />
+                                                                          <Trash2 className="h-4 w-4" />
                                                                         </button>
                                                                       </div>
                                                                     ))}
