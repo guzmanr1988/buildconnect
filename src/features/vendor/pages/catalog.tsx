@@ -487,13 +487,25 @@ function CatalogGroupRenderer({
         ? 'text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider'
         : 'text-[10px] md:text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider'
 
+  // PR-#409 — hide parent option cards that have subGroups; the subGroup
+  // section header + child variant cards carry the parent context. Rod
+  // live-feedback on PR-#407 squares: Soffit + Fascia parent rows render
+  // as $0 dead-weight cards because pricing lives in WOOD / FACIA
+  // subGroups below. Cleanest fix (no catalog-store rewire): parent w/
+  // subGroups is treated as always-enabled at the recursion gate below,
+  // and its card is filtered out of this level's grid. Children's own
+  // enabled-state still gates child card visibility individually.
+  const visibleOptions = optionGroup.options.filter(
+    (o) => !(o.subGroups && o.subGroups.length > 0)
+  )
+
   return (
     <div className={cn(indentClass, spacingClass)}>
       <p className={labelClass}>{optionGroup.label}</p>
       <VendorCatalogOptionsCardGrid
         serviceId={serviceId}
         groupId={optionGroup.id}
-        options={optionGroup.options}
+        options={visibleOptions}
         isOptionEnabled={isOptionEnabled}
         getPrice={getPrice}
         getPricePercent={getPricePercent}
@@ -502,12 +514,7 @@ function CatalogGroupRenderer({
         onPricePercentChange={onPricePercentChange}
       />
       {optionGroup.options
-        .filter(
-          (o) =>
-            o.subGroups &&
-            o.subGroups.length > 0 &&
-            isOptionEnabled(serviceId, optionGroup.id, o.id)
-        )
+        .filter((o) => o.subGroups && o.subGroups.length > 0)
         .map((option) =>
           option.subGroups?.map((subGroup) => (
             <CatalogGroupRenderer
