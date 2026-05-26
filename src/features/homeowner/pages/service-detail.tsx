@@ -1472,7 +1472,19 @@ export function ServiceDetailPage() {
                           const hasSubGroups =
                             !isDedicatedConfiguratorService(serviceId) &&
                             (option.subGroups?.some((sg) => sg.options.length > 0) ?? false)
-                          if (hasSubGroups && isSelected) {
+                          // PR-#406 — roofing addons must allow toggle-off on
+                          // re-tap (Rod live-feedback "i cant unselect soffit
+                          // ones i did the addons"). The hasSubGroups accordion
+                          // intercept blocks the catchall handleSelect deselect
+                          // for any sub_groups-bearing chip, which traps roofing
+                          // addons (Soffit/Fascia after substrate consolidation
+                          // reused legacy 'soffit_wood'/'fascia_wood' ids as the
+                          // new parent option ids carrying sub_groups). Kitchen
+                          // Cabinet/Stone still uses accordion-collapse on
+                          // re-tap because the sub-pick is the primary
+                          // interaction and the parent chip stays "on" by design.
+                          const isRoofingAddonChip = serviceId === 'roofing' && group.id === 'addons'
+                          if (hasSubGroups && isSelected && !isRoofingAddonChip) {
                             setSubGroupExpanded((prev) => ({
                               ...prev,
                               [option.id]: !(prev[option.id] ?? true),
@@ -1618,6 +1630,15 @@ export function ServiceDetailPage() {
                               // Fallthrough lets handleSelect remove from selected.
                               setAddonLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
                               setAddonConfigOpen((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                              // PR-#406 — for sub_groups-bearing addons (Soffit/
+                              // Fascia after substrate consolidation), also clear
+                              // the sub-pick + sub linear-ft so the chip resets
+                              // to a fully neutral state. Idempotent for legacy
+                              // bare addons (no sub-state present → delete is a
+                              // no-op). Mirrors the peripheral-flag-reset pattern
+                              // from PR-#399 service_type toggle-off.
+                              setSubGroupLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                              setSelections((prev) => { const next = { ...prev }; delete next[`${option.id}-sub`]; return next })
                             } else {
                               // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
@@ -2075,8 +2096,22 @@ export function ServiceDetailPage() {
                     lin-ft summary badge on the chip (mirrors the roofing-
                     material chip-tap → ShingleRoofConfigurator → "21 sq"
                     badge pattern). Gutter slot embeds floors + drops chips
-                    and total breakdown inside its own configurator body. */}
-                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.map((c) => (
+                    and total breakdown inside its own configurator body.
+                    PR-#406 — skip the legacy bare card when the corresponding
+                    option carries sub_groups: after the substrate consolidation
+                    of Soffit/Fascia (Wood + Metal split from separate addons
+                    into one parent w/ sub_groups), the new consolidated
+                    AddonLinearFtConfigurator (with inlineVariantSelector, see
+                    L1949+) is the canonical render path. Without this guard
+                    both fire → duplicate "Soffit linear feet" + "Soffit Wood
+                    linear feet" cards stack under the same chip (Rod
+                    20260525_165835 live-feedback). Gutters has no sub_groups
+                    so legacy render still fires; intentional. */}
+                {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.map((c) => {
+                  const matchingOption = renderOptions.find((o) => o.id === c.id)
+                  const hasSubGroups = matchingOption?.subGroups?.some((sg) => sg.options.length > 0) ?? false
+                  if (hasSubGroups) return null
+                  return (
                   <AnimatePresence key={c.id}>
                     {selected.includes(c.id) && addonConfigOpen[c.id] && (
                       <AddonLinearFtConfigurator
@@ -2094,7 +2129,8 @@ export function ServiceDetailPage() {
                       />
                     )}
                   </AnimatePresence>
-                ))}
+                  )
+                })}
                 {/* Arc-19 — Pool Floor sqft configurator dispatch. One
                     AnimatePresence per sqft-eligible floor; only the
                     selected option's configurator renders since pool_floor
