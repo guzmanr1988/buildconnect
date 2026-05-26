@@ -248,6 +248,17 @@ export function computeVendorTotal(
   const missingSub: string[] = []
   const coveredServices = new Set<string>()
 
+  // PR-#412 follow-up — bare FRAME_COLOR_IDS / GLASS_COLOR_IDS / GLASS_TYPE_IDS
+  // maps still produce bare slugs (white, low_e, ...) but post-PR-#412 substrate
+  // rename moved those rows to parent-prefixed literals (windows_white,
+  // doors_low_e, storm_front_clear, ...). Hot-swap window keeps bare rows alive
+  // today, but once hermes sweeps them this priceMap.get(key) would silently
+  // miss for every windows_doors sub-option. Mirror the configurator-catalog-
+  // price.ts call-site concat pattern: keep bare maps intact, prefix at lookup
+  // site. Helper kept local + per-call (not exported) to match PR-#412 style.
+  const prefixed = (bare: string | undefined, prefix: string): string | undefined =>
+    bare ? `${prefix}${bare}` : undefined
+
   for (const item of cartItems) {
     for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
       if (!optionIds || optionIds.length === 0) continue
@@ -411,9 +422,9 @@ export function computeVendorTotal(
         [
           w.size,
           WINDOW_TYPE_IDS[w.type],
-          FRAME_COLOR_IDS[w.frameColor],
-          GLASS_COLOR_IDS[w.glassColor],
-          GLASS_TYPE_IDS[w.glassType],
+          prefixed(FRAME_COLOR_IDS[w.frameColor], 'windows_'),
+          prefixed(GLASS_COLOR_IDS[w.glassColor], 'windows_'),
+          prefixed(GLASS_TYPE_IDS[w.glassType], 'windows_'),
         ],
         w.quantity,
       )
@@ -424,9 +435,9 @@ export function computeVendorTotal(
         [
           d.size,
           DOOR_TYPE_IDS[d.type],
-          FRAME_COLOR_IDS[d.frameColor],
-          GLASS_COLOR_IDS[d.glassColor],
-          GLASS_TYPE_IDS[d.glassType],
+          prefixed(FRAME_COLOR_IDS[d.frameColor], 'doors_'),
+          prefixed(GLASS_COLOR_IDS[d.glassColor], 'doors_'),
+          prefixed(GLASS_TYPE_IDS[d.glassType], 'doors_'),
         ],
         d.quantity,
       )
@@ -437,9 +448,9 @@ export function computeVendorTotal(
         [
           STORM_FRONT_SIZE_IDS[sf.size],
           STORM_FRONT_TYPE_IDS[sf.type],
-          FRAME_COLOR_IDS[sf.frameColor],
-          GLASS_COLOR_IDS[sf.glassColor],
-          GLASS_TYPE_IDS[sf.glassType],
+          prefixed(FRAME_COLOR_IDS[sf.frameColor], 'storm_front_'),
+          prefixed(GLASS_COLOR_IDS[sf.glassColor], 'storm_front_'),
+          prefixed(GLASS_TYPE_IDS[sf.glassType], 'storm_front_'),
         ],
         sf.quantity,
       )
