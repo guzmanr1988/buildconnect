@@ -1339,6 +1339,14 @@ export default function ProductsAdminPage() {
                                                                         >
                                                                           <Pencil className="h-2.5 w-2.5" />
                                                                         </button>
+                                                                        <button
+                                                                          type="button"
+                                                                          onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                                          className="opacity-50 hover:opacity-100 shrink-0 text-destructive"
+                                                                          aria-label={`Delete ${subOpt.label}`}
+                                                                        >
+                                                                          <Trash2 className="h-2.5 w-2.5" />
+                                                                        </button>
                                                                       </div>
                                                                     ))}
                                                                   </div>
