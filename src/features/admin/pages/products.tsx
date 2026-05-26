@@ -1321,16 +1321,16 @@ export default function ProductsAdminPage() {
                                                                     tall single-column tower. */}
                                                                 {subGroup.options.length > 0 && (
                                                                   <div
-                                                                    className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3"
+                                                                    className="flex flex-wrap gap-1.5"
                                                                     data-admin-sub-options-grid={subGroup.id}
                                                                   >
                                                                     {subGroup.options.map((subOpt) => (
                                                                       <div
                                                                         key={subOpt.id}
                                                                         data-admin-sub-option-tile={subOpt.id}
-                                                                        className="flex items-center justify-between gap-2 rounded border bg-card px-2.5 py-1.5 text-sm hover:bg-muted/40 transition-colors"
+                                                                        className="flex items-center gap-2 rounded border bg-card px-2.5 py-1.5 text-sm hover:bg-muted/40 transition-colors"
                                                                       >
-                                                                        <span className="truncate flex-1 min-w-0" title={subOpt.label}>{subOpt.label}</span>
+                                                                        <span title={subOpt.label}>{subOpt.label}</span>
                                                                         <button
                                                                           type="button"
                                                                           onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
