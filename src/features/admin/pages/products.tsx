@@ -3,6 +3,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  RotateCcw,
   ChevronRight,
   ChevronUp,
   ChevronDown,
@@ -178,28 +179,38 @@ export default function ProductsAdminPage() {
     services,
     addService,
     updateService,
-    removeService,
     addOptionGroup,
-    updateOptionGroup,
-    removeOptionGroup,
     addOption,
-    updateOption,
-    removeOption,
     addSubGroup,
-    updateSubGroup,
-    removeSubGroup,
     addSubOption,
-    updateSubOption,
-    removeSubOption,
     hydrateFromServer,
     reorderOptionGroups,
     reorderOptions,
     reorderSubGroups,
     reorderSubOptions,
     saveService,
+    _pendingDeletes,
+    _pendingEdits,
+    stageDeleteService,
+    stageDeleteGroup,
+    stageDeleteOption,
+    stageDeleteSubGroup,
+    stageDeleteSubOption,
+    unstageDeleteService,
+    unstageDeleteGroup,
+    unstageDeleteOption,
+    unstageDeleteSubGroup,
+    unstageDeleteSubOption,
+    stageEditService,
+    stageEditGroup,
+    stageEditOption,
+    stageEditSubGroup,
+    stageEditSubOption,
+    discardAllPendingForService,
   } = useCatalogStore()
 
   const [savingServiceId, setSavingServiceId] = useState<string | null>(null)
+  const [aggregateConfirmService, setAggregateConfirmService] = useState<string | null>(null)
 
   // Cards / List view-mode toggle (Rod-iteration-v1). Persists choice to
   // localStorage so the next visit lands on the same shape.
@@ -284,7 +295,7 @@ export default function ProductsAdminPage() {
     }
   }
 
-  async function handleSaveServiceClick(serviceId: string) {
+  async function flushSaveService(serviceId: string) {
     setSavingServiceId(serviceId)
     try {
       await saveService(serviceId)
@@ -294,6 +305,20 @@ export default function ProductsAdminPage() {
     } finally {
       setSavingServiceId(null)
     }
+  }
+
+  // PR-#425 — Save Changes click gate. If any deletes are pending for this
+  // service, show aggregate confirm dialog first (one prompt covers the whole
+  // batch). Otherwise commit immediately.
+  function handleSaveServiceClick(serviceId: string) {
+    const pendingDeleteCount = _pendingDeletes.filter(
+      (d) => d.serviceId === serviceId,
+    ).length
+    if (pendingDeleteCount > 0) {
+      setAggregateConfirmService(serviceId)
+      return
+    }
+    void flushSaveService(serviceId)
   }
 
   // Trigger server hydration on mount so admin sees fresh data from Supabase,
@@ -413,14 +438,6 @@ export default function ProductsAdminPage() {
   const [editingSubOptionId, setEditingSubOptionId] = useState<string | null>(null)
   const [subOptionForm, setSubOptionForm] = useState<OptionFormData>(emptyOptionForm)
 
-  // --- Delete confirm ---
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'service' | 'group' | 'option'
-    label: string
-    onConfirm: () => void
-  } | null>(null)
-
   /* ---------- Service handlers ---------- */
 
   function openAddService() {
@@ -450,7 +467,9 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingService) {
-        await updateService(editingService.id, {
+        // PR-#425 — dialog Save STAGES the edit; commit fires from
+        // service-card "Save Changes" via saveService 3-phase flush.
+        stageEditService(editingService.id, {
           name: serviceForm.name,
           tagline: serviceForm.tagline,
           description: serviceForm.description,
@@ -481,20 +500,105 @@ export default function ProductsAdminPage() {
     }
   }
 
+  // PR-#425 — trash toggles staged-delete. Click once to stage (visual:
+  // opacity + strike-through). Click again to undo. Aggregate "About to
+  // delete N items" prompt fires at Save Changes time.
+  function isPendingDeleteService(serviceId: string) {
+    return _pendingDeletes.some((d) => d.type === 'service' && d.serviceId === serviceId)
+  }
+  function isPendingDeleteGroup(serviceId: string, groupId: string) {
+    return _pendingDeletes.some(
+      (d) => d.type === 'group' && d.serviceId === serviceId && d.groupId === groupId,
+    )
+  }
+  function isPendingDeleteOption(serviceId: string, groupId: string, optionId: string) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'option' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId,
+    )
+  }
+  function isPendingDeleteSubGroup(
+    serviceId: string, groupId: string, optionId: string, subGroupId: string,
+  ) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'subGroup' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId &&
+        d.subGroupId === subGroupId,
+    )
+  }
+  function isPendingDeleteSubOption(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+  ) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'subOption' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId &&
+        d.subGroupId === subGroupId &&
+        d.subOptionId === subOptionId,
+    )
+  }
+  function isPendingEditService(serviceId: string) {
+    return _pendingEdits.some((e) => e.type === 'service' && e.serviceId === serviceId)
+  }
+  function isPendingEditGroup(serviceId: string, groupId: string) {
+    return _pendingEdits.some(
+      (e) => e.type === 'group' && e.serviceId === serviceId && e.groupId === groupId,
+    )
+  }
+  function isPendingEditOption(serviceId: string, groupId: string, optionId: string) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'option' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId,
+    )
+  }
+  function isPendingEditSubGroup(
+    serviceId: string, groupId: string, optionId: string, subGroupId: string,
+  ) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'subGroup' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId &&
+        e.subGroupId === subGroupId,
+    )
+  }
+  function isPendingEditSubOption(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+  ) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'subOption' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId &&
+        e.subGroupId === subGroupId &&
+        e.subOptionId === subOptionId,
+    )
+  }
+
   function confirmDeleteService(s: ServiceConfig) {
-    setDeleteTarget({
-      type: 'service',
-      label: s.name,
-      onConfirm: async () => {
-        try {
-          await removeService(s.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteService(s.id)) unstageDeleteService(s.id)
+    else stageDeleteService(s.id)
   }
 
   async function toggleServiceStatus(s: ServiceConfig) {
@@ -538,7 +642,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingGroup) {
-        await updateOptionGroup(groupContext, editingGroup.id, {
+        stageEditGroup(groupContext, editingGroup.id, {
           label: groupForm.label,
           required: groupForm.required,
           type: groupForm.type,
@@ -560,19 +664,8 @@ export default function ProductsAdminPage() {
   }
 
   function confirmDeleteGroup(serviceId: string, group: OptionGroup) {
-    setDeleteTarget({
-      type: 'group',
-      label: group.label,
-      onConfirm: async () => {
-        try {
-          await removeOptionGroup(serviceId, group.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteGroup(serviceId, group.id)) unstageDeleteGroup(serviceId, group.id)
+    else stageDeleteGroup(serviceId, group.id)
   }
 
   /* ---------- Option handlers ---------- */
@@ -601,19 +694,9 @@ export default function ProductsAdminPage() {
   }
 
   function confirmDeleteOption(serviceId: string, groupId: string, opt: { id: string; label: string }) {
-    setDeleteTarget({
-      type: 'option',
-      label: opt.label,
-      onConfirm: async () => {
-        try {
-          await removeOption(serviceId, groupId, opt.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteOption(serviceId, groupId, opt.id))
+      unstageDeleteOption(serviceId, groupId, opt.id)
+    else stageDeleteOption(serviceId, groupId, opt.id)
   }
 
   async function handleSaveOption() {
@@ -628,7 +711,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingOptionId) {
-        await updateOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
+        stageEditOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
@@ -715,7 +798,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingSubGroupId) {
-        await updateSubGroup(
+        stageEditSubGroup(
           subGroupContext.serviceId,
           subGroupContext.groupId,
           subGroupContext.optionId,
@@ -756,19 +839,9 @@ export default function ProductsAdminPage() {
     optionId: string,
     subGroup: OptionGroup
   ) {
-    setDeleteTarget({
-      type: 'group',
-      label: subGroup.label,
-      onConfirm: async () => {
-        try {
-          await removeSubGroup(serviceId, groupId, optionId, subGroup.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteSubGroup(serviceId, groupId, optionId, subGroup.id))
+      unstageDeleteSubGroup(serviceId, groupId, optionId, subGroup.id)
+    else stageDeleteSubGroup(serviceId, groupId, optionId, subGroup.id)
   }
 
   /* ---------- Sub-option handlers ---------- */
@@ -812,7 +885,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingSubOptionId) {
-        await updateSubOption(
+        stageEditSubOption(
           subOptionContext.serviceId,
           subOptionContext.groupId,
           subOptionContext.optionId,
@@ -851,19 +924,9 @@ export default function ProductsAdminPage() {
     subGroupId: string,
     subOpt: { id: string; label: string }
   ) {
-    setDeleteTarget({
-      type: 'option',
-      label: subOpt.label,
-      onConfirm: async () => {
-        try {
-          await removeSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id))
+      unstageDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
+    else stageDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
   }
 
   /* ------------------------------------------------------------------ */
@@ -1037,37 +1100,88 @@ export default function ProductsAdminPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className={cn(
+                            'h-8 w-8 relative',
+                            isPendingEditService(service.id) && 'text-amber-600',
+                          )}
                           onClick={() => openEditService(service)}
                           aria-label={`Edit ${service.name}`}
+                          data-pending-edit={isPendingEditService(service.id) ? 'true' : undefined}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                          {isPendingEditService(service.id) && (
+                            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className={cn(
+                            'h-8 w-8',
+                            isPendingDeleteService(service.id)
+                              ? 'text-amber-600 hover:text-amber-600'
+                              : 'text-destructive hover:text-destructive',
+                          )}
                           onClick={() => confirmDeleteService(service)}
-                          aria-label={`Delete ${service.name}`}
+                          aria-label={
+                            isPendingDeleteService(service.id)
+                              ? `Undo delete ${service.name}`
+                              : `Delete ${service.name}`
+                          }
+                          data-pending-delete={isPendingDeleteService(service.id) ? 'true' : undefined}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          {isPendingDeleteService(service.id) ? (
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
                         </Button>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="h-8 px-3 text-[10px] sm:text-xs whitespace-nowrap"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleSaveServiceClick(service.id)
-                        }}
-                        disabled={savingServiceId === service.id}
-                        data-testid="admin-service-save-button"
-                        data-service-id={service.id}
-                        aria-label={`Save changes for ${service.name}`}
-                      >
-                        {savingServiceId === service.id ? 'Saving…' : 'Save Changes'}
-                      </Button>
+                      {(() => {
+                        const pendCount =
+                          _pendingDeletes.filter((d) => d.serviceId === service.id).length +
+                          _pendingEdits.filter((e) => e.serviceId === service.id).length
+                        return (
+                          <div className="flex items-center gap-1">
+                            {pendCount > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-[10px] sm:text-xs whitespace-nowrap text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  discardAllPendingForService(service.id)
+                                }}
+                                data-testid="admin-service-discard-button"
+                                data-service-id={service.id}
+                                aria-label={`Discard pending changes for ${service.name}`}
+                              >
+                                Discard
+                              </Button>
+                            )}
+                            <Button
+                              variant={pendCount > 0 ? 'default' : 'secondary'}
+                              size="sm"
+                              className="h-8 px-3 text-[10px] sm:text-xs whitespace-nowrap"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSaveServiceClick(service.id)
+                              }}
+                              disabled={savingServiceId === service.id}
+                              data-testid="admin-service-save-button"
+                              data-service-id={service.id}
+                              data-pending-count={pendCount}
+                              aria-label={`Save changes for ${service.name}`}
+                            >
+                              {savingServiceId === service.id
+                                ? 'Saving…'
+                                : pendCount > 0
+                                  ? `Save Changes (${pendCount})`
+                                  : 'Save Changes'}
+                            </Button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </CardHeader>
@@ -1163,20 +1277,41 @@ export default function ProductsAdminPage() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-7 w-7"
+                                          className={cn(
+                                            'h-7 w-7 relative',
+                                            isPendingEditGroup(service.id, group.id) && 'text-amber-600',
+                                          )}
                                           onClick={() => openEditGroup(service.id, group)}
                                           aria-label={`Edit ${group.label}`}
+                                          data-pending-edit={isPendingEditGroup(service.id, group.id) ? 'true' : undefined}
                                         >
                                           <Pencil className="h-3 w-3" />
+                                          {isPendingEditGroup(service.id, group.id) && (
+                                            <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                          )}
                                         </Button>
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-7 w-7 text-destructive hover:text-destructive"
+                                          className={cn(
+                                            'h-7 w-7',
+                                            isPendingDeleteGroup(service.id, group.id)
+                                              ? 'text-amber-600 hover:text-amber-600'
+                                              : 'text-destructive hover:text-destructive',
+                                          )}
                                           onClick={() => confirmDeleteGroup(service.id, group)}
-                                          aria-label={`Delete ${group.label}`}
+                                          aria-label={
+                                            isPendingDeleteGroup(service.id, group.id)
+                                              ? `Undo delete ${group.label}`
+                                              : `Delete ${group.label}`
+                                          }
+                                          data-pending-delete={isPendingDeleteGroup(service.id, group.id) ? 'true' : undefined}
                                         >
-                                          <Trash2 className="h-3 w-3" />
+                                          {isPendingDeleteGroup(service.id, group.id) ? (
+                                            <RotateCcw className="h-3 w-3" />
+                                          ) : (
+                                            <Trash2 className="h-3 w-3" />
+                                          )}
                                         </Button>
                                       </div>
                                     </div>
@@ -1255,20 +1390,41 @@ export default function ProductsAdminPage() {
                                                         <Button
                                                           variant="ghost"
                                                           size="icon"
-                                                          className="h-6 w-6"
+                                                          className={cn(
+                                                            'h-6 w-6 relative',
+                                                            isPendingEditOption(service.id, group.id, opt.id) && 'text-amber-600',
+                                                          )}
                                                           onClick={() => openEditOption(service.id, group.id, opt)}
                                                           aria-label={`Edit ${opt.label}`}
+                                                          data-pending-edit={isPendingEditOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                                         >
                                                           <Pencil className="h-3 w-3" />
+                                                          {isPendingEditOption(service.id, group.id, opt.id) && (
+                                                            <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                          )}
                                                         </Button>
                                                         <Button
                                                           variant="ghost"
                                                           size="icon"
-                                                          className="h-6 w-6 text-destructive hover:text-destructive"
+                                                          className={cn(
+                                                            'h-6 w-6',
+                                                            isPendingDeleteOption(service.id, group.id, opt.id)
+                                                              ? 'text-amber-600 hover:text-amber-600'
+                                                              : 'text-destructive hover:text-destructive',
+                                                          )}
                                                           onClick={() => confirmDeleteOption(service.id, group.id, opt)}
-                                                          aria-label={`Delete ${opt.label}`}
+                                                          aria-label={
+                                                            isPendingDeleteOption(service.id, group.id, opt.id)
+                                                              ? `Undo delete ${opt.label}`
+                                                              : `Delete ${opt.label}`
+                                                          }
+                                                          data-pending-delete={isPendingDeleteOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                                         >
-                                                          <Trash2 className="h-3 w-3" />
+                                                          {isPendingDeleteOption(service.id, group.id, opt.id) ? (
+                                                            <RotateCcw className="h-3 w-3" />
+                                                          ) : (
+                                                            <Trash2 className="h-3 w-3" />
+                                                          )}
                                                         </Button>
                                                       </div>
                                                     </div>
@@ -1299,20 +1455,41 @@ export default function ProductsAdminPage() {
                                                                     <Button
                                                                       variant="ghost"
                                                                       size="icon"
-                                                                      className="h-6 w-6"
+                                                                      className={cn(
+                                                                        'h-6 w-6 relative',
+                                                                        isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && 'text-amber-600',
+                                                                      )}
                                                                       onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
                                                                       aria-label={`Edit ${subGroup.label}`}
+                                                                      data-pending-edit={isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                                                     >
                                                                       <Pencil className="h-2.5 w-2.5" />
+                                                                      {isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && (
+                                                                        <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                                      )}
                                                                     </Button>
                                                                     <Button
                                                                       variant="ghost"
                                                                       size="icon"
-                                                                      className="h-6 w-6 text-destructive hover:text-destructive"
+                                                                      className={cn(
+                                                                        'h-6 w-6',
+                                                                        isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                                          ? 'text-amber-600 hover:text-amber-600'
+                                                                          : 'text-destructive hover:text-destructive',
+                                                                      )}
                                                                       onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
-                                                                      aria-label={`Delete ${subGroup.label}`}
+                                                                      aria-label={
+                                                                        isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                                          ? `Undo delete ${subGroup.label}`
+                                                                          : `Delete ${subGroup.label}`
+                                                                      }
+                                                                      data-pending-delete={isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                                                     >
-                                                                      <Trash2 className="h-2.5 w-2.5" />
+                                                                      {isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? (
+                                                                        <RotateCcw className="h-2.5 w-2.5" />
+                                                                      ) : (
+                                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                                      )}
                                                                     </Button>
                                                                   </div>
                                                                 </div>
@@ -1328,24 +1505,48 @@ export default function ProductsAdminPage() {
                                                                       <div
                                                                         key={subOpt.id}
                                                                         data-admin-sub-option-tile={subOpt.id}
-                                                                        className="flex items-center gap-2.5 rounded border bg-card px-3 py-2 text-base hover:bg-muted/40 transition-colors"
+                                                                        data-pending-delete={isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
+                                                                        className={cn(
+                                                                          'flex items-center gap-2.5 rounded border bg-card px-3 py-2 text-base hover:bg-muted/40 transition-colors',
+                                                                          isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'opacity-50 line-through',
+                                                                        )}
                                                                       >
                                                                         <span title={subOpt.label}>{subOpt.label}</span>
                                                                         <button
                                                                           type="button"
                                                                           onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                                          className="opacity-60 hover:opacity-100 shrink-0"
+                                                                          className={cn(
+                                                                            'opacity-60 hover:opacity-100 shrink-0 relative',
+                                                                            isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'text-amber-600 opacity-100',
+                                                                          )}
                                                                           aria-label={`Edit ${subOpt.label}`}
+                                                                          data-pending-edit={isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
                                                                         >
                                                                           <Pencil className="h-4 w-4" />
+                                                                          {isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && (
+                                                                            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                                          )}
                                                                         </button>
                                                                         <button
                                                                           type="button"
                                                                           onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                                          className="opacity-60 hover:opacity-100 shrink-0 text-destructive"
-                                                                          aria-label={`Delete ${subOpt.label}`}
+                                                                          className={cn(
+                                                                            'opacity-60 hover:opacity-100 shrink-0',
+                                                                            isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                                              ? 'text-amber-600 opacity-100'
+                                                                              : 'text-destructive',
+                                                                          )}
+                                                                          aria-label={
+                                                                            isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                                              ? `Undo delete ${subOpt.label}`
+                                                                              : `Delete ${subOpt.label}`
+                                                                          }
                                                                         >
-                                                                          <Trash2 className="h-4 w-4" />
+                                                                          {isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? (
+                                                                            <RotateCcw className="h-4 w-4" />
+                                                                          ) : (
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                          )}
                                                                         </button>
                                                                       </div>
                                                                     ))}
@@ -1492,20 +1693,41 @@ export default function ProductsAdminPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7"
+                                  className={cn(
+                                    'h-7 w-7 relative',
+                                    isPendingEditGroup(service.id, group.id) && 'text-amber-600',
+                                  )}
                                   onClick={() => openEditGroup(service.id, group)}
                                   aria-label={`Edit ${group.label}`}
+                                  data-pending-edit={isPendingEditGroup(service.id, group.id) ? 'true' : undefined}
                                 >
                                   <Pencil className="h-3 w-3" />
+                                  {isPendingEditGroup(service.id, group.id) && (
+                                    <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                  )}
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  className={cn(
+                                    'h-7 w-7',
+                                    isPendingDeleteGroup(service.id, group.id)
+                                      ? 'text-amber-600 hover:text-amber-600'
+                                      : 'text-destructive hover:text-destructive',
+                                  )}
                                   onClick={() => confirmDeleteGroup(service.id, group)}
-                                  aria-label={`Delete ${group.label}`}
+                                  aria-label={
+                                    isPendingDeleteGroup(service.id, group.id)
+                                      ? `Undo delete ${group.label}`
+                                      : `Delete ${group.label}`
+                                  }
+                                  data-pending-delete={isPendingDeleteGroup(service.id, group.id) ? 'true' : undefined}
                                 >
-                                  <Trash2 className="h-3 w-3" />
+                                  {isPendingDeleteGroup(service.id, group.id) ? (
+                                    <RotateCcw className="h-3 w-3" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3" />
+                                  )}
                                 </Button>
                               </div>
                             </div>
@@ -1593,20 +1815,41 @@ export default function ProductsAdminPage() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7"
+                                        className={cn(
+                                          'h-7 w-7 relative',
+                                          isPendingEditOption(service.id, group.id, opt.id) && 'text-amber-600',
+                                        )}
                                         onClick={() => openEditOption(service.id, group.id, opt)}
                                         aria-label={`Edit ${opt.label}`}
+                                        data-pending-edit={isPendingEditOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                       >
                                         <Pencil className="h-3 w-3" />
+                                        {isPendingEditOption(service.id, group.id, opt.id) && (
+                                          <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                        )}
                                       </Button>
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        className={cn(
+                                          'h-7 w-7',
+                                          isPendingDeleteOption(service.id, group.id, opt.id)
+                                            ? 'text-amber-600 hover:text-amber-600'
+                                            : 'text-destructive hover:text-destructive',
+                                        )}
                                         onClick={() => confirmDeleteOption(service.id, group.id, opt)}
-                                        aria-label={`Delete ${opt.label}`}
+                                        aria-label={
+                                          isPendingDeleteOption(service.id, group.id, opt.id)
+                                            ? `Undo delete ${opt.label}`
+                                            : `Delete ${opt.label}`
+                                        }
+                                        data-pending-delete={isPendingDeleteOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                       >
-                                        <Trash2 className="h-3 w-3" />
+                                        {isPendingDeleteOption(service.id, group.id, opt.id) ? (
+                                          <RotateCcw className="h-3 w-3" />
+                                        ) : (
+                                          <Trash2 className="h-3 w-3" />
+                                        )}
                                       </Button>
                                     </div>
                                   </div>
@@ -1684,20 +1927,41 @@ export default function ProductsAdminPage() {
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-6 w-6"
+                                                className={cn(
+                                                  'h-6 w-6 relative',
+                                                  isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && 'text-amber-600',
+                                                )}
                                                 onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
                                                 aria-label={`Edit ${subGroup.label}`}
+                                                data-pending-edit={isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                               >
                                                 <Pencil className="h-2.5 w-2.5" />
+                                                {isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && (
+                                                  <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                )}
                                               </Button>
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                                className={cn(
+                                                  'h-6 w-6',
+                                                  isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                    ? 'text-amber-600 hover:text-amber-600'
+                                                    : 'text-destructive hover:text-destructive',
+                                                )}
                                                 onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
-                                                aria-label={`Delete ${subGroup.label}`}
+                                                aria-label={
+                                                  isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                    ? `Undo delete ${subGroup.label}`
+                                                    : `Delete ${subGroup.label}`
+                                                }
+                                                data-pending-delete={isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                               >
-                                                <Trash2 className="h-2.5 w-2.5" />
+                                                {isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? (
+                                                  <RotateCcw className="h-2.5 w-2.5" />
+                                                ) : (
+                                                  <Trash2 className="h-2.5 w-2.5" />
+                                                )}
                                               </Button>
                                             </div>
                                           </div>
@@ -1769,20 +2033,41 @@ export default function ProductsAdminPage() {
                                                   <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6"
+                                                    className={cn(
+                                                      'h-6 w-6 relative',
+                                                      isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'text-amber-600',
+                                                    )}
                                                     onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
                                                     aria-label={`Edit ${subOpt.label}`}
+                                                    data-pending-edit={isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
                                                   >
                                                     <Pencil className="h-3 w-3" />
+                                                    {isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && (
+                                                      <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                    )}
                                                   </Button>
                                                   <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                                    className={cn(
+                                                      'h-6 w-6',
+                                                      isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                        ? 'text-amber-600 hover:text-amber-600'
+                                                        : 'text-destructive hover:text-destructive',
+                                                    )}
                                                     onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                    aria-label={`Delete ${subOpt.label}`}
+                                                    aria-label={
+                                                      isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                        ? `Undo delete ${subOpt.label}`
+                                                        : `Delete ${subOpt.label}`
+                                                    }
+                                                    data-pending-delete={isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
                                                   >
-                                                    <Trash2 className="h-3 w-3" />
+                                                    {isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? (
+                                                      <RotateCcw className="h-3 w-3" />
+                                                    ) : (
+                                                      <Trash2 className="h-3 w-3" />
+                                                    )}
                                                   </Button>
                                                 </div>
                                               </div>
@@ -2331,23 +2616,61 @@ export default function ProductsAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ---- Delete Confirmation Dialog ---- */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="max-w-sm">
+      {/* ---- Aggregate Delete Confirmation Dialog ---- */}
+      {/* PR-#425 — fires from "Save Changes" click when pending deletes
+          exist for that service. One prompt covers the whole batch. */}
+      <Dialog
+        open={aggregateConfirmService !== null}
+        onOpenChange={(open) => !open && setAggregateConfirmService(null)}
+      >
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogTitle>Confirm Save Changes</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <span className="font-semibold text-foreground">{deleteTarget?.label}</span>? This action
-              cannot be undone.
+              {aggregateConfirmService !== null
+                ? (() => {
+                    const sid = aggregateConfirmService
+                    const dels = _pendingDeletes.filter((d) => d.serviceId === sid).length
+                    const edits = _pendingEdits.filter((e) => e.serviceId === sid).length
+                    return (
+                      <>
+                        You are about to permanently delete{' '}
+                        <span className="font-semibold text-foreground">
+                          {dels} item{dels === 1 ? '' : 's'}
+                        </span>
+                        {edits > 0 ? (
+                          <>
+                            {' '}and apply{' '}
+                            <span className="font-semibold text-foreground">
+                              {edits} edit{edits === 1 ? '' : 's'}
+                            </span>
+                          </>
+                        ) : null}
+                        . Deletes cannot be undone.
+                      </>
+                    )
+                  })()
+                : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setAggregateConfirmService(null)}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => deleteTarget?.onConfirm()}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (aggregateConfirmService) {
+                  const sid = aggregateConfirmService
+                  setAggregateConfirmService(null)
+                  void flushSaveService(sid)
+                }
+              }}
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
