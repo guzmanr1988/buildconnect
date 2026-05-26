@@ -31,7 +31,7 @@ export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined 
       <div className="flex flex-col gap-1">
         <Badge
           variant="secondary"
-          className={`text-[10px] w-fit ${
+          className={`text-sm px-3 py-1 w-fit ${
             permit === 'yes'
               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
               : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
@@ -40,7 +40,7 @@ export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined 
           {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
         </Badge>
         {permit === 'no' && (
-          <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
+          <span className="text-xs text-muted-foreground italic">Cash only — financing not available</span>
         )}
       </div>
     </div>
