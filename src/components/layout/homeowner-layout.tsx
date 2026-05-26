@@ -13,6 +13,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useCartStore } from '@/stores/cart-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
+import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -42,6 +43,14 @@ export function HomeownerLayout() {
   // subscribe with admin/vendor sessions.
   const refetchCatalog = useCatalogStore((s) => s.hydrateFromServer)
   useCatalogRealtime(refetchCatalog)
+  // PR-#426 — mirror admin/products triad (mount-fire + focus-refetch +
+  // realtime). Without mount-fire, unauthed sessions OR AuthBootstrap timing
+  // races leave the catalog on the bundled SERVICE_CATALOG fallback, so
+  // consumer Door Types renders 6 stale items while admin substrate has 4.
+  useEffect(() => {
+    refetchCatalog()
+  }, [refetchCatalog])
+  useRefetchOnFocus(refetchCatalog)
 
   // Ship #262 / #265 — blinking indicator on Projects nav. Rodolfo-direct
   // task_1776795590596_638 (2026-04-21). Initial #262 only counted
