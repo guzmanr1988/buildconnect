@@ -15,6 +15,27 @@ import { cn } from '@/lib/utils'
 import type { OptionGroup } from '@/types'
 import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
 
+// Per-service bulk-select primitive. Flattens nested optionGroups → options
+// → subGroups recursively into a flat (groupId, optionId) list, so the
+// header-toolbar "Select all" / "Deselect all" button can iterate once and
+// flip every option at every depth. Sub-options are toggled regardless of
+// parent enabled-state — vendor pre-arms the full tree, parent-collapse
+// rendering still gates visibility.
+function collectAllOptions(
+  groups: OptionGroup[]
+): Array<{ groupId: string; optionId: string }> {
+  const out: Array<{ groupId: string; optionId: string }> = []
+  for (const g of groups) {
+    for (const o of g.options) {
+      out.push({ groupId: g.id, optionId: o.id })
+      if (o.subGroups && o.subGroups.length > 0) {
+        out.push(...collectAllOptions(o.subGroups))
+      }
+    }
+  }
+  return out
+}
+
 export default function VendorCatalog() {
   const adminServices = useCatalogStore((s) => s.services)
   const refetchAdminCatalog = useCatalogStore((s) => s.hydrateFromServer)
@@ -302,8 +323,43 @@ export default function VendorCatalog() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{service.tagline}</p>
-                  {enabled && optionCount > 0 && (
-                    <p className="text-[10px] text-primary font-medium mt-1">{optionCount} items selected</p>
+                  {enabled && (
+                    <div className="flex items-center justify-between mt-1 gap-2">
+                      {optionCount > 0 ? (
+                        <p className="text-[10px] text-primary font-medium">{optionCount} items selected</p>
+                      ) : (
+                        <span />
+                      )}
+                      {(() => {
+                        const allOpts = collectAllOptions(service.optionGroups)
+                        if (allOpts.length === 0) return null
+                        const allSelected = allOpts.every(({ groupId, optionId }) =>
+                          isOptionEnabled(service.id, groupId, optionId)
+                        )
+                        return (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              for (const { groupId, optionId } of allOpts) {
+                                const isOn = isOptionEnabled(service.id, groupId, optionId)
+                                if (allSelected ? isOn : !isOn) {
+                                  wrappedToggleOption(service.id, groupId, optionId)
+                                }
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            aria-label={`${allSelected ? 'Deselect all' : 'Select all'} options for ${service.name}`}
+                            className="h-7 px-2 text-[10px]"
+                          >
+                            {allSelected ? 'Deselect all' : 'Select all'}
+                          </Button>
+                        )
+                      })()}
+                    </div>
                   )}
                 </CardHeader>
 
