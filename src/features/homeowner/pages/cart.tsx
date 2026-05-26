@@ -1039,7 +1039,7 @@ export function CartPage() {
                                 }
                               }
                               return (
-                                <Badge key={optId} variant="secondary" className="text-sm px-3 py-1">
+                                <Badge key={optId} variant="secondary" className="text-xs px-2 py-0.5 max-w-full truncate" title={`${label}${qty}`}>
                                   {label}{qty}
                                 </Badge>
                               )
