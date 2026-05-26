@@ -15,11 +15,52 @@ import * as api from '@/lib/api/service-catalog'
  * state is untouched and user sees the error.
  */
 
+/* ---------------------------------------------------------------- */
+/* Staged-mutation types (PR-#425)                                  */
+/*                                                                  */
+/* Trash clicks + dialog Saves stage locally; Save Changes flushes  */
+/* the whole batch (deletes → edits → reorders). Pending state is   */
+/* INTENTIONALLY not persisted (partialize excludes _pending*) —    */
+/* page reload discards staged-but-unsaved changes (mirrors Arc-32  */
+/* _pendingWrites discipline in vendor-catalog-store).              */
+/* ---------------------------------------------------------------- */
+
+export type PendingNodeType =
+  | 'service'
+  | 'group'
+  | 'option'
+  | 'subGroup'
+  | 'subOption'
+
+export interface PendingKeys {
+  serviceId: string
+  groupId?: string
+  optionId?: string
+  subGroupId?: string
+  subOptionId?: string
+}
+
+export interface PendingDelete extends PendingKeys {
+  type: PendingNodeType
+}
+
+export interface PendingEdit extends PendingKeys {
+  type: PendingNodeType
+  patch: Record<string, unknown>
+  // prev snapshot lets Undo restore the pre-stage values when the user
+  // discards a pending edit without committing.
+  prev: Record<string, unknown>
+}
+
 interface CatalogState {
   services: ServiceConfig[]
   isHydrating: boolean
   hasHydrated: boolean
   lastFetchError: string | null
+
+  // Staged mutations for batch-commit Save Changes (PR-#425)
+  _pendingDeletes: PendingDelete[]
+  _pendingEdits: PendingEdit[]
 
   // Server sync
   hydrateFromServer: () => Promise<void>
@@ -119,6 +160,92 @@ interface CatalogState {
     toIndex: number
   ) => Promise<void>
   saveService: (serviceId: string) => Promise<void>
+
+  // PR-#425 staged-mutation actions. Trash → stageDelete*. Dialog Save
+  // (edit mode) → stageEdit*. Save Changes commits via saveService.
+  stageDeleteService: (serviceId: string) => void
+  stageDeleteGroup: (serviceId: string, groupId: string) => void
+  stageDeleteOption: (serviceId: string, groupId: string, optionId: string) => void
+  stageDeleteSubGroup: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string
+  ) => void
+  stageDeleteSubOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string
+  ) => void
+
+  unstageDeleteService: (serviceId: string) => void
+  unstageDeleteGroup: (serviceId: string, groupId: string) => void
+  unstageDeleteOption: (serviceId: string, groupId: string, optionId: string) => void
+  unstageDeleteSubGroup: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string
+  ) => void
+  unstageDeleteSubOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string
+  ) => void
+
+  stageEditService: (
+    serviceId: string,
+    patch: Partial<Omit<ServiceConfig, 'id'>>
+  ) => void
+  stageEditGroup: (
+    serviceId: string,
+    groupId: string,
+    patch: Partial<Omit<OptionGroup, 'id'>>
+  ) => void
+  stageEditOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    patch: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+  ) => void
+  stageEditSubGroup: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    patch: Partial<Omit<OptionGroup, 'id' | 'options'>>
+  ) => void
+  stageEditSubOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+    patch: Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+  ) => void
+
+  unstageEditService: (serviceId: string) => void
+  unstageEditGroup: (serviceId: string, groupId: string) => void
+  unstageEditOption: (serviceId: string, groupId: string, optionId: string) => void
+  unstageEditSubGroup: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string
+  ) => void
+  unstageEditSubOption: (
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string
+  ) => void
+
+  discardAllPendingForService: (serviceId: string) => void
 }
 
 /* ---------------------------------------------------------------- */
@@ -484,6 +611,139 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
 }
 
 /* ---------------------------------------------------------------- */
+/* Pending-key helpers (PR-#425)                                    */
+/* ---------------------------------------------------------------- */
+
+const sameKeys = (a: PendingKeys, b: PendingKeys, type: PendingNodeType): boolean => {
+  if (a.serviceId !== b.serviceId) return false
+  if (type === 'service') return true
+  if (a.groupId !== b.groupId) return false
+  if (type === 'group') return true
+  if (a.optionId !== b.optionId) return false
+  if (type === 'option') return true
+  if (a.subGroupId !== b.subGroupId) return false
+  if (type === 'subGroup') return true
+  return a.subOptionId === b.subOptionId
+}
+
+const matchesPending = (
+  entry: { type: PendingNodeType } & PendingKeys,
+  type: PendingNodeType,
+  keys: PendingKeys
+): boolean => entry.type === type && sameKeys(entry, keys, type)
+
+// Re-apply pending edits on top of a fresh services array so realtime/
+// hydrateFromServer refetch doesn't clobber Rod's staged-but-uncommitted
+// changes. Pending-deletes are NOT applied here — they're rendered as
+// pending-delete styling and only removed from services on flush.
+function applyPendingEditsToServices(
+  services: ServiceConfig[],
+  pendingEdits: PendingEdit[]
+): ServiceConfig[] {
+  if (pendingEdits.length === 0) return services
+  let next: { services: ServiceConfig[] } = { services }
+  for (const e of pendingEdits) {
+    switch (e.type) {
+      case 'service':
+        next = localUpdateService(
+          { ...(next as unknown as CatalogState), services: next.services },
+          e.serviceId,
+          e.patch
+        )
+        break
+      case 'group':
+        if (!e.groupId) break
+        next = localUpdateOptionGroup(
+          { ...(next as unknown as CatalogState), services: next.services },
+          e.serviceId,
+          e.groupId,
+          e.patch
+        )
+        break
+      case 'option':
+        if (!e.groupId || !e.optionId) break
+        next = localUpdateOption(
+          { ...(next as unknown as CatalogState), services: next.services },
+          e.serviceId,
+          e.groupId,
+          e.optionId,
+          e.patch
+        )
+        break
+      case 'subGroup':
+        if (!e.groupId || !e.optionId || !e.subGroupId) break
+        next = localUpdateSubGroup(
+          { ...(next as unknown as CatalogState), services: next.services },
+          e.serviceId,
+          e.groupId,
+          e.optionId,
+          e.subGroupId,
+          e.patch
+        )
+        break
+      case 'subOption':
+        if (!e.groupId || !e.optionId || !e.subGroupId || !e.subOptionId) break
+        next = localUpdateSubOption(
+          { ...(next as unknown as CatalogState), services: next.services },
+          e.serviceId,
+          e.groupId,
+          e.optionId,
+          e.subGroupId,
+          e.subOptionId,
+          e.patch
+        )
+        break
+    }
+  }
+  return next.services
+}
+
+// Snapshot pre-stage entity values so stageEdit can store `prev` for Undo.
+function snapshotEntity(
+  services: ServiceConfig[],
+  type: PendingNodeType,
+  keys: PendingKeys
+): Record<string, unknown> {
+  const svc = services.find((s) => s.id === keys.serviceId)
+  if (!svc) return {}
+  if (type === 'service') {
+    const { id: _id, ...rest } = svc
+    void _id
+    return rest as Record<string, unknown>
+  }
+  const grp = svc.optionGroups.find((g) => g.id === keys.groupId)
+  if (!grp) return {}
+  if (type === 'group') {
+    const { id: _id, options: _options, ...rest } = grp
+    void _id
+    void _options
+    return rest as Record<string, unknown>
+  }
+  const opt = grp.options.find((o) => o.id === keys.optionId)
+  if (!opt) return {}
+  if (type === 'option') {
+    const { id: _id, subGroups: _sg, ...rest } = opt
+    void _id
+    void _sg
+    return rest as Record<string, unknown>
+  }
+  const sg = (opt.subGroups ?? []).find((x) => x.id === keys.subGroupId)
+  if (!sg) return {}
+  if (type === 'subGroup') {
+    const { id: _id, options: _options, ...rest } = sg
+    void _id
+    void _options
+    return rest as Record<string, unknown>
+  }
+  const so = sg.options.find((x) => x.id === keys.subOptionId)
+  if (!so) return {}
+  const { id: _id, subGroups: _sg2, ...rest } = so
+  void _id
+  void _sg2
+  return rest as Record<string, unknown>
+}
+
+/* ---------------------------------------------------------------- */
 /* Store                                                             */
 /* ---------------------------------------------------------------- */
 
@@ -494,6 +754,8 @@ export const useCatalogStore = create<CatalogState>()(
       isHydrating: false,
       hasHydrated: false,
       lastFetchError: null,
+      _pendingDeletes: [],
+      _pendingEdits: [],
 
       hydrateFromServer: async () => {
         if (get().isHydrating) return
@@ -504,8 +766,12 @@ export const useCatalogStore = create<CatalogState>()(
           // because nothing locally re-fills the catalog from bundled defaults
           // after fetch. SERVICE_CATALOG remains only as an offline-bootstrap
           // fallback (initial state on first load before hydrate fires).
-          const services = await api.fetchServiceCatalog()
-          set({ services, hasHydrated: true, isHydrating: false })
+          const fresh = await api.fetchServiceCatalog()
+          // PR-#425 — overlay any in-flight pending edits on top of the fresh
+          // server payload so realtime refetch doesn't visually clobber staged-
+          // but-uncommitted user changes. Pending-deletes stay marker-only.
+          const withPending = applyPendingEditsToServices(fresh, get()._pendingEdits)
+          set({ services: withPending, hasHydrated: true, isHydrating: false })
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'fetchServiceCatalog failed'
           // Keep existing local services (bundled fallback or cached) — do NOT blank out on fetch failure.
@@ -759,45 +1025,545 @@ export const useCatalogStore = create<CatalogState>()(
         }
       },
 
-      // Idempotent re-fire of the service's nested sort_order to Supabase.
-      // Powers the per-service "Save Changes" button that gives admin a
-      // confirmation handle for any pending reorder fires.
+      // PR-#425 — Save Changes commits the entire staged batch for one
+      // service: deletes (leaf-first) → substantive edits → reorders. Each
+      // phase mirrors the existing brute-force programmatic-rewrite shape
+      // (see Arc-32 _pendingWrites pattern in vendor-catalog-store). On
+      // first error throws — partial-state is acceptable since user can
+      // retry; subsequent retries are idempotent.
       saveService: async (serviceId) => {
-        const svc = get().services.find((s) => s.id === serviceId)
+        const state = get()
+        const svc = state.services.find((s) => s.id === serviceId)
         if (!svc) throw new Error(`saveService: no service ${serviceId}`)
-        await api.reorderOptionGroupsApi(
-          serviceId,
-          svc.optionGroups.map((g) => g.id),
-        )
-        for (const group of svc.optionGroups) {
-          await api.reorderOptionsApi(
-            serviceId,
-            group.id,
-            group.options.map((o) => o.id),
-          )
-          for (const opt of group.options) {
-            const subGroups = opt.subGroups ?? []
-            if (subGroups.length > 0) {
-              await api.reorderSubGroupsApi(
-                serviceId,
-                group.id,
-                opt.id,
-                subGroups.map((sg) => sg.id),
-              )
-              for (const sg of subGroups) {
-                if (sg.options.length > 0) {
-                  await api.reorderSubOptionsApi(
-                    serviceId,
-                    group.id,
-                    opt.id,
-                    sg.id,
-                    sg.options.map((so) => so.id),
+
+        // Phase 1 — flush pending deletes leaf-first so FK constraints
+        // never trip. subOption → subGroup → option → group → service.
+        const deleteOrder: PendingNodeType[] = [
+          'subOption',
+          'subGroup',
+          'option',
+          'group',
+          'service',
+        ]
+        const myDeletes = state._pendingDeletes.filter((d) => d.serviceId === serviceId)
+        for (const t of deleteOrder) {
+          const batch = myDeletes.filter((d) => d.type === t)
+          await Promise.all(
+            batch.map((d) => {
+              switch (d.type) {
+                case 'subOption':
+                  return api.deleteSubOption(
+                    d.serviceId,
+                    d.groupId!,
+                    d.optionId!,
+                    d.subGroupId!,
+                    d.subOptionId!
                   )
+                case 'subGroup':
+                  return api.deleteSubGroup(
+                    d.serviceId,
+                    d.groupId!,
+                    d.optionId!,
+                    d.subGroupId!
+                  )
+                case 'option':
+                  return api.deleteOption(d.serviceId, d.groupId!, d.optionId!)
+                case 'group':
+                  return api.deleteOptionGroup(d.serviceId, d.groupId!)
+                case 'service':
+                  return api.deleteService(d.serviceId)
+              }
+            })
+          )
+          // After each level's deletes land in substrate, prune from local
+          // services so the next phase's edits/reorders don't reference
+          // already-gone nodes.
+          for (const d of batch) {
+            switch (d.type) {
+              case 'subOption':
+                set((s) =>
+                  localRemoveSubOption(
+                    s,
+                    d.serviceId,
+                    d.groupId!,
+                    d.optionId!,
+                    d.subGroupId!,
+                    d.subOptionId!
+                  )
+                )
+                break
+              case 'subGroup':
+                set((s) =>
+                  localRemoveSubGroup(
+                    s,
+                    d.serviceId,
+                    d.groupId!,
+                    d.optionId!,
+                    d.subGroupId!
+                  )
+                )
+                break
+              case 'option':
+                set((s) =>
+                  localRemoveOption(s, d.serviceId, d.groupId!, d.optionId!)
+                )
+                break
+              case 'group':
+                set((s) => localRemoveOptionGroup(s, d.serviceId, d.groupId!))
+                break
+              case 'service':
+                set((s) => localRemoveService(s, d.serviceId))
+                break
+            }
+          }
+        }
+
+        // Phase 2 — flush substantive edits (label/description/priceUnit/etc).
+        // Order within phase doesn't matter for updates; parallelize per-level
+        // mirroring bulkSortOrder shape.
+        const myEdits = get()._pendingEdits.filter((e) => e.serviceId === serviceId)
+        await Promise.all(
+          myEdits.map((e) => {
+            switch (e.type) {
+              case 'service':
+                return api.updateService(e.serviceId, e.patch as Partial<Omit<ServiceConfig, 'id'>>)
+              case 'group':
+                return api.updateOptionGroup(
+                  e.serviceId,
+                  e.groupId!,
+                  e.patch as Partial<Omit<OptionGroup, 'id'>>
+                )
+              case 'option':
+                return api.updateOption(
+                  e.serviceId,
+                  e.groupId!,
+                  e.optionId!,
+                  e.patch as Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+                )
+              case 'subGroup':
+                return api.updateSubGroup(
+                  e.serviceId,
+                  e.groupId!,
+                  e.optionId!,
+                  e.subGroupId!,
+                  e.patch as Partial<Omit<OptionGroup, 'id' | 'options'>>
+                )
+              case 'subOption':
+                return api.updateSubOption(
+                  e.serviceId,
+                  e.groupId!,
+                  e.optionId!,
+                  e.subGroupId!,
+                  e.subOptionId!,
+                  e.patch as Partial<Omit<ServiceOption, 'id' | 'subGroups'>>
+                )
+            }
+          })
+        )
+
+        // Phase 3 — idempotent re-fire of the service's nested sort_order
+        // to Supabase. Picks up any drag-reorders the user did in this
+        // session. Reload of services from get() so post-delete shape is
+        // respected.
+        const svcAfter = get().services.find((s) => s.id === serviceId)
+        if (svcAfter) {
+          await api.reorderOptionGroupsApi(
+            serviceId,
+            svcAfter.optionGroups.map((g) => g.id),
+          )
+          for (const group of svcAfter.optionGroups) {
+            await api.reorderOptionsApi(
+              serviceId,
+              group.id,
+              group.options.map((o) => o.id),
+            )
+            for (const opt of group.options) {
+              const subGroups = opt.subGroups ?? []
+              if (subGroups.length > 0) {
+                await api.reorderSubGroupsApi(
+                  serviceId,
+                  group.id,
+                  opt.id,
+                  subGroups.map((sg) => sg.id),
+                )
+                for (const sg of subGroups) {
+                  if (sg.options.length > 0) {
+                    await api.reorderSubOptionsApi(
+                      serviceId,
+                      group.id,
+                      opt.id,
+                      sg.id,
+                      sg.options.map((so) => so.id),
+                    )
+                  }
                 }
               }
             }
           }
         }
+
+        // All phases landed — clear this service's pending queues.
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter((d) => d.serviceId !== serviceId),
+          _pendingEdits: s._pendingEdits.filter((e) => e.serviceId !== serviceId),
+        }))
+      },
+
+      /* ---- PR-#425 stage/unstage actions ---- */
+
+      stageDeleteService: (serviceId) => {
+        set((s) => {
+          const keys: PendingKeys = { serviceId }
+          if (s._pendingDeletes.some((d) => matchesPending(d, 'service', keys))) return s
+          // Cancel any pending edit on the same node — delete supersedes edit.
+          return {
+            _pendingDeletes: [...s._pendingDeletes, { type: 'service', ...keys }],
+            _pendingEdits: s._pendingEdits.filter(
+              (e) => !matchesPending(e, 'service', keys)
+            ),
+          }
+        })
+      },
+      stageDeleteGroup: (serviceId, groupId) => {
+        set((s) => {
+          const keys: PendingKeys = { serviceId, groupId }
+          if (s._pendingDeletes.some((d) => matchesPending(d, 'group', keys))) return s
+          return {
+            _pendingDeletes: [...s._pendingDeletes, { type: 'group', ...keys }],
+            _pendingEdits: s._pendingEdits.filter((e) => !matchesPending(e, 'group', keys)),
+          }
+        })
+      },
+      stageDeleteOption: (serviceId, groupId, optionId) => {
+        set((s) => {
+          const keys: PendingKeys = { serviceId, groupId, optionId }
+          if (s._pendingDeletes.some((d) => matchesPending(d, 'option', keys))) return s
+          return {
+            _pendingDeletes: [...s._pendingDeletes, { type: 'option', ...keys }],
+            _pendingEdits: s._pendingEdits.filter((e) => !matchesPending(e, 'option', keys)),
+          }
+        })
+      },
+      stageDeleteSubGroup: (serviceId, groupId, optionId, subGroupId) => {
+        set((s) => {
+          const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId }
+          if (s._pendingDeletes.some((d) => matchesPending(d, 'subGroup', keys))) return s
+          return {
+            _pendingDeletes: [...s._pendingDeletes, { type: 'subGroup', ...keys }],
+            _pendingEdits: s._pendingEdits.filter(
+              (e) => !matchesPending(e, 'subGroup', keys)
+            ),
+          }
+        })
+      },
+      stageDeleteSubOption: (serviceId, groupId, optionId, subGroupId, subOptionId) => {
+        set((s) => {
+          const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId, subOptionId }
+          if (s._pendingDeletes.some((d) => matchesPending(d, 'subOption', keys))) return s
+          return {
+            _pendingDeletes: [...s._pendingDeletes, { type: 'subOption', ...keys }],
+            _pendingEdits: s._pendingEdits.filter(
+              (e) => !matchesPending(e, 'subOption', keys)
+            ),
+          }
+        })
+      },
+
+      unstageDeleteService: (serviceId) =>
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter(
+            (d) => !matchesPending(d, 'service', { serviceId })
+          ),
+        })),
+      unstageDeleteGroup: (serviceId, groupId) =>
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter(
+            (d) => !matchesPending(d, 'group', { serviceId, groupId })
+          ),
+        })),
+      unstageDeleteOption: (serviceId, groupId, optionId) =>
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter(
+            (d) => !matchesPending(d, 'option', { serviceId, groupId, optionId })
+          ),
+        })),
+      unstageDeleteSubGroup: (serviceId, groupId, optionId, subGroupId) =>
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter(
+            (d) =>
+              !matchesPending(d, 'subGroup', { serviceId, groupId, optionId, subGroupId })
+          ),
+        })),
+      unstageDeleteSubOption: (serviceId, groupId, optionId, subGroupId, subOptionId) =>
+        set((s) => ({
+          _pendingDeletes: s._pendingDeletes.filter(
+            (d) =>
+              !matchesPending(d, 'subOption', {
+                serviceId,
+                groupId,
+                optionId,
+                subGroupId,
+                subOptionId,
+              })
+          ),
+        })),
+
+      stageEditService: (serviceId, patch) => {
+        const keys: PendingKeys = { serviceId }
+        const state = get()
+        const existing = state._pendingEdits.find((e) =>
+          matchesPending(e, 'service', keys)
+        )
+        const prev = existing?.prev ?? snapshotEntity(state.services, 'service', keys)
+        set((s) => ({
+          services: localUpdateService(s, serviceId, patch).services,
+          _pendingEdits: [
+            ...s._pendingEdits.filter((e) => !matchesPending(e, 'service', keys)),
+            {
+              type: 'service',
+              ...keys,
+              patch: { ...(existing?.patch ?? {}), ...(patch as Record<string, unknown>) },
+              prev,
+            },
+          ],
+        }))
+      },
+      stageEditGroup: (serviceId, groupId, patch) => {
+        const keys: PendingKeys = { serviceId, groupId }
+        const state = get()
+        const existing = state._pendingEdits.find((e) =>
+          matchesPending(e, 'group', keys)
+        )
+        const prev = existing?.prev ?? snapshotEntity(state.services, 'group', keys)
+        set((s) => ({
+          services: localUpdateOptionGroup(s, serviceId, groupId, patch).services,
+          _pendingEdits: [
+            ...s._pendingEdits.filter((e) => !matchesPending(e, 'group', keys)),
+            {
+              type: 'group',
+              ...keys,
+              patch: { ...(existing?.patch ?? {}), ...(patch as Record<string, unknown>) },
+              prev,
+            },
+          ],
+        }))
+      },
+      stageEditOption: (serviceId, groupId, optionId, patch) => {
+        const keys: PendingKeys = { serviceId, groupId, optionId }
+        const state = get()
+        const existing = state._pendingEdits.find((e) =>
+          matchesPending(e, 'option', keys)
+        )
+        const prev = existing?.prev ?? snapshotEntity(state.services, 'option', keys)
+        set((s) => ({
+          services: localUpdateOption(s, serviceId, groupId, optionId, patch).services,
+          _pendingEdits: [
+            ...s._pendingEdits.filter((e) => !matchesPending(e, 'option', keys)),
+            {
+              type: 'option',
+              ...keys,
+              patch: { ...(existing?.patch ?? {}), ...(patch as Record<string, unknown>) },
+              prev,
+            },
+          ],
+        }))
+      },
+      stageEditSubGroup: (serviceId, groupId, optionId, subGroupId, patch) => {
+        const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId }
+        const state = get()
+        const existing = state._pendingEdits.find((e) =>
+          matchesPending(e, 'subGroup', keys)
+        )
+        const prev = existing?.prev ?? snapshotEntity(state.services, 'subGroup', keys)
+        set((s) => ({
+          services: localUpdateSubGroup(s, serviceId, groupId, optionId, subGroupId, patch)
+            .services,
+          _pendingEdits: [
+            ...s._pendingEdits.filter((e) => !matchesPending(e, 'subGroup', keys)),
+            {
+              type: 'subGroup',
+              ...keys,
+              patch: { ...(existing?.patch ?? {}), ...(patch as Record<string, unknown>) },
+              prev,
+            },
+          ],
+        }))
+      },
+      stageEditSubOption: (
+        serviceId,
+        groupId,
+        optionId,
+        subGroupId,
+        subOptionId,
+        patch
+      ) => {
+        const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId, subOptionId }
+        const state = get()
+        const existing = state._pendingEdits.find((e) =>
+          matchesPending(e, 'subOption', keys)
+        )
+        const prev = existing?.prev ?? snapshotEntity(state.services, 'subOption', keys)
+        set((s) => ({
+          services: localUpdateSubOption(
+            s,
+            serviceId,
+            groupId,
+            optionId,
+            subGroupId,
+            subOptionId,
+            patch
+          ).services,
+          _pendingEdits: [
+            ...s._pendingEdits.filter((e) => !matchesPending(e, 'subOption', keys)),
+            {
+              type: 'subOption',
+              ...keys,
+              patch: { ...(existing?.patch ?? {}), ...(patch as Record<string, unknown>) },
+              prev,
+            },
+          ],
+        }))
+      },
+
+      // Unstage edit = roll the local entity back to its snapshotted prev
+      // values, then drop the pending-edit record. Mirrors the stage path
+      // in reverse.
+      unstageEditService: (serviceId) => {
+        const state = get()
+        const keys: PendingKeys = { serviceId }
+        const entry = state._pendingEdits.find((e) => matchesPending(e, 'service', keys))
+        if (!entry) return
+        set((s) => ({
+          services: localUpdateService(s, serviceId, entry.prev).services,
+          _pendingEdits: s._pendingEdits.filter((e) => !matchesPending(e, 'service', keys)),
+        }))
+      },
+      unstageEditGroup: (serviceId, groupId) => {
+        const state = get()
+        const keys: PendingKeys = { serviceId, groupId }
+        const entry = state._pendingEdits.find((e) => matchesPending(e, 'group', keys))
+        if (!entry) return
+        set((s) => ({
+          services: localUpdateOptionGroup(s, serviceId, groupId, entry.prev).services,
+          _pendingEdits: s._pendingEdits.filter((e) => !matchesPending(e, 'group', keys)),
+        }))
+      },
+      unstageEditOption: (serviceId, groupId, optionId) => {
+        const state = get()
+        const keys: PendingKeys = { serviceId, groupId, optionId }
+        const entry = state._pendingEdits.find((e) => matchesPending(e, 'option', keys))
+        if (!entry) return
+        set((s) => ({
+          services: localUpdateOption(s, serviceId, groupId, optionId, entry.prev).services,
+          _pendingEdits: s._pendingEdits.filter((e) => !matchesPending(e, 'option', keys)),
+        }))
+      },
+      unstageEditSubGroup: (serviceId, groupId, optionId, subGroupId) => {
+        const state = get()
+        const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId }
+        const entry = state._pendingEdits.find((e) => matchesPending(e, 'subGroup', keys))
+        if (!entry) return
+        set((s) => ({
+          services: localUpdateSubGroup(
+            s,
+            serviceId,
+            groupId,
+            optionId,
+            subGroupId,
+            entry.prev
+          ).services,
+          _pendingEdits: s._pendingEdits.filter(
+            (e) => !matchesPending(e, 'subGroup', keys)
+          ),
+        }))
+      },
+      unstageEditSubOption: (serviceId, groupId, optionId, subGroupId, subOptionId) => {
+        const state = get()
+        const keys: PendingKeys = { serviceId, groupId, optionId, subGroupId, subOptionId }
+        const entry = state._pendingEdits.find((e) =>
+          matchesPending(e, 'subOption', keys)
+        )
+        if (!entry) return
+        set((s) => ({
+          services: localUpdateSubOption(
+            s,
+            serviceId,
+            groupId,
+            optionId,
+            subGroupId,
+            subOptionId,
+            entry.prev
+          ).services,
+          _pendingEdits: s._pendingEdits.filter(
+            (e) => !matchesPending(e, 'subOption', keys)
+          ),
+        }))
+      },
+
+      discardAllPendingForService: (serviceId) => {
+        const state = get()
+        // Roll back any pending-edits' local state to their prev snapshots
+        // before clearing the queues.
+        let services = state.services
+        const edits = state._pendingEdits.filter((e) => e.serviceId === serviceId)
+        for (const e of edits) {
+          switch (e.type) {
+            case 'service':
+              services = localUpdateService(
+                { ...state, services } as CatalogState,
+                e.serviceId,
+                e.prev
+              ).services
+              break
+            case 'group':
+              if (!e.groupId) break
+              services = localUpdateOptionGroup(
+                { ...state, services } as CatalogState,
+                e.serviceId,
+                e.groupId,
+                e.prev
+              ).services
+              break
+            case 'option':
+              if (!e.groupId || !e.optionId) break
+              services = localUpdateOption(
+                { ...state, services } as CatalogState,
+                e.serviceId,
+                e.groupId,
+                e.optionId,
+                e.prev
+              ).services
+              break
+            case 'subGroup':
+              if (!e.groupId || !e.optionId || !e.subGroupId) break
+              services = localUpdateSubGroup(
+                { ...state, services } as CatalogState,
+                e.serviceId,
+                e.groupId,
+                e.optionId,
+                e.subGroupId,
+                e.prev
+              ).services
+              break
+            case 'subOption':
+              if (!e.groupId || !e.optionId || !e.subGroupId || !e.subOptionId) break
+              services = localUpdateSubOption(
+                { ...state, services } as CatalogState,
+                e.serviceId,
+                e.groupId,
+                e.optionId,
+                e.subGroupId,
+                e.subOptionId,
+                e.prev
+              ).services
+              break
+          }
+        }
+        set((s) => ({
+          services,
+          _pendingDeletes: s._pendingDeletes.filter((d) => d.serviceId !== serviceId),
+          _pendingEdits: s._pendingEdits.filter((e) => e.serviceId !== serviceId),
+        }))
       },
 
       removeSubOption: async (serviceId, groupId, optionId, subGroupId, subOptionId) => {
