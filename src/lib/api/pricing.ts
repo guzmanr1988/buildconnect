@@ -363,17 +363,38 @@ export function computeVendorTotal(
   // key, look up the price, and add basePrice × quantity.
   for (const item of cartItems) {
     const serviceId = item.serviceId
-    const products = 'products'
+    // TD-fix: derive parent option's groupId by walking the catalog instead
+    // of hardcoding 'products'. windows_doors today nests windows/doors/
+    // storm_front/garage_doors under optionGroups.id='products' so the
+    // historical literal happens to match — but any service whose parent
+    // options live under a different group id would silently undersum.
+    // Fallback retains 'products' for the bundled SERVICE_CATALOG offline
+    // path where `services` is undefined.
+    const service = services?.find((s) => s.id === serviceId)
+    const deriveSubOptGroupId = (parentOptionId: string): string =>
+      service?.optionGroups.find((g) => g.options.some((o) => o.id === parentOptionId))?.id ?? 'products'
 
     const accumulateSubOpts = (
       parentOptionId: string,
       subOptionIds: (string | undefined)[],
       quantity: number,
     ) => {
-      for (const subId of subOptionIds) {
-        if (!subId) continue
+      const groupId = deriveSubOptGroupId(parentOptionId)
+      for (let i = 0; i < subOptionIds.length; i++) {
+        const subId = subOptionIds[i]
+        if (!subId) {
+          // Silent-skip telemetry: label→id map drift surfaces here when a
+          // FRAME_COLOR_IDS / GLASS_COLOR_IDS / etc. label maps to undefined.
+          // Push synthetic key into missingSub so the UI "unpriced" badge
+          // catches it; warn in DEV so it shows up in browser console.
+          if (import.meta.env.DEV) {
+            console.warn(`[pricing] unresolved subOpt label for parent=${parentOptionId} dim-index=${i}`)
+          }
+          missingSub.push(`unresolved-label:${parentOptionId}|dim-${i}`)
+          continue
+        }
         hasSelections = true
-        const key = subOptionPriceKey(serviceId, products, parentOptionId, subId)
+        const key = subOptionPriceKey(serviceId, groupId, parentOptionId, subId)
         const basePrice = priceMap.get(key)
         if (basePrice === undefined) {
           missingSub.push(key)
