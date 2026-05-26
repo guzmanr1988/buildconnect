@@ -12,6 +12,16 @@ import { cn } from '@/lib/utils'
 // stopPropagation cascades preserved verbatim from ship #65 — prevents
 // checkbox/Input interactions inside an expanded service-card from
 // bubbling up to the CardHeader collapse handler.
+//
+// PR-#407 — square card shape per Rod live-feedback (telegram screenshot
+// 20260525_215857). "alike but not the same" — references admin/products
+// PR-#400 cards-view family without copying 1:1. Layout: label TOP (font-
+// medium, sm:text-base) + unit-suffix sub-line; checkbox + $price input
+// + optional %markup as one row at the BOTTOM. min-h-[120px] keeps cells
+// visually squarer than the prior thin rectangles. Stronger selected fill
+// (bg-primary/10 + ring-2 ring-primary/40) + hover lift
+// (hover:-translate-y-0.5 + hover:shadow-md) for affordance. All handlers
+// + stopPropagation cascades + cents↔dollars encoding boundary preserved.
 
 type CatalogOption = {
   id: string
@@ -64,42 +74,62 @@ export function VendorCatalogOptionsCardGrid({
             key={option.id}
             data-option-id={option.id}
             data-group-id={groupId}
+            data-card-shape="square"
+            data-card-state={optEnabled ? 'enabled' : 'disabled'}
             className={cn(
-              'rounded-lg border bg-background p-3 space-y-2 transition',
-              optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
+              'group relative flex min-h-[120px] flex-col justify-between rounded-xl border bg-background p-4',
+              'transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md',
+              optEnabled
+                ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
+                : 'border-border hover:border-primary/40'
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggle(serviceId, groupId, option.id)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded border shrink-0 transition',
-                    optEnabled
-                      ? 'bg-primary border-primary text-white'
-                      : 'border-muted-foreground/30'
-                  )}
-                >
-                  {optEnabled && <Check className="h-3 w-3" />}
-                </button>
+            <div className="flex flex-col gap-1">
+              <span
+                className={cn(
+                  'text-sm sm:text-base font-medium leading-snug',
+                  optEnabled ? 'text-foreground' : 'text-foreground/80'
+                )}
+              >
+                {option.label}
+              </span>
+              {unitSuffix && (
                 <span
-                  className={cn(
-                    'text-sm md:text-base truncate',
-                    optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
-                  )}
+                  className="text-[11px] text-muted-foreground leading-tight"
+                  data-card-unit-suffix={meta.priceUnit ?? ''}
                 >
-                  {option.label}
+                  {unitSuffix}
+                  {meta.priceUnit === 'square' && (
+                    <span className="ml-1 text-[10px] text-muted-foreground/70">
+                      (1 sq = 100 sqft)
+                    </span>
+                  )}
                 </span>
-              </div>
+              )}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                aria-label={`Toggle ${option.label}`}
+                aria-pressed={optEnabled}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggle(serviceId, groupId, option.id)
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition',
+                  optEnabled
+                    ? 'bg-primary border-primary text-white'
+                    : 'border-muted-foreground/30 hover:border-primary/60'
+                )}
+              >
+                {optEnabled && <Check className="h-3.5 w-3.5" />}
+              </button>
               {optEnabled && (
                 <div
-                  className="flex items-center gap-1 shrink-0"
+                  className="flex items-center gap-1"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -125,43 +155,24 @@ export function VendorCatalogOptionsCardGrid({
                     placeholder="0"
                     className="h-9 w-24 text-sm text-right"
                   />
+                  {meta.supportsPercentMarkup && (
+                    <div className="ml-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <span>%</span>
+                      <Input
+                        aria-label={`Percent markup for ${option.label}`}
+                        type="number"
+                        value={getPricePercent(serviceId, option.id) || ''}
+                        onChange={(e) =>
+                          onPricePercentChange(serviceId, option.id, Number(e.target.value))
+                        }
+                        placeholder="0"
+                        className="h-8 w-14 text-xs text-right"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            {optEnabled && (unitSuffix || meta.supportsPercentMarkup) && (
-              <div
-                className="flex items-center justify-end gap-2 text-xs text-muted-foreground"
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {unitSuffix && (
-                  <div className="flex flex-col items-end leading-tight">
-                    <span className="whitespace-nowrap">{unitSuffix}</span>
-                    {meta.priceUnit === 'square' && (
-                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
-                        1 sq = 100 sqft
-                      </span>
-                    )}
-                  </div>
-                )}
-                {meta.supportsPercentMarkup && (
-                  <div className="flex items-center gap-1">
-                    <span>%</span>
-                    <Input
-                      aria-label={`Percent markup for ${option.label}`}
-                      type="number"
-                      value={getPricePercent(serviceId, option.id) || ''}
-                      onChange={(e) =>
-                        onPricePercentChange(serviceId, option.id, Number(e.target.value))
-                      }
-                      placeholder="0"
-                      className="h-8 w-16 text-xs text-right"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )
       })}
