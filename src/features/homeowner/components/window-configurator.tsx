@@ -73,6 +73,17 @@ function WindowIcon({ type, size = 20 }: { type: string; size?: number }) {
           <rect x="6" y="5" width="12" height="14" rx="0.5" strokeDasharray="2 2" />
         </svg>
       )
+    case 'Arch':
+      // PR-#436 — substrate-seeded 6th window type (admin-side option_groups
+      // additions don't propagate to FE icon switch; only label rendered).
+      // Architectural arch: rounded top (half-circle), vertical sides, flat
+      // bottom + interior sash divider matching sibling-window detail level.
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={sw} strokeLinejoin="round">
+          <path d="M3 22 L3 11 A9 9 0 0 1 21 11 L21 22 Z" />
+          <line x1="3" y1="14" x2="21" y2="14" strokeOpacity="0.4" />
+        </svg>
+      )
     default:
       return null
   }
