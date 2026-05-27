@@ -362,6 +362,10 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     setAddingExtra(true)
     setExtraVertexCount(0)
     extraPathRef.current = []
+    // PR-#431 — defensive null: closeExtra/cancelAddingExtra setMap(null) but
+    // do not clear this ref, so the L379 `!extraFirstMarkerRef.current` guard
+    // would skip creating the close-marker for the 3rd+ polygon.
+    extraFirstMarkerRef.current = null
 
     const color = EXTRA_COLORS[extraPolygons.length % EXTRA_COLORS.length]
     attachCursorMarker(mapRef.current, color)
