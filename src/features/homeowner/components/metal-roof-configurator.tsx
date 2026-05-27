@@ -1,9 +1,14 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-const METAL_ROOF_COLORS = [
+// PR-#429 — bundled fallback. Same substrate-derive pattern as PR-#428
+// door-configurator; fallback stays byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_METAL_ROOF_COLORS = [
   // Whites/Grays
   { id: 'snow_white', label: 'Snow White', color: '#F5F5F5', group: 'Whites & Grays' },
   { id: 'bone_white', label: 'Bone White', color: '#E8E0D4', group: 'Whites & Grays' },
@@ -56,7 +61,12 @@ const METAL_ROOF_COLORS = [
   { id: 'weathered_zinc', label: 'Weathered Zinc', color: '#8A8D8F', group: 'Metallics' },
 ]
 
-const COLOR_GROUPS = [...new Set(METAL_ROOF_COLORS.map((c) => c.group))]
+// Substrate carries only id+label; the visual color hex and the UI
+// group bucket stay in code (substrate has no field for either). Lookup
+// by id; unknown ids fall back to neutral + an "Other" group.
+const METAL_ROOF_COLOR_META: Record<string, { color: string; group: string }> = Object.fromEntries(
+  FALLBACK_METAL_ROOF_COLORS.map((c) => [c.id, { color: c.color, group: c.group }])
+)
 
 export interface MetalRoofSelection {
   color: string
@@ -70,8 +80,28 @@ interface MetalRoofConfiguratorProps {
 }
 
 export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoofConfiguratorProps) {
+  const services = useCatalogStore((s) => s.services)
   const isComplete = selection.color && selection.roofSize.trim().length > 0
-  const selectedColor = METAL_ROOF_COLORS.find((c) => c.id === selection.color)
+
+  const metalRoofColors = useMemo(() => {
+    const svc = services.find((s) => s.id === 'roofing')
+    const material = svc?.optionGroups?.find((g) => g.id === 'material')
+    const metal = material?.options?.find((o) => o.id === 'metal')
+    const colorsSub = metal?.subGroups?.find((sg) => sg.id === 'metal_roof_colors')?.options
+
+    if (colorsSub && colorsSub.length > 0) {
+      return colorsSub.map((o) => ({
+        id: o.id,
+        label: o.label,
+        color: METAL_ROOF_COLOR_META[o.id]?.color ?? '#cccccc',
+        group: METAL_ROOF_COLOR_META[o.id]?.group ?? 'Other',
+      }))
+    }
+    return FALLBACK_METAL_ROOF_COLORS
+  }, [services])
+
+  const colorGroups = useMemo(() => [...new Set(metalRoofColors.map((c) => c.group))], [metalRoofColors])
+  const selectedColor = metalRoofColors.find((c) => c.id === selection.color)
 
   return (
     <motion.div
@@ -88,8 +118,8 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
           <div className="flex flex-col gap-4">
-            {COLOR_GROUPS.map((group) => {
-              const colors = METAL_ROOF_COLORS.filter((c) => c.group === group)
+            {colorGroups.map((group) => {
+              const colors = metalRoofColors.filter((c) => c.group === group)
               return (
                 <div key={group}>
                   <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider mb-1.5 block">

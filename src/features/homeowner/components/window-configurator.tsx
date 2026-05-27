@@ -1,10 +1,17 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Minus, Plus, PlusCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-const WINDOW_SIZES = [
+// PR-#429 — bundled fallbacks. Lists derive from catalog-store substrate
+// (admin /admin/products edits propagate here), but fallbacks stay
+// byte-identical to the pre-rewire literals so the rendered list does
+// NOT churn when the substrate hasn't hydrated yet (cold open, RLS deny,
+// unauth, network blip). Same pattern as PR-#428 door-configurator.
+const FALLBACK_WINDOW_SIZES = [
   '18x38',
   '26x25', '26x38', '26x50', '26x62', '26x73',
   '36x25', '36x38', '36x50', '36x62', '36x72',
@@ -13,7 +20,7 @@ const WINDOW_SIZES = [
   '110x25', '110x38', '110x50', '110x62', '110x72',
 ]
 
-const WINDOW_TYPES = [
+const FALLBACK_WINDOW_TYPES = [
   'Single Hung',
   'Casement',
   'Awning',
@@ -71,13 +78,13 @@ function WindowIcon({ type, size = 20 }: { type: string; size?: number }) {
   }
 }
 
-const FRAME_COLORS = [
+const FALLBACK_FRAME_COLORS = [
   { label: 'White', color: '#ffffff' },
   { label: 'Bronze', color: '#8B6914' },
   { label: 'Black', color: '#1a1a1a' },
 ]
 
-const GLASS_COLORS = [
+const FALLBACK_GLASS_COLORS = [
   { id: 'grey-white', label: 'Grey-White', note: 'Dark Grey Tinted Glass - Mostly selected for Bathroom windows or any windows for maximum privacy', color: '#6b7280', requiresLowE: false },
   { id: 'clear-white', label: 'Clear-White', note: 'Light grey tinted - mostly added for bathroom windows or any windows for maximum privacy', color: '#d1d5db', requiresLowE: false },
   { id: 'clear', label: 'Clear', note: '', color: '#e0f2fe', requiresLowE: false },
@@ -85,7 +92,22 @@ const GLASS_COLORS = [
   { id: 'green', label: 'Green', note: 'Only available with Low-Emissivity Glass coating', color: '#6ee7b7', requiresLowE: true },
 ]
 
-const GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+const FALLBACK_GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+
+// Substrate carries only id+label; visual hex + note copy + requiresLowE
+// flag stay in code because the substrate doesn't carry those fields.
+const FRAME_COLOR_HEX: Record<string, string> = {
+  White: '#ffffff',
+  Bronze: '#8B6914',
+  Black: '#1a1a1a',
+}
+const GLASS_COLOR_META: Record<string, { note: string; color: string; requiresLowE: boolean }> = {
+  'grey-white': { note: 'Dark Grey Tinted Glass - Mostly selected for Bathroom windows or any windows for maximum privacy', color: '#6b7280', requiresLowE: false },
+  'clear-white': { note: 'Light grey tinted - mostly added for bathroom windows or any windows for maximum privacy', color: '#d1d5db', requiresLowE: false },
+  clear: { note: '', color: '#e0f2fe', requiresLowE: false },
+  gray: { note: 'Tint color grey added to the Impact glass', color: '#9ca3af', requiresLowE: false },
+  green: { note: 'Only available with Low-Emissivity Glass coating', color: '#6ee7b7', requiresLowE: true },
+}
 
 export interface WindowSelection {
   id: string
@@ -104,10 +126,62 @@ interface WindowConfiguratorProps {
 }
 
 export function WindowConfigurator({ selections, onChange, onSave }: WindowConfiguratorProps) {
-  function addEntry(size: string, type: string = 'Single Hung') {
+  const services = useCatalogStore((s) => s.services)
+
+  const { windowSizes, windowTypes, frameColors, glassColors, glassTypes } = useMemo(() => {
+    const svc = services.find((s) => s.id === 'windows_doors')
+    const products = svc?.optionGroups?.find((g) => g.id === 'products')
+    const windows = products?.options?.find((o) => o.id === 'windows')
+    const findSub = (id: string) => windows?.subGroups?.find((sg) => sg.id === id)
+
+    const sizesSub = findSub('window_sizes')?.options
+    const typesSub = findSub('window_types')?.options
+    const frameSub = findSub('window_frame_colors')?.options
+    const glassColorsSub = findSub('window_glass_colors')?.options
+    const glassTypesSub = findSub('window_glass_types')?.options
+
+    return {
+      windowSizes:
+        sizesSub && sizesSub.length > 0
+          ? sizesSub.map((o) => o.id)
+          : FALLBACK_WINDOW_SIZES,
+      windowTypes:
+        typesSub && typesSub.length > 0
+          ? typesSub.map((o) => o.label)
+          : FALLBACK_WINDOW_TYPES,
+      frameColors:
+        frameSub && frameSub.length > 0
+          ? frameSub.map((o) => ({ label: o.label, color: FRAME_COLOR_HEX[o.label] ?? '#cccccc' }))
+          : FALLBACK_FRAME_COLORS,
+      glassColors:
+        glassColorsSub && glassColorsSub.length > 0
+          ? glassColorsSub.map((o) => ({
+              id: o.id,
+              label: o.label,
+              note: GLASS_COLOR_META[o.id]?.note ?? '',
+              color: GLASS_COLOR_META[o.id]?.color ?? '#cccccc',
+              requiresLowE: GLASS_COLOR_META[o.id]?.requiresLowE ?? false,
+            }))
+          : FALLBACK_GLASS_COLORS,
+      glassTypes:
+        glassTypesSub && glassTypesSub.length > 0
+          ? glassTypesSub.map((o) => o.label)
+          : FALLBACK_GLASS_TYPES,
+    }
+  }, [services])
+
+  function addEntry(size: string, type: string = windowTypes[0] ?? 'Single Hung') {
     onChange([
       ...selections,
-      { id: crypto.randomUUID(), size, type, frameColor: 'White', glassColor: 'Clear-White', glassType: 'Impact Glass', quantity: 1 },
+      {
+        id: crypto.randomUUID(),
+        size,
+        type,
+        frameColor: frameColors[0]?.label ?? 'White',
+        glassColor: glassColors.find((g) => g.label === 'Clear-White')?.label ?? glassColors[0]?.label ?? 'Clear-White',
+        glassType: glassTypes[0] ?? 'Impact Glass',
+        quantity: 1,
+      },
     ])
   }
 
@@ -144,7 +218,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
 
   // Group sizes by width
   const sizeGroups: Record<string, string[]> = {}
-  WINDOW_SIZES.forEach((size) => {
+  windowSizes.forEach((size) => {
     const width = size.split('x')[0]
     if (!sizeGroups[width]) sizeGroups[width] = []
     sizeGroups[width].push(size)
@@ -214,7 +288,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="min-w-[180px]">
-                            {WINDOW_TYPES.filter((type) => {
+                            {windowTypes.filter((type) => {
                               const width = parseInt(entry.size.split('x')[0])
                               if (width >= 73) return type === 'Rolling'
                               if (width >= 52 && type === 'Casement') return false
@@ -252,7 +326,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                             <SelectValue placeholder="Frame" />
                           </SelectTrigger>
                           <SelectContent>
-                            {FRAME_COLORS.map((c) => (
+                            {frameColors.map((c) => (
                               <SelectItem key={c.label} value={c.label} className="text-xs py-2 pl-3 pr-4">
                                 <div className="flex items-center gap-2">
                                   <div className="w-4 h-4 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
@@ -270,7 +344,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                             <SelectValue placeholder="Glass" />
                           </SelectTrigger>
                           <SelectContent className="w-[320px] max-w-[90vw]">
-                            {GLASS_COLORS.filter((c) => {
+                            {glassColors.filter((c) => {
                               if (c.requiresLowE && entry.glassType !== 'Low-E Glass') return false
                               return true
                             }).map((c) => (
@@ -297,7 +371,7 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                           <SelectContent>
-                            {GLASS_TYPES.map((t) => (
+                            {glassTypes.map((t) => (
                               <SelectItem key={t} value={t} className="text-xs py-2 text-center justify-center pl-4 pr-4">{t}</SelectItem>
                             ))}
                           </SelectContent>
