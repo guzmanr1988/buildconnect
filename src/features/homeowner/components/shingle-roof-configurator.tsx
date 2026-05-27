@@ -1,9 +1,14 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-export const TIMBERLINE_HDZ_COLORS = [
+// PR-#429 — bundled fallback. Same substrate-derive pattern as PR-#428
+// door-configurator; fallback stays byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_TIMBERLINE_HDZ_COLORS = [
   { id: 'barkwood', label: 'Barkwood', color: '#4A3024' },
   { id: 'birchwood', label: 'Birchwood', color: '#B8A082' },
   { id: 'charcoal', label: 'Charcoal', color: '#3A3A3C' },
@@ -14,7 +19,11 @@ export const TIMBERLINE_HDZ_COLORS = [
   { id: 'shakewood', label: 'Shakewood', color: '#8B6F4E' },
   { id: 'slate', label: 'Slate', color: '#4A5560' },
   { id: 'weathered_wood', label: 'Weathered Wood', color: '#7A6F5F' },
-] as const
+]
+
+const SHINGLE_COLOR_HEX: Record<string, string> = Object.fromEntries(
+  FALLBACK_TIMBERLINE_HDZ_COLORS.map((c) => [c.id, c.color])
+)
 
 export interface ShingleRoofSelection {
   color: string
@@ -28,7 +37,25 @@ interface ShingleRoofConfiguratorProps {
 }
 
 export function ShingleRoofConfigurator({ selection, onChange, onSave }: ShingleRoofConfiguratorProps) {
-  const selected = TIMBERLINE_HDZ_COLORS.find((c) => c.id === selection.color)
+  const services = useCatalogStore((s) => s.services)
+
+  const shingleColors = useMemo(() => {
+    const svc = services.find((s) => s.id === 'roofing')
+    const material = svc?.optionGroups?.find((g) => g.id === 'material')
+    const shingle = material?.options?.find((o) => o.id === 'shingle')
+    const colorsSub = shingle?.subGroups?.find((sg) => sg.id === 'shingle_colors')?.options
+
+    if (colorsSub && colorsSub.length > 0) {
+      return colorsSub.map((o) => ({
+        id: o.id,
+        label: o.label,
+        color: SHINGLE_COLOR_HEX[o.id] ?? '#cccccc',
+      }))
+    }
+    return FALLBACK_TIMBERLINE_HDZ_COLORS
+  }, [services])
+
+  const selected = shingleColors.find((c) => c.id === selection.color)
   const isComplete = !!selection.color && selection.roofSize.trim().length > 0
 
   return (
@@ -47,7 +74,7 @@ export function ShingleRoofConfigurator({ selection, onChange, onSave }: Shingle
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
           <div className="flex flex-wrap gap-3">
-            {TIMBERLINE_HDZ_COLORS.map((c) => (
+            {shingleColors.map((c) => (
               <button
                 key={c.id}
                 type="button"
