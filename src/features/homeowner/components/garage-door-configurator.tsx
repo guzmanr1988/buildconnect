@@ -59,7 +59,12 @@ interface GarageDoorConfiguratorProps {
 
 export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDoorConfiguratorProps) {
   const services = useCatalogStore((s) => s.services)
-  const isComplete = selection.type && selection.color && selection.glass && selection.size
+  // PR-#433 — Rod-surfaced: Save Selection must require explicit Color +
+  // Glass Color picks. Other fields (type/size) are implicit (Save only
+  // shows inside type-guarded summary) so we tighten to the two Rod called
+  // out; this also drops the single_garage size-reset trap that prevented
+  // single_garage from ever reaching Save.
+  const isComplete = !!(selection.color && selection.glass)
 
   const { garageDoorTypes, garageDoorSizes, garageDoorColors, garageDoorGlass } = useMemo(() => {
     const svc = services.find((s) => s.id === 'garage')
@@ -155,50 +160,53 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
         )}
 
-        {/* Color */}
-        <div>
-          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
-          <Select
-            value={selection.color}
-            onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
-          >
-            <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
-              <SelectValue placeholder="Select color" />
-            </SelectTrigger>
-            <SelectContent>
-              {garageDoorColors.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-sm py-2.5 pl-3 pr-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
-                    <span>{c.label}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* PR-#433 — Color + Glass Color side-by-side on desktop, stacked on mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Color */}
+          <div>
+            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
+            <Select
+              value={selection.color}
+              onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
+            >
+              <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
+                <SelectValue placeholder="Select color" />
+              </SelectTrigger>
+              <SelectContent>
+                {garageDoorColors.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="text-sm py-2.5 pl-3 pr-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
+                      <span>{c.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Glass Color */}
-        <div>
-          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
-          <Select
-            value={selection.glass}
-            onValueChange={(v) => onChange({ ...selection, glass: v ?? '' })}
-          >
-            <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
-              <SelectValue placeholder="Select glass color" />
-            </SelectTrigger>
-            <SelectContent>
-              {garageDoorGlass.map((g) => (
-                <SelectItem key={g.id} value={g.id} className="text-sm py-2.5 pl-3 pr-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: g.color }} />
-                    <span>{g.label}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Glass Color */}
+          <div>
+            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
+            <Select
+              value={selection.glass}
+              onValueChange={(v) => onChange({ ...selection, glass: v ?? '' })}
+            >
+              <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
+                <SelectValue placeholder="Select glass color" />
+              </SelectTrigger>
+              <SelectContent>
+                {garageDoorGlass.map((g) => (
+                  <SelectItem key={g.id} value={g.id} className="text-sm py-2.5 pl-3 pr-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: g.color }} />
+                      <span>{g.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -225,10 +233,12 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
               </span>
             )}
           </div>
-          {isComplete && onSave && (
+          {/* PR-#433 — always-render Save with disabled-state until Color + Glass Color picked */}
+          {onSave && (
             <Button
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
+              disabled={!isComplete}
             >
               Save Selection
             </Button>
