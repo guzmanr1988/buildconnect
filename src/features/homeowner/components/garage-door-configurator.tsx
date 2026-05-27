@@ -160,10 +160,10 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
         )}
 
-        {/* PR-#433 — Color + Glass Color side-by-side on desktop, stacked on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* PR-#434 — Color + Glass Color ADJACENT (not split-full-row). flex-wrap so mobile wraps when total > viewport */}
+        <div className="flex flex-wrap items-end gap-3">
           {/* Color */}
-          <div>
+          <div className="w-48">
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
             <Select
               value={selection.color}
@@ -186,7 +186,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
 
           {/* Glass Color */}
-          <div>
+          <div className="w-48">
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
             <Select
               value={selection.glass}
