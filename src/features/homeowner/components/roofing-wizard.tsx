@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Home, Wrench } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ import { TileRoofConfigurator, type TileRoofSelection, type TileType } from './t
 import { RoofMeasurementWizard, type RoofWizardResult } from './roof-measurement-wizard'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
+import { useCatalogStore } from '@/stores/catalog-store'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { sqftToSquares } from '@/lib/option-metadata'
@@ -22,14 +23,19 @@ import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
 import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
-const ADDON_LINEAR_FT_CONFIG = [
+// PR-#430 — bundled fallback. The linear-ft addon ID set is FE-routing
+// logic (drives step visibility) so the IDs stay hardcoded; only the
+// display labels derive from the catalog-store substrate so admin
+// /admin/products edits to the addon labels propagate to the wizard
+// without churning the step-routing.
+const FALLBACK_ADDON_LINEAR_FT_CONFIG = [
   { id: 'gutters', label: 'Gutter linear feet' },
   { id: 'soffit_wood', label: 'Soffit Wood linear feet' },
   { id: 'fascia_wood', label: 'Fascia Wood linear feet' },
   { id: 'soffit_metal', label: 'Soffit Metal linear feet' },
   { id: 'fascia_metal', label: 'Fascia Metal linear feet' },
 ] as const
-const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
+const ADDON_LINEAR_FT_IDS: string[] = FALLBACK_ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
 
 const ADDONS_PATH_B_HIDE: string[] = ['extra_plywood', 'solar_prep', 'insulation']
 
@@ -152,6 +158,19 @@ export function RoofingWizard({
 }: RoofingWizardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const removeItem = useCartStore((s) => s.removeItem)
+  const catalogServices = useCatalogStore((s) => s.services)
+
+  const addonLinearFtConfig = useMemo(() => {
+    const svc = catalogServices.find((s) => s.id === 'roofing')
+    const addonsGroup = svc?.optionGroups?.find((g) => g.id === 'addons')
+    if (!addonsGroup?.options || addonsGroup.options.length === 0) {
+      return FALLBACK_ADDON_LINEAR_FT_CONFIG.slice()
+    }
+    return FALLBACK_ADDON_LINEAR_FT_CONFIG.map((c) => {
+      const opt = addonsGroup.options?.find((o) => o.id === c.id)
+      return { id: c.id, label: opt ? `${opt.label} linear feet` : c.label }
+    })
+  }, [catalogServices])
   const setProjectPermit = useCartStore((s) => s.setProjectPermit)
   const setProjectPermitWaiver = useCartStore((s) => s.setProjectPermitWaiver)
   const projectPermit = useCartStore((s) => s.projectPermit)
@@ -275,7 +294,7 @@ export function RoofingWizard({
   async function handleAddToProject() {
     setSubmitting(true)
     const roofAddonLinearFtParsed: Record<string, number> = {}
-    for (const { id } of ADDON_LINEAR_FT_CONFIG) {
+    for (const { id } of FALLBACK_ADDON_LINEAR_FT_CONFIG) {
       const val = addonLinearFt[id]
       if (val && (selections['addons'] ?? []).includes(id)) {
         const n = Number(val)
@@ -827,7 +846,7 @@ export function RoofingWizard({
                 </>
               )}
               {linearFtAddonIds.map((id) => {
-                const config = ADDON_LINEAR_FT_CONFIG.find((c) => c.id === id)!
+                const config = addonLinearFtConfig.find((c) => c.id === id)!
                 return (
                   <div key={id} className="space-y-2">
                     <Label className="text-sm font-medium">{config.label}</Label>
