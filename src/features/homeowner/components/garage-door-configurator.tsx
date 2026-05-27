@@ -160,10 +160,12 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
         )}
 
-        {/* PR-#434 — Color + Glass Color ADJACENT (not split-full-row). flex-wrap so mobile wraps when total > viewport */}
+        {/* PR-#435 — Color + Glass Color TIGHT adjacent. w-fit slot hugs trigger natural-width so
+            no internal whitespace between Color trigger right-edge and Glass label/trigger left-edge.
+            PR-#434 used w-48 fixed slots which trapped ~73px of unused space inside each slot. */}
         <div className="flex flex-wrap items-end gap-3">
           {/* Color */}
-          <div className="w-48">
+          <div className="w-fit">
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
             <Select
               value={selection.color}
@@ -186,7 +188,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
 
           {/* Glass Color */}
-          <div className="w-48">
+          <div className="w-fit">
             <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
             <Select
               value={selection.glass}
