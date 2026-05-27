@@ -1,15 +1,24 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
 export type FlatMembraneType = 'tpo' | 'epdm' | 'modified_bitumen'
 
-export const FLAT_MEMBRANE_TYPES: Array<{ id: FlatMembraneType; label: string; description: string }> = [
+// PR-#430 — bundled fallback. Same substrate-derive pattern as PR-#428
+// door-configurator; fallback stays byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_FLAT_MEMBRANE_TYPES: Array<{ id: FlatMembraneType; label: string; description: string }> = [
   { id: 'tpo', label: 'TPO', description: 'Heat-welded thermoplastic, energy-efficient' },
   { id: 'epdm', label: 'EPDM', description: 'Rubber membrane, long-lasting' },
   { id: 'modified_bitumen', label: 'Modified Bitumen', description: 'Asphalt-based, layered system' },
 ]
+
+const FLAT_MEMBRANE_DESCRIPTION: Record<string, string> = Object.fromEntries(
+  FALLBACK_FLAT_MEMBRANE_TYPES.map((m) => [m.id, m.description])
+)
 
 export interface FlatRoofSelection {
   membraneType: FlatMembraneType | ''
@@ -23,7 +32,25 @@ interface FlatRoofConfiguratorProps {
 }
 
 export function FlatRoofConfigurator({ selection, onChange, onSave }: FlatRoofConfiguratorProps) {
-  const selected = FLAT_MEMBRANE_TYPES.find((m) => m.id === selection.membraneType)
+  const services = useCatalogStore((s) => s.services)
+
+  const flatMembraneTypes = useMemo(() => {
+    const svc = services.find((s) => s.id === 'roofing')
+    const material = svc?.optionGroups?.find((g) => g.id === 'material')
+    const flatRoof = material?.options?.find((o) => o.id === 'flat_roof')
+    const typesSub = flatRoof?.subGroups?.find((sg) => sg.id === 'flat_membrane_types')?.options
+
+    if (typesSub && typesSub.length > 0) {
+      return typesSub.map((o) => ({
+        id: o.id as FlatMembraneType,
+        label: o.label,
+        description: o.description ?? FLAT_MEMBRANE_DESCRIPTION[o.id] ?? '',
+      }))
+    }
+    return FALLBACK_FLAT_MEMBRANE_TYPES
+  }, [services])
+
+  const selected = flatMembraneTypes.find((m) => m.id === selection.membraneType)
   const isComplete = !!selection.membraneType && selection.roofSize.trim().length > 0
 
   return (
@@ -41,7 +68,7 @@ export function FlatRoofConfigurator({ selection, onChange, onSave }: FlatRoofCo
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Membrane Type</span>
           <div className="grid grid-cols-3 gap-2">
-            {FLAT_MEMBRANE_TYPES.map((m) => {
+            {flatMembraneTypes.map((m) => {
               const isSelected = selection.membraneType === m.id
               return (
                 <button
