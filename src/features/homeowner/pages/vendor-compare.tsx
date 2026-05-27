@@ -33,7 +33,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 // Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
 // other code changes (the guards below collapse to no-ops).
 const APEX_ONLY_MODE = true
-const APEX_REAL_UUID = 'fc0d8ff3-cc1c-4101-a4b3-068594753bbf'
+// PR-#437 — swap from fc0d8ff3 (suspended "(legacy)" apex profile) to
+// 3e0821aa (active canonical apex). useRealVendors filters status='active'
+// so the legacy UUID never returned a row; APEX_ONLY guard at L101 then
+// excluded the live 3e0821aa too → zero-vendors. Same consolidation as
+// Arc-32 W4 close 2026-05-25 (vendor-visibility compound gate). Rod
+// surface: "Put apex within the 60 miles radius. Because nothing is
+// showing as demo" — distance was a red herring; root was wrong UUID.
+const APEX_REAL_UUID = '3e0821aa-89e7-4140-bff8-c4f7f985f561'
 
 export function VendorComparePage() {
   const navigate = useNavigate()
