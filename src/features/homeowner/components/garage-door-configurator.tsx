@@ -19,7 +19,7 @@ const FALLBACK_GARAGE_DOOR_SIZES = [
 
 const FALLBACK_GARAGE_DOOR_COLORS = [
   { id: 'white', label: 'White', color: '#ffffff' },
-  { id: 'bronze', label: 'Bronze', color: '#8B6914' },
+  { id: 'bronze', label: 'Bronze', color: '#5B3A29' },
   { id: 'black', label: 'Black', color: '#1a1a1a' },
 ]
 
@@ -34,7 +34,7 @@ const FALLBACK_GARAGE_DOOR_GLASS = [
 // substrate doesn't carry that field.
 const GARAGE_DOOR_COLOR_HEX: Record<string, string> = {
   white: '#ffffff',
-  bronze: '#8B6914',
+  bronze: '#5B3A29',
   black: '#1a1a1a',
 }
 const GARAGE_DOOR_GLASS_HEX: Record<string, string> = {

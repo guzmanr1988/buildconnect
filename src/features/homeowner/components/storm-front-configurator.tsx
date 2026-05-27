@@ -35,7 +35,7 @@ function StormFrontIcon({ size = 20 }: { size?: number }) {
 
 const FALLBACK_FRAME_COLORS = [
   { label: 'White', color: '#ffffff' },
-  { label: 'Bronze', color: '#8B6914' },
+  { label: 'Bronze', color: '#5B3A29' },
   { label: 'Black', color: '#1a1a1a' },
 ]
 
@@ -51,7 +51,7 @@ const FALLBACK_GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
 
 const FRAME_COLOR_HEX: Record<string, string> = {
   White: '#ffffff',
-  Bronze: '#8B6914',
+  Bronze: '#5B3A29',
   Black: '#1a1a1a',
 }
 const GLASS_COLOR_META: Record<string, { note: string; color: string; requiresLowE: boolean }> = {

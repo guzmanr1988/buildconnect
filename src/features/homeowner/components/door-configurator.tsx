@@ -37,7 +37,7 @@ const FALLBACK_DOOR_TYPES = [
 
 const FALLBACK_FRAME_COLORS = [
   { label: 'White', color: '#ffffff' },
-  { label: 'Bronze', color: '#8B6914' },
+  { label: 'Bronze', color: '#5B3A29' },
   { label: 'Black', color: '#1a1a1a' },
 ]
 const FALLBACK_GLASS_COLORS = [
@@ -54,7 +54,7 @@ const FALLBACK_GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
 // falls back to neutral when the substrate adds a value we don't know yet.
 const FRAME_COLOR_HEX: Record<string, string> = {
   White: '#ffffff',
-  Bronze: '#8B6914',
+  Bronze: '#5B3A29',
   Black: '#1a1a1a',
 }
 const GLASS_COLOR_NOTE: Record<string, string> = {
