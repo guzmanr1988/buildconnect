@@ -491,6 +491,16 @@ function CatalogGroupRenderer({
 }: CatalogGroupRendererProps) {
   const indentClass = depth === 0 ? '' : depth === 1 ? 'ml-4' : depth === 2 ? 'ml-8' : 'ml-12'
   const spacingClass = depth === 0 ? 'space-y-2' : 'mt-2 space-y-1.5'
+  // PR-#439 — Rod density-over-shape preserved: outer box wraps each top-level
+  // optionGroup section (WINDOW SIZES / WINDOW TYPES / FRAME COLORS / GLASS
+  // COLORS / GLASS TYPES / DOOR SIZES / etc.) with light border + subtle bg
+  // for visual section grouping. Applied only at depth=0 to avoid double-box
+  // nesting on substrate sub_groups (Soffit/Facia Wood/Metal subgroups stay
+  // indented inside the parent box). Thin-row chip layout inside
+  // VendorCatalogOptionsCardGrid unchanged — banked Rod density primitive
+  // (PR-#412 thin-row canonical, PR-#411 revert of PR-#407 squares).
+  const containerClass =
+    depth === 0 ? 'rounded-lg border border-border bg-muted/20 p-3' : ''
   const labelClass =
     depth === 0
       ? 'text-xs font-semibold text-muted-foreground uppercase tracking-wider'
@@ -511,7 +521,7 @@ function CatalogGroupRenderer({
   )
 
   return (
-    <div className={cn(indentClass, spacingClass)}>
+    <div className={cn(indentClass, spacingClass, containerClass)}>
       <p className={labelClass}>{optionGroup.label}</p>
       <VendorCatalogOptionsCardGrid
         serviceId={serviceId}
