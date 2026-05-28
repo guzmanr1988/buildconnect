@@ -491,16 +491,24 @@ function CatalogGroupRenderer({
 }: CatalogGroupRendererProps) {
   const indentClass = depth === 0 ? '' : depth === 1 ? 'ml-4' : depth === 2 ? 'ml-8' : 'ml-12'
   const spacingClass = depth === 0 ? 'space-y-2' : 'mt-2 space-y-1.5'
-  // PR-#439 — Rod density-over-shape preserved: outer box wraps each top-level
-  // optionGroup section (WINDOW SIZES / WINDOW TYPES / FRAME COLORS / GLASS
-  // COLORS / GLASS TYPES / DOOR SIZES / etc.) with light border + subtle bg
-  // for visual section grouping. Applied only at depth=0 to avoid double-box
-  // nesting on substrate sub_groups (Soffit/Facia Wood/Metal subgroups stay
-  // indented inside the parent box). Thin-row chip layout inside
-  // VendorCatalogOptionsCardGrid unchanged — banked Rod density primitive
-  // (PR-#412 thin-row canonical, PR-#411 revert of PR-#407 squares).
-  const containerClass =
-    depth === 0 ? 'rounded-lg border border-border bg-muted/20 p-3' : ''
+  // PR-#440 — outer box for each leaf-bearing section (any group whose
+  // immediate options include at least one leaf chip). Pure-container groups
+  // (Products in windows/doors — children are all sub_group-bearing Window
+  // and Door options) skip the box so the actual leaf-bearing nested sections
+  // (Window Sizes / Window Types / Frame Colors / Glass Colors / Glass Types /
+  // Door Sizes) get individual boxes without a heavy outer wrapper.
+  // PR-#439 shipped depth=0-only — apollo MIXED: Roofing/Pool PASS (top-level
+  // already leaf-bearing) / Windows+Doors FAIL (Products top-level wrapped
+  // every nested section in one box). Leaf-bearing detection generalises
+  // cleanly without depth-coupling.
+  // Thin-row chip layout inside VendorCatalogOptionsCardGrid unchanged —
+  // banked Rod density primitive (PR-#412 thin-row, PR-#411 revert PR-#407).
+  const hasLeafOptions = optionGroup.options.some(
+    (o) => !(o.subGroups && o.subGroups.length > 0)
+  )
+  const containerClass = hasLeafOptions
+    ? 'rounded-lg border border-border bg-muted/20 p-3'
+    : ''
   const labelClass =
     depth === 0
       ? 'text-xs font-semibold text-muted-foreground uppercase tracking-wider'
