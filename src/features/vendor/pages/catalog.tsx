@@ -21,6 +21,15 @@ import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-option
 // flip every option at every depth. Sub-options are toggled regardless of
 // parent enabled-state — vendor pre-arms the full tree, parent-collapse
 // rendering still gates visibility.
+//
+// PR-#438 — must mirror CatalogGroupRenderer L533 ancestor-path scoping
+// (PR-#410 primitive). The renderer composes nested subGroup ids as
+// `${parentOption.id}__${subGroup.id}` so sibling subgroups w/ identical
+// bare ids don't collide in vendor-catalog-store enabledOptions[groupId].
+// Bare-id collectAllOptions silently no-ops Select All on any service that
+// has sub_groups (windows/doors/garage/storm_front etc) because writes land
+// at enabledOptions[bare] while renderer reads enabledOptions[scoped].
+// Roofing-PASS / windows_doors-FAIL fingerprint = top-level-only vs nested.
 function collectAllOptions(
   groups: OptionGroup[]
 ): Array<{ groupId: string; optionId: string }> {
@@ -29,7 +38,9 @@ function collectAllOptions(
     for (const o of g.options) {
       out.push({ groupId: g.id, optionId: o.id })
       if (o.subGroups && o.subGroups.length > 0) {
-        out.push(...collectAllOptions(o.subGroups))
+        for (const sg of o.subGroups) {
+          out.push(...collectAllOptions([{ ...sg, id: `${o.id}__${sg.id}` }]))
+        }
       }
     }
   }
