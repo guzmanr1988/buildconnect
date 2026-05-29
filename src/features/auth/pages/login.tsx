@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Eye,
   EyeOff,
-  Building2,
   ArrowRight,
   Star,
   Users,
@@ -261,9 +260,11 @@ export function LoginPage() {
             transition={{ duration: 0.5 }}
             className="flex items-center gap-3"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Building2 className="h-5 w-5 text-white" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="BuildConnect"
+              className="h-10 w-10 rounded-xl object-cover"
+            />
             <span className="text-xl font-bold tracking-tight font-heading text-white">
               BuildConnect
             </span>
@@ -340,9 +341,11 @@ export function LoginPage() {
         >
           {/* Mobile logo */}
           <div className="mb-10 flex items-center gap-2.5 lg:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Building2 className="h-5 w-5" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="BuildConnect"
+              className="h-9 w-9 rounded-lg object-cover"
+            />
             <span className="text-lg font-bold tracking-tight font-heading">
               Build<span className="text-primary">Connect</span>
             </span>
