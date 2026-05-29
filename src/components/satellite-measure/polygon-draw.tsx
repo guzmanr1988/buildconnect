@@ -302,7 +302,9 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     if (path.length < 3) return
     if (clickListenerRef.current) { google.maps.event.removeListener(clickListenerRef.current); clickListenerRef.current = null }
     previewPolyRef.current?.setMap(null)
+    previewPolyRef.current = null
     firstMarkerRef.current?.setMap(null)
+    firstMarkerRef.current = null
     hideCursorMarker()
 
     const poly = new google.maps.Polygon({
