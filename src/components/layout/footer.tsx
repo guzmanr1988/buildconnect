@@ -294,7 +294,7 @@ export function Footer({ className }: FooterProps) {
         <div className="mt-12 border-t pt-8">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <p className="text-xs text-muted-foreground">
-              © 2026 BuildConnect. A service of RG Improvements Group, LLC. All rights reserved.
+              © 2026 BuildConnect. All rights reserved.
             </p>
             <div className="flex items-center gap-3">
               <a
