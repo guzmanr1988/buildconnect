@@ -444,7 +444,7 @@ export function HomeownerHome() {
           How it works
         </p>
         <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible defaultValue={[]} className="w-full">
             {howItWorks.map((step) => (
               <AccordionItem key={step.n} value={`step-${step.n}`} className="px-5">
                 <AccordionTrigger className="py-4 text-[14px]">
@@ -474,7 +474,7 @@ export function HomeownerHome() {
           Frequently asked
         </p>
         <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible defaultValue={[]} className="w-full">
             {faq.map((qa, i) => (
               <AccordionItem key={qa.q} value={`faq-${i}`} className="px-5">
                 <AccordionTrigger className="py-4 text-[14px] font-medium text-foreground">
