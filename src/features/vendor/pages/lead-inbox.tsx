@@ -29,7 +29,7 @@ import { mapsUrl, telHref } from '@/lib/contact-links'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
 import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
-import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
+import { VendorProjectDocumentsPanel } from '@/features/vendor/components/vendor-project-documents-panel'
 import type { Lead } from '@/types'
 
 function fmt(n: number) {
@@ -524,30 +524,21 @@ export default function LeadInbox() {
                         )
                       })()}
 
-                      {/* Permit & Financing info — financing badge shows
-                          live application status when
-                          feature_flags.financing_enabled is true AND vendor
-                          RLS permits read (approved/terms_accepted per
-                          migration 047); falls back to legacy
-                          Requested/Not-needed otherwise. */}
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant={lead.permit_choice ? 'default' : 'secondary'} className="text-xs">
-                          Permit: {lead.permit_choice ? 'Yes' : 'No'}
-                        </Badge>
-                        {(() => {
-                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
-                          return (
-                            <ProjectFinancingBadge
-                              projectId={sp?.id ?? null}
-                              fallback={
-                                <Badge variant={lead.financing ? 'default' : 'secondary'} className="text-xs">
-                                  Financing: {lead.financing ? 'Requested' : 'Not needed'}
-                                </Badge>
-                              }
-                            />
-                          )
-                        })()}
-                      </div>
+                      {/* PR-449 — Vendor project documents panel replaces
+                          Rod-"useless" Permit/Financing chips row. Bidirectional
+                          mirror of homeowner /home/documents widget scoped to
+                          this lead's sent_project. RLS-gated read+write lands
+                          parallel-late from hephaestus; until then the panel
+                          shows empty-state silently (no toast/error noise). */}
+                      {(() => {
+                        const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                        return (
+                          <VendorProjectDocumentsPanel
+                            sentProjectId={sp?.id ?? null}
+                            homeownerId={sp?.homeowner_id ?? null}
+                          />
+                        )
+                      })()}
 
                       {/* Customer photos, notes, ID */}
                       {(() => {

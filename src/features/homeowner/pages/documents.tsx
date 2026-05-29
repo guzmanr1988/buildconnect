@@ -8,15 +8,6 @@ import {
   Plus,
   MapPin,
   User2,
-  Ruler,
-  ScrollText,
-  ClipboardCheck,
-  Image as ImageIcon,
-  ShieldCheck,
-  PenLine,
-  FileSignature,
-  Calculator,
-  FileQuestion,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -25,6 +16,14 @@ import {
   type HomeownerDoc,
   type HomeownerDocType,
 } from '@/stores/homeowner-documents-store'
+import {
+  DOC_TYPE_ORDER,
+  DOC_TYPE_LABEL,
+  DOC_TYPE_ICON,
+  formatDocDate,
+  friendlyDocTitle,
+  uploaderChip,
+} from '@/lib/homeowner-doc-display'
 import { useProjectsStore } from '@/stores/projects-store'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -50,42 +49,6 @@ import { toast } from 'sonner'
 //   3. "Customer documents" cross-project box for vendor-uploaded
 //      homeowner-level docs that carry NULL sent_project_id.
 
-const DOC_TYPE_ORDER: HomeownerDocType[] = [
-  'license',
-  'permit',
-  'sketch',
-  'measurement',
-  'agreement',
-  'contract',
-  'quote',
-  'photo',
-  'other',
-]
-
-const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
-  license: 'License',
-  permit: 'Permit',
-  sketch: 'Sketch',
-  measurement: 'Measurement',
-  agreement: 'Agreement',
-  contract: 'Contract',
-  quote: 'Quote',
-  photo: 'Photo',
-  other: 'Other',
-}
-
-const DOC_TYPE_ICON: Record<HomeownerDocType, typeof FileText> = {
-  license: ShieldCheck,
-  permit: ClipboardCheck,
-  sketch: PenLine,
-  measurement: Ruler,
-  agreement: ScrollText,
-  contract: FileSignature,
-  quote: Calculator,
-  photo: ImageIcon,
-  other: FileQuestion,
-}
-
 interface SentProjectGroup {
   sentProjectId: string | null
   serviceName: string
@@ -94,30 +57,6 @@ interface SentProjectGroup {
   sentAt: string | null
   status: string | null
   docs: HomeownerDoc[]
-}
-
-function formatDocDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-function friendlyDocTitle(doc: HomeownerDoc): string {
-  const stamp = formatDocDate(doc.createdAt)
-  if (doc.docType) {
-    return `${DOC_TYPE_LABEL[doc.docType]} — ${stamp}`
-  }
-  return doc.filename
-}
-
-function uploaderChip(doc: HomeownerDoc): string | null {
-  if (doc.uploadedBy === 'vendor') return 'Uploaded by contractor'
-  if (doc.uploadedBy === 'homeowner') return 'Uploaded by you'
-  return null
 }
 
 export function HomeownerDocumentsPage() {
