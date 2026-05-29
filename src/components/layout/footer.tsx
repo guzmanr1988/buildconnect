@@ -1,0 +1,341 @@
+import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { Mail, Phone } from 'lucide-react'
+import { Logo } from '@/components/shared/logo'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+
+interface FooterProps {
+  className?: string
+}
+
+// Inline SVG for brand marks — lucide-react deliberately excludes brand
+// glyphs, and Tailwind currentColor lets us color these via text-* on the
+// parent <a>. Keep paths minimal; they render at h-4 w-4.
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  )
+}
+
+function FacebookIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  )
+}
+
+function LinkedinIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z" />
+      <rect x="2" y="9" width="4" height="12" />
+      <circle cx="4" cy="4" r="2" />
+    </svg>
+  )
+}
+
+export function Footer({ className }: FooterProps) {
+  const [email, setEmail] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleSubscribe = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!email) return
+    setSubmitted(true)
+    setEmail('')
+    window.setTimeout(() => setSubmitted(false), 4000)
+  }
+
+  return (
+    <footer className={cn('mt-16 border-t bg-muted/30', className)}>
+      <div className="mx-auto max-w-7xl px-6 py-12">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-4">
+          {/* Col 1 — Support */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
+              Support
+            </h3>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li>
+                <a
+                  href="tel:+13059427955"
+                  className="flex items-start gap-2 hover:text-foreground"
+                >
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    <span className="block font-medium text-foreground">(305) 942-7955</span>
+                    <span className="block text-xs">Mon-Sun 9am-8pm ET</span>
+                  </span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:hello@buildc.net"
+                  className="flex items-center gap-2 hover:text-foreground"
+                >
+                  <Mail className="h-4 w-4 shrink-0" />
+                  hello@buildc.net
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:support@buildc.net"
+                  className="flex items-center gap-2 hover:text-foreground"
+                >
+                  <Mail className="h-4 w-4 shrink-0" />
+                  support@buildc.net
+                </a>
+              </li>
+              <li>
+                <Link to="/help" className="hover:text-foreground">
+                  Help Center
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Col 2 — Trust */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
+              Trust and Coverage
+            </h3>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li>All contractors independently licensed + insured</li>
+              <li>Serving South Florida</li>
+            </ul>
+            <div
+              data-testid="footer-trust-badges"
+              aria-hidden="true"
+              className="mt-6 min-h-[3rem]"
+            />
+          </div>
+
+          {/* Col 3 — Quick Links */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
+              Quick Links
+            </h3>
+            <div className="space-y-5 text-sm">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+                  For Homeowners
+                </p>
+                <ul className="space-y-2 text-muted-foreground">
+                  <li>
+                    <Link to="/signup" className="hover:text-foreground">
+                      Get Started
+                    </Link>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      How It Works
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      FAQ
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      Pricing
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+                  For Vendors
+                </p>
+                <ul className="space-y-2 text-muted-foreground">
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      Become a Pro
+                    </a>
+                  </li>
+                  <li>
+                    <Link to="/login" className="hover:text-foreground">
+                      Vendor Login
+                    </Link>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      Vendor Support
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+                  Company
+                </p>
+                <ul className="space-y-2 text-muted-foreground">
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      About
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      Blog
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-foreground">
+                      Careers
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Col 4 — Company */}
+          <div>
+            <Logo />
+            <p className="mt-3 text-sm text-muted-foreground">
+              South Florida home services, simplified.
+            </p>
+
+            <form onSubmit={handleSubscribe} className="mt-6">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+                Newsletter
+              </p>
+              <p className="mb-2 text-xs text-muted-foreground">Project tips, monthly.</p>
+              <div className="flex gap-2">
+                <Input
+                  id="footer-newsletter"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="h-9"
+                  aria-label="Newsletter email address"
+                />
+                <Button type="submit" size="sm" className="shrink-0">
+                  Subscribe
+                </Button>
+              </div>
+              {submitted && (
+                <p
+                  role="status"
+                  className="mt-2 text-xs text-emerald-600 dark:text-emerald-400"
+                >
+                  Thank you. You are subscribed.
+                </p>
+              )}
+            </form>
+
+            <div className="mt-6">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
+                Language
+              </p>
+              <div
+                role="group"
+                aria-label="Language selector (coming soon)"
+                className="inline-flex rounded-md border bg-background p-0.5"
+              >
+                <button
+                  type="button"
+                  disabled
+                  aria-pressed="true"
+                  className="rounded px-3 py-1 text-xs font-medium bg-muted text-foreground"
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  aria-pressed="false"
+                  className="rounded px-3 py-1 text-xs font-medium text-muted-foreground"
+                >
+                  ES
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom strip */}
+        <div className="mt-12 border-t pt-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <p className="text-xs text-muted-foreground">
+              © 2026 BuildConnect. A service of RG Improvements Group, LLC. All rights reserved.
+            </p>
+            <div className="flex items-center gap-3">
+              <a
+                href="#"
+                aria-label="Instagram"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <InstagramIcon className="h-4 w-4" />
+              </a>
+              <a
+                href="#"
+                aria-label="Facebook"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FacebookIcon className="h-4 w-4" />
+              </a>
+              <a
+                href="#"
+                aria-label="LinkedIn"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LinkedinIcon className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <a href="#" className="hover:text-foreground">
+              Terms of Service
+            </a>
+            <a href="#" className="hover:text-foreground">
+              Privacy Policy
+            </a>
+            <a href="#" className="hover:text-foreground">
+              Cookie Policy
+            </a>
+            <a href="#" className="hover:text-foreground">
+              Accessibility
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
