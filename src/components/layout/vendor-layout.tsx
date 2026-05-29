@@ -22,6 +22,7 @@ import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { cn } from '@/lib/utils'
+import { Footer } from '@/components/layout/footer'
 
 const navItems = [
   { to: '/vendor', icon: LayoutDashboard, label: 'Dashboard' },
@@ -435,6 +436,12 @@ export function VendorLayout() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Footer — per-role shell mount inside sidebar-offset wrapper so
+            the footer respects the sidebar width on desktop and spans
+            full width on mobile. Off App.tsx root so /login + /signup +
+            admin do not leak. */}
+        <Footer />
       </div>
 
       {/* Ship #270 — Non-circumvention agreement gate. Single insertion

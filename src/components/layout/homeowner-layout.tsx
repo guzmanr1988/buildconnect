@@ -16,6 +16,7 @@ import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Footer } from '@/components/layout/footer'
 
 const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
@@ -292,6 +293,14 @@ export function HomeownerLayout() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Footer — per-role shell mount, off App.tsx root so /login + /signup
+          + admin do not leak. Mobile gets pb-24 wrapper so the last footer
+          line is not hidden behind the fixed mobile bottom nav (h-16 + safe-
+          area-inset). Desktop renders flush. */}
+      <div className={cn(isMobile && 'pb-24')}>
+        <Footer />
+      </div>
 
       {/* Mobile bottom nav */}
       {isMobile && (
