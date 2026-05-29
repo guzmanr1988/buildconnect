@@ -495,7 +495,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 <>
                   <div className="rounded-xl border p-4 space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Selections</h4>
-                    {Object.entries(selectedItem.project_data.item.selections).map(([key, values]: [string, any]) => (
+                    {Object.entries(selectedItem.project_data.item.selections ?? {}).map(([key, values]: [string, any]) => (
                       <div key={key} className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-medium text-muted-foreground capitalize min-w-[60px]">{key.replace(/_/g, ' ')}:</span>
                         {(values as string[]).map((v: string) => (
