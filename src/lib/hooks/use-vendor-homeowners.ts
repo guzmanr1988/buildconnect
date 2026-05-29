@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 
@@ -99,13 +99,20 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
         })
       })
 
-    // (b) sentProjects filtered by contractor.vendor_id (preferred) or
-    // contractor.company (legacy fallback). Rep-scope: only assigned.
+    // (b) sentProjects filtered via contractorMatchesVendor — bidirectional
+    // mock-id ↔ UUID match through DEMO_VENDOR_UUID_BY_MOCK_ID (forward +
+    // reverse + company-name legacy fallback). PR-#443 closed this class at
+    // the helper for lead-inbox / vendor-lead-stages but this consumer was
+    // never migrated — naive direct equality `sp.contractor.vendor_id !==
+    // vendor.id` compared real Supabase UUIDs against mock-id strings
+    // ('v-1'..'v-5') for demo-vendor sessions where useResolvedVendor
+    // returns the MOCK_VENDORS fixture (vendor.id='v-1') for profile.id
+    // 3e0821aa. Symptom: real-substrate rows whose contractor.vendor_id is
+    // the real UUID were filtered out → invisible-homeowner class on the
+    // /vendor/homeowners roster + detail surfaces.
     sentProjects
       .filter((sp) => {
-        if (sp.contractor?.vendor_id) { if (sp.contractor.vendor_id !== vendor.id) return false }
-        else if (sp.vendor_id) { if (sp.vendor_id !== vendor.id) return false }
-        else if (sp.contractor?.company !== vendor.company) return false
+        if (!contractorMatchesVendor(sp.contractor, vendor)) return false
         if (isRep && profile?.id) {
           const leadId = `L-${sp.id.slice(0, 4).toUpperCase()}`
           return accountRepIdByLead[leadId] === profile.id
