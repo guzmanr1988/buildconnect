@@ -80,7 +80,20 @@ export function contractorMatchesVendor(
     for (const [mockId, uuid] of Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID)) {
       if (uuid === cid && mockId === vendor.id) return true
     }
-    return false
+    // PR-#443 — fall through to company-name fallback when cid is
+    // present but no UUID-path matches. Handles the UUID-flip case
+    // where vendor-compare writes the post-flip APEX_REAL_UUID
+    // (3e0821aa, PR-#437) into contractor.vendor_id but an authed
+    // demo-Apex session resolves to MOCK_VENDORS v-1 whose seed-
+    // script UUID is the pre-flip fc0d8ff3 (stale in DEMO_VENDOR_
+    // UUID_BY_MOCK_ID since the seed script lags hand-edited FE
+    // constants). Pre-PR-#443 the early `return false` here caused
+    // demo-Apex sessions to see 0 leads in all 5 Lead Workflow
+    // buckets while the unscoped Active Leads counter showed 1 —
+    // the smoking-gun mismatch Rod surfaced 2026-05-29. Company-
+    // name match is safe at this layer because `vendor` is the
+    // authed session's resolved identity, so a company-name
+    // collision means same logical vendor.
   }
   return !!contractor.company && contractor.company === vendor.company
 }

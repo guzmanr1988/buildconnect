@@ -868,10 +868,18 @@ function deriveStatusSteps(args: {
   // so isSold must be checked first to land on active_project (3) rather
   // than the terminal completed (4). A lead.status='completed' without
   // isSold (mock fixture path) reaches step 4.
+  // PR-#443 — split pending vs confirmed. Pre-fix collapsed both to
+  // index 2 (Representative assigned = current), which checked off
+  // "Vendor confirmed" while the pill above still read "Scheduled —
+  // Pending Approval" (yellow). Rod surfaced 2026-05-29: stepper
+  // claimed vendor confirmed before vendor had even seen the lead.
+  // pending → 1 (Vendor confirmed = current Hourglass);
+  // confirmed → 2 (Rep assigned = current, Vendor confirmed checked).
   const completedIndex = (() => {
     if (isSold) return 3
     if (status === 'completed') return 4
-    if (status === 'pending' || status === 'confirmed') return 2
+    if (status === 'confirmed') return 2
+    if (status === 'pending') return 1
     return 0
   })()
   return stepKeys.map((key, i) => ({
