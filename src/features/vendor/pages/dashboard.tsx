@@ -23,7 +23,7 @@ import { useVendorEventsStore } from '@/stores/vendor-events-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { LEAD_STAGES, STAGE_PULSE_BY_KEY, useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { SERVICE_CATALOG } from '@/lib/constants'
@@ -175,7 +175,10 @@ export default function VendorDashboard() {
   // homeownerLeads (sentProjects) have no account_rep_id, so reps get an empty list here.
   const homeownerLeads: Lead[] = useMemo(() => {
     if (profile?.role === 'account_rep') return []
-    return sentProjects.map((p) => ({
+    if (!vendor) return []
+    return sentProjects
+      .filter((p) => contractorMatchesVendor(p.contractor, vendor))
+      .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
@@ -194,7 +197,7 @@ export default function VendorDashboard() {
       slot: p.sentAt,
       received_at: p.sentAt,
     }))
-  }, [sentProjects, VENDOR_ID, profile?.role])
+  }, [sentProjects, VENDOR_ID, profile?.role, vendor])
 
   const leads = useMemo(() => {
     const combined = [...homeownerLeads, ...mockLeads]
