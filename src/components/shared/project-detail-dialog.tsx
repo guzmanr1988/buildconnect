@@ -286,9 +286,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
             <div className={`${DIALOG_HORIZONTAL_GRID} mt-2`}>
             <div className="space-y-4">
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Project</span>
-                  <span className="font-medium">{selectedItem.project}</span>
+                <div className="space-y-0.5">
+                  <span className="text-muted-foreground text-xs">Project</span>
+                  <p className="font-medium leading-snug">{selectedItem.project}</p>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
