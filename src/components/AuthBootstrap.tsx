@@ -111,7 +111,12 @@ export function AuthBootstrap() {
         const message = err instanceof Error && err.message.includes('timed out')
           ? 'Loading profile is slow. Try refreshing if this persists.'
           : null
-        if (message) toast.error(message)
+        // Stable id dedupes concurrent fires: both the getSession().then()
+        // bootstrap path and the onAuthStateChange SIGNED_IN listener call
+        // hydrate() on page load, so a slow getProfile times out on BOTH and
+        // each catch fires this toast → two stacked identical toasts. Sonner
+        // collapses same-id toasts into one.
+        if (message) toast.error(message, { id: 'profile-slow' })
       }
     }
 
