@@ -56,7 +56,7 @@ export interface LeadStageMeta {
 export const LEAD_STAGES: LeadStageMeta[] = [
   { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-500', bgColor: 'bg-amber-50 dark:bg-amber-950/20', borderColor: 'border-amber-300', pulse: true },
   { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck, color: 'bg-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', borderColor: 'border-emerald-300' },
-  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-primary', bgColor: 'bg-primary/5 dark:bg-primary/10', borderColor: 'border-primary/30', pulse: true },
+  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-success', bgColor: 'bg-success/5 dark:bg-success/10', borderColor: 'border-success/40', pulse: true },
   { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-500', bgColor: 'bg-slate-50 dark:bg-slate-950/20', borderColor: 'border-slate-300' },
   { key: 'cancelled', title: 'Cancelled Projects', icon: X, color: 'bg-destructive', bgColor: 'bg-destructive/5 dark:bg-destructive/10', borderColor: 'border-destructive/30' },
 ]

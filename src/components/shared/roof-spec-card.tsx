@@ -93,7 +93,7 @@ export function RoofSpecCard({
         className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4"
         data-project-summary-grid
       >
-        {areaValue && <SpecCard label="Area" value={areaValue} />}
+        {areaValue && <SpecCard label="Area" value={areaValue} valueClass="text-xs leading-snug" />}
         {rm && !isAddonsOnly && includeMaterialOrder && rm.pitch && (
           <SpecCard label="Pitch" value={rm.pitch} />
         )}
@@ -105,10 +105,12 @@ export function RoofSpecCard({
             <SpecCard
               label="Pitched"
               value={`${rm.pitchedAreaSqft!.toLocaleString()} sqft (${Math.ceil((rm.pitchedAreaSqft! * PITCHED_WASTE_FACTOR) / 100)} sq)`}
+              valueClass="text-xs leading-snug"
             />
             <SpecCard
               label="Flat"
               value={`${rm.flatAreaSqft!.toLocaleString()} sqft (${Math.ceil((rm.flatAreaSqft! * FLAT_WASTE_FACTOR) / 100)} sq)`}
+              valueClass="text-xs leading-snug"
             />
           </>
         )}
@@ -151,9 +153,9 @@ function SpecCard({
   valueClass?: string
 }) {
   return (
-    <div className="rounded-lg bg-background border p-3 space-y-1.5">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={cn('text-sm font-semibold text-foreground', valueClass)}>{value}</p>
+    <div className="rounded-lg bg-background border p-3.5 space-y-2">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">{label}</p>
+      <p className={cn('text-sm font-semibold text-foreground leading-snug', valueClass)}>{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   )

@@ -65,8 +65,8 @@ export function VendorCatalogOptionsCardGrid({
             data-option-id={option.id}
             data-group-id={groupId}
             className={cn(
-              'rounded-lg border bg-background p-3 space-y-2 transition',
-              optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
+              'rounded-lg border bg-[oklch(0.968_0.020_255)] p-3 space-y-2 transition',
+              optEnabled ? 'border-primary/30 bg-primary/8' : 'border-[oklch(0.895_0.016_260)]'
             )}
           >
             <div className="flex items-center justify-between gap-2">
