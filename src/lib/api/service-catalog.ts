@@ -10,6 +10,21 @@ export class CatalogMutationError extends Error {
   }
 }
 
+// PostgREST UPDATE/DELETE/INSERT silently report 0 rows affected with NO
+// `error` on RLS-deny or stale id-drift (task_517 / anti-primitive-G). Force
+// a `.select()` chain on every mutator so the returned data lets us assert
+// the expected row count; throw a synthesized `0_ROWS` CatalogMutationError
+// otherwise so the FE surfaces real failure instead of false success.
+const ZERO_ROWS_CODE = 'PGRST_0_ROWS'
+function assertOneRow(action: string, data: unknown[] | null) {
+  const n = data?.length ?? 0
+  if (n === 1) return
+  throw new CatalogMutationError(action, {
+    message: `expected 1 row, got ${n} (RLS-deny or stale id)`,
+    code: ZERO_ROWS_CODE,
+  })
+}
+
 /*
  * Service Catalog API — Phase 2 commerce-layer wiring.
  *
@@ -198,21 +213,25 @@ export async function fetchServiceCatalog(): Promise<ServiceConfig[]> {
 /* ---------------------------------------------------------------- */
 
 export async function createService(service: ServiceConfig): Promise<void> {
-  const { error } = await supabase.from('services').insert({
-    id: service.id,
-    name: service.name,
-    tagline: service.tagline,
-    description: service.description,
-    badge: service.badge ?? null,
-    badge_color: service.badgeColor ?? null,
-    status: service.status,
-    phase2: service.status === 'draft',
-    features: service.features,
-    stat_label: service.stat.label,
-    stat_value: service.stat.value,
-    sort_order: 999,
-  })
+  const { data, error } = await supabase
+    .from('services')
+    .insert({
+      id: service.id,
+      name: service.name,
+      tagline: service.tagline,
+      description: service.description,
+      badge: service.badge ?? null,
+      badge_color: service.badgeColor ?? null,
+      status: service.status,
+      phase2: service.status === 'draft',
+      features: service.features,
+      stat_label: service.stat.label,
+      stat_value: service.stat.value,
+      sort_order: 999,
+    })
+    .select()
   if (error) throw new CatalogMutationError('createService', error)
+  assertOneRow('createService', data)
 }
 
 export async function updateService(
@@ -235,13 +254,19 @@ export async function updateService(
     dbPatch.stat_value = patch.stat.value
   }
 
-  const { error } = await supabase.from('services').update(dbPatch).eq('id', id)
+  const { data, error } = await supabase
+    .from('services')
+    .update(dbPatch)
+    .eq('id', id)
+    .select()
   if (error) throw new CatalogMutationError('updateService', error)
+  assertOneRow('updateService', data)
 }
 
 export async function deleteService(id: string): Promise<void> {
-  const { error } = await supabase.from('services').delete().eq('id', id)
+  const { data, error } = await supabase.from('services').delete().eq('id', id).select()
   if (error) throw new CatalogMutationError('deleteService', error)
+  assertOneRow('deleteService', data)
 }
 
 /* ---------------------------------------------------------------- */
@@ -252,17 +277,21 @@ export async function createOptionGroup(
   serviceId: string,
   group: OptionGroup
 ): Promise<void> {
-  const { error } = await supabase.from('option_groups').insert({
-    service_id: serviceId,
-    group_id: group.id,
-    label: group.label,
-    required: group.required,
-    type: group.type,
-    reveals_on_group_id: group.revealsOn?.group ?? null,
-    reveals_on_equals: group.revealsOn?.equals ?? null,
-    sort_order: 999,
-  })
+  const { data, error } = await supabase
+    .from('option_groups')
+    .insert({
+      service_id: serviceId,
+      group_id: group.id,
+      label: group.label,
+      required: group.required,
+      type: group.type,
+      reveals_on_group_id: group.revealsOn?.group ?? null,
+      reveals_on_equals: group.revealsOn?.equals ?? null,
+      sort_order: 999,
+    })
+    .select()
   if (error) throw new CatalogMutationError('createOptionGroup', error)
+  assertOneRow('createOptionGroup', data)
 }
 
 export async function updateOptionGroup(
@@ -279,24 +308,28 @@ export async function updateOptionGroup(
     dbPatch.reveals_on_equals = patch.revealsOn?.equals ?? null
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('option_groups')
     .update(dbPatch)
     .eq('service_id', serviceId)
     .eq('group_id', groupId)
+    .select()
   if (error) throw new CatalogMutationError('updateOptionGroup', error)
+  assertOneRow('updateOptionGroup', data)
 }
 
 export async function deleteOptionGroup(
   serviceId: string,
   groupId: string
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('option_groups')
     .delete()
     .eq('service_id', serviceId)
     .eq('group_id', groupId)
+    .select()
   if (error) throw new CatalogMutationError('deleteOptionGroup', error)
+  assertOneRow('deleteOptionGroup', data)
 }
 
 /* ---------------------------------------------------------------- */
@@ -324,15 +357,19 @@ export async function createOption(
   option: ServiceOption
 ): Promise<void> {
   const groupUuid = await resolveGroupUuid(serviceId, groupId)
-  const { error } = await supabase.from('options').insert({
-    option_group_id: groupUuid,
-    option_id: option.id,
-    label: option.label,
-    description: option.description ?? null,
-    price_unit: option.priceUnit ?? null,
-    sort_order: 999,
-  })
+  const { data, error } = await supabase
+    .from('options')
+    .insert({
+      option_group_id: groupUuid,
+      option_id: option.id,
+      label: option.label,
+      description: option.description ?? null,
+      price_unit: option.priceUnit ?? null,
+      sort_order: 999,
+    })
+    .select()
   if (error) throw new CatalogMutationError('createOption', error)
+  assertOneRow('createOption', data)
 }
 
 export async function updateOption(
@@ -346,12 +383,14 @@ export async function updateOption(
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('options')
     .update(dbPatch)
     .eq('option_group_id', groupUuid)
     .eq('option_id', optionId)
+    .select()
   if (error) throw new CatalogMutationError('updateOption', error)
+  assertOneRow('updateOption', data)
 }
 
 export async function deleteOption(
@@ -360,12 +399,14 @@ export async function deleteOption(
   optionId: string
 ): Promise<void> {
   const groupUuid = await resolveGroupUuid(serviceId, groupId)
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('options')
     .delete()
     .eq('option_group_id', groupUuid)
     .eq('option_id', optionId)
+    .select()
   if (error) throw new CatalogMutationError('deleteOption', error)
+  assertOneRow('deleteOption', data)
 }
 
 /* ---------------------------------------------------------------- */
@@ -415,16 +456,20 @@ export async function createSubGroup(
   subGroup: OptionGroup
 ): Promise<void> {
   const optionUuid = await resolveOptionUuid(serviceId, groupId, optionId)
-  const { error } = await supabase.from('sub_groups').insert({
-    option_id: optionUuid,
-    sub_group_id: subGroup.id,
-    label: subGroup.label,
-    description: subGroup.description ?? null,
-    required: subGroup.required,
-    type: subGroup.type,
-    sort_order: 999,
-  })
+  const { data, error } = await supabase
+    .from('sub_groups')
+    .insert({
+      option_id: optionUuid,
+      sub_group_id: subGroup.id,
+      label: subGroup.label,
+      description: subGroup.description ?? null,
+      required: subGroup.required,
+      type: subGroup.type,
+      sort_order: 999,
+    })
+    .select()
   if (error) throw new CatalogMutationError('createSubGroup', error)
+  assertOneRow('createSubGroup', data)
 }
 
 export async function updateSubGroup(
@@ -440,12 +485,14 @@ export async function updateSubGroup(
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.required !== undefined) dbPatch.required = patch.required
   if (patch.type !== undefined) dbPatch.type = patch.type
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sub_groups')
     .update(dbPatch)
     .eq('option_id', optionUuid)
     .eq('sub_group_id', subGroupId)
+    .select()
   if (error) throw new CatalogMutationError('updateSubGroup', error)
+  assertOneRow('updateSubGroup', data)
 }
 
 export async function deleteSubGroup(
@@ -455,12 +502,14 @@ export async function deleteSubGroup(
   subGroupId: string
 ): Promise<void> {
   const optionUuid = await resolveOptionUuid(serviceId, groupId, optionId)
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sub_groups')
     .delete()
     .eq('option_id', optionUuid)
     .eq('sub_group_id', subGroupId)
+    .select()
   if (error) throw new CatalogMutationError('deleteSubGroup', error)
+  assertOneRow('deleteSubGroup', data)
 }
 
 export async function createSubOption(
@@ -471,15 +520,19 @@ export async function createSubOption(
   subOption: ServiceOption
 ): Promise<void> {
   const subGroupUuid = await resolveSubGroupUuid(serviceId, groupId, optionId, subGroupId)
-  const { error } = await supabase.from('sub_options').insert({
-    sub_group_id: subGroupUuid,
-    sub_option_id: subOption.id,
-    label: subOption.label,
-    description: subOption.description ?? null,
-    price_unit: subOption.priceUnit ?? null,
-    sort_order: 999,
-  })
+  const { data, error } = await supabase
+    .from('sub_options')
+    .insert({
+      sub_group_id: subGroupUuid,
+      sub_option_id: subOption.id,
+      label: subOption.label,
+      description: subOption.description ?? null,
+      price_unit: subOption.priceUnit ?? null,
+      sort_order: 999,
+    })
+    .select()
   if (error) throw new CatalogMutationError('createSubOption', error)
+  assertOneRow('createSubOption', data)
 }
 
 export async function updateSubOption(
@@ -495,12 +548,14 @@ export async function updateSubOption(
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sub_options')
     .update(dbPatch)
     .eq('sub_group_id', subGroupUuid)
     .eq('sub_option_id', subOptionId)
+    .select()
   if (error) throw new CatalogMutationError('updateSubOption', error)
+  assertOneRow('updateSubOption', data)
 }
 
 export async function deleteSubOption(
@@ -511,12 +566,14 @@ export async function deleteSubOption(
   subOptionId: string
 ): Promise<void> {
   const subGroupUuid = await resolveSubGroupUuid(serviceId, groupId, optionId, subGroupId)
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sub_options')
     .delete()
     .eq('sub_group_id', subGroupUuid)
     .eq('sub_option_id', subOptionId)
+    .select()
   if (error) throw new CatalogMutationError('deleteSubOption', error)
+  assertOneRow('deleteSubOption', data)
 }
 
 async function bulkSortOrder(
@@ -533,11 +590,21 @@ async function bulkSortOrder(
         .from(table)
         .update({ sort_order: idx })
         .eq(parentColumn, parentUuid)
-        .eq(childIdColumn, id),
+        .eq(childIdColumn, id)
+        .select(),
     ),
   )
   const firstError = results.find((r) => r.error)?.error
   if (firstError) throw new CatalogMutationError(action, firstError)
+  const zeroRowIdx = results.findIndex((r) => (r.data?.length ?? 0) !== 1)
+  if (zeroRowIdx !== -1) {
+    const offending = orderedIds[zeroRowIdx]
+    const got = results[zeroRowIdx].data?.length ?? 0
+    throw new CatalogMutationError(action, {
+      message: `expected 1 row for ${childIdColumn}=${offending}, got ${got} (RLS-deny or stale id)`,
+      code: ZERO_ROWS_CODE,
+    })
+  }
 }
 
 export async function reorderOptionGroupsApi(
