@@ -79,6 +79,12 @@ interface VendorCatalogState {
   // builds option UUID cache, and migrates any localStorage-only prices
   // to Supabase on first run.
   hydrateFromSupabase: (vendorUuid: string) => Promise<void>
+  // Arc-32 W3 follow-up — clear all vendor-scoped in-memory state on auth
+  // SIGNED_OUT so a same-session sign-in as a different vendor on a shared
+  // browser can't replay the previous vendor's queued _pendingWrites under
+  // the new vendor_id. Companion to catalog-store.resetToBundled() — wired
+  // from AuthBootstrap SIGNED_OUT handler.
+  resetVendorScopedState: () => void
 }
 
 type DbPriceRow = {
@@ -643,6 +649,17 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // drain any writes that queued while we were 'in_flight' or 'idle'.
         set({ _hydrationStatus: 'complete' })
         await drainPendingWrites(vendorUuid, get, set)
+      },
+      resetVendorScopedState: () => {
+        set({
+          services: [],
+          _vendorUuid: null,
+          _optionDbIdCache: {},
+          _subOptionDbIdCache: {},
+          _migrationDone: false,
+          _hydrationStatus: 'idle',
+          _pendingWrites: [],
+        })
       },
     }),
     {
