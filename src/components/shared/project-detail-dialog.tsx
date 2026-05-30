@@ -865,6 +865,19 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                           )
                         })()}
                         {(() => {
+                          // Gate Phase-C standalone Permit card behind absence of project-level
+                          // permit snapshot. When pd.projectPermit (or legacy roofPermit) is set
+                          // the PermitDisplayRow above already surfaces permit context as a card,
+                          // so this Fee-only card was rendering as a second permit card on screen
+                          // (Rodolfo file_401 ref: admin/workflow Donald roofing lead-detail had
+                          // both "Yes — permit will be pulled" + "Permit Fee $X" stacked).
+                          // Keep this card for windows_doors and any service without a
+                          // project-level permit snapshot, so the catalog Permit Fee still
+                          // surfaces in those flows.
+                          const hasProjectPermit =
+                            !!selectedItem.project_data?.projectPermit ||
+                            !!(selectedItem.project_data?.item as any)?.roofPermit
+                          if (hasProjectPermit) return null
                           const permitLine = lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
                           const catalogPrice = getVendorPrice(pd.item.serviceId, 'permit')
                           const hasCatalog = catalogPrice > 0
