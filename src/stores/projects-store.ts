@@ -442,11 +442,26 @@ export const useProjectsStore = create<ProjectsState>()(
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
 
-        // 3. Merge: Supabase wins on conflict by id; local-only rows kept.
+        // 3. Merge: Supabase wins on conflict by id; local-only rows kept
+        // ONLY for roles that legitimately author sentProjects locally
+        // (homeowner via vendor-compare optimistic-write; admin = full
+        // substrate access + back-compat). For role='vendor' / 'account_rep'
+        // substrate is canonical-truth — vendors don't author sentProjects
+        // (homeowners send them via vendor-compare, substrate-write is the
+        // canonical path), so any LS-only-not-in-substrate carry-forward
+        // is by-definition stale from a prior demo session. Pre-fix,
+        // Rod-vendor (3e0821aa) saw 3 cards on /vendor/leads (1 real Donald
+        // + 2 stale "Demo Homeowner" L-6D58 / L-A826 from prior demo-Vendor
+        // session) — bundle-byte-grep (helios) ZERO HITS on Demo-Homeowner /
+        // L-6D58 / L-A826 / address-parts + substrate-axis-probe (hephaestus)
+        // confirmed vendor_id=3e0821aa has 4 Donald rows ZERO Demo Homeowner,
+        // collapsing class to LS-persist-carry-forward at this merge.
         set((state) => {
+          const localCarryForward =
+            role === 'vendor' || role === 'account_rep' ? [] : state.sentProjects
           const seen = new Set<string>()
           const merged: SentProject[] = []
-          for (const p of [...dbProjects, ...state.sentProjects]) {
+          for (const p of [...dbProjects, ...localCarryForward]) {
             if (!seen.has(p.id)) { seen.add(p.id); merged.push(dbById.get(p.id) ?? p) }
           }
           const newAssignedRep: Record<string, VendorRep> = { ...state.assignedRepByLead }
