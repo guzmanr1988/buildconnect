@@ -228,6 +228,11 @@ export function AuthBootstrap() {
         // Reset catalog to bundled fallback so a subsequent unauthed load
         // doesn't show stale server data from the previous session.
         useCatalogStore.getState().resetToBundled()
+        // Arc-32 W3 follow-up — clear vendor-scoped state so a different
+        // vendor signing in on the same browser session doesn't inherit
+        // the prior vendor's _pendingWrites (which would otherwise drain
+        // under the new vendor_id on hydrate, leaking prices cross-vendor).
+        useVendorCatalogStore.getState().resetVendorScopedState()
         return
       }
       // INITIAL_SESSION with null session arrives on every page load for
