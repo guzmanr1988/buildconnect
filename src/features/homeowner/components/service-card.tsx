@@ -61,7 +61,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         'dark:hover:shadow-black/20 dark:hover:border-white/[0.08]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
         isExpanded && 'shadow-lg shadow-primary/[0.06] border-primary/25 dark:border-primary/30 ring-1 ring-primary/10',
-        isDraft && 'opacity-45 pointer-events-none',
+        isDraft && 'pointer-events-none',
       )}
     >
       <div className="flex items-start justify-between mb-3">
@@ -75,7 +75,11 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         >
           <Icon className="h-5 w-5 text-white" strokeWidth={1.8} />
         </motion.div>
-        {service.badge && (
+        {isDraft ? (
+          <span className="inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-semibold leading-none bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+            Coming Soon
+          </span>
+        ) : service.badge ? (
           <span
             className={cn(
               'inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-semibold leading-none',
@@ -84,7 +88,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
           >
             {service.badge}
           </span>
-        )}
+        ) : null}
       </div>
 
       <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug truncate">
