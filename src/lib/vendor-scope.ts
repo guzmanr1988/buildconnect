@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { deriveInitials } from '@/lib/initials'
-import type { Vendor } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { Profile, Vendor } from '@/types'
 
 /**
  * Set of mock-vendor ids that MOCK_LEADS + MOCK_CLOSED_SALES fixtures are
@@ -158,64 +159,95 @@ export function useVendorScope(): {
  * predicates intentionally diverge (dashboard permissive, lead-inbox
  * strict) so only the vendor resolution is deep-shared.
  */
+// Synthesize a Vendor object from a vendor-role Profile. Shared by both
+// the authed-vendor self-resolve path and the account_rep parent-vendor
+// resolve path so both surfaces show identical vendor shape.
+function profileToVendor(p: Profile): Vendor {
+  return {
+    id: p.id,
+    email: p.email,
+    name: p.name,
+    role: 'vendor',
+    phone: p.phone ?? '',
+    address: p.address ?? '',
+    company: p.company ?? p.name,
+    avatar_color: p.avatar_color ?? '#3b82f6',
+    initials: p.initials ?? deriveInitials(p.name),
+    status: p.status ?? 'active',
+    created_at: p.created_at ?? new Date().toISOString(),
+    service_categories: [],
+    rating: 0,
+    response_time: '—',
+    verified: false,
+    financing_available: false,
+    total_reviews: 0,
+    // Ship #290 — Rodolfo-direct: platform-default commission for new
+    // vendor signups is 10%. Admin override via setVendorCommission
+    // takes precedence per existing vendorCommissionOverrides resolution.
+    commission_pct: 10,
+  }
+}
+
+// Ship #333 Phase B — fetch parent-vendor profile for an authed account_rep
+// via the account_rep_for_vendor_id FK. Returns null while loading, when no
+// FK is set, or when the parent profile can't be found (suspended/deleted/
+// RLS-denied). Dashboard renders empty-state until the fetch resolves —
+// same shape as Phase A's synchronous null-return so consumers don't need
+// to differentiate loading vs unset.
+function useRepParentVendor(): Vendor | null {
+  const profile = useAuthStore((s) => s.profile)
+  const parentId =
+    profile?.role === 'account_rep' ? profile.account_rep_for_vendor_id : undefined
+  const [parent, setParent] = useState<Vendor | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setParent(null)
+    if (!parentId) return
+    void (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', parentId)
+        .eq('role', 'vendor')
+        .maybeSingle()
+      if (cancelled) return
+      if (error) {
+        console.error('[vendor-scope] rep parent-vendor fetch failed:', error.message)
+        return
+      }
+      if (!data) return
+      setParent(profileToVendor(data as Profile))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [parentId])
+  return parent
+}
+
 export function useResolvedVendor(): Vendor | null {
   const { mockVendorId } = useVendorScope()
   const profile = useAuthStore((s) => s.profile)
+  // Phase B — fetched parent vendor for account_rep role. Called
+  // unconditionally per Rules of Hooks; internal gate skips fetch when
+  // profile.role !== 'account_rep' or parent FK unset.
+  const repParentVendor = useRepParentVendor()
   return useMemo(() => {
     if (mockVendorId) {
       const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
       if (m) return m
     }
     if (!profile) return null
-    // Ship #333 Phase A — account_rep auth-resolution. Reps resolve to
-    // their PARENT vendor's profile via account_rep_for_vendor_id FK.
-    // Per banked CHAIN IS GOD: this is auth-resolution-layer (which
-    // Vendor profile to use), NOT chain modification (chain consumes
-    // Vendor type the same way regardless of resolution-path). Adds-to-
-    // chain (new resolution path) without changing how chain works.
-    // Real Supabase fetch of parent profile lands in Phase B; for Phase
-    // A the synthesized vendor-shape returns null when parent FK is
-    // unset so reps without a parent vendor see empty-state rather than
-    // crash.
+    // Ship #333 Phase B — account_rep resolves to PARENT vendor's profile
+    // via account_rep_for_vendor_id FK. Returns the fetched parent (or null
+    // while loading / FK unset / parent missing). Per banked CHAIN IS GOD:
+    // this is auth-resolution-layer (which Vendor profile to use), NOT
+    // chain modification (chain consumes Vendor type the same way
+    // regardless of resolution path).
     if (profile.role === 'account_rep') {
-      // Phase A: parent-vendor resolution requires fetching parent
-      // profile. Real fetch lands in Phase B. For now return null so
-      // dashboard renders empty-state instead of synth-from-rep-profile
-      // (which would give wrong company / commission_pct). Reps who
-      // log in pre-Phase-B see auth-success + empty-vendor-context;
-      // navigation works but lead-data unscoped until Phase B wires
-      // the parent fetch.
-      return null
+      return repParentVendor
     }
     if (profile.role !== 'vendor') return null
-    return {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      role: 'vendor',
-      phone: profile.phone ?? '',
-      address: profile.address ?? '',
-      company: profile.company ?? profile.name,
-      avatar_color: profile.avatar_color ?? '#3b82f6',
-      initials: profile.initials ?? deriveInitials(profile.name),
-      status: profile.status ?? 'active',
-      created_at: profile.created_at ?? new Date().toISOString(),
-      service_categories: [],
-      rating: 0,
-      response_time: '—',
-      verified: false,
-      financing_available: false,
-      total_reviews: 0,
-      // Ship #290 — Rodolfo-direct: platform-default commission for
-      // new vendor signups is 10%. Admin override via setVendorCommission
-      // (#286-#289 Save Changes flow) takes precedence per existing
-      // vendorCommissionOverrides resolution. Pre-#290 default was 15;
-      // changed to match Rodolfo's "every vendor that signs up the
-      // preset % is 10% unless I go and manually adjust" directive.
-      // MOCK_VENDORS fixtures (v-1..v-5) keep their per-fixture values
-      // per kratos lean — Rodolfo's "signs up" language targets new-
-      // signups, not pre-existing fixtures.
-      commission_pct: 10,
-    }
-  }, [mockVendorId, profile])
+    return profileToVendor(profile)
+  }, [mockVendorId, profile, repParentVendor])
 }
