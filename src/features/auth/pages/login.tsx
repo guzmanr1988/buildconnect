@@ -261,7 +261,7 @@ export function LoginPage() {
             className="flex items-center gap-3"
           >
             <img
-              src="/logo.png"
+              src="/logo-v2.png"
               alt="BuildConnect"
               className="h-10 w-10 rounded-xl object-cover"
             />
@@ -342,7 +342,7 @@ export function LoginPage() {
           {/* Mobile logo */}
           <div className="mb-10 flex items-center gap-2.5 lg:hidden">
             <img
-              src="/logo.png"
+              src="/logo-v2.png"
               alt="BuildConnect"
               className="h-9 w-9 rounded-lg object-cover"
             />

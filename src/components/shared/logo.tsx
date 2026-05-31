@@ -9,7 +9,7 @@ export function Logo({ collapsed, className }: LogoProps) {
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
       <img
-        src="/logo.png"
+        src="/logo-v2.png"
         alt="BuildConnect"
         className="h-9 w-9 rounded-lg object-cover"
       />
