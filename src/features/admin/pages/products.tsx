@@ -1192,7 +1192,7 @@ export default function ProductsAdminPage() {
                     <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
                       <div className="flex flex-wrap gap-2">
                         {service.features.map((f) => (
-                          <Badge key={f} variant="secondary" className="text-xs">
+                          <Badge key={f} variant="outline" className="text-xs bg-primary/5 border-primary/20 text-primary">
                             {f}
                           </Badge>
                         ))}
