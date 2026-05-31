@@ -194,25 +194,30 @@ function profileToVendor(p: Profile): Vendor {
 // RLS-denied). Dashboard renders empty-state until the fetch resolves —
 // same shape as Phase A's synchronous null-return so consumers don't need
 // to differentiate loading vs unset.
+// Phase B-RPC — calls the substrate-side SECURITY DEFINER function
+// get_my_assigned_vendor() rather than SELECTing profiles directly, because
+// the profiles RLS policy set (migration 010) has no account_rep -> assigned-
+// vendor SELECT carve-out and a permissive table-level policy would over-
+// expose vendor PII beyond the single assigned parent. The RPC scopes return
+// to ONLY the calling rep's account_rep_for_vendor_id row via subquery —
+// matches the auth_role() SECURITY DEFINER pattern already in migration 010.
+// Hook is called unconditionally; internal `role !== 'account_rep'` gate
+// skips the RPC otherwise.
 function useRepParentVendor(): Vendor | null {
   const profile = useAuthStore((s) => s.profile)
-  const parentId =
-    profile?.role === 'account_rep' ? profile.account_rep_for_vendor_id : undefined
+  const isRep = profile?.role === 'account_rep'
   const [parent, setParent] = useState<Vendor | null>(null)
   useEffect(() => {
     let cancelled = false
     setParent(null)
-    if (!parentId) return
+    if (!isRep) return
     void (async () => {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', parentId)
-        .eq('role', 'vendor')
+        .rpc('get_my_assigned_vendor')
         .maybeSingle()
       if (cancelled) return
       if (error) {
-        console.error('[vendor-scope] rep parent-vendor fetch failed:', error.message)
+        console.error('[vendor-scope] rep parent-vendor RPC failed:', error.message)
         return
       }
       if (!data) return
@@ -221,7 +226,7 @@ function useRepParentVendor(): Vendor | null {
     return () => {
       cancelled = true
     }
-  }, [parentId])
+  }, [isRep])
   return parent
 }
 
