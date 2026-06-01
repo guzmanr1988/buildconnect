@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-vite-env.mjs",
     "build": "tsc -b && vite build",
+    "check:vite-env": "node scripts/check-vite-env.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts"
