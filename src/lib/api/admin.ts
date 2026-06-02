@@ -1,14 +1,15 @@
 import { supabase } from '@/lib/supabase'
+import { PROFILE_SELECT } from '@/lib/auth'
 import type { Transaction, AppSettings, Bug, Profile, BankAccount } from '@/types'
 
 export async function getHomeowners() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_SELECT)
     .eq('role', 'homeowner')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as Profile[]
+  return data as unknown as Profile[]
 }
 
 export async function getAllBankAccounts() {

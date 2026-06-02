@@ -4,6 +4,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { deriveInitials } from '@/lib/initials'
 import { supabase } from '@/lib/supabase'
+import { PROFILE_SELECT } from '@/lib/auth'
 import type { Profile, Vendor } from '@/types'
 
 /**
@@ -212,8 +213,16 @@ function useRepParentVendor(): Vendor | null {
     setParent(null)
     if (!isRep) return
     void (async () => {
+      // PR-#XXX (slow-login fix) — explicit projection on the RPC
+      // response so the fat id_document_url column (one of the 24 RPC
+      // return columns) doesn't ride along. If any vendor row ever
+      // gets id_document_url populated, the rep dashboard would pay
+      // the same multi-MB transfer the homeowner getProfile path
+      // suffered from. PostgREST honors column projection on
+      // table-returning RPCs.
       const { data, error } = await supabase
         .rpc('get_my_assigned_vendor')
+        .select(PROFILE_SELECT)
         .maybeSingle()
       if (cancelled) return
       if (error) {
@@ -221,7 +230,7 @@ function useRepParentVendor(): Vendor | null {
         return
       }
       if (!data) return
-      setParent(profileToVendor(data as Profile))
+      setParent(profileToVendor(data as unknown as Profile))
     })()
     return () => {
       cancelled = true

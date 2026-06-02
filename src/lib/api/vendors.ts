@@ -1,25 +1,26 @@
 import { supabase } from '@/lib/supabase'
+import { PROFILE_SELECT } from '@/lib/auth'
 import { geocodeVendorAddress } from '@/lib/api/geocode'
 import type { Vendor } from '@/types'
 
 export async function getVendors() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_SELECT)
     .eq('role', 'vendor')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as Vendor[]
+  return data as unknown as Vendor[]
 }
 
 export async function getVendorProfile(id: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_SELECT)
     .eq('id', id)
     .single()
   if (error) throw error
-  return data as Vendor
+  return data as unknown as Vendor
 }
 
 export async function updateVendor(id: string, updates: Partial<Vendor>) {

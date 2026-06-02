@@ -47,15 +47,70 @@ export async function getSession() {
   return data.session
 }
 
+// PR-#XXX (2026-06-02 slow-login fix) — explicit projection excluding
+// id_document_url. The id_document_url column can carry a ~4.4MB base64
+// data URL (today: Donald homeowner-seed), and select('*') against any
+// row populated like that drove p50 login getProfile to 2233ms and p95
+// to 22785ms (hephaestus measurement). The fat column is rendered only
+// in homeowner /documents and read existence-only in cart /
+// booking-confirmation submit-gate, so we lazy-fetch it via
+// getProfileIdDocument and patch the store after the hot path
+// completes.
+const PROFILE_SELECT_COLUMNS = [
+  'id',
+  'email',
+  'name',
+  'role',
+  'account_rep_for_vendor_id',
+  'phone',
+  'address',
+  'latitude',
+  'longitude',
+  'additional_addresses',
+  'company',
+  'avatar_color',
+  'avatar_url',
+  'initials',
+  'status',
+  'created_at',
+  'service_categories',
+  'contractor_licenses',
+  'noncircumvention_agreement_signed_at',
+  'noncircumvention_agreement_signed_name',
+  'noncircumvention_agreement_version',
+  'noncircumvention_agreement_text_snapshot',
+  'noncircumvention_agreement_signature_metadata',
+].join(', ')
+
 export async function getProfile(userId: string): Promise<Profile> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_SELECT_COLUMNS)
     .eq('id', userId)
     .single()
   if (error) throw error
-  return data as Profile
+  return data as unknown as Profile
 }
+
+// Lazy id_document_url fetch. AuthBootstrap fires this after the main
+// getProfile resolves so the fat column doesn't block the login hot
+// path. Returns undefined when the row has no uploaded ID (NULL column).
+export async function getProfileIdDocument(userId: string): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id_document_url')
+    .eq('id', userId)
+    .single()
+  if (error) throw error
+  const value = (data as { id_document_url: string | null } | null)?.id_document_url
+  return value ?? undefined
+}
+
+// Explicit projection — exported for other profile-loading call sites
+// (admin homeowner list, vendor list, rep parent-vendor RPC). Keep this
+// in sync with PROFILE_SELECT_COLUMNS above; any new profiles column
+// the FE consumes should be added here, except id_document_url.
+export const PROFILE_SELECT = PROFILE_SELECT_COLUMNS
 
 /*
  * Ship #182 (Rodolfo-direct 2026-04-21) — map Supabase auth errors to

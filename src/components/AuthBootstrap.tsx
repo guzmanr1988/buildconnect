@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
-import { getProfile } from '@/lib/auth'
+import { getProfile, getProfileIdDocument } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
@@ -90,6 +90,25 @@ export function AuthBootstrap() {
         }
         store.setProfile(merged)
         diagLog('AuthBootstrap.hydrate:setProfile-called', { merged_role: merged.role })
+        // PR-#XXX (slow-login fix) — id_document_url is lazy-loaded after
+        // the hot path so the fat ~4.4MB base64 doesn't block login. Only
+        // homeowners actually upload IDs; vendor / account_rep / admin
+        // skip the second round-trip. Failure is swallowed — cart +
+        // booking gates retry against the in-store value, and the next
+        // visibility-refetch will try again.
+        if (merged.role === 'homeowner') {
+          void getProfileIdDocument(userId)
+            .then((idDocumentUrl) => {
+              if (!mounted) return
+              const current = useAuthStore.getState().profile
+              if (!current || current.id !== merged.id) return
+              if (current.id_document_url === idDocumentUrl) return
+              useAuthStore.getState().setProfile({ ...current, id_document_url: idDocumentUrl })
+            })
+            .catch((err) => {
+              console.error('[AuthBootstrap] getProfileIdDocument failed:', err)
+            })
+        }
         // Catalog is authed-read-only — pull fresh data now that the session is live.
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
@@ -193,6 +212,21 @@ export function AuthBootstrap() {
           merged.noncircumvention_agreement_signature_metadata = prior.noncircumvention_agreement_signature_metadata
         }
         useAuthStore.getState().setProfile(merged)
+        // Lazy id_document_url refetch on visibility-refetch path too,
+        // matching the hydrate() path. Homeowner-only.
+        if (merged.role === 'homeowner') {
+          void getProfileIdDocument(sessionUserId)
+            .then((idDocumentUrl) => {
+              if (!mounted) return
+              const current = useAuthStore.getState().profile
+              if (!current || current.id !== merged.id) return
+              if (current.id_document_url === idDocumentUrl) return
+              useAuthStore.getState().setProfile({ ...current, id_document_url: idDocumentUrl })
+            })
+            .catch((err) => {
+              console.error('[AuthBootstrap] getProfileIdDocument failed:', err)
+            })
+        }
       } catch (err) {
         // Silent — stale profile remains; next token-refresh hydrate will retry.
         console.error('[AuthBootstrap] refetchProfileIfStale failed:', err)
