@@ -1358,7 +1358,8 @@ export function ServiceDetailPage() {
                   {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
                     const isCardTile = isTileModeGroup(serviceId, group.id)
-                    const TileIcon = isCardTile
+                    const isImageTile = isCardTile && !!option.image_url
+                    const TileIcon = isCardTile && !isImageTile
                       ? SERVICE_TILE_ICONS[serviceId ?? '']?.[group.id]?.[option.id]
                       : undefined
                     // PR — roofing material primary lock. Once a non-flat material is
@@ -1449,28 +1450,44 @@ export function ServiceDetailPage() {
                     // PR-#462 — per-option number-input rendering. Vendor/admin
                     // flips an option's inputType to 'number-input' (catalog
                     // column, mapped through service-catalog.ts) and the
-                    // configurator surfaces an empty number Input instead of a
-                    // chip. Quantity writes to selectionQuantities[option.id];
-                    // the option is auto-toggled into `selected` when qty > 0
-                    // so the existing prunedQuantities loop (L2576) and
-                    // pricing.ts requiresQuantity branch pick it up. Mirrors
-                    // install_windows mechanism (requiresQuantity flag) — no
-                    // per-option pricing path, reuses qty × basePrice.
-                    if (option.inputType === 'number-input') {
+                    // configurator surfaces an empty number Input bound to
+                    // selectionQuantities[option.id]; the option is auto-toggled
+                    // into `selected` when qty > 0 so the existing
+                    // prunedQuantities loop (L2576) and pricing.ts
+                    // requiresQuantity branch pick it up. Mirrors install_windows
+                    // mechanism (requiresQuantity flag) — no per-option pricing
+                    // path, reuses qty × basePrice.
+                    //
+                    // Combo path (image_url + inputType=number-input): AUGMENT
+                    // — render the image tile chip THEN the Input below, so the
+                    // homeowner sees the visual sample AND enters a quantity
+                    // (e.g. wall-paneling linear-ft). Plain number-input (no
+                    // image_url) still REPLACES the chip with the Input row.
+                    const isNumberInput = option.inputType === 'number-input'
+                    const isImageNumberInput = isNumberInput && !!option.image_url
+                    const renderNumberInputRow = () => {
                       const qty = selectionQuantities[option.id]
+                      const unitSuffix =
+                        option.priceUnit === 'linear_ft'
+                          ? 'lin ft'
+                          : option.priceUnit === 'sqft'
+                            ? 'sq ft'
+                            : option.priceUnit === 'square'
+                              ? 'sq'
+                              : null
                       return (
                         <div
-                          key={option.id}
-                          data-option-id={option.id}
-                          data-option-group={group.id}
-                          data-option-input-type="number-input"
-                          className="flex items-center gap-2"
+                          data-option-input-row={option.id}
+                          className="flex items-center gap-2 mt-2"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           <label
                             htmlFor={`option-number-input-${option.id}`}
-                            className="text-sm font-medium text-foreground"
+                            className="text-xs font-medium text-muted-foreground"
                           >
-                            {optionLabel}
+                            {unitSuffix ?? 'Qty'}
                           </label>
                           <Input
                             id={`option-number-input-${option.id}`}
@@ -1505,9 +1522,27 @@ export function ServiceDetailPage() {
                         </div>
                       )
                     }
-                    return (
+                    if (isNumberInput && !isImageNumberInput) {
+                      return (
+                        <div
+                          key={option.id}
+                          data-option-id={option.id}
+                          data-option-group={group.id}
+                          data-option-input-type="number-input"
+                          className="flex items-center gap-2"
+                        >
+                          <label
+                            htmlFor={`option-number-input-${option.id}`}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            {optionLabel}
+                          </label>
+                          {renderNumberInputRow()}
+                        </div>
+                      )
+                    }
+                    const chipButton = (
                       <button
-                        key={option.id}
                         type="button"
                         data-chip-id={option.id}
                         data-chip-group={group.id}
@@ -1755,6 +1790,14 @@ export function ServiceDetailPage() {
                             )}
                           </div>
                         )}
+                        {isImageTile && (
+                          <img
+                            src={option.image_url}
+                            alt={option.label || 'Design'}
+                            loading="lazy"
+                            className="w-full aspect-video rounded-lg object-cover bg-muted"
+                          />
+                        )}
                         {!isCardTile && group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
@@ -1770,7 +1813,9 @@ export function ServiceDetailPage() {
                         })()}
                         {isCardTile ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            {optionLabel && optionLabel.trim() !== '' && (
+                              <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            )}
                             {option.description ? (
                               <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
                             ) : null}
@@ -1948,6 +1993,20 @@ export function ServiceDetailPage() {
                         )}
                       </button>
                     )
+                    if (isImageNumberInput) {
+                      return (
+                        <div
+                          key={option.id}
+                          data-option-wrapper={option.id}
+                          data-option-input-type="image-number-input"
+                          className="flex flex-col"
+                        >
+                          {chipButton}
+                          {renderNumberInputRow()}
+                        </div>
+                      )
+                    }
+                    return <div key={option.id} className="contents">{chipButton}</div>
                   })}
                 </div>
                 {/* Stone-scoped Linear feet input (Kitchen vertical only).

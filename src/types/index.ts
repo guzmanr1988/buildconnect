@@ -322,8 +322,15 @@ export interface ServiceOption {
   // option as a togglable chip/tile under its group; 'number-input' renders
   // an empty number Input bound to selectionQuantities[option.id] and prices
   // line = quantity × basePrice (mirrors install_windows requiresQuantity
-  // path). Absent = tile-select.
+  // path). Absent = tile-select. When BOTH image_url AND
+  // inputType='number-input' are set, service-detail.tsx augments the image
+  // tile with the Input below (combo path) instead of replacing the tile.
   inputType?: 'tile-select' | 'number-input'
+  // Image-tile mode (wall_paneling et al). When set, service-detail.tsx
+  // renders the option as an image-fill tile; an empty `label` suppresses
+  // the text caption so the tile is purely image. Vendor names + prices
+  // come later via on-platform edits — initial seed ships nameless.
+  image_url?: string
 }
 
 export interface OptionGroup {

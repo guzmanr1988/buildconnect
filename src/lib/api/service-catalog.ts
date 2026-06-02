@@ -81,6 +81,7 @@ type DbOption = {
   description: string | null
   price_unit: string | null
   input_type: string | null
+  image_url: string | null
   sort_order: number
   sub_groups: DbSubGroup[]
 }
@@ -103,6 +104,7 @@ type DbSubOption = {
   description: string | null
   price_unit: string | null
   input_type: string | null
+  image_url: string | null
   sort_order: number
 }
 
@@ -129,6 +131,7 @@ function subOptionFromRow(r: DbSubOption): ServiceOption {
     ...(r.description ? { description: r.description } : {}),
     ...(priceUnit ? { priceUnit } : {}),
     ...(inputType ? { inputType } : {}),
+    ...(r.image_url ? { image_url: r.image_url } : {}),
   }
 }
 
@@ -159,6 +162,7 @@ function optionFromRow(r: DbOption): ServiceOption {
     ...(r.description ? { description: r.description } : {}),
     ...(priceUnit ? { priceUnit } : {}),
     ...(inputType ? { inputType } : {}),
+    ...(r.image_url ? { image_url: r.image_url } : {}),
     ...(subGroups.length > 0 ? { subGroups } : {}),
   }
 }
