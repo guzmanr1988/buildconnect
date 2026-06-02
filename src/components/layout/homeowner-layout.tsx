@@ -28,7 +28,12 @@ const navItems = [
 ]
 
 export function HomeownerLayout() {
-  const isMobile = useMobile()
+  // 1024 (lg) — desktop nav has 6 links + logo + 4 controls (bell/help/theme/
+  // avatar). Below 1024 the row crowds and links collide with the wordmark on
+  // tablet portrait + every mobile-landscape (iPhone 14 844, Pixel 915, Pro Max
+  // 932 all <1024). Push those widths into the existing mobile shell (slim top
+  // bar + bottom nav) instead of authoring a third layout.
+  const isMobile = useMobile(1024)
   const profile = useAuthStore((s) => s.profile)
   const location = useLocation()
   const navigate = useNavigate()
