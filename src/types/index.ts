@@ -318,6 +318,12 @@ export interface ServiceOption {
   // option-metadata.ts when set; map remains as the fallback for older
   // persisted rows that don't carry the field yet.
   priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft'
+  // Input mode for the configurator: 'tile-select' (default) renders the
+  // option as a togglable chip/tile under its group; 'number-input' renders
+  // an empty number Input bound to selectionQuantities[option.id] and prices
+  // line = quantity × basePrice (mirrors install_windows requiresQuantity
+  // path). Absent = tile-select.
+  inputType?: 'tile-select' | 'number-input'
 }
 
 export interface OptionGroup {

@@ -160,14 +160,32 @@ type GroupFormData = {
 const emptyGroupForm: GroupFormData = { id: '', label: '', description: '', required: true, type: 'single' }
 
 type PriceUnit = 'flat' | 'square' | 'sqft' | 'linear_ft'
-type OptionFormData = { id: string; label: string; description: string; priceUnit: PriceUnit }
-const emptyOptionForm: OptionFormData = { id: '', label: '', description: '', priceUnit: 'flat' }
+type InputType = 'tile-select' | 'number-input'
+type OptionFormData = {
+  id: string
+  label: string
+  description: string
+  priceUnit: PriceUnit
+  inputType: InputType
+}
+const emptyOptionForm: OptionFormData = {
+  id: '',
+  label: '',
+  description: '',
+  priceUnit: 'flat',
+  inputType: 'tile-select',
+}
 
 const PRICE_UNIT_OPTIONS: Array<{ value: PriceUnit; label: string; helper: string }> = [
   { value: 'flat', label: 'Flat ($)', helper: 'Single dollar amount' },
   { value: 'square', label: 'Per Square ($/sq)', helper: '1 square = 100 sqft (roofing)' },
   { value: 'sqft', label: 'Per Sq Ft ($/sqft)', helper: 'Multiplied by measured area' },
   { value: 'linear_ft', label: 'Per Linear Ft ($/lin ft)', helper: 'Multiplied by linear feet' },
+]
+
+const INPUT_TYPE_OPTIONS: Array<{ value: InputType; label: string; helper: string }> = [
+  { value: 'tile-select', label: 'Tile / Chip Select', helper: 'Default — chip or image tile the homeowner picks' },
+  { value: 'number-input', label: 'Number Input', helper: 'Empty number field — price = quantity × base price' },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -680,7 +698,7 @@ export default function ProductsAdminPage() {
   function openEditOption(
     serviceId: string,
     groupId: string,
-    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setOptionContext({ serviceId, groupId })
     setEditingOptionId(opt.id)
@@ -689,6 +707,7 @@ export default function ProductsAdminPage() {
       label: opt.label,
       description: opt.description ?? '',
       priceUnit: opt.priceUnit ?? 'flat',
+      inputType: opt.inputType ?? 'tile-select',
     })
     setOptionDialogOpen(true)
   }
@@ -715,6 +734,7 @@ export default function ProductsAdminPage() {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       } else {
         await addOption(optionContext.serviceId, optionContext.groupId, {
@@ -722,6 +742,7 @@ export default function ProductsAdminPage() {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       }
       setOptionDialogOpen(false)
@@ -858,7 +879,7 @@ export default function ProductsAdminPage() {
     groupId: string,
     optionId: string,
     subGroupId: string,
-    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
     setEditingSubOptionId(subOpt.id)
@@ -867,6 +888,7 @@ export default function ProductsAdminPage() {
       label: subOpt.label,
       description: subOpt.description ?? '',
       priceUnit: subOpt.priceUnit ?? 'flat',
+      inputType: subOpt.inputType ?? 'tile-select',
     })
     setSubOptionDialogOpen(true)
   }
@@ -895,6 +917,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       } else {
@@ -908,6 +931,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       }
@@ -2361,6 +2385,29 @@ export default function ProductsAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {PRICE_UNIT_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{p.label}</span>
+                        <span className="text-xs text-muted-foreground">{p.helper}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Input Type</Label>
+              <Select
+                value={optionForm.inputType}
+                onValueChange={(v) => setOptionForm((f) => ({ ...f, inputType: v as InputType }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    <span>{INPUT_TYPE_OPTIONS.find((p) => p.value === optionForm.inputType)?.label ?? 'Tile / Chip Select'}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {INPUT_TYPE_OPTIONS.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
                       <div className="flex flex-col">
                         <span className="text-sm">{p.label}</span>

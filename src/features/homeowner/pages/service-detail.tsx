@@ -191,7 +191,7 @@ function isTileModeGroup(serviceId: string | undefined, groupId: string): boolea
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
-import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
@@ -1446,6 +1446,65 @@ export function ServiceDetailPage() {
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
                         : roofingAddonSubPickLabel ?? option.label
+                    // PR-#462 — per-option number-input rendering. Vendor/admin
+                    // flips an option's inputType to 'number-input' (catalog
+                    // column, mapped through service-catalog.ts) and the
+                    // configurator surfaces an empty number Input instead of a
+                    // chip. Quantity writes to selectionQuantities[option.id];
+                    // the option is auto-toggled into `selected` when qty > 0
+                    // so the existing prunedQuantities loop (L2576) and
+                    // pricing.ts requiresQuantity branch pick it up. Mirrors
+                    // install_windows mechanism (requiresQuantity flag) — no
+                    // per-option pricing path, reuses qty × basePrice.
+                    if (option.inputType === 'number-input') {
+                      const qty = selectionQuantities[option.id]
+                      return (
+                        <div
+                          key={option.id}
+                          data-option-id={option.id}
+                          data-option-group={group.id}
+                          data-option-input-type="number-input"
+                          className="flex items-center gap-2"
+                        >
+                          <label
+                            htmlFor={`option-number-input-${option.id}`}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            {optionLabel}
+                          </label>
+                          <Input
+                            id={`option-number-input-${option.id}`}
+                            data-testid="option-number-input"
+                            data-option-id={option.id}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            placeholder="0"
+                            disabled={isLocked}
+                            value={qty ?? ''}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              const n = raw === '' ? undefined : Number(raw)
+                              setSelectionQuantities((prev) => {
+                                const next = { ...prev }
+                                if (n === undefined || isNaN(n) || n <= 0) {
+                                  delete next[option.id]
+                                } else {
+                                  next[option.id] = n
+                                }
+                                return next
+                              })
+                              const shouldBeSelected = n !== undefined && !isNaN(n) && n > 0
+                              const isCurrentlySelected = selected.includes(option.id)
+                              if (shouldBeSelected !== isCurrentlySelected) {
+                                handleSelect(group, option.id)
+                              }
+                            }}
+                            className="h-9 w-24"
+                          />
+                        </div>
+                      )
+                    }
                     return (
                       <button
                         key={option.id}
@@ -2575,7 +2634,8 @@ export function ServiceDetailPage() {
               const prunedQuantities: Record<string, number> = {}
               for (const [gid, optIds] of Object.entries(selections)) {
                 for (const oid of optIds) {
-                  if (!getOptionMetadata(oid, serviceId).requiresQuantity) continue
+                  const catOpt = serviceId ? findCatalogOption(services, serviceId, oid) : undefined
+                  if (!getOptionMetadata(oid, serviceId, catOpt).requiresQuantity) continue
                   if (serviceId === 'windows_doors' && oid === 'install_windows') {
                     prunedQuantities[oid] = windowTotal
                   } else if (serviceId === 'windows_doors' && oid === 'install_doors') {
