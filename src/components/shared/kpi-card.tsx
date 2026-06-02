@@ -15,7 +15,7 @@ interface KpiCardProps {
 
 export function KpiCard({ title, value, change, trend, icon: Icon, iconColor, className }: KpiCardProps) {
   return (
-    <Card className={cn('relative overflow-hidden bg-[oklch(0.968_0.020_255)] shadow-sm transition-shadow hover:shadow-md', className)}>
+    <Card className={cn('relative overflow-hidden bg-[oklch(0.968_0.020_255)] dark:bg-[oklch(0.205_0.020_258)] shadow-sm transition-shadow hover:shadow-md', className)}>
       <CardContent className="p-3.5">
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5 min-w-0">
