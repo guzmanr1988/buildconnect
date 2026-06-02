@@ -322,3 +322,25 @@ input[type="number"] {
 .pac-icon {
   display: none;
 }
+
+.goog-te-banner-frame.skiptranslate,
+.goog-te-gadget-icon,
+.goog-te-gadget-simple img,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+body {
+  top: 0 !important;
+}
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+#google_translate_element {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
