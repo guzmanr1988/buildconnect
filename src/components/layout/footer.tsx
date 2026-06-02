@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, Phone } from 'lucide-react'
 import { Logo } from '@/components/shared/logo'
@@ -8,6 +8,23 @@ import { cn } from '@/lib/utils'
 
 interface FooterProps {
   className?: string
+}
+
+type Lang = 'en' | 'es'
+
+function readGoogtransLang(): Lang {
+  if (typeof document === 'undefined') return 'en'
+  const m = document.cookie.match(/googtrans=\/(?:en|auto)\/(en|es)/)
+  return m && m[1] === 'es' ? 'es' : 'en'
+}
+
+function setGoogtransCookie(target: Lang) {
+  const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString()
+  document.cookie = `googtrans=/en/${target}; path=/; expires=${expires}`
+  const host = window.location.hostname.replace(/^www\./, '')
+  if (host && !/^\d+\.\d+\.\d+\.\d+$/.test(host) && host !== 'localhost') {
+    document.cookie = `googtrans=/en/${target}; path=/; domain=.${host}; expires=${expires}`
+  }
 }
 
 // Inline SVG for brand marks — lucide-react deliberately excludes brand
@@ -71,6 +88,7 @@ function LinkedinIcon({ className }: { className?: string }) {
 export function Footer({ className }: FooterProps) {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [lang, setLang] = useState<Lang>(() => readGoogtransLang())
 
   const handleSubscribe = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -78,6 +96,36 @@ export function Footer({ className }: FooterProps) {
     setSubmitted(true)
     setEmail('')
     window.setTimeout(() => setSubmitted(false), 4000)
+  }
+
+  // Inject Google Translate widget once per page-load.
+  // The hidden #google_translate_element host is rendered in the footer below.
+  // Language switch = set googtrans cookie + reload — most reliable cross-page
+  // re-translation path. Cookie persists across navigation (path=/, +1yr).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (document.getElementById('gtranslate-loader-script')) return
+    ;(window as unknown as { googleTranslateElementInit?: () => void }).googleTranslateElementInit = () => {
+      const g = (window as unknown as { google?: { translate?: { TranslateElement?: new (cfg: object, el: string) => unknown } } }).google
+      if (g?.translate?.TranslateElement) {
+        new g.translate.TranslateElement(
+          { pageLanguage: 'en', includedLanguages: 'en,es', autoDisplay: false },
+          'google_translate_element',
+        )
+      }
+    }
+    const script = document.createElement('script')
+    script.id = 'gtranslate-loader-script'
+    script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit'
+    script.async = true
+    document.body.appendChild(script)
+  }, [])
+
+  const switchLang = (target: Lang) => {
+    if (target === lang) return
+    setGoogtransCookie(target)
+    setLang(target)
+    window.location.reload()
   }
 
   return (
@@ -178,20 +226,7 @@ export function Footer({ className }: FooterProps) {
                 </ul>
               </div>
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
-                  For Vendors
-                </p>
                 <ul className="space-y-2 text-muted-foreground">
-                  <li>
-                    <a href="#" className="hover:text-foreground">
-                      Become a Pro
-                    </a>
-                  </li>
-                  <li>
-                    <Link to="/login" className="hover:text-foreground">
-                      Vendor Login
-                    </Link>
-                  </li>
                   <li>
                     <a href="#" className="hover:text-foreground">
                       Vendor Support
@@ -266,26 +301,41 @@ export function Footer({ className }: FooterProps) {
               </p>
               <div
                 role="group"
-                aria-label="Language selector (coming soon)"
+                aria-label="Language selector"
                 className="inline-flex rounded-md border bg-background p-0.5"
               >
                 <button
                   type="button"
-                  disabled
-                  aria-pressed="true"
-                  className="rounded px-3 py-1 text-xs font-medium bg-muted text-foreground"
+                  onClick={() => switchLang('en')}
+                  aria-pressed={lang === 'en'}
+                  className={cn(
+                    'rounded px-3 py-1 text-xs font-medium transition-colors notranslate',
+                    lang === 'en'
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
-                  EN
+                  English
                 </button>
                 <button
                   type="button"
-                  disabled
-                  aria-pressed="false"
-                  className="rounded px-3 py-1 text-xs font-medium text-muted-foreground"
+                  onClick={() => switchLang('es')}
+                  aria-pressed={lang === 'es'}
+                  className={cn(
+                    'rounded px-3 py-1 text-xs font-medium transition-colors notranslate',
+                    lang === 'es'
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
-                  ES
+                  Spanish
                 </button>
               </div>
+              <div
+                id="google_translate_element"
+                aria-hidden="true"
+                className="sr-only"
+              />
             </div>
           </div>
         </div>
