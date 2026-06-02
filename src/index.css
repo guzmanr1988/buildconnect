@@ -323,15 +323,38 @@ input[type="number"] {
   display: none;
 }
 
+/* Google Translate — strip all default chrome.
+   We drive translation via our own English/Spanish footer buttons +
+   googtrans cookie, never via GT's UI. Hide:
+   - Top "Translated to: ... / Show original / Options" banner (iframe.skiptranslate)
+   - Default GT widget gadget + icon + image
+   - Hover tooltips + balloon popups
+   - "goog-gt-tt" inline-text popover
+   Plus reset body { top: 40px } which GT injects to make room
+   for its banner — without the reset, removing the banner leaves
+   a blank 40px gap at the top of the page. */
+.goog-te-banner-frame,
 .goog-te-banner-frame.skiptranslate,
+iframe.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-te-gadget,
 .goog-te-gadget-icon,
+.goog-te-gadget-simple,
 .goog-te-gadget-simple img,
+.goog-te-balloon-frame,
 .goog-tooltip,
-.goog-tooltip:hover {
+.goog-tooltip:hover,
+#goog-gt-tt,
+.goog-te-spinner-pos {
   display: none !important;
+  visibility: hidden !important;
 }
 body {
   top: 0 !important;
+  position: static !important;
+}
+html {
+  margin-top: 0 !important;
 }
 .goog-text-highlight {
   background-color: transparent !important;
@@ -340,6 +363,7 @@ body {
 #google_translate_element {
   position: absolute !important;
   left: -10000px !important;
+  top: -10000px !important;
   width: 1px !important;
   height: 1px !important;
   overflow: hidden !important;
