@@ -92,12 +92,12 @@ export function Footer({ className }: FooterProps) {
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <a
-                  href="tel:+13059427955"
+                  href="tel:+13057249369"
                   className="flex items-start gap-2 hover:text-foreground"
                 >
                   <Phone className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    <span className="block font-medium text-foreground">(305) 942-7955</span>
+                    <span className="block font-medium text-foreground">(305) 724-9369</span>
                     <span className="block text-xs">Mon-Sun 9am-8pm ET</span>
                   </span>
                 </a>
