@@ -1358,7 +1358,8 @@ export function ServiceDetailPage() {
                   {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
                     const isCardTile = isTileModeGroup(serviceId, group.id)
-                    const TileIcon = isCardTile
+                    const isImageTile = isCardTile && !!option.image_url
+                    const TileIcon = isCardTile && !isImageTile
                       ? SERVICE_TILE_ICONS[serviceId ?? '']?.[group.id]?.[option.id]
                       : undefined
                     // PR — roofing material primary lock. Once a non-flat material is
@@ -1696,6 +1697,14 @@ export function ServiceDetailPage() {
                             )}
                           </div>
                         )}
+                        {isImageTile && (
+                          <img
+                            src={option.image_url}
+                            alt={option.label || 'Design'}
+                            loading="lazy"
+                            className="w-full aspect-video rounded-lg object-cover bg-muted"
+                          />
+                        )}
                         {!isCardTile && group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
@@ -1711,7 +1720,9 @@ export function ServiceDetailPage() {
                         })()}
                         {isCardTile ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            {optionLabel && optionLabel.trim() !== '' && (
+                              <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            )}
                             {option.description ? (
                               <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
                             ) : null}
