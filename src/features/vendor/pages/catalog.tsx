@@ -507,7 +507,7 @@ function CatalogGroupRenderer({
     (o) => !(o.subGroups && o.subGroups.length > 0)
   )
   const containerClass = hasLeafOptions
-    ? 'rounded-lg border border-foreground/10 bg-[oklch(0.905_0.012_255)] p-3 shadow-md'
+    ? 'rounded-lg border border-foreground/10 bg-[oklch(0.905_0.012_255)] dark:bg-[oklch(0.180_0.012_258)] p-3 shadow-md'
     : ''
   const labelClass =
     depth === 0
