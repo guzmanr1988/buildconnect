@@ -86,11 +86,21 @@ const CITY_OPTIONS: CityOption[] = [
   { key: 'doral',           label: 'Doral',                   pdfPath: '/permits/city-permit/doral.pdf',           portalUrl: 'https://www.cityofdoral.com/government/departments/building' },
   { key: 'cutler-bay',      label: 'Cutler Bay',              pdfPath: '/permits/city-permit/cutler-bay.pdf',      portalUrl: 'https://www.cutlerbay-fl.gov/departments/building' },
   { key: 'homestead',       label: 'Homestead',               pdfPath: '/permits/city-permit/homestead.pdf',       portalUrl: 'https://www.cityofhomestead.com/139/Building-Division' },
+  { key: 'orlando',         label: 'Orlando',                 pdfPath: '/permits/city-permit/orlando.pdf',         portalUrl: 'https://www.orlando.gov/Building-Development/Permits-Inspections/Get-a-Permit' },
+  { key: 'tampa',           label: 'Tampa',                   pdfPath: '/permits/city-permit/tampa.pdf',           portalUrl: 'https://www.tampa.gov/construction-services/documents-and-forms' },
+  { key: 'naples',          label: 'Naples',                  pdfPath: '/permits/city-permit/naples.pdf',          portalUrl: 'https://www.naplesgov.com/building/page/permit-application-forms-8th-edition-effective-12312023' },
+  { key: 'lee-county',      label: 'Lee County',              pdfPath: '/permits/city-permit/lee-county.pdf',      portalUrl: 'https://www.leegov.com/dcd/BldPermitServ/guides' },
+  { key: 'cape-coral',      label: 'Cape Coral',              pdfPath: '/permits/city-permit/cape-coral.pdf',      portalUrl: 'https://www.capecoral.gov/departments/development_services/permitting_services_division/permit_document_center.php' },
+  { key: 'fort-myers',      label: 'Fort Myers',              pdfPath: '/permits/city-permit/fort-myers.pdf',      portalUrl: 'https://www.fortmyers.gov/1645/Permits-Applications' },
+  { key: 'monroe-county',   label: 'Monroe County',           pdfPath: '/permits/city-permit/monroe-county.pdf',   portalUrl: 'https://www.monroecounty-fl.gov/160/Permitting-Fees-Forms-Applications' },
+  { key: 'key-west',        label: 'Key West',                pdfPath: '/permits/city-permit/key-west.pdf',        portalUrl: 'https://www.cityofkeywest-fl.gov/220/Permits' },
+  { key: 'marathon',        label: 'Marathon',                pdfPath: '/permits/city-permit/marathon.pdf',        portalUrl: 'https://www.ci.marathon.fl.us/building/page/forms' },
+  { key: 'islamorada',      label: 'Islamorada',              pdfPath: '/permits/city-permit/islamorada.pdf',      portalUrl: 'https://www.islamorada.fl.us/157/Building-Services' },
 ]
 
 // NOC: FL 713 text is statewide-uniform; recording is per county clerk.
-// Miami-Dade Clerk form covers Miami, Miami-Dade, Doral, Cutler Bay, Homestead, Fort Lauderdale, WPB.
-// Monroe County has its own clerk form.
+// Mainland jurisdictions reuse the generic FL-713 form (miami-dade.pdf as canonical).
+// Keys (Monroe / Key West / Marathon / Islamorada) record under Monroe County Clerk.
 interface NocJurisdiction {
   key: string
   label: string
@@ -106,7 +116,16 @@ const NOC_JURISDICTIONS: NocJurisdiction[] = [
   { key: 'doral',           label: 'Doral',                   pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-doral-signed.pdf' },
   { key: 'cutler-bay',      label: 'Cutler Bay',              pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-cutler-bay-signed.pdf' },
   { key: 'homestead',       label: 'Homestead',               pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-homestead-signed.pdf' },
+  { key: 'orlando',         label: 'Orlando',                 pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-orlando-signed.pdf' },
+  { key: 'tampa',           label: 'Tampa',                   pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-tampa-signed.pdf' },
+  { key: 'naples',          label: 'Naples',                  pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-naples-signed.pdf' },
+  { key: 'lee-county',      label: 'Lee County',              pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-lee-county-signed.pdf' },
+  { key: 'cape-coral',      label: 'Cape Coral',              pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-cape-coral-signed.pdf' },
+  { key: 'fort-myers',      label: 'Fort Myers',              pdfPath: '/permits/notice-of-commencement/miami-dade.pdf',   downloadName: 'noc-fort-myers-signed.pdf' },
   { key: 'monroe-county',   label: 'Monroe County',           pdfPath: '/permits/notice-of-commencement/monroe-county.pdf', downloadName: 'noc-monroe-county-signed.pdf' },
+  { key: 'key-west',        label: 'Key West',                pdfPath: '/permits/notice-of-commencement/monroe-county.pdf', downloadName: 'noc-key-west-signed.pdf' },
+  { key: 'marathon',        label: 'Marathon',                pdfPath: '/permits/notice-of-commencement/monroe-county.pdf', downloadName: 'noc-marathon-signed.pdf' },
+  { key: 'islamorada',      label: 'Islamorada',              pdfPath: '/permits/notice-of-commencement/monroe-county.pdf', downloadName: 'noc-islamorada-signed.pdf' },
 ]
 
 interface PermitManifest {
@@ -336,7 +355,7 @@ function PermitFormsSection() {
           <div>
             <div className="font-semibold text-sm">Permit Forms</div>
             <div className="text-[11px] text-muted-foreground">
-              South Florida permit applications — sign in-app and attach to projects
+              Florida permit applications — sign in-app and attach to projects
             </div>
           </div>
         </div>
@@ -415,24 +434,37 @@ function PermitFormsSection() {
 
             {/* PDF status + actions */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {!pdfAvailable && (
-                <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                  Official PDF pending — placeholder active
-                </span>
+              {pdfAvailable ? (
+                <>
+                  <Button size="sm" className="gap-1.5" onClick={() => setSigOpen(true)}>
+                    <PenLine className="h-3.5 w-3.5" />
+                    Sign &amp; Download
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => window.open(signTarget.pdfPath, '_blank')}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download Blank
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    Portal-only — download from official site
+                  </span>
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => window.open(signTarget.portalUrl, '_blank')}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Open Official Portal
+                  </Button>
+                </>
               )}
-              <Button size="sm" className="gap-1.5" onClick={() => setSigOpen(true)}>
-                <PenLine className="h-3.5 w-3.5" />
-                Sign &amp; Download
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => window.open(signTarget.pdfPath, '_blank')}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download Blank
-              </Button>
             </div>
           </div>
         </CardContent>
