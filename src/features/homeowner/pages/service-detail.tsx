@@ -1469,11 +1469,11 @@ export function ServiceDetailPage() {
                       const qty = selectionQuantities[option.id]
                       const unitSuffix =
                         option.priceUnit === 'linear_ft'
-                          ? 'lin ft'
+                          ? 'Linear ft'
                           : option.priceUnit === 'sqft'
-                            ? 'sq ft'
+                            ? 'Sq ft'
                             : option.priceUnit === 'square'
-                              ? 'sq'
+                              ? 'Sq'
                               : null
                       return (
                         <div
@@ -1487,7 +1487,7 @@ export function ServiceDetailPage() {
                             htmlFor={`option-number-input-${option.id}`}
                             className="text-xs font-medium text-muted-foreground"
                           >
-                            {unitSuffix ?? 'Qty'}
+                            {unitSuffix ?? 'Quantity'}
                           </label>
                           <Input
                             id={`option-number-input-${option.id}`}
