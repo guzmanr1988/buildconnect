@@ -2020,15 +2020,22 @@ export function ServiceDetailPage() {
                       </button>
                     )
                     if (isImageNumberInput) {
+                      // Rod 2026-06-03 declutter: linear-ft input reveals only
+                      // when the tile is selected (isSelected = data-chip-state
+                      // 'active'). Cart-state selectionQuantities[option.id]
+                      // persists across deselect+reselect (handleSelect L933-
+                      // 1024 never touches it), so the value survives the
+                      // visibility toggle and reappears prefilled on reselect.
                       return (
                         <div
                           key={option.id}
                           data-option-wrapper={option.id}
                           data-option-input-type="image-number-input"
+                          data-option-input-revealed={isSelected ? 'true' : 'false'}
                           className="flex flex-col"
                         >
                           {chipButton}
-                          {renderNumberInputRow()}
+                          {isSelected && renderNumberInputRow()}
                         </div>
                       )
                     }
