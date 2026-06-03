@@ -1818,9 +1818,10 @@ export function ServiceDetailPage() {
                                   }
                                 }
                               }}
-                              className="absolute top-1.5 right-1.5 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm transition-colors hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              data-zoom-trigger={option.id}
+                              className="absolute top-2 right-2 inline-flex h-11 w-11 min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full bg-background/95 text-foreground shadow-md ring-1 ring-foreground/20 backdrop-blur-sm transition-colors hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             >
-                              <ZoomIn className="h-3.5 w-3.5" strokeWidth={2} />
+                              <ZoomIn className="h-5 w-5" strokeWidth={2.25} />
                             </span>
                           </div>
                         )}
