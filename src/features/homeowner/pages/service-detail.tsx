@@ -3393,14 +3393,14 @@ export function ServiceDetailPage() {
       <Dialog open={lightboxImage !== null} onOpenChange={(open) => { if (!open) setLightboxImage(null) }}>
         <DialogContent
           showCloseButton
-          className="max-w-[95vw] sm:max-w-[90vw] md:max-w-3xl lg:max-w-4xl p-2 bg-popover"
+          className="max-w-[95vw] sm:max-w-[95vw] md:max-w-[95vw] lg:max-w-[95vw] max-h-[90vh] p-2 bg-popover"
         >
           <DialogTitle className="sr-only">{lightboxImage?.alt || 'Design preview'}</DialogTitle>
           {lightboxImage && (
             <img
               src={lightboxImage.src}
               alt={lightboxImage.alt}
-              className="w-full max-h-[85vh] rounded-lg object-contain bg-muted"
+              className="w-full max-h-[86vh] rounded-lg object-contain bg-muted"
             />
           )}
         </DialogContent>
