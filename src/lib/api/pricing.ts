@@ -20,6 +20,19 @@ import {
 import type { CartItem, ConfiguratorEntry } from '@/stores/cart-store'
 import type { ServiceConfig } from '@/types'
 
+// Fix C-2 — pool addonQuantities → priced option mapping. The pool wizard
+// surfaces these as count-steppers under the parent waterfall toggle; they
+// are NEVER written into item.selections, so the parent-iter loop never
+// reaches them. The synthetic pass below injects each entry as a billable
+// option keyed by the priceMap shape (opt:pool|<groupId>|<optionId>) and
+// bills basePrice × count. Apex confirmed all four are priced + active.
+const POOL_QUANTITY_MAP: Record<keyof import('@/stores/cart-store').AddonQuantities, { groupId: string; optionId: string }> = {
+  ledCount:     { groupId: 'addons',              optionId: 'led' },
+  bubblerCount: { groupId: 'addons',              optionId: 'bubbler' },
+  laminarJets:  { groupId: 'water_feature_units', optionId: 'laminar_jet' },
+  waterfalls:   { groupId: 'water_feature_units', optionId: 'waterfall_unit' },
+}
+
 /*
  * Pricing API — Phase 3+4.
  *
@@ -259,6 +272,17 @@ export function computeVendorTotal(
   const prefixed = (bare: string | undefined, prefix: string): string | undefined =>
     bare ? `${prefix}${bare}` : undefined
 
+  // Fix C-1 — X-sub convention. cart writes the user's sub-option pick under
+  // `selections['<parent>-sub']=[subOptionId]` (roofing fascia_wood-sub,
+  // soffit_wood-sub today). resolveOptionPriceKey looks for an OPTION at that
+  // key and misses → leaks to missingOptionKeys + billed $0. Detect the -sub
+  // suffix and route through subOptionPriceKey instead. Linear-ft semantics
+  // inherit from the parent's roofAddonLinearFt entry; bare flat otherwise.
+  const resolveSubGroupIdForParent = (svcId: string, parentOptionId: string): string =>
+    services?.find((s) => s.id === svcId)?.optionGroups.find((g) =>
+      g.options.some((o) => o.id === parentOptionId)
+    )?.id ?? 'products'
+
   for (const item of cartItems) {
     for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
       if (!optionIds || optionIds.length === 0) continue
@@ -266,6 +290,32 @@ export function computeVendorTotal(
       // not a customer-facing charge — excluded from homeowner-visible totals.
       if (item.serviceId === 'roofing' && groupId === 'service_type') continue
       hasSelections = true
+
+      // Fix C-1 — X-sub routing.
+      if (groupId.endsWith('-sub')) {
+        const parentOptionId = groupId.slice(0, -4)
+        const subGroupId = resolveSubGroupIdForParent(item.serviceId, parentOptionId)
+        const roofLinFt = item.roofAddonLinearFt?.[parentOptionId]
+        const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
+        const isPerimeterAddonZeroed = roofLinFt !== undefined && !includePerimeterOpt
+        for (const optionId of optionIds) {
+          const subKey = subOptionPriceKey(item.serviceId, subGroupId, parentOptionId, optionId)
+          const basePrice = priceMap.get(subKey)
+          if (basePrice === undefined) {
+            missingSub.push(subKey)
+            continue
+          }
+          coveredServices.add(item.serviceId)
+          if (isPerimeterAddonZeroed) continue
+          if (roofLinFt !== undefined) {
+            totalCents += basePrice * roofLinFt
+          } else {
+            totalCents += basePrice
+          }
+        }
+        continue
+      }
+
       for (const optionId of optionIds) {
         const key = resolveOptionPriceKey(services, item.serviceId, groupId, optionId, priceMap)
         const basePrice = priceMap.get(key)
@@ -325,9 +375,14 @@ export function computeVendorTotal(
           // 2. item.areaSqft — single satellite-measured area (driveways +
           //    pergolas; whichever option is sqft-priced for that service).
           // 3. roofMeasurement.areaSqft — insulation + legacy roof items.
+          // Fix C-5 — pergolas multi-structure. When the user draws >1 polygon
+          // (terrace + pergola etc.), the wizard writes per-structure sqft into
+          // structureMeasurements[optionId]. Prefer that over scalar areaSqft
+          // so the smaller structure no longer gets dropped from the bill.
           const rawSqft = isRepairOption(optionId)
             ? resolveRepairAreaSqft(item, optionId)
             : (item.customSizeSqft?.[optionId]
+                ?? item.structureMeasurements?.[optionId]?.sqft
                 ?? item.areaSqft
                 ?? item.roofMeasurement?.areaSqft
                 ?? 0)
@@ -351,7 +406,16 @@ export function computeVendorTotal(
           if (isRoofPerimeterAddon && !includePerimeterOpt) {
             // Zero contribution — perimeter toggle excluded this line item.
           } else {
-            const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
+            // Fix C-3 — kitchen Stone/Cabinet sub-group options write their
+            // linear-ft into item.subGroupLinearFt[parentOptionId]; previously
+            // hit the 0 fallback and billed 0. Fix C-4 — fencing options carry
+            // their length in the item-scalar perimeterFt instead of a per-id
+            // map; bill against that when no per-id source is present.
+            const linFt = roofLinFt
+              ?? item.addonLinearFt?.[optionId]
+              ?? item.subGroupLinearFt?.[optionId]
+              ?? (item.serviceId === 'fencing' ? item.perimeterFt : undefined)
+              ?? 0
             const effectiveLinFt = optionId === 'gutters'
               ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
               : linFt
@@ -361,6 +425,34 @@ export function computeVendorTotal(
           totalCents += basePrice
         }
       }
+    }
+  }
+
+  // Fix C-2 — pool addonQuantities synthetic pass. ledCount / bubblerCount /
+  // laminarJets / waterfalls are stepper counts that the pool wizard writes
+  // into item.addonQuantities, NOT into item.selections — so the parent-iter
+  // above never touches them. Multiply basePrice × count for each entry that
+  // resolves to a non-zero priceMap row. Missing rows surface in missing[]
+  // so the "unpriced" UI badge stays honest.
+  for (const item of cartItems) {
+    if (item.serviceId !== 'pool') continue
+    const counts = item.addonQuantities
+    if (!counts) continue
+    for (const [field, { groupId, optionId }] of Object.entries(POOL_QUANTITY_MAP) as Array<[
+      keyof import('@/stores/cart-store').AddonQuantities,
+      { groupId: string; optionId: string },
+    ]>) {
+      const qty = counts[field] ?? 0
+      if (qty <= 0) continue
+      hasSelections = true
+      const key = resolveOptionPriceKey(services, item.serviceId, groupId, optionId, priceMap)
+      const basePrice = priceMap.get(key)
+      if (basePrice === undefined) {
+        missing.push(key)
+        continue
+      }
+      coveredServices.add(item.serviceId)
+      totalCents += basePrice * qty
     }
   }
 
@@ -471,6 +563,15 @@ export function computeVendorTotal(
 
   if (permitMap) {
     for (const serviceId of coveredServices) {
+      // Fix C-6 — roof permit opt-out. Rod's cash-only path sets
+      // roofPermit='no' on the cart item; the permit line should drop. Default
+      // (undefined / 'yes') still bills the permit, matching pre-fix behavior.
+      if (serviceId === 'roofing') {
+        const anyRoofingItemKeepsPermit = cartItems.some(
+          (it) => it.serviceId === 'roofing' && it.roofPermit !== 'no'
+        )
+        if (!anyRoofingItemKeepsPermit) continue
+      }
       const permitCents = permitMap.get(serviceId) ?? 0
       totalCents += permitCents
     }
