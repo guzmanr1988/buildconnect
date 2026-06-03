@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -303,6 +303,7 @@ export function ServiceDetailPage() {
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
   const [activeAddonMenu, setActiveAddonMenu] = useState<string | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
   const editAddons = editItemForService?.addonQuantities as { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number } | undefined
   const [laminarJets, setLaminarJets] = useState(editAddons?.laminarJets || 0)
   const [waterfalls, setWaterfalls] = useState(editAddons?.waterfalls || 0)
@@ -1791,12 +1792,37 @@ export function ServiceDetailPage() {
                           </div>
                         )}
                         {isImageTile && (
-                          <img
-                            src={option.image_url}
-                            alt={option.label || 'Design'}
-                            loading="lazy"
-                            className="w-full aspect-video rounded-lg object-cover bg-muted"
-                          />
+                          <div className="relative w-full">
+                            <img
+                              src={option.image_url}
+                              alt={option.label || 'Design'}
+                              loading="lazy"
+                              className="w-full aspect-video rounded-lg object-cover bg-muted"
+                            />
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Zoom ${option.label || 'design'} image`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (option.image_url) {
+                                  setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  if (option.image_url) {
+                                    setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                  }
+                                }
+                              }}
+                              className="absolute top-1.5 right-1.5 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm transition-colors hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              <ZoomIn className="h-3.5 w-3.5" strokeWidth={2} />
+                            </span>
+                          </div>
                         )}
                         {!isCardTile && group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
@@ -3353,6 +3379,22 @@ export function ServiceDetailPage() {
               Close
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={lightboxImage !== null} onOpenChange={(open) => { if (!open) setLightboxImage(null) }}>
+        <DialogContent
+          showCloseButton
+          className="max-w-[95vw] sm:max-w-[90vw] md:max-w-3xl lg:max-w-4xl p-2 bg-popover"
+        >
+          <DialogTitle className="sr-only">{lightboxImage?.alt || 'Design preview'}</DialogTitle>
+          {lightboxImage && (
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.alt}
+              className="w-full max-h-[85vh] rounded-lg object-contain bg-muted"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
