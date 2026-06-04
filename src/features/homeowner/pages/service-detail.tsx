@@ -1268,7 +1268,7 @@ export function ServiceDetailPage() {
         )}
 
         {/* Option groups */}
-        <div className="flex flex-col gap-6">
+        <div className={serviceId === 'wall_paneling' ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-6'}>
           {service.optionGroups.filter((group) => {
             // Generic conditional reveal — e.g., windows_doors install_preference
             // waits on `scope` (Permit/No Permit) being answered first.
@@ -1349,13 +1349,20 @@ export function ServiceDetailPage() {
                       'data-group-has-selection': hasSelection ? 'true' : 'false',
                     }
                   : {})}
+                style={useAccordion && isExpanded ? { gridColumn: '1 / -1' } : undefined}
               >
                 {useAccordion ? (
                 <button
                   type="button"
                   onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !isExpanded }))}
-                  className="w-full flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
+                  className={cn(
+                    'rounded-lg border bg-card hover:bg-accent/30 transition-colors',
+                    isExpanded
+                      ? 'w-full flex items-center gap-2 px-3 py-2.5 text-left'
+                      : 'aspect-square w-full flex flex-col items-center justify-center gap-1.5 p-4 text-center'
+                  )}
                   data-group-header={group.id}
+                  data-group-card={isExpanded ? 'expanded' : 'collapsed'}
                   aria-expanded={isExpanded}
                 >
                   <span className="text-sm font-semibold text-foreground shrink-0" data-group-label={groupLabel}>
