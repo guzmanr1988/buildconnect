@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -300,6 +300,7 @@ export function ServiceDetailPage() {
   const [selectionQuantities, setSelectionQuantities] = useState<Record<string, number>>(
     (editItemForService?.selectionQuantities as Record<string, number>) || {}
   )
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
   const [activeAddonMenu, setActiveAddonMenu] = useState<string | null>(null)
@@ -1329,6 +1330,8 @@ export function ServiceDetailPage() {
               isRoofingPerimeterOnly && group.id === 'addons'
                 ? group.options.filter((o) => ADDON_LINEAR_FT_IDS.includes(o.id))
                 : group.options
+            const isExpanded = expandedGroups[group.id] === true
+            const hasSelection = selected.length > 0
             return (
               <div
                 key={group.id}
@@ -1338,19 +1341,60 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
+                data-group-expanded={isExpanded ? 'true' : 'false'}
+                data-group-has-selection={hasSelection ? 'true' : 'false'}
               >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !isExpanded }))}
+                  className="w-full flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 hover:bg-accent/30 transition-colors text-left"
+                  data-group-header={group.id}
+                  aria-expanded={isExpanded}
+                >
+                  <span className="text-sm font-semibold text-foreground shrink-0" data-group-label={groupLabel}>
                     {groupLabel}
                   </span>
                   {group.required ? (
-                    <span className="text-destructive text-xs">*</span>
+                    <span className="text-destructive text-xs shrink-0">*</span>
                   ) : (
-                    <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5">
+                    <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5 shrink-0">
                       Optional
                     </span>
                   )}
-                </div>
+                  {!isExpanded && hasSelection && (
+                    <span className="flex flex-wrap items-center gap-1.5 ml-1 min-w-0 flex-1" data-group-summary={group.id}>
+                      {selected.map((optId) => {
+                        const opt = renderOptions.find((o) => o.id === optId)
+                        if (!opt) return null
+                        const qty = selectionQuantities[optId]
+                        return (
+                          <span
+                            key={optId}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground max-w-full"
+                            data-group-summary-chip={optId}
+                            data-group-summary-qty={qty ?? ''}
+                          >
+                            {opt.image_url ? (
+                              <img src={opt.image_url} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                            ) : null}
+                            <span className="truncate max-w-[10rem]">{opt.label}</span>
+                            {qty != null && qty > 0 ? (
+                              <span className="text-muted-foreground shrink-0">· {qty} LF</span>
+                            ) : null}
+                          </span>
+                        )
+                      })}
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={cn(
+                      'ml-auto h-4 w-4 text-muted-foreground transition-transform shrink-0',
+                      isExpanded && 'rotate-180'
+                    )}
+                  />
+                </button>
+                {isExpanded && (
+                <div className="mt-3">
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
                     ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
@@ -1516,6 +1560,12 @@ export function ServiceDetailPage() {
                               const isCurrentlySelected = selected.includes(option.id)
                               if (shouldBeSelected !== isCurrentlySelected) {
                                 handleSelect(group, option.id)
+                              }
+                            }}
+                            onBlur={() => {
+                              const committed = selectionQuantities[option.id]
+                              if (committed != null && committed > 0) {
+                                setExpandedGroups((prev) => ({ ...prev, [group.id]: false }))
                               }
                             }}
                             className="h-9 w-24"
@@ -2552,6 +2602,8 @@ export function ServiceDetailPage() {
                       </div>
                     )}
                   </>
+                )}
+                </div>
                 )}
               </div>
             )
