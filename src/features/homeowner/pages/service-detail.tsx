@@ -1332,6 +1332,8 @@ export function ServiceDetailPage() {
                 : group.options
             const isExpanded = expandedGroups[group.id] === true
             const hasSelection = selected.length > 0
+            const useAccordion = serviceId === 'wall_paneling'
+            const bodyVisible = !useAccordion || isExpanded
             return (
               <div
                 key={group.id}
@@ -1341,9 +1343,14 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
-                data-group-expanded={isExpanded ? 'true' : 'false'}
-                data-group-has-selection={hasSelection ? 'true' : 'false'}
+                {...(useAccordion
+                  ? {
+                      'data-group-expanded': isExpanded ? 'true' : 'false',
+                      'data-group-has-selection': hasSelection ? 'true' : 'false',
+                    }
+                  : {})}
               >
+                {useAccordion ? (
                 <button
                   type="button"
                   onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !isExpanded }))}
@@ -1393,8 +1400,22 @@ export function ServiceDetailPage() {
                     )}
                   />
                 </button>
-                {isExpanded && (
-                <div className="mt-3">
+                ) : (
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
+                    {groupLabel}
+                  </span>
+                  {group.required ? (
+                    <span className="text-destructive text-xs">*</span>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5">
+                      Optional
+                    </span>
+                  )}
+                </div>
+                )}
+                {bodyVisible && (
+                <div className={useAccordion ? 'mt-3' : ''}>
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
                     ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
