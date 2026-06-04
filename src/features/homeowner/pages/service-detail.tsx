@@ -1359,7 +1359,7 @@ export function ServiceDetailPage() {
                     'rounded-lg border bg-card hover:bg-accent/30 transition-colors',
                     isExpanded
                       ? 'w-full flex items-center gap-2 px-3 py-2.5 text-left'
-                      : 'w-full flex flex-col items-center justify-center gap-1.5 px-4 py-5 min-h-[96px] text-center'
+                      : 'w-full flex flex-col items-center justify-center gap-1.5 px-4 py-5 h-[136px] text-center'
                   )}
                   data-group-header={group.id}
                   data-group-card={isExpanded ? 'expanded' : 'collapsed'}
@@ -1376,7 +1376,7 @@ export function ServiceDetailPage() {
                     </span>
                   )}
                   {!isExpanded && hasSelection && (
-                    <span className="flex flex-wrap items-center gap-1.5 ml-1 min-w-0 flex-1" data-group-summary={group.id}>
+                    <span className="flex flex-nowrap items-center gap-1.5 ml-1 min-w-0 flex-1 overflow-hidden" data-group-summary={group.id}>
                       {selected.map((optId) => {
                         const opt = renderOptions.find((o) => o.id === optId)
                         if (!opt) return null
