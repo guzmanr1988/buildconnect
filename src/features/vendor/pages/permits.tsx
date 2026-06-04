@@ -591,6 +591,11 @@ export default function VendorPermitsPage() {
   const mockLeads = useEffectiveMockLeads()
   const vendorHomeowners = useVendorHomeowners()
   const { permits, addPermit, updatePermit, deletePermit } = useVendorPermitsStore()
+  const hydratePermits = useVendorPermitsStore((s) => s.hydrate)
+
+  useEffect(() => {
+    void hydratePermits(vendorId)
+  }, [vendorId, hydratePermits])
 
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)

@@ -111,7 +111,7 @@ export default function VendorDashboard() {
     useFlagThreadStore.setState({ threadsByProject: {} })
     useCommissionPaymentsStore.setState({ paymentsBySale: {} })
     // Vendor-keyed demo state that accumulates across test cycles.
-    useVendorPermitsStore.setState({ permits: [] })
+    useVendorPermitsStore.setState({ permits: [], hydratedVendors: new Set() })
     useVendorEventsStore.setState({ eventsByVendor: {} })
     useAgreementEventsStore.setState({ events: [] })
     // Admin-vendor chat thread fixtures — useAdminMessagesStore default

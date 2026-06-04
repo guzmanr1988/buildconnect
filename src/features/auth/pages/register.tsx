@@ -333,7 +333,9 @@ export function RegisterPage() {
       // Ship #180 — activate the monthly membership atomically with the
       // payment-method commit. Billing day seeded from today so the
       // next charge lands one month from signup.
-      activateMembership(vendorId)
+      activateMembership(vendorId).catch((err) => {
+        console.warn('[register] activateMembership failed:', err)
+      })
     } else {
       // Edge case: profile not yet hydrated when success fires. Store
       // against the form email as a fallback key so the portal can

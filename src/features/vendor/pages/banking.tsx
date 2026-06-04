@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -272,6 +272,11 @@ export default function VendorBanking() {
   const bankEnabledMap = useVendorEmployeesStore((s) => s.bankEnabledByVendor)
   const payrollBankEnabled = bankEnabledMap[payrollVendorId] ?? false
   const setPayrollBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
+  const hydrateSettings = useVendorEmployeesStore((s) => s.hydrateSettings)
+
+  useEffect(() => {
+    void hydrateSettings(payrollVendorId)
+  }, [payrollVendorId, hydrateSettings])
 
   // Per-rep pay config — config-only (no payout math per banked
   // project_buildconnect_vendor_compensation_private rule).
