@@ -65,6 +65,13 @@ export default function VendorCatalog() {
     getPricePercent,
     getServicePermit,
   } = useVendorCatalogStore()
+  // EDIT 1.H — gate the Switch on hydration completion. Pre-1.G the toggle
+  // was always interactive; post-1.G the localStorage-rehydrated baseline
+  // is enabled=false everywhere until hydrateFromSupabase resolves DB truth.
+  // Disabling avoids a misleading "all-Inactive" baseline misrepresenting
+  // DB state during the hydrate window.
+  const hydrationStatus = useVendorCatalogStore((s) => s._hydrationStatus)
+  const hydrationComplete = hydrationStatus === 'complete'
 
   // Expand state is per-service, session-scoped (no persist — if vendor
   // refreshes, everything starts collapsed again). Tracking EXPANDED (flipped
@@ -328,6 +335,7 @@ export default function VendorCatalog() {
                       })()}
                       <Switch
                         checked={enabled}
+                        disabled={!hydrationComplete}
                         onCheckedChange={() => toggleService(service.id)}
                         aria-label={`${enabled ? 'Deactivate' : 'Activate'} ${service.name}`}
                       />

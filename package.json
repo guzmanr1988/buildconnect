@@ -10,7 +10,8 @@
     "check:vite-env": "node scripts/check-vite-env.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts"
+    "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts",
+    "active-toggle-protection": "tsx tests/active-toggle-protection/runner.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

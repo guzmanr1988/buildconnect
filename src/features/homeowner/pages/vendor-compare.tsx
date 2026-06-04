@@ -203,14 +203,13 @@ export function VendorComparePage() {
       // Mock vendors (non-UUID id or in DEMO map) already passed PRODUCT-IS-GOD.
       const isMock = !UUID_RE_DISPLAY.test(v.id) || v.id in DEMO_VENDOR_UUID_BY_MOCK_ID
       if (isMock) return true
-      // Apex floor: real Apex always renders even with partial pricing — the
-      // availability-gap UX (badge + deducted total + small-letters note)
-      // informs the homeowner instead of hiding the only contractor.
-      if (v.id === APEX_REAL_UUID) {
-        const r = totalsByVendor[v.id]
-        return !!(r && r.hasSelections)
-      }
-      // Other real vendors: PRODUCT-IS-GOD strict floor.
+      // All real vendors (incl. Apex) gated by PRODUCT-IS-GOD strict floor.
+      // Rod-chosen behavior: when vendor toggles a service OFF in their
+      // catalog, the cascaded vop.active=false drops it from the priceMap;
+      // computeVendorTotal reports !coversAllServices and Apex disappears
+      // from Compare-Vendors for any cart needing that service. APEX FLOOR
+      // (previously rendered Apex with partial pricing via .hasSelections)
+      // removed in vendor-active-toggle-law bundle.
       const result = totalsByVendor[v.id]
       return !!(result && result.coversAllServices && result.totalCents > 0)
     })
