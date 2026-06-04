@@ -198,17 +198,17 @@ export function HomeownerLayout() {
     <div className="min-h-screen bg-background">
       {/* Desktop top nav */}
       {!isMobile && (
-        <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80" data-nav-surface="desktop">
+          <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-8">
             <button onClick={() => navigate('/home')} className="cursor-pointer">
-              <Logo />
+              <Logo className="[&_img]:h-11 [&_img]:w-11 [&_span]:text-xl" />
             </button>
             <nav className="flex items-center gap-1">
               {navItems.map(({ to, label }) => (
                 <NavLink key={to} to={to} end={to === '/home'}>
                   {({ isActive }) => (
                     <div className="relative">
-                      <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className={cn('rounded-full px-4', isActive && 'bg-primary/10 text-primary font-medium')}>
+                      <Button variant={isActive ? 'secondary' : 'ghost'} className={cn('rounded-full px-5', isActive && 'bg-primary/10 text-primary font-medium')}>
                         {label}
                       </Button>
                       {label === 'Projects' && openProjectsCount > 0 && (
@@ -225,14 +225,14 @@ export function HomeownerLayout() {
                 </NavLink>
               ))}
             </nav>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <NotificationBell notifications={notifications} />
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => window.dispatchEvent(new Event('buildconnect:open-onboarding'))}
                 aria-label="Reopen onboarding tour"
-                className="h-9 w-9"
+                className="h-10 w-10"
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>
@@ -243,7 +243,7 @@ export function HomeownerLayout() {
                   className="cursor-pointer"
                   aria-label="Profile"
                 >
-                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="md" />
                 </button>
               )}
             </div>
