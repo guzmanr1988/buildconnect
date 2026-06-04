@@ -1359,7 +1359,7 @@ export function ServiceDetailPage() {
                     'rounded-lg border bg-card hover:bg-accent/30 transition-colors',
                     isExpanded
                       ? 'w-full flex items-center gap-2 px-3 py-2.5 text-left'
-                      : 'aspect-square w-full flex flex-col items-center justify-center gap-1.5 p-4 text-center'
+                      : 'w-full flex flex-col items-center justify-center gap-1.5 px-4 py-5 min-h-[96px] text-center'
                   )}
                   data-group-header={group.id}
                   data-group-card={isExpanded ? 'expanded' : 'collapsed'}
