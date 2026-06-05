@@ -103,4 +103,7 @@ export const SERVICE_DEFAULT_AREAS: Record<ServiceCategory, number> = {
   house_painting: 3000,
   windows_doors: 150,
   blinds: 50,
+  // Interior Remodel is measurement-driven (L/W/H/numWalls) — no
+  // satellite fallback. Carry 0 so the Record is total over ServiceCategory.
+  remodel: 0,
 }

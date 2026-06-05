@@ -100,4 +100,10 @@ export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> =
     lineItem('bld-product', 'Product Price', 950),
     lineItem('bld-install', 'Install Labor', 450),
   ],
+  // Interior Remodel uses a per-measurement compute engine
+  // (computeRemodelLineItems in src/lib/remodel-pricing.ts) called at
+  // booking-confirmation snapshot time — same pattern as roofing's
+  // buildRoofingLineItems. Preset stays empty so no preset-fallback path
+  // ever fires on the remodel category.
+  remodel: [],
 }

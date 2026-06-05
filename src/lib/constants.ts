@@ -912,6 +912,21 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
       },
     ],
   },
+  {
+    // Ship #475+1 — Interior Remodel (walls + ceilings). Measurement-driven
+    // configurator: homeowner enters L × W × ceiling height × wall count
+    // ONCE; the per-line itemized breakdown auto-computes from REMODEL_RATES
+    // (src/lib/remodel-pricing.ts). NO chip optionGroups — service-detail.tsx
+    // short-circuits to <RemodelConfigurator> when serviceId === 'remodel'.
+    id: 'remodel',
+    name: 'Interior Remodel',
+    tagline: 'Studs-to-finish room transformation',
+    description: 'Demo, framing, drywall, paint, permit — every line auto-calculated from your room dimensions.',
+    features: ['Auto-Calculated Quote', 'Studs to Finish', 'Permit Included'],
+    stat: { label: 'Rooms Remodeled', value: '—' },
+    status: 'live',
+    optionGroups: [],
+  },
 ]
 
 export const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {

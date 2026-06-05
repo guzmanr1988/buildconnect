@@ -40,6 +40,7 @@ import { ColorCircle } from '@/components/ui/color-circle'
 import { applyAreaWaste } from '@/lib/area-waste'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
+import { RemodelConfigurator } from '../components/remodel-configurator'
 
 // Polygon colors used to bind pergolas structure chips to map polygons.
 // POLYGON_COLORS[0] matches polygon-draw.tsx MAIN_COLOR; POLYGON_COLORS[1]
@@ -246,6 +247,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   garage: Hammer,
   house_painting: PaintRoller,
   blinds: Blinds,
+  remodel: Wrench,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
@@ -262,6 +264,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   garage: 'from-slate-400 to-slate-600',
   house_painting: 'from-rose-400 to-pink-500',
   blinds: 'from-indigo-400 to-purple-500',
+  remodel: 'from-fuchsia-400 to-pink-600',
 }
 
 // Legacy metalRoofSelection.roofSize values were sqft strings (e.g. "2916").
@@ -281,6 +284,14 @@ export function ServiceDetailPage() {
   const { serviceId } = useParams<{ serviceId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Ship #475+1 — Interior Remodel is measurement-driven (L/W/H/numWalls)
+  // not chip-driven. Short-circuit to the bespoke configurator instead of
+  // shoehorning the optionGroups pattern. Edit-payload handoff still
+  // travels via location.state ({ editItem }) below for cart edits.
+  if (serviceId === 'remodel') {
+    return <RemodelConfigurator />
+  }
 
   // Edit payload travels on the router's location.state — tied to the
   // navigation, not to a component mount instance. This survives React's

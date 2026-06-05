@@ -13,6 +13,7 @@ import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionPriceKey } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { computeRemodelLineItems } from '@/lib/remodel-pricing'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import { useCatalogStore } from '@/stores/catalog-store'
@@ -344,6 +345,12 @@ export function BookingConfirmationPage() {
             const services = useCatalogStore.getState().services
             const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined, services)
             if (built) computedLineItems = built
+          } else if (pendingItem.serviceId === 'remodel' && pendingItem.remodelMeasurements) {
+            // Ship #475+1 — Interior Remodel: every line auto-computed from
+            // L×W×H×numWalls via REMODEL_RATES (per-line rate + measurement-
+            // derived qty stamped as preset_calculated, same snapshot
+            // semantics as roofing).
+            computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements)
           } else if (contractor.vendor_id) {
             // PR #118 fix-forward — for non-roofing services, snapshot a
             // permit-line from vendor's flat per-service permit fee

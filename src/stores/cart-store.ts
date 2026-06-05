@@ -109,6 +109,10 @@ export interface CartItem {
   // here when present to sum same-rate sqft across structures; absence
   // falls back to scalar areaSqft (legacy single-structure path).
   structureMeasurements?: Record<string, { sqft: number; color: string }>
+  // Interior Remodel measurements (ship #475+1). Captured by the
+  // remodel configurator; consumed at booking-confirmation snapshot time
+  // by computeRemodelLineItems → PriceLineItem[] (preset_calculated source).
+  remodelMeasurements?: { length: number; width: number; ceilingHeight: number; numWalls: number }
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string
