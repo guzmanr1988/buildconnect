@@ -60,7 +60,7 @@ const STEP_META: Record<StepKey, { title: string; subtitle?: string }> = {
   },
   review: {
     title: 'Review your quote',
-    subtitle: 'Itemized breakdown. Rates shown are placeholders pending final pricing.',
+    subtitle: 'Itemized breakdown. Estimate — your contractor confirms final pricing.',
   },
 }
 
