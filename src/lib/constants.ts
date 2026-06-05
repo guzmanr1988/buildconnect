@@ -840,7 +840,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
     id: 'blinds',
     name: 'Blinds',
     tagline: 'Custom window treatments for every room',
-    description: 'Roller, venetian, roman, cellular, vertical, blackout, motorized — multiple materials, mount styles, and light-control options for residential applications.',
+    description: 'Roller, drape, venetian, roman, cellular, vertical, blackout, motorized — multiple materials, mount styles, and light-control options for residential applications.',
     features: ['Cordless Available', 'Energy Efficient', 'Custom Fit'],
     stat: { label: 'Homes Dressed', value: '1,240' },
     status: 'live',
@@ -854,6 +854,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         type: 'multi',
         options: [
           { id: 'roller', label: 'Roller Shades', description: 'Clean, modern, affordable — most common' },
+          { id: 'drape', label: 'Drape Blinds', description: 'Sheer fabric in soft waves on a ceiling track — softens sunlight, keeps the view' },
           { id: 'venetian', label: 'Venetian Blinds', description: 'Horizontal slats, classic look' },
           { id: 'roman', label: 'Roman Shades', description: 'Fabric folds, upscale' },
           { id: 'cellular', label: 'Cellular / Honeycomb', description: 'Energy-efficient insulation' },

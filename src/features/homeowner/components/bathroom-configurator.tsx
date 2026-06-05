@@ -236,14 +236,20 @@ function AddressStep({
           onPick(key, addr)
         }}
       >
-        <SelectTrigger className="h-12 rounded-xl">
+        <SelectTrigger className="h-auto min-h-[3.25rem] py-2 rounded-xl">
           <SelectValue placeholder="Select address" />
         </SelectTrigger>
         <SelectContent>
           {options.map((o) => (
-            <SelectItem key={o.key} value={o.key}>
-              <span className="font-medium">{o.label}</span>
-              <span className="text-muted-foreground"> — {o.full}</span>
+            <SelectItem key={o.key} value={o.key} className="py-2 pr-10">
+              <span className="flex flex-1 flex-col items-start gap-1 min-w-0">
+                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                  {o.label}
+                </span>
+                <span className="text-xs text-muted-foreground whitespace-normal break-words leading-tight">
+                  {o.full}
+                </span>
+              </span>
             </SelectItem>
           ))}
         </SelectContent>

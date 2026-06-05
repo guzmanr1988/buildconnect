@@ -2723,23 +2723,34 @@ export function ServiceDetailPage() {
             Which property is this for?
           </label>
           <Select value={addressKey} onValueChange={(value) => setAddressKey(value ?? '')}>
-            <SelectTrigger id="address-select" className="h-11 text-sm">
-              <span
-                className={cn(
-                  'flex-1 text-left truncate',
-                  !selectedAddress.full && !selectedAddress.label && 'text-muted-foreground'
-                )}
-              >
-                {selectedAddress.full || selectedAddress.label || 'Select a property'}
+            <SelectTrigger id="address-select" className="h-auto min-h-[3.25rem] py-2 text-sm">
+              <span className="flex flex-1 flex-col items-start gap-1 min-w-0 text-left">
+                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                  {selectedAddress.label || 'Property'}
+                </span>
+                <span
+                  className={cn(
+                    'text-sm whitespace-normal break-words leading-tight',
+                    !selectedAddress.full && 'text-muted-foreground'
+                  )}
+                >
+                  {selectedAddress.full || 'Select a property'}
+                </span>
               </span>
             </SelectTrigger>
             <SelectContent>
               {addressOptions.map((opt) => (
-                <SelectItem key={opt.key} value={opt.key}>
-                  <span className="font-medium">{opt.label}</span>
-                  {opt.full && (
-                    <span className="ml-2 text-xs text-muted-foreground">{opt.full}</span>
-                  )}
+                <SelectItem key={opt.key} value={opt.key} className="py-2 pr-10">
+                  <span className="flex flex-1 flex-col items-start gap-1 min-w-0">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                      {opt.label}
+                    </span>
+                    {opt.full && (
+                      <span className="text-xs text-muted-foreground whitespace-normal break-words leading-tight">
+                        {opt.full}
+                      </span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

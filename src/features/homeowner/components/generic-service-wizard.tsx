@@ -218,16 +218,22 @@ export function GenericServiceWizard({
     return (
       <div className="flex flex-col gap-3">
         <Select value={addressKey} onValueChange={(v) => setAddressKey(v ?? '')}>
-          <SelectTrigger className="h-11 text-sm">
+          <SelectTrigger className="h-auto min-h-[3.25rem] py-2 text-sm">
             <SelectValue placeholder="Select a property" />
           </SelectTrigger>
           <SelectContent>
             {addressOptions.map((opt) => (
-              <SelectItem key={opt.key} value={opt.key}>
-                <span className="font-medium">{opt.label}</span>
-                {opt.full && (
-                  <span className="ml-2 text-xs text-muted-foreground">{opt.full}</span>
-                )}
+              <SelectItem key={opt.key} value={opt.key} className="py-2 pr-10">
+                <span className="flex flex-1 flex-col items-start gap-1 min-w-0">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                    {opt.label}
+                  </span>
+                  {opt.full && (
+                    <span className="text-xs text-muted-foreground whitespace-normal break-words leading-tight">
+                      {opt.full}
+                    </span>
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
