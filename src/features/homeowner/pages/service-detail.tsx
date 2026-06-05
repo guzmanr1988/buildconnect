@@ -1400,12 +1400,17 @@ export function ServiceDetailPage() {
                       })}
                     </span>
                   )}
-                  <ChevronDown
-                    className={cn(
-                      'ml-auto h-4 w-4 text-muted-foreground transition-transform shrink-0',
-                      isExpanded && 'rotate-180'
-                    )}
-                  />
+                  <span
+                    aria-hidden="true"
+                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md ring-1 ring-foreground/20 backdrop-blur-sm transition-colors shrink-0"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        isExpanded && 'rotate-180'
+                      )}
+                    />
+                  </span>
                 </button>
                 ) : (
                 <div className="mb-3 flex items-center gap-2">
