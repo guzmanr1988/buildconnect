@@ -97,7 +97,9 @@ export const SERVICE_DEFAULT_AREAS: Record<ServiceCategory, number> = {
   pool: 400,
   air_conditioning: 120,
   kitchen: 200,
-  bathroom: 80,
+  // Ship #475+2 — Bathroom is measurement-driven (L/W/H/tile-coverage +
+  // tub-toggle), not measurable from satellite. Carry 0 like remodel.
+  bathroom: 0,
   wall_paneling: 600,
   garage: 400,
   house_painting: 3000,

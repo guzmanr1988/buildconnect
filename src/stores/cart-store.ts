@@ -113,6 +113,12 @@ export interface CartItem {
   // remodel configurator; consumed at booking-confirmation snapshot time
   // by computeRemodelLineItems → PriceLineItem[] (preset_calculated source).
   remodelMeasurements?: { length: number; width: number; ceilingHeight: number; numWalls: number }
+  // Bathroom Remodel measurements (ship #475+2). Captured by the bathroom
+  // configurator; consumed at booking-confirmation snapshot time by
+  // computeBathroomLineItems → PriceLineItem[] (preset_calculated source).
+  // tileCoverageHeight uses 3 canonical values: 4 (wainscot), 6 (mid-wall),
+  // or matches ceilingHeight (full-to-ceiling).
+  bathroomMeasurements?: { length: number; width: number; ceilingHeight: number; tileCoverageHeight: number; includesTub: boolean }
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string

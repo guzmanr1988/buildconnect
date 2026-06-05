@@ -41,6 +41,7 @@ import { applyAreaWaste } from '@/lib/area-waste'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
 import { RemodelConfigurator } from '../components/remodel-configurator'
+import { BathroomConfigurator } from '../components/bathroom-configurator'
 
 // Polygon colors used to bind pergolas structure chips to map polygons.
 // POLYGON_COLORS[0] matches polygon-draw.tsx MAIN_COLOR; POLYGON_COLORS[1]
@@ -291,6 +292,11 @@ export function ServiceDetailPage() {
   // travels via location.state ({ editItem }) below for cart edits.
   if (serviceId === 'remodel') {
     return <RemodelConfigurator />
+  }
+  // Ship #475+2 — Bathroom Remodel is measurement-driven (L/W/H/tile-coverage
+  // + tub-toggle) with a fixtures-as-$0 split. Same short-circuit pattern.
+  if (serviceId === 'bathroom') {
+    return <BathroomConfigurator />
   }
 
   // Edit payload travels on the router's location.state — tied to the

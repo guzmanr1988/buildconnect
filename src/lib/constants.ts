@@ -517,13 +517,13 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
   {
     id: 'bathroom',
     name: 'Bathroom Remodel',
-    badge: 'Coming Soon',
-    badgeColor: 'bg-muted text-muted-foreground',
+    badge: 'New',
+    badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     tagline: 'Create your personal spa retreat',
-    description: 'Modern bathroom renovations with premium fixtures and finishes.',
-    features: ['Walk-In Shower', 'Heated Floors', 'Smart Fixtures'],
+    description: 'Measurement-driven bathroom renovations — full scope, itemized estimate.',
+    features: ['Tile Install', 'Plumbing Rough-In', 'Fixture Install'],
     stat: { label: 'Bathrooms Remodeled', value: '—' },
-    status: 'draft',
+    status: 'live',
     optionGroups: [],
   },
   {

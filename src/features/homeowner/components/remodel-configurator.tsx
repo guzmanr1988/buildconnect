@@ -191,7 +191,7 @@ function ReviewLineRow({ line }: { line: RemodelLine }) {
           {' × '}
           {fmtRate(line.rate, line.unit)}
           {' '}
-          <span className="italic text-amber-600 dark:text-amber-400">(placeholder rate)</span>
+          <span className="italic text-muted-foreground">(estimate)</span>
         </div>
       </div>
       <div className="text-sm font-semibold tabular-nums text-foreground shrink-0">
@@ -264,9 +264,11 @@ function ReviewStep({
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground italic">
-        Rates marked &quot;placeholder&quot; are pending final pricing. Your contractor will confirm before any work begins.
-      </p>
+      <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3">
+        <p className="text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
+          <span className="font-semibold">Estimate</span> — your contractor confirms final pricing. Rates shown are starting points so you can compare quotes.
+        </p>
+      </div>
     </div>
   )
 }

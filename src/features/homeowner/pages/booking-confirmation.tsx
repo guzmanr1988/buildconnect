@@ -14,6 +14,7 @@ import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionPriceKey } from '@/lib/api/pricing'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeRemodelLineItems } from '@/lib/remodel-pricing'
+import { computeBathroomLineItems } from '@/lib/bathroom-pricing'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import { useCatalogStore } from '@/stores/catalog-store'
@@ -351,6 +352,12 @@ export function BookingConfirmationPage() {
             // derived qty stamped as preset_calculated, same snapshot
             // semantics as roofing).
             computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements)
+          } else if (pendingItem.serviceId === 'bathroom' && pendingItem.bathroomMeasurements) {
+            // Ship #475+2 — Bathroom Remodel: line scope from L×W×H×tile-coverage
+            // + tub toggle via BATHROOM_RATES. FIXTURES rows ($0 client-provided)
+            // are included in the snapshot so the vendor inbox sees the full
+            // scope, but contractor subtotal === grand total by construction.
+            computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements)
           } else if (contractor.vendor_id) {
             // PR #118 fix-forward — for non-roofing services, snapshot a
             // permit-line from vendor's flat per-service permit fee
