@@ -15,7 +15,7 @@ import {
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { CardSlideWizard } from './card-slide-wizard'
-import { PermitStepSection, isProjectPermitValid } from './permit-step-section'
+import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid } from './permit-step-section'
 import {
   BATHROOM_RATES,
   computeBathroomLineItems,
@@ -427,6 +427,8 @@ export function BathroomConfigurator() {
   const updateItem = useCartStore((s) => s.updateItem)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
 
   const editData = (location.state && typeof location.state === 'object' && 'editItem' in location.state
     ? (location.state as { editItem: Record<string, unknown> }).editItem
@@ -460,7 +462,9 @@ export function BathroomConfigurator() {
   const meta = STEP_META[step]
 
   const measurementsValid = isBathroomMeasurementsValid(measurements)
-  const permitValid = isProjectPermitValid(projectPermit ?? null, projectPermitWaiver ?? null)
+  const permitValid =
+    isProjectPermitValid(projectPermit ?? null, projectPermitWaiver ?? null) &&
+    isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
   const addressValid = !!address
 
   let nextDisabled = false

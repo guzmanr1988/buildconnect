@@ -21,7 +21,7 @@ import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
+import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
@@ -472,6 +472,8 @@ export function ServiceDetailPage() {
   const cartItems = useCartStore((s) => s.items)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
   const cartCount = cartItems.length
   // Single-project-per-service-per-cart gate (kratos msg 1776669325145 Rod
   // pivot from state-reset approach). Before Add-to-Project fires, check if
@@ -2828,7 +2830,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }

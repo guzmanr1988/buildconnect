@@ -6,7 +6,7 @@ import { CardSlideWizard } from './card-slide-wizard'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
+import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 // Synthetic groupId used to render the project-permit step inside the
 // chip-based generic wizard. Resolves to <PermitStepSection /> instead of
@@ -93,6 +93,8 @@ export function GenericServiceWizard({
   const removeItem = useCartStore((s) => s.removeItem)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
 
   const CONTENT_STEPS = steps.length
   const ADDR_STEP = CONTENT_STEPS + 1
@@ -151,6 +153,7 @@ export function GenericServiceWizard({
     if (!cfg) return true
     if (cfg.groupId === PERMIT_STEP_GROUP_ID) {
       return isProjectPermitValid(projectPermit, projectPermitWaiver)
+        && isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
     }
     return (selections[cfg.groupId]?.length ?? 0) > 0
   }

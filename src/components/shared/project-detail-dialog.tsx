@@ -17,7 +17,9 @@ import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
-import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { PermitDisplayRow, AssociationDisplayRow, PoolSurveyDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { fetchAssociationDocForSentProject, getSignedUrl } from '@/lib/api/homeowner-documents'
+import type { HomeownerDoc } from '@/stores/homeowner-documents-store'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -94,6 +96,27 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     })
     return () => { cancelled = true }
   }, [open, projectId, sentProjects])
+
+  // Association permit doc — fetched by sent_project_id + doc_type='permit'.
+  // RLS gates the row to the owning vendor / admin.
+  const [associationDoc, setAssociationDoc] = useState<HomeownerDoc | null>(null)
+  useEffect(() => {
+    setAssociationDoc(null)
+    if (!open || !projectId) return
+    const sp = sentProjects.find((p) => p.id === projectId)
+    if (!sp) return
+    let cancelled = false
+    fetchAssociationDocForSentProject(projectId).then((doc) => {
+      if (!cancelled) setAssociationDoc(doc)
+    })
+    return () => { cancelled = true }
+  }, [open, projectId, sentProjects])
+
+  const handleAssociationDocDownload = async () => {
+    if (!associationDoc) return
+    const url = await getSignedUrl(associationDoc.storagePath)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -528,6 +551,20 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ?? (selectedItem.project_data.item as any).roofPermit
                     }
                   />
+
+                  {/* Association — project-level, shown for any service.
+                      task_1780776240716_817. When yes + doc uploaded, the
+                      vendor gets a click-to-download signed-URL link. */}
+                  <AssociationDisplayRow
+                    association={selectedItem.project_data.projectAssociation ?? null}
+                    docFilename={associationDoc?.filename}
+                    onDownload={handleAssociationDocDownload}
+                  />
+
+                  {/* Pool survey — Pool-only. Other services leave value NULL
+                      so the row hides cleanly via the null-gate in the
+                      component. */}
+                  <PoolSurveyDisplayRow survey={selectedItem.project_data.poolSurvey ?? null} />
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
                     const pd = selectedItem.project_data

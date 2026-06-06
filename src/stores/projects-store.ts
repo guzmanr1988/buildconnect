@@ -168,6 +168,12 @@ export interface SentProject {
     signedName: string
     signedAt: string
   } | null
+  // Migration 064 — project-level association question (every service) and
+  // Pool-only survey question, both snapshotted from cart-store at sendProject
+  // time alongside projectPermit. poolSurvey stays undefined for non-Pool
+  // services so the vendor surface can hide the row cleanly.
+  projectAssociation?: 'yes' | 'no'
+  poolSurvey?: 'yes' | 'no'
   // PR-330 — homeowner-allocated financing for this sent_project. Both
   // NULL pre-allocation; both set together via the Edge Fn apply_allocation
   // path (writes are gated server-side by envelope-cap re-check). Slot-
@@ -391,7 +397,8 @@ export const useProjectsStore = create<ProjectsState>()(
           'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
           'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
           'cancellation_request, applied_financing_amount_cents, ' +
-          'applied_financing_application_id'
+          'applied_financing_application_id, project_permit, ' +
+          'project_permit_waiver, project_association, pool_survey'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -438,6 +445,10 @@ export const useProjectsStore = create<ProjectsState>()(
           quotedPriceCents:row.quoted_price_cents ?? undefined,
           applied_financing_amount_cents:    row.applied_financing_amount_cents ?? null,
           applied_financing_application_id:  row.applied_financing_application_id ?? null,
+          projectPermit:        row.project_permit ?? undefined,
+          projectPermitWaiver:  row.project_permit_waiver ?? undefined,
+          projectAssociation:   row.project_association ?? undefined,
+          poolSurvey:           row.pool_survey ?? undefined,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
@@ -574,8 +585,16 @@ export const useProjectsStore = create<ProjectsState>()(
         const cartState = useCartStore.getState()
         const projectPermitSnapshot = cartState.projectPermit ?? undefined
         const projectPermitWaiverSnapshot = cartState.projectPermitWaiver ?? undefined
+        const projectAssociationSnapshot = cartState.projectAssociation ?? undefined
+        const poolSurveySnapshot = cartState.poolSurvey ?? undefined
+        // Same-UUID promotion (task_1780776240716_817 Option 1): when an
+        // Association permit doc was uploaded mid-wizard, cart-store stamped a
+        // pendingProjectId and wrote it as the doc's sent_project_id FK. We
+        // promote that UUID here so the FK lands on the freshly-written
+        // sent_projects row without a reconciliation UPDATE. clearCart()
+        // resets pendingProjectId post-submit so the next project starts fresh.
         const next: SentProject = {
-          id: crypto.randomUUID(),
+          id: cartState.pendingProjectId ?? crypto.randomUUID(),
           item,
           status: 'pending',
           contractor,
@@ -590,6 +609,8 @@ export const useProjectsStore = create<ProjectsState>()(
             : {}),
           ...(projectPermitSnapshot ? { projectPermit: projectPermitSnapshot } : {}),
           ...(projectPermitWaiverSnapshot ? { projectPermitWaiver: projectPermitWaiverSnapshot } : {}),
+          ...(projectAssociationSnapshot ? { projectAssociation: projectAssociationSnapshot } : {}),
+          ...(poolSurveySnapshot ? { poolSurvey: poolSurveySnapshot } : {}),
         }
         set((state) => {
           if (state.sentProjects.some((p) => p.item.id === item.id)) return state
@@ -628,8 +649,19 @@ export const useProjectsStore = create<ProjectsState>()(
             id_document: next.idDocument ?? null,
             price_line_items: next.priceLineItems ?? null,
             quoted_price_cents: next.quotedPriceCents ?? null,
+            project_permit: next.projectPermit ?? null,
+            project_permit_waiver: next.projectPermitWaiver ?? null,
+            project_association: next.projectAssociation ?? null,
+            pool_survey: next.poolSurvey ?? null,
           })
         }
+        // task_1780776240716_817 — same-UUID promotion is one-shot. Clearing
+        // pendingProjectId here means a second sendProject in the same cart
+        // session generates a fresh UUID instead of colliding on this one.
+        // Permit / association / survey answers stay until clearCart so the
+        // homeowner doesn't re-answer for a multi-item cart, but the FK
+        // anchor for any new uploads gets reset.
+        useCartStore.getState().clearPendingProjectId()
         return next.id
       },
 

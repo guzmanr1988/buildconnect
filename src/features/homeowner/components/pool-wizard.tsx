@@ -8,7 +8,7 @@ import { CardSlideWizard } from './card-slide-wizard'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
+import { PermitStepSection, PoolSurveySection, isProjectPermitValid, isProjectAssociationValid, isPoolSurveyValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 type Selections = Record<string, string[]>
 
@@ -117,6 +117,9 @@ export function PoolWizard({
   const removeItem = useCartStore((s) => s.removeItem)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
+  const poolSurvey = useCartStore((s) => s.poolSurvey)
 
   const editAddons = editItem?.addonQuantities as
     | { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number }
@@ -393,7 +396,12 @@ export function PoolWizard({
   }
 
   function renderStep7() {
-    return <PermitStepSection />
+    return (
+      <div className="flex flex-col gap-6">
+        <PoolSurveySection />
+        <PermitStepSection />
+      </div>
+    )
   }
 
   function renderStep8() {
@@ -548,7 +556,11 @@ export function PoolWizard({
       if (sel[0] !== 'na' && poolFloorSqft <= 0) return false
       return true
     }
-    if (s === 7) return isProjectPermitValid(projectPermit, projectPermitWaiver)
+    if (s === 7) {
+      return isProjectPermitValid(projectPermit, projectPermitWaiver)
+        && isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
+        && isPoolSurveyValid(poolSurvey ?? null)
+    }
     return true
   }
   const nextDisabled = (isRequired(step) && !isDone(step)) || added

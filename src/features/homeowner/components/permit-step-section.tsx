@@ -1,5 +1,12 @@
-import { useEffect, useState } from 'react'
-import { useCartStore, type ProjectPermitWaiver } from '@/stores/cart-store'
+import { useEffect, useRef, useState } from 'react'
+import { Loader2, Upload, X } from 'lucide-react'
+import {
+  useCartStore,
+  type ProjectPermitWaiver,
+  type ProjectYesNoChoice,
+} from '@/stores/cart-store'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -7,8 +14,19 @@ import { cn } from '@/lib/utils'
 // configurator. Reads/writes cart-store projectPermit + projectPermitWaiver
 // (project-level SoT). Per kratos verdict 2026-05-07 (Q1/Q4/Q6): same copy
 // across every flow, identical waiver semantics, no per-flow forking.
-export const PERMIT_HEADING = 'Do you need a permit?'
-export const PERMIT_SUBTITLE = 'Permits are required for full replacements in most Florida counties.'
+//
+// task_1780776240716_817 widened the step to also cover the Association
+// question (every service, mandatory upload when yes). Step title constants
+// updated accordingly so consumers don't need to know about the second Q.
+export const PERMIT_HEADING = 'A few last questions'
+export const PERMIT_SUBTITLE = 'These help us match you with the right paperwork up front.'
+
+export const ASSOCIATION_HEADING = 'Do you have an association?'
+export const ASSOCIATION_SUBTITLE = 'Some neighborhoods require an HOA / association permit before work can start.'
+export const ASSOCIATION_UPLOAD_LABEL = 'Association permit form'
+
+const ALLOWED_DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png']
+const MAX_DOC_SIZE_BYTES = 10 * 1024 * 1024
 
 export function isProjectPermitValid(
   permit: 'yes' | 'no' | null,
@@ -16,6 +34,15 @@ export function isProjectPermitValid(
 ): boolean {
   if (permit === 'yes') return true
   if (permit === 'no' && waiver?.acknowledged && waiver.signedName.trim().length >= 2) return true
+  return false
+}
+
+export function isProjectAssociationValid(
+  association: ProjectYesNoChoice | null,
+  associationDocId: string | null,
+): boolean {
+  if (association === 'no') return true
+  if (association === 'yes' && !!associationDocId) return true
   return false
 }
 
@@ -47,7 +74,293 @@ export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined 
   )
 }
 
-export function PermitStepSection() {
+// Read-only display row for the Association question (vendor + admin project
+// detail surfaces). Mirrors PermitDisplayRow shape. When association is 'yes'
+// AND a doc was uploaded, renders a download link alongside the badge.
+export function AssociationDisplayRow({
+  association,
+  docFilename,
+  onDownload,
+}: {
+  association: 'yes' | 'no' | undefined | null
+  docFilename?: string
+  onDownload?: () => void
+}) {
+  if (!association) return null
+  return (
+    <div className="rounded-xl border p-4 space-y-2">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Association</h4>
+      <div className="flex flex-col gap-2">
+        <Badge
+          variant="secondary"
+          className={`text-sm px-3 py-1 w-fit ${
+            association === 'yes'
+              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {association === 'yes' ? 'Yes — association permit included' : 'No association'}
+        </Badge>
+        {association === 'yes' && docFilename && (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="text-xs text-primary hover:underline text-left w-fit"
+          >
+            Download: {docFilename}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Read-only display row for the Pool survey question. Pool-only — every
+// other service leaves the value NULL so this returns null cleanly.
+export function PoolSurveyDisplayRow({ survey }: { survey: 'yes' | 'no' | undefined | null }) {
+  if (!survey) return null
+  return (
+    <div className="rounded-xl border p-4 space-y-2">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property survey</h4>
+      <Badge
+        variant="secondary"
+        className={`text-sm px-3 py-1 w-fit ${
+          survey === 'yes'
+            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+            : 'bg-muted text-muted-foreground'
+        }`}
+      >
+        {survey === 'yes' ? 'Yes — homeowner has survey' : 'No survey on file'}
+      </Badge>
+    </div>
+  )
+}
+
+function AssociationSection() {
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const setProjectAssociation = useCartStore((s) => s.setProjectAssociation)
+  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
+  const setProjectAssociationDocId = useCartStore((s) => s.setProjectAssociationDocId)
+  const ensurePendingProjectId = useCartStore((s) => s.ensurePendingProjectId)
+  const profile = useAuthStore((s) => s.profile)
+  const addDoc = useHomeownerDocsStore((s) => s.addDoc)
+  const removeDoc = useHomeownerDocsStore((s) => s.removeDoc)
+  const docs = useHomeownerDocsStore((s) => s.docs)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const associationDoc = projectAssociationDocId
+    ? docs.find((d) => d.id === projectAssociationDocId) ?? null
+    : null
+
+  function selectYes() {
+    setProjectAssociation('yes')
+  }
+
+  function selectNo() {
+    setProjectAssociation('no')
+    // If user previously uploaded an association doc then flipped to No,
+    // drop the orphaned reference. The blob stays in storage until next
+    // submit / cleanup but no row points at it from the cart anymore.
+    if (projectAssociationDocId && associationDoc) {
+      void removeDoc(projectAssociationDocId)
+      setProjectAssociationDocId(null)
+    }
+    setUploadError(null)
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!profile?.id) {
+      setUploadError('Please sign in before uploading documents.')
+      return
+    }
+    if (!ALLOWED_DOC_MIME.includes(file.type)) {
+      setUploadError('File must be a PDF, JPG, or PNG.')
+      return
+    }
+    if (file.size > MAX_DOC_SIZE_BYTES) {
+      setUploadError('File is too large (max 10 MB).')
+      return
+    }
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const pendingProjectId = ensurePendingProjectId()
+      const blob = file.slice(0, file.size, file.type)
+      const doc = await addDoc({
+        homeownerId: profile.id,
+        category: 'project-submission',
+        filename: file.name,
+        blob,
+        sentProjectId: pendingProjectId,
+        docType: 'permit',
+        uploadedBy: 'homeowner',
+      })
+      if (!doc) {
+        setUploadError('Upload failed — please try again.')
+      } else {
+        setProjectAssociationDocId(doc.id)
+      }
+    } catch (err) {
+      console.error('[association-upload] failed:', err)
+      setUploadError('Upload failed — please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function removeUploadedDoc() {
+    if (!projectAssociationDocId) return
+    void removeDoc(projectAssociationDocId)
+    setProjectAssociationDocId(null)
+  }
+
+  return (
+    <div className="flex flex-col gap-3" data-association-step-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">{ASSOCIATION_HEADING}</h3>
+        <p className="text-sm text-muted-foreground">{ASSOCIATION_SUBTITLE}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={selectYes}
+        data-association-choice="yes"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          projectAssociation === 'yes'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            projectAssociation === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {projectAssociation === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">Yes — I have an association</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            We'll need a copy of your approved association permit form before work begins.
+          </p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={selectNo}
+        data-association-choice="no"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          projectAssociation === 'no'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            projectAssociation === 'no' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {projectAssociation === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">No — no association</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Skip this step and continue.
+          </p>
+        </div>
+      </button>
+
+      {projectAssociation === 'yes' && (
+        <div
+          className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3"
+          data-association-upload-block="true"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                {ASSOCIATION_UPLOAD_LABEL}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                PDF, JPG, or PNG. 10 MB maximum.
+              </p>
+            </div>
+          </div>
+
+          {associationDoc ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
+              <div className="text-sm font-medium text-foreground truncate">
+                {associationDoc.filename}
+              </div>
+              <button
+                type="button"
+                onClick={removeUploadedDoc}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                data-association-remove-doc="true"
+              >
+                <X className="h-3.5 w-3.5" />
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                onChange={handleFileChange}
+                className="sr-only"
+                data-association-file-input="true"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className={cn(
+                  'inline-flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 px-4 py-3 text-sm font-medium text-primary transition-colors',
+                  uploading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-primary/5',
+                )}
+                data-association-upload-trigger="true"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Upload association permit
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Upload required to continue.
+              </p>
+            </div>
+          )}
+
+          {uploadError && (
+            <p className="text-xs text-destructive" data-association-upload-error="true">
+              {uploadError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PermitSection() {
   const projectPermit = useCartStore((s) => s.projectPermit)
   const setProjectPermit = useCartStore((s) => s.setProjectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
@@ -88,6 +401,13 @@ export function PermitStepSection() {
 
   return (
     <div className="flex flex-col gap-3" data-permit-step-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">Do you need a permit?</h3>
+        <p className="text-sm text-muted-foreground">
+          Permits are required for full replacements in most Florida counties.
+        </p>
+      </div>
+
       <button
         type="button"
         onClick={selectYes}
@@ -180,6 +500,93 @@ export function PermitStepSection() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export function PermitStepSection() {
+  return (
+    <div className="flex flex-col gap-6">
+      <AssociationSection />
+      <PermitSection />
+    </div>
+  )
+}
+
+export const POOL_SURVEY_HEADING = 'Do you have the survey of the property?'
+export const POOL_SURVEY_SUBTITLE = 'A property survey helps us plan the pool layout and confirm setback distances.'
+
+export function isPoolSurveyValid(survey: ProjectYesNoChoice | null): boolean {
+  return survey === 'yes' || survey === 'no'
+}
+
+// Pool-only survey question — plain Yes / No (no upload). Mirrors
+// AssociationSection styling so the step keeps a consistent shape, but lives
+// outside the shared PermitStepSection so non-Pool flows never see it.
+export function PoolSurveySection() {
+  const poolSurvey = useCartStore((s) => s.poolSurvey)
+  const setPoolSurvey = useCartStore((s) => s.setPoolSurvey)
+
+  return (
+    <div className="flex flex-col gap-3" data-pool-survey-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">{POOL_SURVEY_HEADING}</h3>
+        <p className="text-sm text-muted-foreground">{POOL_SURVEY_SUBTITLE}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setPoolSurvey('yes')}
+        data-pool-survey-choice="yes"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          poolSurvey === 'yes'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            poolSurvey === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {poolSurvey === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">Yes — I have a survey</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            The contractor will request a copy before scheduling layout.
+          </p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setPoolSurvey('no')}
+        data-pool-survey-choice="no"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          poolSurvey === 'no'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            poolSurvey === 'no' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {poolSurvey === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">No — no survey on file</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            The contractor can order or verify one as part of the project.
+          </p>
+        </div>
+      </button>
     </div>
   )
 }
