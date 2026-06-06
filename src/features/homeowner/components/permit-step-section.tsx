@@ -141,7 +141,6 @@ function AssociationSection() {
   const setProjectAssociation = useCartStore((s) => s.setProjectAssociation)
   const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
   const setProjectAssociationDocId = useCartStore((s) => s.setProjectAssociationDocId)
-  const ensurePendingProjectId = useCartStore((s) => s.ensurePendingProjectId)
   const profile = useAuthStore((s) => s.profile)
   const addDoc = useHomeownerDocsStore((s) => s.addDoc)
   const removeDoc = useHomeownerDocsStore((s) => s.removeDoc)
@@ -189,14 +188,16 @@ function AssociationSection() {
     setUploading(true)
     setUploadError(null)
     try {
-      const pendingProjectId = ensurePendingProjectId()
+      // task_817 deferred-FK: upload with sent_project_id=NULL. Vendor RLS
+      // cannot see this row until sendProject backfills sent_project_id with
+      // the new sent_projects.id. Zero draft sent_projects rows by design.
       const blob = file.slice(0, file.size, file.type)
       const doc = await addDoc({
         homeownerId: profile.id,
         category: 'project-submission',
         filename: file.name,
         blob,
-        sentProjectId: pendingProjectId,
+        sentProjectId: null,
         docType: 'permit',
         uploadedBy: 'homeowner',
       })

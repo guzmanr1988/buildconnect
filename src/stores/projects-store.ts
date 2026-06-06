@@ -587,14 +587,15 @@ export const useProjectsStore = create<ProjectsState>()(
         const projectPermitWaiverSnapshot = cartState.projectPermitWaiver ?? undefined
         const projectAssociationSnapshot = cartState.projectAssociation ?? undefined
         const poolSurveySnapshot = cartState.poolSurvey ?? undefined
-        // Same-UUID promotion (task_1780776240716_817 Option 1): when an
-        // Association permit doc was uploaded mid-wizard, cart-store stamped a
-        // pendingProjectId and wrote it as the doc's sent_project_id FK. We
-        // promote that UUID here so the FK lands on the freshly-written
-        // sent_projects row without a reconciliation UPDATE. clearCart()
-        // resets pendingProjectId post-submit so the next project starts fresh.
+        // Deferred-FK reconcile (task_1780776240716_817 Option B): Association
+        // permit doc was uploaded with sent_project_id=NULL (FK accepts null;
+        // no draft sent_projects row exists, so vendor list stays clean by
+        // construction). cart-store stored the doc id in projectAssociationDocId
+        // at upload time. After upsertProject lands the sent_projects row, we
+        // reconcile by UPDATEing the doc's sent_project_id to the new row id.
+        const projectAssociationDocId = cartState.projectAssociationDocId
         const next: SentProject = {
-          id: cartState.pendingProjectId ?? crypto.randomUUID(),
+          id: crypto.randomUUID(),
           item,
           status: 'pending',
           contractor,
@@ -654,14 +655,25 @@ export const useProjectsStore = create<ProjectsState>()(
             project_association: next.projectAssociation ?? null,
             pool_survey: next.poolSurvey ?? null,
           })
+          // task_817 Option B reconcile — backfill sent_project_id on the
+          // association doc that was uploaded with NULL FK. Fire-and-forget
+          // mirrors upsertProject; the doc row already exists (homeowner
+          // owns it, RLS allows the homeowner UPDATE on their own row).
+          if (projectAssociationDocId) {
+            supabase.from('homeowner_documents')
+              .update({ sent_project_id: next.id })
+              .eq('id', projectAssociationDocId)
+              .then(({ error }) => {
+                if (error) console.error('[projects] assoc doc reconcile failed:', error.message)
+              })
+          }
         }
-        // task_1780776240716_817 — same-UUID promotion is one-shot. Clearing
-        // pendingProjectId here means a second sendProject in the same cart
-        // session generates a fresh UUID instead of colliding on this one.
-        // Permit / association / survey answers stay until clearCart so the
-        // homeowner doesn't re-answer for a multi-item cart, but the FK
-        // anchor for any new uploads gets reset.
+        // task_817 — clear cart-side FK refs after submit so a second
+        // sendProject in the same cart session starts fresh. pendingProjectId
+        // is no longer load-bearing (Option B uses deferred reconcile) but
+        // clearing it is still correct hygiene.
         useCartStore.getState().clearPendingProjectId()
+        useCartStore.getState().setProjectAssociationDocId(null)
         return next.id
       },
 
