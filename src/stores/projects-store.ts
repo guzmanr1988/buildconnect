@@ -11,9 +11,12 @@ const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getSt
   useActivityLogStore.getState().logEvent(entry)
 
 function upsertProject(fields: Record<string, unknown> & { id: string }) {
-  supabase.from('sent_projects')
+  return supabase.from('sent_projects')
     .upsert(fields, { onConflict: 'id' })
-    .then(({ error }) => { if (error) console.error('[projects] upsert failed:', error.message) })
+    .then(({ error }) => {
+      if (error) console.error('[projects] upsert failed:', error.message)
+      return { error }
+    })
 }
 
 function updateProject(id: string, fields: Record<string, unknown>) {
@@ -633,7 +636,7 @@ export const useProjectsStore = create<ProjectsState>()(
         })
         logEvent({ eventType: 'submitted', projectId: undefined, meta: { serviceName: item.serviceName, vendor: contractor.company } })
         if (next.contractor.vendor_id) {
-          upsertProject({
+          const upsertPromise = upsertProject({
             id: next.id,
             vendor_id: next.contractor.vendor_id,
             homeowner_id: next.homeowner_id ?? null,
@@ -656,16 +659,22 @@ export const useProjectsStore = create<ProjectsState>()(
             pool_survey: next.poolSurvey ?? null,
           })
           // task_817 Option B reconcile — backfill sent_project_id on the
-          // association doc that was uploaded with NULL FK. Fire-and-forget
-          // mirrors upsertProject; the doc row already exists (homeowner
-          // owns it, RLS allows the homeowner UPDATE on their own row).
+          // association doc uploaded with NULL FK. MUST serialize AFTER
+          // sent_projects upsert resolves; firing in parallel races the
+          // network and the PATCH lands before the INSERT, tripping
+          // homeowner_documents_sent_project_id_fkey (23503). Apollo P-A2
+          // pinned this race on 0332faf. Early-return on upsert error so we
+          // don't fire a reconcile guaranteed to FK-violate.
           if (projectAssociationDocId) {
-            supabase.from('homeowner_documents')
-              .update({ sent_project_id: next.id })
-              .eq('id', projectAssociationDocId)
-              .then(({ error }) => {
-                if (error) console.error('[projects] assoc doc reconcile failed:', error.message)
-              })
+            upsertPromise.then(({ error }) => {
+              if (error) return
+              supabase.from('homeowner_documents')
+                .update({ sent_project_id: next.id })
+                .eq('id', projectAssociationDocId)
+                .then(({ error: reconcileError }) => {
+                  if (reconcileError) console.error('[projects] assoc doc reconcile failed:', reconcileError.message)
+                })
+            })
           }
         }
         // task_817 — clear cart-side FK refs after submit so a second
