@@ -21,7 +21,7 @@ import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
-import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
+import { PermitStepSection, PoolSurveySection, isProjectPermitValid, isProjectAssociationValid, isPoolSurveyValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
@@ -474,6 +474,7 @@ export function ServiceDetailPage() {
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const projectAssociation = useCartStore((s) => s.projectAssociation)
   const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
+  const poolSurvey = useCartStore((s) => s.poolSurvey)
   const cartCount = cartItems.length
   // Single-project-per-service-per-cart gate (kratos msg 1776669325145 Rod
   // pivot from state-reset approach). Before Add-to-Project fires, check if
@@ -2766,10 +2767,17 @@ export function ServiceDetailPage() {
 
         {/* Project-permit step — same shape + copy as roofing wizard step 8.
             Inline configurator path (windows_doors / kitchen / bathroom);
-            wizards render PermitStepSection inside their step list. */}
+            wizards render PermitStepSection inside their step list.
+            Pool-only: render PoolSurveySection above (spec order:
+            pool_survey → association → permit). */}
         <div className="mt-6 pt-6 border-t border-border/50">
           <h3 className="text-base font-semibold text-foreground mb-1">{PERMIT_HEADING}</h3>
           <p className="text-sm text-muted-foreground mb-3">{PERMIT_SUBTITLE}</p>
+          {serviceId === 'pool' && (
+            <div className="mb-6">
+              <PoolSurveySection />
+            </div>
+          )}
           <PermitStepSection />
         </div>
 
@@ -2830,7 +2838,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
