@@ -472,6 +472,8 @@ export default function LeadInbox() {
                             <ProjectItemsCardGrid
                               item={sp.item}
                               projectPermit={sp.projectPermit}
+                              projectAssociation={sp.projectAssociation}
+                              poolSurvey={sp.poolSurvey}
                               showPricing
                               getPrice={getVendorPrice}
                               resolvedLineItems={sp.priceLineItems}

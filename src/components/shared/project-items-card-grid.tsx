@@ -583,6 +583,11 @@ function SummarySectionView({ section }: { section: SummarySection }) {
 export interface ProjectItemsCardGridProps {
   item: CartItem
   projectPermit?: 'yes' | 'no'
+  // task_1780776240716_817 — project-level association answer (every service)
+  // and Pool-only survey answer. Both undefined for back-compat with legacy
+  // pre-migration-064 sent_projects that never carried the columns.
+  projectAssociation?: 'yes' | 'no'
+  poolSurvey?: 'yes' | 'no'
   showPricing?: boolean
   getPrice?: GetPriceFn
   resolvedLineItems?: ResolvedLineItem[]
@@ -591,6 +596,8 @@ export interface ProjectItemsCardGridProps {
 export function ProjectItemsCardGrid({
   item,
   projectPermit,
+  projectAssociation,
+  poolSurvey,
   showPricing,
   getPrice,
   resolvedLineItems,
@@ -611,6 +618,44 @@ export function ProjectItemsCardGrid({
             {
               variant: permitChoice === 'yes' ? 'secondary' : 'outline',
               text: permitChoice === 'yes' ? 'Yes' : 'No',
+            },
+          ],
+        },
+      ],
+    })
+  }
+
+  // Association — project-level, every service (task_1780776240716_817).
+  if (projectAssociation) {
+    sections.push({
+      id: 'association',
+      title: 'Association',
+      cards: [
+        {
+          topLabel: 'Association permit',
+          specs: [
+            {
+              variant: projectAssociation === 'yes' ? 'secondary' : 'outline',
+              text: projectAssociation === 'yes' ? 'Yes' : 'No',
+            },
+          ],
+        },
+      ],
+    })
+  }
+
+  // Pool survey — Pool-only; absent on every other service.
+  if (poolSurvey) {
+    sections.push({
+      id: 'pool-survey',
+      title: 'Property survey',
+      cards: [
+        {
+          topLabel: 'Survey on file',
+          specs: [
+            {
+              variant: poolSurvey === 'yes' ? 'secondary' : 'outline',
+              text: poolSurvey === 'yes' ? 'Yes' : 'No',
             },
           ],
         },

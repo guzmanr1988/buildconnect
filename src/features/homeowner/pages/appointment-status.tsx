@@ -731,6 +731,8 @@ export function AppointmentStatusPage() {
               <ProjectItemsCardGrid
                 item={sentProject.item}
                 projectPermit={sentProject?.projectPermit}
+                projectAssociation={sentProject?.projectAssociation}
+                poolSurvey={sentProject?.poolSurvey}
                 resolvedLineItems={sentProject?.priceLineItems}
               />
             ) : (
