@@ -288,7 +288,6 @@ export function RemodelConfigurator() {
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const projectAssociation = useCartStore((s) => s.projectAssociation)
-  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
 
   const editData = (location.state && typeof location.state === 'object' && 'editItem' in location.state
     ? (location.state as { editItem: Record<string, unknown> }).editItem
@@ -325,7 +324,7 @@ export function RemodelConfigurator() {
   const measurementsValid = isMeasurementsValid(measurements)
   const permitValid =
     isProjectPermitValid(projectPermit ?? null, projectPermitWaiver ?? null) &&
-    isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
+    isProjectAssociationValid(projectAssociation ?? null)
   const addressValid = !!address
 
   let nextDisabled = false

@@ -118,7 +118,6 @@ export function PoolWizard({
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const projectAssociation = useCartStore((s) => s.projectAssociation)
-  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
   const poolSurvey = useCartStore((s) => s.poolSurvey)
 
   const editAddons = editItem?.addonQuantities as
@@ -558,7 +557,7 @@ export function PoolWizard({
     }
     if (s === 7) {
       return isProjectPermitValid(projectPermit, projectPermitWaiver)
-        && isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
+        && isProjectAssociationValid(projectAssociation ?? null)
         && isPoolSurveyValid(poolSurvey ?? null)
     }
     return true

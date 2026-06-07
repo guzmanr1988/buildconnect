@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { Loader2, Upload, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import {
   useCartStore,
   type ProjectPermitWaiver,
   type ProjectYesNoChoice,
 } from '@/stores/cart-store'
-import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
-import { useAuthStore } from '@/stores/auth-store'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -16,17 +13,21 @@ import { cn } from '@/lib/utils'
 // across every flow, identical waiver semantics, no per-flow forking.
 //
 // task_1780776240716_817 widened the step to also cover the Association
-// question (every service, mandatory upload when yes). Step title constants
-// updated accordingly so consumers don't need to know about the second Q.
+// question (every service). Step title constants updated accordingly so
+// consumers don't need to know about the second Q.
+//
+// Re-scope 2026-06-07 (kratos arc#21 Part A): Association is now PURE Y/N
+// mirroring the Permit question — no upload at submission time. Customers
+// must be able to submit + match a contractor with zero document upload.
+// The association permit document moves to engagement-time (Part B, after
+// the customer has selected/engaged a contractor); the doc-fetch + display
+// scaffolding (AssociationDisplayRow with onDownload) is kept dormant for
+// Part B reactivation.
 export const PERMIT_HEADING = 'A few last questions'
 export const PERMIT_SUBTITLE = 'These help us match you with the right paperwork up front.'
 
 export const ASSOCIATION_HEADING = 'Do you have an association?'
 export const ASSOCIATION_SUBTITLE = 'Some neighborhoods require an HOA / association permit before work can start.'
-export const ASSOCIATION_UPLOAD_LABEL = 'Association permit form'
-
-const ALLOWED_DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png']
-const MAX_DOC_SIZE_BYTES = 10 * 1024 * 1024
 
 export function isProjectPermitValid(
   permit: 'yes' | 'no' | null,
@@ -37,13 +38,12 @@ export function isProjectPermitValid(
   return false
 }
 
+// Pure Y/N — answer must be 'yes' or 'no'. No document requirement.
+// Part B engagement-time upload is a separate gate on a different surface.
 export function isProjectAssociationValid(
   association: ProjectYesNoChoice | null,
-  associationDocId: string | null,
 ): boolean {
-  if (association === 'no') return true
-  if (association === 'yes' && !!associationDocId) return true
-  return false
+  return association === 'yes' || association === 'no'
 }
 
 // Read-only display row for parent surfaces (cart project-detail dialog,
@@ -139,86 +139,6 @@ export function PoolSurveyDisplayRow({ survey }: { survey: 'yes' | 'no' | undefi
 function AssociationSection() {
   const projectAssociation = useCartStore((s) => s.projectAssociation)
   const setProjectAssociation = useCartStore((s) => s.setProjectAssociation)
-  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
-  const setProjectAssociationDocId = useCartStore((s) => s.setProjectAssociationDocId)
-  const profile = useAuthStore((s) => s.profile)
-  const addDoc = useHomeownerDocsStore((s) => s.addDoc)
-  const removeDoc = useHomeownerDocsStore((s) => s.removeDoc)
-  const docs = useHomeownerDocsStore((s) => s.docs)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-
-  const associationDoc = projectAssociationDocId
-    ? docs.find((d) => d.id === projectAssociationDocId) ?? null
-    : null
-
-  function selectYes() {
-    setProjectAssociation('yes')
-  }
-
-  function selectNo() {
-    setProjectAssociation('no')
-    // If user previously uploaded an association doc then flipped to No,
-    // drop the orphaned reference. The blob stays in storage until next
-    // submit / cleanup but no row points at it from the cart anymore.
-    if (projectAssociationDocId && associationDoc) {
-      void removeDoc(projectAssociationDocId)
-      setProjectAssociationDocId(null)
-    }
-    setUploadError(null)
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!profile?.id) {
-      setUploadError('Please sign in before uploading documents.')
-      return
-    }
-    if (!ALLOWED_DOC_MIME.includes(file.type)) {
-      setUploadError('File must be a PDF, JPG, or PNG.')
-      return
-    }
-    if (file.size > MAX_DOC_SIZE_BYTES) {
-      setUploadError('File is too large (max 10 MB).')
-      return
-    }
-    setUploading(true)
-    setUploadError(null)
-    try {
-      // task_817 deferred-FK: upload with sent_project_id=NULL. Vendor RLS
-      // cannot see this row until sendProject backfills sent_project_id with
-      // the new sent_projects.id. Zero draft sent_projects rows by design.
-      const blob = file.slice(0, file.size, file.type)
-      const doc = await addDoc({
-        homeownerId: profile.id,
-        category: 'project-submission',
-        filename: file.name,
-        blob,
-        sentProjectId: null,
-        docType: 'permit',
-        uploadedBy: 'homeowner',
-      })
-      if (!doc) {
-        setUploadError('Upload failed — please try again.')
-      } else {
-        setProjectAssociationDocId(doc.id)
-      }
-    } catch (err) {
-      console.error('[association-upload] failed:', err)
-      setUploadError('Upload failed — please try again.')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  function removeUploadedDoc() {
-    if (!projectAssociationDocId) return
-    void removeDoc(projectAssociationDocId)
-    setProjectAssociationDocId(null)
-  }
 
   return (
     <div className="flex flex-col gap-3" data-association-step-section="true">
@@ -229,7 +149,7 @@ function AssociationSection() {
 
       <button
         type="button"
-        onClick={selectYes}
+        onClick={() => setProjectAssociation('yes')}
         data-association-choice="yes"
         className={cn(
           'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
@@ -249,14 +169,14 @@ function AssociationSection() {
         <div>
           <p className="text-sm font-medium text-foreground">Yes — I have an association</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            We'll need a copy of your approved association permit form before work begins.
+            Your contractor will request the association permit form once you've matched.
           </p>
         </div>
       </button>
 
       <button
         type="button"
-        onClick={selectNo}
+        onClick={() => setProjectAssociation('no')}
         data-association-choice="no"
         className={cn(
           'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
@@ -280,83 +200,6 @@ function AssociationSection() {
           </p>
         </div>
       </button>
-
-      {projectAssociation === 'yes' && (
-        <div
-          className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3"
-          data-association-upload-block="true"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                {ASSOCIATION_UPLOAD_LABEL}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                PDF, JPG, or PNG. 10 MB maximum.
-              </p>
-            </div>
-          </div>
-
-          {associationDoc ? (
-            <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
-              <div className="text-sm font-medium text-foreground truncate">
-                {associationDoc.filename}
-              </div>
-              <button
-                type="button"
-                onClick={removeUploadedDoc}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                data-association-remove-doc="true"
-              >
-                <X className="h-3.5 w-3.5" />
-                Remove
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/jpeg,image/png"
-                onChange={handleFileChange}
-                className="sr-only"
-                data-association-file-input="true"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className={cn(
-                  'inline-flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 px-4 py-3 text-sm font-medium text-primary transition-colors',
-                  uploading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-primary/5',
-                )}
-                data-association-upload-trigger="true"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Uploading…
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Upload association permit
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-muted-foreground">
-                Upload required to continue.
-              </p>
-            </div>
-          )}
-
-          {uploadError && (
-            <p className="text-xs text-destructive" data-association-upload-error="true">
-              {uploadError}
-            </p>
-          )}
-        </div>
-      )}
     </div>
   )
 }

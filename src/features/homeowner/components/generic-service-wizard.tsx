@@ -94,7 +94,6 @@ export function GenericServiceWizard({
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const projectAssociation = useCartStore((s) => s.projectAssociation)
-  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
 
   const CONTENT_STEPS = steps.length
   const ADDR_STEP = CONTENT_STEPS + 1
@@ -153,7 +152,7 @@ export function GenericServiceWizard({
     if (!cfg) return true
     if (cfg.groupId === PERMIT_STEP_GROUP_ID) {
       return isProjectPermitValid(projectPermit, projectPermitWaiver)
-        && isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null)
+        && isProjectAssociationValid(projectAssociation ?? null)
     }
     return (selections[cfg.groupId]?.length ?? 0) > 0
   }

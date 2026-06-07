@@ -176,7 +176,6 @@ export function RoofingWizard({
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
   const projectAssociation = useCartStore((s) => s.projectAssociation)
-  const projectAssociationDocId = useCartStore((s) => s.projectAssociationDocId)
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
   const [flowPath, setFlowPathState] = useState<FlowPath | null>(() => inferFlowPath(editItem))
@@ -463,7 +462,7 @@ export function RoofingWizard({
           (step === 5 && tileSelected && (!tileSelection.tileType || !tileSelection.tileColor)) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
-          (step === 8 && (!isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null, projectAssociationDocId ?? null))) ||
+          (step === 8 && (!isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null))) ||
           (step === 10 && submitting)
         }
       >
