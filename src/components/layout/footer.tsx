@@ -1,9 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, Phone } from 'lucide-react'
 import { Logo } from '@/components/shared/logo'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 interface FooterProps {
@@ -86,17 +84,7 @@ function LinkedinIcon({ className }: { className?: string }) {
 }
 
 export function Footer({ className }: FooterProps) {
-  const [email, setEmail] = useState('')
-  const [submitted, setSubmitted] = useState(false)
   const [lang, setLang] = useState<Lang>(() => readGoogtransLang())
-
-  const handleSubscribe = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!email) return
-    setSubmitted(true)
-    setEmail('')
-    window.setTimeout(() => setSubmitted(false), 4000)
-  }
 
   // Inject Google Translate widget once per page-load.
   // The hidden #google_translate_element host is rendered in the footer below.
@@ -226,15 +214,6 @@ export function Footer({ className }: FooterProps) {
                 </ul>
               </div>
               <div>
-                <ul className="space-y-2 text-muted-foreground">
-                  <li>
-                    <a href="#" className="hover:text-foreground">
-                      Vendor Support
-                    </a>
-                  </li>
-                </ul>
-              </div>
-              <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
                   Company
                 </p>
@@ -266,34 +245,16 @@ export function Footer({ className }: FooterProps) {
               South Florida home services, simplified.
             </p>
 
-            <form onSubmit={handleSubscribe} className="mt-6">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
-                Newsletter
-              </p>
-              <p className="mb-2 text-xs text-muted-foreground">Project tips, monthly.</p>
-              <div className="flex gap-2">
-                <Input
-                  id="footer-newsletter"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email address"
-                  className="h-9"
-                  aria-label="Newsletter email address"
-                />
-                <Button type="submit" size="sm" className="shrink-0">
-                  Subscribe
-                </Button>
-              </div>
-              {submitted && (
-                <p
-                  role="status"
-                  className="mt-2 text-xs text-emerald-600 dark:text-emerald-400"
-                >
-                  Thank you. You are subscribed.
-                </p>
-              )}
-            </form>
+            {/* Rod-direct task_1780802494987_731: Vendor Support relocated
+                here from Quick Links col 3; Newsletter block removed. */}
+            <div className="mt-6">
+              <a
+                href="#"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Vendor Support
+              </a>
+            </div>
 
             <div className="mt-6">
               <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/80">
@@ -346,27 +307,31 @@ export function Footer({ className }: FooterProps) {
             <p className="text-xs text-muted-foreground">
               © 2026 BuildConnect. All rights reserved.
             </p>
-            <div className="flex items-center gap-3">
+            {/* Rod-direct task_1780802494987_731: enlarged social icons.
+                h-6 w-6 visible glyph + 44x44 touch target (WCAG 2.5.5 AAA).
+                Default text-foreground (visible at rest, not muted); hover
+                rounds + adds primary tint. */}
+            <div className="flex items-center gap-2">
               <a
                 href="#"
                 aria-label="Instagram"
-                className="text-muted-foreground hover:text-foreground"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted hover:text-primary"
               >
-                <InstagramIcon className="h-4 w-4" />
+                <InstagramIcon className="h-6 w-6" />
               </a>
               <a
                 href="#"
                 aria-label="Facebook"
-                className="text-muted-foreground hover:text-foreground"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted hover:text-primary"
               >
-                <FacebookIcon className="h-4 w-4" />
+                <FacebookIcon className="h-6 w-6" />
               </a>
               <a
                 href="#"
                 aria-label="LinkedIn"
-                className="text-muted-foreground hover:text-foreground"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted hover:text-primary"
               >
-                <LinkedinIcon className="h-4 w-4" />
+                <LinkedinIcon className="h-6 w-6" />
               </a>
             </div>
           </div>

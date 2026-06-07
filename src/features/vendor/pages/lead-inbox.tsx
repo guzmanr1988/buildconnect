@@ -367,7 +367,7 @@ export default function LeadInbox() {
                             size="md"
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
+                            <p className="text-base font-semibold truncate">{lead.homeowner_name}</p>
                             <p className="text-sm text-muted-foreground line-clamp-1 break-words">{lead.project}</p>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <StatusBadge status={lead.status} label={resolveLeadStatusLabel(lead)} />
@@ -391,7 +391,7 @@ export default function LeadInbox() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-lg font-bold tabular-nums text-foreground" data-lead-value={lead.value}>{fmt(lead.value)}</span>
+                          <span className="text-xl font-bold tabular-nums text-foreground" data-lead-value={lead.value}>{fmt(lead.value)}</span>
                           {isExpanded ? (
                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
                           ) : (
@@ -418,21 +418,24 @@ export default function LeadInbox() {
                       className="overflow-hidden"
                     >
                     <div className="px-4 sm:px-5 pb-5 space-y-4 border-t overflow-hidden">
-                      {/* Customer details */}
-                      <div className="flex flex-wrap gap-4 pt-4 text-sm text-muted-foreground">
+                      {/* Customer details — Rod-direct task_1780804150936_308:
+                          row bumped to text-[15px] + h-4 icons so address/phone/
+                          sqft read clearly in the expanded card; was text-sm
+                          (14px) + h-3.5 icons. */}
+                      <div className="flex flex-wrap gap-4 pt-4 text-[15px] text-muted-foreground">
                         <div className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5" />
+                          <MapPin className="h-4 w-4" />
                           <a href={mapsUrl(lead.address)} target="_blank" rel="noopener noreferrer" className="hover:text-foreground hover:underline transition-colors">{lead.address}</a>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5" />
+                          <User className="h-4 w-4" />
                           <span>{lead.phone}</span>
                           <a href={telHref(lead.phone)} className="inline-flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={`Call ${lead.homeowner_name}`}>
                             <Phone className="h-3 w-3" />
                           </a>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" />
+                          <Calendar className="h-4 w-4" />
                           <span>{lead.sq_ft.toLocaleString()} sq ft</span>
                         </div>
                       </div>

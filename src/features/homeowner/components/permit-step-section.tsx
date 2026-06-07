@@ -140,7 +140,11 @@ function AssociationSection() {
   const projectAssociation = useCartStore((s) => s.projectAssociation)
   const setProjectAssociation = useCartStore((s) => s.setProjectAssociation)
 
+  // Rod-direct task_1780802082008_750: per-question divider matches the
+  // EXACT class that separates property-address from "A few last questions"
+  // heading in service-detail.tsx (mt-6 pt-6 border-t border-border/50).
   return (
+    <div className="mt-6 pt-6 border-t border-border/50">
     <div className="flex flex-col gap-3" data-association-step-section="true">
       <div className="space-y-0.5">
         <h3 className="text-base font-semibold text-foreground">{ASSOCIATION_HEADING}</h3>
@@ -201,6 +205,7 @@ function AssociationSection() {
         </div>
       </button>
     </div>
+    </div>
   )
 }
 
@@ -244,6 +249,7 @@ function PermitSection() {
   }
 
   return (
+    <div className="mt-6 pt-6 border-t border-border/50">
     <div className="flex flex-col gap-3" data-permit-step-section="true">
       <div className="space-y-0.5">
         <h3 className="text-base font-semibold text-foreground">Do you need a permit?</h3>
@@ -345,12 +351,17 @@ function PermitSection() {
         </div>
       )}
     </div>
+    </div>
   )
 }
 
 export function PermitStepSection() {
+  // gap-0 — each child section (AssociationSection / PermitSection)
+  // brings its own mt-6 pt-6 border-t divider wrapper, so the flex
+  // wrapper just stacks them; the per-question dividers handle the
+  // visual separation between blocks (Rod-direct task_1780802082008_750).
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col">
       <AssociationSection />
       <PermitSection />
     </div>
@@ -372,6 +383,7 @@ export function PoolSurveySection() {
   const setPoolSurvey = useCartStore((s) => s.setPoolSurvey)
 
   return (
+    <div className="mt-6 pt-6 border-t border-border/50">
     <div className="flex flex-col gap-3" data-pool-survey-section="true">
       <div className="space-y-0.5">
         <h3 className="text-base font-semibold text-foreground">{POOL_SURVEY_HEADING}</h3>
@@ -431,6 +443,7 @@ export function PoolSurveySection() {
           </p>
         </div>
       </button>
+    </div>
     </div>
   )
 }

@@ -251,23 +251,25 @@ export function HomeownerLayout() {
         </header>
       )}
 
-      {/* Mobile top bar */}
+      {/* Mobile top bar — height + control sizes track the bottom nav (h-16,
+          h-5 icons) for visual parity. Rod-direct task_1780800742510_885: top
+          bar should read as equal visual weight to the bottom nav he eyeballs. */}
       {isMobile && (
         <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
-          <div className="flex h-14 items-center justify-between px-4">
+          <div className="flex h-16 items-center justify-between px-4">
             <button onClick={() => navigate('/home')} className="cursor-pointer">
-              <Logo />
+              <Logo className="[&_img]:h-10 [&_img]:w-10 [&_span]:text-xl" />
             </button>
             <div className="flex items-center gap-2">
-              <NotificationBell notifications={notifications} size="sm" />
+              <NotificationBell notifications={notifications} size="md" />
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => window.dispatchEvent(new Event('buildconnect:open-onboarding'))}
                 aria-label="Reopen onboarding tour"
-                className="h-8 w-8"
+                className="h-10 w-10"
               >
-                <HelpCircle className="h-4 w-4" />
+                <HelpCircle className="h-5 w-5" />
               </Button>
               <ThemeToggle />
               {profile && (
@@ -276,7 +278,7 @@ export function HomeownerLayout() {
                   className="cursor-pointer"
                   aria-label="Profile"
                 >
-                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="md" />
                 </button>
               )}
             </div>
