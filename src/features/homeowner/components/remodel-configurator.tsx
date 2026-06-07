@@ -328,9 +328,23 @@ export function RemodelConfigurator() {
   const addressValid = !!address
 
   let nextDisabled = false
-  if (step === 'measurements') nextDisabled = !measurementsValid
-  if (step === 'permit') nextDisabled = !permitValid
-  if (step === 'address') nextDisabled = !addressValid
+  let nextDisabledReason: string | undefined
+  if (step === 'measurements') {
+    nextDisabled = !measurementsValid
+    if (nextDisabled) nextDisabledReason = 'Enter your room measurements to continue.'
+  }
+  if (step === 'permit') {
+    nextDisabled = !permitValid
+    if (nextDisabled) {
+      nextDisabledReason = !isProjectAssociationValid(projectAssociation ?? null)
+        ? 'Answer the association question to continue.'
+        : 'Choose a permit option to continue.'
+    }
+  }
+  if (step === 'address') {
+    nextDisabled = !addressValid
+    if (nextDisabled) nextDisabledReason = 'Add a project address to continue.'
+  }
 
   function goBack() {
     if (stepIdx === 0) {
@@ -388,6 +402,7 @@ export function RemodelConfigurator() {
         onNext={goNext}
         nextLabel={nextLabel}
         nextDisabled={nextDisabled || added}
+        nextDisabledReason={nextDisabledReason}
       >
         {step === 'measurements' && (
           <MeasurementsStep value={measurements} onChange={setMeasurements} />

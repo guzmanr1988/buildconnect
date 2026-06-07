@@ -161,6 +161,21 @@ export function GenericServiceWizard({
   const nextDisabled =
     step <= CONTENT_STEPS && isStepRequired(step) && !isStepDone(step)
 
+  // Per-step disabled reason — name the topmost missing item plainly.
+  let nextDisabledReason: string | undefined
+  if (nextDisabled) {
+    const cfg = steps[step - 1]
+    if (cfg?.groupId === PERMIT_STEP_GROUP_ID) {
+      nextDisabledReason = !isProjectAssociationValid(projectAssociation ?? null)
+        ? 'Answer the association question to continue.'
+        : 'Choose a permit option to continue.'
+    } else if (cfg) {
+      const group = service.optionGroups.find((g) => g.id === cfg.groupId)
+      const label = (group?.label ?? cfg.title ?? 'option').toLowerCase()
+      nextDisabledReason = `Pick a ${label} to continue.`
+    }
+  }
+
   async function handleSubmit() {
     const itemAddress: CartItemAddress | undefined = selectedAddress?.full
       ? { label: selectedAddress.label, full: selectedAddress.full }
@@ -364,6 +379,7 @@ export function GenericServiceWizard({
         onSkip={stepSkipLabel() ? handleSkip : undefined}
         skipLabel={stepSkipLabel()}
         nextDisabled={nextDisabled || added}
+        nextDisabledReason={nextDisabledReason}
         nextLabel={added ? (editingItemId ? 'Updated' : 'Added') : stepNextLabel()}
       >
         {step <= CONTENT_STEPS && renderContentStep(step)}

@@ -563,6 +563,25 @@ export function PoolWizard({
     return true
   }
   const nextDisabled = (isRequired(step) && !isDone(step)) || added
+  let nextDisabledReason: string | undefined
+  if (nextDisabled && !added) {
+    if (step === 1) nextDisabledReason = 'Pick a project type to continue.'
+    else if (step === 2) {
+      const sel = selections['pool_size'] ?? []
+      if (sel.length === 0) nextDisabledReason = 'Pick a pool size to continue.'
+      else if (sel.includes('custom') && customPoolSqft <= 0) nextDisabledReason = 'Enter a custom pool size to continue.'
+    }
+    else if (step === 3) {
+      const sel = selections['pool_floor'] ?? []
+      if (sel.length === 0) nextDisabledReason = 'Pick a pool floor to continue.'
+      else if (sel[0] !== 'na' && poolFloorSqft <= 0) nextDisabledReason = 'Enter the floor area to continue.'
+    }
+    else if (step === 7) {
+      if (!isProjectAssociationValid(projectAssociation ?? null)) nextDisabledReason = 'Answer the association question to continue.'
+      else if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) nextDisabledReason = 'Choose a permit option to continue.'
+      else if (!isPoolSurveyValid(poolSurvey ?? null)) nextDisabledReason = 'Complete the pool survey to continue.'
+    }
+  }
 
   function renderStepContent() {
     switch (step) {
@@ -591,6 +610,7 @@ export function PoolWizard({
         onSkip={step === 4 ? () => { setDirection(1); setStep(getNextStep(4, selections)) } : undefined}
         skipLabel="Skip"
         nextDisabled={nextDisabled}
+        nextDisabledReason={nextDisabledReason}
         nextLabel={
           step === TOTAL_STEPS
             ? added ? (editingItemId ? 'Updated' : 'Added') : (editingItemId ? 'Save Changes' : 'Add to Project')

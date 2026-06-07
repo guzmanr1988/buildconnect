@@ -864,6 +864,32 @@ export function ServiceDetailPage() {
     !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
   const allRequiredDone = completedRequired === requiredGroups.length
 
+  // Per-step plain-English gating message — names the topmost missing item.
+  // Order matches the on-screen group order, then the secondary structural
+  // gates (permit / association / pool survey / addon-ack / pergolas assign).
+  function gatingReason(): string {
+    const missingGroup = requiredGroups.find(
+      (g) => (selections[g.id]?.length ?? 0) === 0,
+    )
+    if (missingGroup) return `Pick a ${missingGroup.label.toLowerCase()} to continue.`
+    if (!isProjectAssociationValid(projectAssociation ?? null)) {
+      return 'Answer the association question to continue.'
+    }
+    if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+      return 'Choose a permit option to continue.'
+    }
+    if (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) {
+      return 'Complete the pool survey to continue.'
+    }
+    if (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) {
+      return 'Acknowledge the flat-only order to continue.'
+    }
+    if (!pergolasStructuresAllAssigned) {
+      return 'Assign a structure to each measured area to continue.'
+    }
+    return 'Complete all required selections to continue.'
+  }
+
   // PR-223 Option B — pergolas force-pick gate. Every drawn measurement
   // square must have a structure assigned via the in-card picker before
   // Add-to-Project unlocks. Custom-size flow (no polygons) is not affected;
@@ -3107,9 +3133,16 @@ export function ServiceDetailPage() {
               Project Details
             </Button>
           )}
-          {!allRequiredDone && !alreadyInCart && (
+          {!alreadyInCart && !added && (
+            !allRequiredDone ||
+            !isProjectPermitValid(projectPermit, projectPermitWaiver) ||
+            !isProjectAssociationValid(projectAssociation ?? null) ||
+            (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
+            (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) ||
+            !pergolasStructuresAllAssigned
+          ) && (
             <p className="text-xs text-muted-foreground text-center">
-              Complete all required selections to continue
+              {gatingReason()}
             </p>
           )}
           {alreadyInCart && (
