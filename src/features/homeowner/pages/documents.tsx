@@ -25,6 +25,7 @@ import {
   uploaderChip,
 } from '@/lib/homeowner-doc-display'
 import { useProjectsStore } from '@/stores/projects-store'
+import { AssociationDocActionCard } from '@/features/homeowner/components/association-doc-action-card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
@@ -57,6 +58,11 @@ interface SentProjectGroup {
   sentAt: string | null
   status: string | null
   docs: HomeownerDoc[]
+  // Migration 066 / task_066 — drive the engagement-time association-doc
+  // action card. Action card renders when projectAssociation='yes' AND
+  // engaged (soldAt set) AND no association_permit doc on this project.
+  projectAssociation: 'yes' | 'no' | undefined
+  soldAt: string | null
 }
 
 export function HomeownerDocumentsPage() {
@@ -145,6 +151,8 @@ export function HomeownerDocumentsPage() {
             sentAt: project.sentAt ?? null,
             status: project.status ?? null,
             docs: [],
+            projectAssociation: project.projectAssociation,
+            soldAt: project.soldAt ?? null,
           }
           buckets.set(key, bucket)
         }
@@ -171,10 +179,33 @@ export function HomeownerDocumentsPage() {
           sentAt: null,
           status: null,
           docs: [],
+          projectAssociation: undefined,
+          soldAt: null,
         }
         buckets.set(key, bucket)
       }
       bucket.docs.push(doc)
+    }
+
+    // task_066 — seed an empty bucket for engaged + association=YES
+    // projects so the Action-needed card appears even when the homeowner
+    // has no other docs uploaded yet (otherwise the doc-walk above
+    // wouldn't create the box).
+    for (const sp of sentProjects) {
+      if (sp.projectAssociation !== 'yes') continue
+      if (!sp.soldAt) continue
+      if (buckets.has(sp.id)) continue
+      buckets.set(sp.id, {
+        sentProjectId: sp.id,
+        serviceName: sp.item.serviceName,
+        vendorCompany: sp.contractor.company ?? null,
+        address: sp.homeowner?.address ?? null,
+        sentAt: sp.sentAt ?? null,
+        status: sp.status ?? null,
+        docs: [],
+        projectAssociation: sp.projectAssociation,
+        soldAt: sp.soldAt ?? null,
+      })
     }
 
     for (const bucket of buckets.values()) {
@@ -437,8 +468,28 @@ function ProjectBox({
     void onUpload(group, pickerDocType, file)
   }
 
+  // task_066 — engagement-time association-doc action card. Renders only
+  // when projectAssociation='yes' AND project is engaged (soldAt set) AND
+  // no association_permit doc is on file for this sent_project. Self-
+  // hides when any condition stops holding (upload lands -> last gate
+  // clears via the docs selector below).
+  const hasAssociationDoc = group.docs.some(
+    (d) => d.docType === 'association_permit',
+  )
+  const showAssociationActionCard =
+    !!group.sentProjectId
+    && group.projectAssociation === 'yes'
+    && !!group.soldAt
+    && !hasAssociationDoc
+
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3" data-sent-project-id={group.sentProjectId ?? 'customer'}>
+      {showAssociationActionCard && group.sentProjectId && (
+        <AssociationDocActionCard
+          sentProjectId={group.sentProjectId}
+          address={group.address}
+        />
+      )}
       <div className="flex items-start gap-2">
         <Folder className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">

@@ -184,6 +184,13 @@ export interface SentProject {
   // allocate to pending + approved + sold projects after approval.
   applied_financing_amount_cents?: number | null
   applied_financing_application_id?: string | null
+  // Migration 066 — vendor-marked transition from sold/won to actively
+  // working. Written by markWorkStarted on the gated Start Work button
+  // (lead-workflow sold-branch). Gated client-side by association-doc
+  // presence when projectAssociation='yes'; column itself has no DB
+  // constraint so the gate stays UI-only (matches the Y/N flow's
+  // pattern). NULL pre-start; timestamptz post-start.
+  workStartedAt?: string
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -284,6 +291,12 @@ interface ProjectsState {
   // immediately. Acceleration of the existing 90d age-based auto-
   // transition; not a status change (still 'sold').
   markCompleted: (id: string) => void
+  // Migration 066 — stamps workStartedAt + persists to sent_projects.
+  // Triggered by the vendor "Start Work" button in the Sold/Active
+  // branch. Client-side gate (association_permit doc presence when
+  // projectAssociation='yes') lives in lead-workflow.tsx; this action
+  // doesn't re-check the gate (writes assume caller already gated).
+  markWorkStarted: (id: string) => void
   // Ship #311 — lead-id-keyed manual-completion override map. Mirrors
   // existing leadStatusOverrides / leadConfirmedAtByLead patterns so
   // MOCK_LEADS without sentProject backing still get the manual-
@@ -401,7 +414,8 @@ export const useProjectsStore = create<ProjectsState>()(
           'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
           'cancellation_request, applied_financing_amount_cents, ' +
           'applied_financing_application_id, project_permit, ' +
-          'project_permit_waiver, project_association, pool_survey'
+          'project_permit_waiver, project_association, pool_survey, ' +
+          'work_started_at'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -452,6 +466,7 @@ export const useProjectsStore = create<ProjectsState>()(
           projectPermitWaiver:  row.project_permit_waiver ?? undefined,
           projectAssociation:   row.project_association ?? undefined,
           poolSurvey:           row.pool_survey ?? undefined,
+          workStartedAt:        row.work_started_at ?? undefined,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
@@ -794,6 +809,17 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
         logEvent({ eventType: 'completed', projectId: id })
         updateProject(id, { completed_at: completedAt })
+      },
+
+      markWorkStarted: (id) => {
+        const workStartedAt = new Date().toISOString()
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === id ? { ...p, workStartedAt } : p
+          ),
+        }))
+        logEvent({ eventType: 'work_started', projectId: id })
+        updateProject(id, { work_started_at: workStartedAt })
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {

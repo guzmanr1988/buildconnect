@@ -6,7 +6,7 @@ import {
   Inbox, CalendarCheck, MapPin,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign,
+  UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign, AlertCircle, Bell, Download, Hammer,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,9 @@ import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-gri
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
-import { uploadDocAsVendor } from '@/lib/api/homeowner-documents'
+import { uploadDocAsVendor, getSignedUrl as getDocSignedUrl } from '@/lib/api/homeowner-documents'
+import { useAssociationDocForProject } from '@/features/vendor/lib/use-association-doc'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
@@ -75,6 +77,11 @@ export default function VendorLeadWorkflow() {
   // the sentProject; bucketing reads completedAt-presence to override
   // age-based 90d auto-transition.
   const markCompleted = useProjectsStore((s) => s.markCompleted)
+  // task_066 — vendor "Start Work" action. Writes work_started_at +
+  // logs work_started event. Gated client-side by association_permit
+  // doc presence when sp.projectAssociation='yes' (see Sold/Active
+  // branch in the Lead Detail Modal below).
+  const markWorkStarted = useProjectsStore((s) => s.markWorkStarted)
   // Ship #311 — lead-id-keyed manual-completion override; covers
   // MOCK_LEADS without sentProject backing. Bucketing + label
   // derivation read effective completedAt downstream so the override
@@ -1431,6 +1438,18 @@ export default function VendorLeadWorkflow() {
                               Sold on {new Date(sp.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                           )}
+                          <AssociationDocGateBlock
+                            sp={sp}
+                            onStartWork={() => markWorkStarted(sp.id)}
+                          />
+                          {sp.workStartedAt && (
+                            <p
+                              className="text-xs text-emerald-700 dark:text-emerald-400 text-center font-medium"
+                              data-association-work-started
+                            >
+                              Work started on {new Date(sp.workStartedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          )}
                           {sp.completedAt && (
                             <p className="text-xs text-emerald-700 dark:text-emerald-400 text-center font-medium">
                               Completed on {new Date(sp.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -2349,5 +2368,146 @@ export default function VendorLeadWorkflow() {
         }}
       />
     </motion.div>
+  )
+}
+
+// task_066 — vendor-side Start-Work gate. Drives the new "Start Work"
+// action in the Sold/Active branch above and the WAITING/UPLOADED status
+// pill alongside it. Hidden entirely once workStartedAt is set (work-
+// already-started terminal state). Reads the per-sent_project association
+// doc via useAssociationDocForProject — own hook because the existing
+// VendorProjectDocumentsPanel mounts a separate per-list query and we
+// don't want to drag in its store wiring for a single-row gate.
+//
+// Gate semantics (matches kratos spec):
+//   projectAssociation !== 'yes'  -> Start Work enabled, no pill, no nudge
+//   projectAssociation === 'yes' + no doc -> Start Work DISABLED + amber
+//     WAITING pill + Nudge homeowner button
+//   projectAssociation === 'yes' + doc    -> Start Work ENABLED + emerald
+//     UPLOADED pill with Download (signed URL)
+//
+// Nudge is a v1 placeholder per kratos greenlight ("Include 'Nudge
+// homeowner' fallback in v1 via existing messages flow"); toasts back to
+// the vendor that the homeowner was nudged. Wiring it into the real
+// vendor↔homeowner messages thread is a follow-up — picked the toast
+// stub to keep the gate-shape testable without dragging the messages
+// store into the gate component.
+function AssociationDocGateBlock({
+  sp,
+  onStartWork,
+}: {
+  sp: import('@/stores/projects-store').SentProject
+  onStartWork: () => void
+}) {
+  const { loading, docId, filename, storagePath, refetch } =
+    useAssociationDocForProject(sp.id)
+  const loadDocs = useHomeownerDocsStore((s) => s.loadDocs)
+
+  if (sp.workStartedAt) return null
+
+  const needsAssoc = sp.projectAssociation === 'yes'
+  const docPresent = !!docId
+  const gated = needsAssoc && !docPresent
+
+  const handleDownload = async () => {
+    if (!storagePath) return
+    const url = await getDocSignedUrl(storagePath)
+    if (!url) {
+      toast.error('Could not open the association permit. Please try again.')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleNudge = async () => {
+    await refetch()
+    if (sp.homeowner_id) {
+      await loadDocs(sp.homeowner_id)
+    }
+    toast.success('Nudged homeowner to upload the association permit.')
+  }
+
+  const handleStartWork = () => {
+    if (gated) return
+    onStartWork()
+    toast.success('Work started — homeowner has been notified.')
+  }
+
+  return (
+    <div className="space-y-2" data-association-gate-block data-sent-project-id={sp.id}>
+      {needsAssoc && (
+        <div
+          className={cn(
+            'rounded-lg border p-2.5 flex items-start gap-2',
+            docPresent
+              ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-700'
+              : 'border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700',
+          )}
+          data-association-status-pill
+          data-association-status={docPresent ? 'uploaded' : 'waiting'}
+        >
+          {docPresent ? (
+            <FileCheck className="h-4 w-4 shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p
+              className={cn(
+                'text-xs font-semibold',
+                docPresent
+                  ? 'text-emerald-800 dark:text-emerald-300'
+                  : 'text-amber-800 dark:text-amber-300',
+              )}
+            >
+              {docPresent
+                ? 'Association permit: uploaded'
+                : 'Waiting on homeowner to upload association permit'}
+            </p>
+            {docPresent && filename && (
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 truncate mt-0.5">
+                {filename}
+              </p>
+            )}
+          </div>
+          {docPresent && storagePath && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 gap-1 shrink-0"
+              onClick={handleDownload}
+              data-association-download-button
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="text-xs">Open</span>
+            </Button>
+          )}
+        </div>
+      )}
+
+      <Button
+        className="w-full bg-primary hover:bg-primary/90 text-white"
+        onClick={handleStartWork}
+        disabled={gated || loading}
+        title={gated ? 'Waiting on homeowner to upload association permit' : undefined}
+        data-association-start-work-button
+        data-association-start-work-disabled={gated ? 'true' : 'false'}
+      >
+        <Hammer className="h-4 w-4 mr-1.5" />
+        Start Work
+      </Button>
+
+      {gated && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleNudge}
+          data-association-nudge-button
+        >
+          <Bell className="h-4 w-4 mr-1.5" />
+          Nudge homeowner
+        </Button>
+      )}
+    </div>
   )
 }

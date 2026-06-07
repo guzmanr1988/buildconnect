@@ -18,6 +18,7 @@ import type {
 export const DOC_TYPE_ORDER: HomeownerDocType[] = [
   'license',
   'permit',
+  'association_permit',
   'sketch',
   'measurement',
   'agreement',
@@ -30,6 +31,7 @@ export const DOC_TYPE_ORDER: HomeownerDocType[] = [
 export const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
   license: 'License',
   permit: 'Permit',
+  association_permit: 'Association/HOA permit',
   sketch: 'Sketch',
   measurement: 'Measurement',
   agreement: 'Agreement',
@@ -42,6 +44,7 @@ export const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
 export const DOC_TYPE_ICON: Record<HomeownerDocType, typeof FileText> = {
   license: ShieldCheck,
   permit: ClipboardCheck,
+  association_permit: ClipboardCheck,
   sketch: PenLine,
   measurement: Ruler,
   agreement: ScrollText,

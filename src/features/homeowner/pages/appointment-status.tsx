@@ -14,6 +14,8 @@ import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
+import { AssociationDocActionCard } from '@/features/homeowner/components/association-doc-action-card'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { ApplyFinancingDialog } from '@/features/financing/components/apply-financing-dialog'
 import { supabase } from '@/lib/supabase'
@@ -229,6 +231,26 @@ export function AppointmentStatusPage() {
     (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
   )
 
+  // task_066 — engagement-time association-doc gate. Banner renders only
+  // when the matched sentProject has projectAssociation='yes' AND has been
+  // engaged (soldAt set) AND no association_permit doc on file yet. Reads
+  // the homeowner docs store directly so it auto-hides as soon as the
+  // upload lands.
+  const associationDocPresent = useHomeownerDocsStore((s) =>
+    matchedSentProject
+      ? s.docs.some(
+          (d) =>
+            d.sentProjectId === matchedSentProject.id
+            && d.docType === 'association_permit',
+        )
+      : false,
+  )
+  const showAssociationActionBanner =
+    !!matchedSentProject
+    && matchedSentProject.projectAssociation === 'yes'
+    && !!matchedSentProject.soldAt
+    && !associationDocPresent
+
   // Arc-17 — 1-project-at-a-time allocation rule. Find any sent_project the
   // homeowner has already allocated financing to (across the entire scope,
   // not just this page's matched project). If that other project holds the
@@ -287,6 +309,13 @@ export function AppointmentStatusPage() {
           Lead {lead.id} — {lead.project}
         </p>
       </div>
+
+      {showAssociationActionBanner && matchedSentProject && (
+        <AssociationDocActionCard
+          sentProjectId={matchedSentProject.id}
+          address={matchedSentProject.homeowner?.address ?? null}
+        />
+      )}
 
       {/* Arc-17 — top-of-page Financing applied banner. Renders only when
           this project is the one holding the homeowner's active allocation
