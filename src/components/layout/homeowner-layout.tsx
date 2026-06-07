@@ -287,7 +287,7 @@ export function HomeownerLayout() {
       )}
 
       {/* Main content */}
-      <main className={cn('mx-auto max-w-7xl px-4 sm:px-6 py-6 overflow-x-hidden', isMobile && 'pb-24')}>
+      <main className={cn('mx-auto max-w-7xl px-4 sm:px-6 py-6 overflow-x-hidden', isMobile && 'pb-24 landscape:pb-14')}>
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
@@ -305,20 +305,20 @@ export function HomeownerLayout() {
           + admin do not leak. Mobile gets pb-24 wrapper so the last footer
           line is not hidden behind the fixed mobile bottom nav (h-16 + safe-
           area-inset). Desktop renders flush. */}
-      <div className={cn(isMobile && 'pb-24')}>
+      <div className={cn(isMobile && 'pb-24 landscape:pb-14')}>
         <Footer />
       </div>
 
       {/* Mobile bottom nav */}
       {isMobile && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg safe-area-inset-bottom">
-          <div className="flex items-center justify-around h-16 px-2">
+          <div className="flex items-center justify-around h-16 landscape:h-10 px-2">
             {navItems.map(({ to, icon: Icon, label }) => (
               <NavLink key={to} to={to} end={to === '/home'} className="flex-1">
                 {({ isActive }) => (
-                  <div className={cn('flex flex-col items-center gap-0.5 py-1 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}>
+                  <div className={cn('flex flex-col items-center gap-0.5 py-1 landscape:py-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}>
                     <div className="relative">
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-5 w-5 landscape:h-4 landscape:w-4" />
                       {label === 'Projects' && openProjectsCount > 0 && (
                         <span
                           aria-label={`${openProjectsCount} open project${openProjectsCount > 1 ? 's' : ''}`}
@@ -329,7 +329,7 @@ export function HomeownerLayout() {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] font-medium">{label}</span>
+                    <span className="text-[10px] font-medium landscape:hidden">{label}</span>
                   </div>
                 )}
               </NavLink>
