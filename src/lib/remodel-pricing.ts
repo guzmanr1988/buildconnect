@@ -1,9 +1,21 @@
 import type { PriceLineItem } from '@/types'
+import type { VendorServiceRateMap } from '@/lib/api/vendor-service-rates'
 
 // Ship #475+1 — Interior Remodel configurator pricing engine.
 // Kratos dispatch task_1780640326369_434 / Rod-direct 1-wk launch.
 //
-// PLACEHOLDER RATES (flagged for Rod to set real $ before promote).
+// Mig 068 (task_1780668287986_922) — computeRemodelLineItems now accepts an
+// optional per-vendor VendorServiceRateMap (line_id → rate_cents from the
+// vendor_service_rates table). When supplied, each line resolves its rate
+// from the map; when missing (no vendor selected yet, anon flow, or vendor
+// hasn't seeded rates), the in-code ratePlaceholder = MEDIAN baseline tier
+// fires as fallback. Configurator preview (pre-vendor-selection) keeps
+// using the baseline; booking-confirmation snapshot + vendor-compare pass
+// the per-vendor map so the compare screen surfaces believable different
+// totals across vendors.
+//
+// RATE_PLACEHOLDER values below = MEDIAN baseline (v-2 tier) so the
+// pre-vendor preview matches what the median-tier vendor will quote.
 // See REMODEL_FINDINGS.md at repo root for the rate table + structural
 // map + per-line derivation + grand-total demo room calc.
 //
@@ -82,7 +94,7 @@ export const REMODEL_RATES: RemodelRate[] = [
     label: 'New stud-framed wood walls / framing',
     group: 'STRUCTURE',
     unit: 'linear_ft',
-    ratePlaceholder: 12.00,
+    ratePlaceholder: 14.00,
     qtyFrom: framingLf,
   },
   // SURFACES
@@ -108,7 +120,7 @@ export const REMODEL_RATES: RemodelRate[] = [
     label: 'Paint and texture',
     group: 'FINISH',
     unit: 'sqft',
-    ratePlaceholder: 3.50,
+    ratePlaceholder: 3.25,
     qtyFrom: (m) => wallsAreaSqft(m) + ceilingAreaSqft(m),
   },
   // EXTRAS
@@ -117,7 +129,7 @@ export const REMODEL_RATES: RemodelRate[] = [
     label: 'Permit, haul-away, setup',
     group: 'EXTRAS',
     unit: 'flat',
-    ratePlaceholder: 850.00,
+    ratePlaceholder: 900.00,
     qtyFrom: () => 1,
   },
 ]
@@ -135,10 +147,21 @@ export interface RemodelLine extends PriceLineItem {
 // + source='preset_calculated' so it integrates with the existing
 // PriceLineItem shape (booking-confirmation snapshot semantics carry
 // through unchanged from roofing).
-export function computeRemodelLineItems(m: RemodelMeasurements): RemodelLine[] {
+//
+// Optional vendorRateMap (mig 068) — per-vendor line_id → rate_cents from
+// vendor_service_rates. When a line_id is present in the map, that rate
+// replaces ratePlaceholder; otherwise placeholder fires as the median-tier
+// fallback. Configurator preview omits the map (pre-vendor flow); booking-
+// confirmation + vendor-compare pass the resolved per-vendor map.
+export function computeRemodelLineItems(
+  m: RemodelMeasurements,
+  vendorRateMap?: VendorServiceRateMap,
+): RemodelLine[] {
   return REMODEL_RATES.map((rate) => {
+    const vendorCents = vendorRateMap?.get(rate.id)
+    const resolvedRate = vendorCents != null ? vendorCents / 100 : rate.ratePlaceholder
     const qty = Math.max(0, rate.qtyFrom(m))
-    const amount = Math.round(rate.ratePlaceholder * qty * 100) / 100
+    const amount = Math.round(resolvedRate * qty * 100) / 100
     const priceUnit: PriceLineItem['priceUnit'] =
       rate.unit === 'sqft' ? 'sqft' :
       rate.unit === 'linear_ft' ? 'linear_ft' :
@@ -150,12 +173,12 @@ export function computeRemodelLineItems(m: RemodelMeasurements): RemodelLine[] {
       originalAmount: amount,
       source: 'preset_calculated',
       ...(priceUnit && { priceUnit }),
-      unitRate: rate.ratePlaceholder,
+      unitRate: resolvedRate,
       unitQuantity: qty,
       group: rate.group,
       unit: rate.unit,
       qty,
-      rate: rate.ratePlaceholder,
+      rate: resolvedRate,
     }
   })
 }

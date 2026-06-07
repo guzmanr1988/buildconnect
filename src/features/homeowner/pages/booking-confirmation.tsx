@@ -15,6 +15,7 @@ import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionP
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeRemodelLineItems } from '@/lib/remodel-pricing'
 import { computeBathroomLineItems } from '@/lib/bathroom-pricing'
+import { getVendorServiceRateMap } from '@/lib/api/vendor-service-rates'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import { useCatalogStore } from '@/stores/catalog-store'
@@ -351,13 +352,30 @@ export function BookingConfirmationPage() {
             // L×W×H×numWalls via REMODEL_RATES (per-line rate + measurement-
             // derived qty stamped as preset_calculated, same snapshot
             // semantics as roofing).
-            computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements)
+            //
+            // Mig 068 — per-vendor unit-rate overlay via vendor_service_rates.
+            // When contractor.vendor_id maps to a real UUID, fetch the per-
+            // vendor rate map and pass it to the compute engine; otherwise
+            // the engine falls back to the in-code MEDIAN baseline.
+            let remodelRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { remodelRateMap = await getVendorServiceRateMap(vendorUuid, 'remodel') } catch { /* silent fallback */ }
+            }
+            computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements, remodelRateMap)
           } else if (pendingItem.serviceId === 'bathroom' && pendingItem.bathroomMeasurements) {
             // Ship #475+2 — Bathroom Remodel: line scope from L×W×H×tile-coverage
             // + tub toggle via BATHROOM_RATES. FIXTURES rows ($0 client-provided)
             // are included in the snapshot so the vendor inbox sees the full
             // scope, but contractor subtotal === grand total by construction.
-            computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements)
+            //
+            // Mig 068 — per-vendor unit-rate overlay (same pattern as remodel).
+            let bathroomRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { bathroomRateMap = await getVendorServiceRateMap(vendorUuid, 'bathroom') } catch { /* silent fallback */ }
+            }
+            computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements, bathroomRateMap)
           } else if (contractor.vendor_id) {
             // PR #118 fix-forward — for non-roofing services, snapshot a
             // permit-line from vendor's flat per-service permit fee

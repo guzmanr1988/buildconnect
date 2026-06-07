@@ -1,7 +1,15 @@
 import type { PriceLineItem } from '@/types'
+import type { VendorServiceRateMap } from '@/lib/api/vendor-service-rates'
 
 // Ship #475+2 — Bathroom Remodel configurator pricing engine.
 // Kratos dispatch task_1780641255537_475 / Phase 1 single-shot build.
+//
+// Mig 068 (task_1780668287986_922) — computeBathroomLineItems accepts an
+// optional per-vendor VendorServiceRateMap (line_id → rate_cents from
+// vendor_service_rates). When supplied, each non-fixture line resolves its
+// rate from the map; when missing (no vendor / vendor hasn't seeded rates),
+// the in-code ratePlaceholder = MEDIAN baseline tier (v-2) fires as the
+// fallback. Fixtures stay $0 regardless (client-provided ledger).
 //
 // PLATFORM-DEFAULT RATES (per Rod 2026-06-05 reframe — contractor sets
 // final price, configurator standardizes SCOPE + UNIT + QUANTITY only).
@@ -81,7 +89,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Gut existing bathroom (toilet/tub/vanity/tile/drywall)',
     group: 'DEMO',
     unit: 'flat',
-    ratePlaceholder: 1200.00,
+    ratePlaceholder: 1300.00,
     qtyFrom: () => 1,
   },
   // ROUGH-IN
@@ -90,7 +98,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Plumbing rough-in (tub/shower drain + toilet + vanity supply)',
     group: 'ROUGH-IN',
     unit: 'flat',
-    ratePlaceholder: 1800.00,
+    ratePlaceholder: 1900.00,
     qtyFrom: () => 1,
   },
   {
@@ -98,7 +106,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Electrical rough-in (GFCI + vanity light + exhaust fan)',
     group: 'ROUGH-IN',
     unit: 'flat',
-    ratePlaceholder: 650.00,
+    ratePlaceholder: 700.00,
     qtyFrom: () => 1,
   },
   // SUBSTRATE
@@ -124,7 +132,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Floor tile install (labor only, tile supplied)',
     group: 'TILE',
     unit: 'sqft',
-    ratePlaceholder: 8.00,
+    ratePlaceholder: 8.50,
     qtyFrom: floorAreaSqft,
   },
   {
@@ -132,7 +140,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Wall tile install (labor only, tile supplied)',
     group: 'TILE',
     unit: 'sqft',
-    ratePlaceholder: 9.00,
+    ratePlaceholder: 9.50,
     qtyFrom: wallTileAreaSqft,
   },
   // INSTALL
@@ -149,7 +157,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Double-vanity install (master bath)',
     group: 'INSTALL',
     unit: 'flat',
-    ratePlaceholder: 300.00,
+    ratePlaceholder: 325.00,
     qtyFrom: (m) => (isMaster(m) ? 1 : 0),
   },
   {
@@ -157,7 +165,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Toilet set + wax ring + supply line',
     group: 'INSTALL',
     unit: 'flat',
-    ratePlaceholder: 250.00,
+    ratePlaceholder: 275.00,
     qtyFrom: () => 1,
   },
   {
@@ -165,7 +173,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Shower valve trim-out + head install',
     group: 'INSTALL',
     unit: 'flat',
-    ratePlaceholder: 300.00,
+    ratePlaceholder: 325.00,
     qtyFrom: () => 1,
   },
   {
@@ -173,7 +181,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Tub set + drain trim',
     group: 'INSTALL',
     unit: 'flat',
-    ratePlaceholder: 400.00,
+    ratePlaceholder: 425.00,
     qtyFrom: (m) => (m.includesTub ? 1 : 0),
   },
   {
@@ -181,7 +189,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Mirror + accessories (towel bar, TP holder, hooks)',
     group: 'INSTALL',
     unit: 'flat',
-    ratePlaceholder: 180.00,
+    ratePlaceholder: 200.00,
     qtyFrom: () => 1,
   },
   // FINISH
@@ -264,7 +272,7 @@ export const BATHROOM_RATES: BathroomRate[] = [
     label: 'Permit, haul-away, dumpster, setup',
     group: 'EXTRAS',
     unit: 'flat',
-    ratePlaceholder: 950.00,
+    ratePlaceholder: 1000.00,
     qtyFrom: () => 1,
   },
 ]
@@ -280,11 +288,20 @@ export interface BathroomLine extends PriceLineItem {
 // Compute the ordered itemized list from measurements. Lines with qty=0
 // are dropped (e.g. tub-set when includesTub=false, double-vanity when
 // floor_area<=60 sqft) so the review UI doesn't render empty rows.
-export function computeBathroomLineItems(m: BathroomMeasurements): BathroomLine[] {
+//
+// Optional vendorRateMap (mig 068) — per-vendor line_id → rate_cents from
+// vendor_service_rates. FIXTURES rows ignore the map (always $0).
+export function computeBathroomLineItems(
+  m: BathroomMeasurements,
+  vendorRateMap?: VendorServiceRateMap,
+): BathroomLine[] {
   return BATHROOM_RATES.flatMap((rate) => {
     const qty = Math.max(0, rate.qtyFrom(m))
     if (qty === 0) return []
-    const amount = Math.round(rate.ratePlaceholder * qty * 100) / 100
+    const isFixture = rate.group === 'FIXTURES'
+    const vendorCents = isFixture ? undefined : vendorRateMap?.get(rate.id)
+    const resolvedRate = vendorCents != null ? vendorCents / 100 : rate.ratePlaceholder
+    const amount = Math.round(resolvedRate * qty * 100) / 100
     const priceUnit: PriceLineItem['priceUnit'] =
       rate.unit === 'sqft' ? 'sqft' :
       rate.unit === 'linear_ft' ? 'linear_ft' :
@@ -296,13 +313,13 @@ export function computeBathroomLineItems(m: BathroomMeasurements): BathroomLine[
       originalAmount: amount,
       source: 'preset_calculated',
       ...(priceUnit && { priceUnit }),
-      unitRate: rate.ratePlaceholder,
+      unitRate: resolvedRate,
       unitQuantity: qty,
       group: rate.group,
       unit: rate.unit,
       qty,
-      rate: rate.ratePlaceholder,
-      isFixture: rate.group === 'FIXTURES',
+      rate: resolvedRate,
+      isFixture,
     }]
   })
 }
