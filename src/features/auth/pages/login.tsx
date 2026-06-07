@@ -272,14 +272,14 @@ export function LoginPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex items-center gap-3"
+            className="flex items-center gap-4"
           >
             <img
               src="/logo-v2.png"
               alt="BuildConnect"
-              className="h-10 w-10 rounded-xl object-cover"
+              className="h-16 w-16 rounded-xl object-cover"
             />
-            <span className="text-xl font-bold tracking-tight font-heading text-white">
+            <span className="text-3xl font-bold tracking-tight font-heading text-white">
               BuildConnect
             </span>
           </motion.div>
@@ -354,13 +354,13 @@ export function LoginPage() {
           className="w-full max-w-[380px]"
         >
           {/* Mobile logo */}
-          <div className="mb-10 flex items-center gap-2.5 lg:hidden">
+          <div className="mb-10 flex items-center gap-3 lg:hidden">
             <img
               src="/logo-v2.png"
               alt="BuildConnect"
-              className="h-9 w-9 rounded-lg object-cover"
+              className="h-12 w-12 rounded-lg object-cover"
             />
-            <span className="text-lg font-bold tracking-tight font-heading">
+            <span className="text-xl font-bold tracking-tight font-heading">
               Build<span className="text-primary">Connect</span>
             </span>
           </div>
