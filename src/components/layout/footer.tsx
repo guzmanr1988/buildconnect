@@ -153,7 +153,7 @@ export function Footer({ className }: FooterProps) {
               <li>
                 <a
                   href="mailto:hello@buildc.net"
-                  className="flex items-center gap-2 hover:text-foreground"
+                  className="flex items-center gap-2 py-2 hover:text-foreground"
                 >
                   <Mail className="h-4 w-4 shrink-0" />
                   hello@buildc.net
@@ -162,7 +162,7 @@ export function Footer({ className }: FooterProps) {
               <li>
                 <a
                   href="mailto:support@buildc.net"
-                  className="flex items-center gap-2 hover:text-foreground"
+                  className="flex items-center gap-2 py-2 hover:text-foreground"
                 >
                   <Mail className="h-4 w-4 shrink-0" />
                   support@buildc.net

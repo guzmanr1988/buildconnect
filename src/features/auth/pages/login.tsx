@@ -391,7 +391,10 @@ export function LoginPage() {
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                <button type="button" className="text-xs text-primary hover:underline">
+                <button
+                  type="button"
+                  className="inline-flex min-h-[44px] items-center px-2 -mx-2 text-xs text-primary hover:underline"
+                >
                   Forgot password?
                 </button>
               </div>
@@ -409,7 +412,7 @@ export function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -472,7 +475,10 @@ export function LoginPage() {
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-primary hover:underline">
+            <Link
+              to="/register"
+              className="inline-flex min-h-[44px] items-center px-2 -mx-2 font-medium text-primary hover:underline"
+            >
               Create account
             </Link>
           </p>

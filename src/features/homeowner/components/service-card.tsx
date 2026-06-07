@@ -93,7 +93,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         ) : null}
       </div>
 
-      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug truncate">
+      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug line-clamp-2">
         {service.name}
       </h3>
 

@@ -45,7 +45,7 @@ export function PipelineStatRow({
   testIdPrefix = 'pipeline-stage',
 }: PipelineStatRowProps) {
   return (
-    <div className={cn('flex items-center justify-between gap-2 sm:gap-4', className)}>
+    <div className={cn('grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 lg:flex lg:items-center lg:justify-between', className)}>
       {stages.map((stage, idx) => {
         const StageIcon = stage.icon
         const count = counts[stage.key] ?? 0
