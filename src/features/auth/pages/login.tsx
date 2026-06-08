@@ -353,14 +353,19 @@ export function LoginPage() {
           transition={{ duration: 0.4, ease: 'easeOut' }}
           className="w-full max-w-[380px]"
         >
-          {/* Mobile logo */}
-          <div className="mb-10 flex items-center gap-3 lg:hidden">
+          {/* Mobile logo — task_1780946246012_061 (Rod-direct via kratos):
+              size-up + horizontal-center so the lockup ANCHORS the mobile
+              header instead of reading as a tiny corner mark. Mark h-20
+              (80px) + wordmark text-3xl + rounded-2xl carries the premium
+              proportional weight Rodolfo holds the brand to; mb-12 gives
+              the form below a clean breathing room beat. */}
+          <div className="mb-12 flex items-center justify-center gap-3.5 lg:hidden">
             <img
               src="/logo-v2.png"
               alt="BuildConnect"
-              className="h-12 w-12 rounded-lg object-cover"
+              className="h-20 w-20 rounded-2xl object-cover shadow-sm"
             />
-            <span className="text-xl font-bold tracking-tight font-heading">
+            <span className="text-3xl font-bold tracking-tight font-heading">
               Build<span className="text-primary">Connect</span>
             </span>
           </div>
