@@ -354,12 +354,14 @@ export function LoginPage() {
           className="w-full max-w-[380px]"
         >
           {/* Mobile logo — task_1780946246012_061 (Rod-direct via kratos):
-              size-up + horizontal-center so the lockup ANCHORS the mobile
-              header instead of reading as a tiny corner mark. Mark h-20
-              (80px) + wordmark text-3xl + rounded-2xl carries the premium
-              proportional weight Rodolfo holds the brand to; mb-12 gives
-              the form below a clean breathing room beat. */}
-          <div className="mb-12 flex items-center justify-center gap-3.5 lg:hidden">
+              size-up only, ORIGINAL left-aligned placement preserved.
+              Mark h-20 (80px) + wordmark text-3xl + rounded-2xl carries
+              the premium proportional weight Rodolfo holds the brand to.
+              Lockup flushes to the same left edge as the 'Sign in' h1
+              below (shared w-full max-w-[380px] parent) — anchors the
+              screen at scale without re-centering. mb-12 gives the form
+              below a clean breathing room beat. */}
+          <div className="mb-12 flex items-center gap-3.5 lg:hidden">
             <img
               src="/logo-v2.png"
               alt="BuildConnect"
