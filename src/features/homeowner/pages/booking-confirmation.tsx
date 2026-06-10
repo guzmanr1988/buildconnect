@@ -12,7 +12,6 @@ import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionPriceKey } from '@/lib/api/pricing'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeRemodelLineItems } from '@/lib/remodel-pricing'
 import { computeBathroomLineItems } from '@/lib/bathroom-pricing'
 import { getVendorServiceRateMap } from '@/lib/api/vendor-service-rates'
@@ -376,35 +375,17 @@ export function BookingConfirmationPage() {
               try { bathroomRateMap = await getVendorServiceRateMap(vendorUuid, 'bathroom') } catch { /* silent fallback */ }
             }
             computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements, bathroomRateMap)
-          } else if (contractor.vendor_id) {
-            // PR #118 fix-forward — for non-roofing services, snapshot a
-            // permit-line from vendor's flat per-service permit fee
-            // (vendor_service_permits) instead of PRICE_LINE_ITEM_PRESETS'
-            // static category-permit. Other line categories (Material,
-            // Install, etc.) keep using PRESETS shape until per-vendor
-            // pricing for those exists too.
-            const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id]
-            if (vendorUuid) {
-              try {
-                const permitMap = await getVendorPermitMap(vendorUuid)
-                const permitCents = getPermitForItem(pendingItem, permitMap)
-                const presets = PRICE_LINE_ITEM_PRESETS[pendingItem.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? []
-                if (presets.length > 0) {
-                  const nonPermit = presets.filter((p) => !/permit/i.test(p.id))
-                  const permitLine: PriceLineItem = {
-                    id: `${pendingItem.serviceId}-permit`,
-                    label: 'Permit Price',
-                    amount: Math.round(permitCents) / 100,
-                    originalAmount: Math.round(permitCents) / 100,
-                    source: 'preset',
-                  }
-                  computedLineItems = [...nonPermit.map((p) => ({ ...p })), permitLine]
-                }
-              } catch {
-                // fall through — undefined keeps PRESETS fallback on display surfaces
-              }
-            }
           }
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // PRESET-fallback assembly for non-roof/remodel/bath services is
+          // KILLED. Rod rule: a lead appears WITH a real per-vendor price or
+          // does NOT appear at all (no "Price pending", no "$0", no PRESET
+          // fallback). Roofing / remodel / bathroom compute paths above are
+          // UNTOUCHED (they pull real per-vendor catalog math). For everything
+          // else, computedLineItems remains undefined — the rev4 display
+          // filter on lead-inbox / lead-workflow / lead-stages then hides any
+          // lead whose priceLineItems are empty / fall below total>0, matching
+          // the marketplace-matching rule (coversAllServices && totalCents>0).
 
           // Ship #269 — pass profile.id as homeowner_id snapshot for admin
           // auditing. Optional on the SentProject side, so undefined here

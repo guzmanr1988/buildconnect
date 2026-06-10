@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -129,7 +129,7 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     addons: { border: Square, lighting: Lightbulb, drainage: Droplets },
   },
   fencing: {
-    material: { wood: TreePine, vinyl: Square, aluminum: Cog, chain_link: Grid3X3, wrought_iron: Triangle },
+    material: { wood: TreePine, vinyl: Square, aluminum: Cog, chain_link: Grid3X3, wrought_iron: Triangle, concrete_panel: BrickWall },
     height: { '4ft': ChevronsUp, '6ft': ChevronsUp, '8ft': ChevronsUp },
     addons: { gates: DoorOpen, post_caps: CircleDot, privacy_slats: AlignJustify },
   },

@@ -36,7 +36,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 // while we test the chain end-to-end before opening to other vendors.
 // Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
 // other code changes (the guards below collapse to no-ops).
-const APEX_ONLY_MODE = true
+const APEX_ONLY_MODE = false
 // PR-#437 — swap from fc0d8ff3 (suspended "(legacy)" apex profile) to
 // 3e0821aa (active canonical apex). useRealVendors filters status='active'
 // so the legacy UUID never returned a row; APEX_ONLY guard at L101 then
@@ -234,6 +234,11 @@ export function VendorComparePage() {
       // from Compare-Vendors for any cart needing that service. APEX FLOOR
       // (previously rendered Apex with partial pricing via .hasSelections)
       // removed in vendor-active-toggle-law bundle.
+      // Rod-confirmed 2026-06-09 — this IS the appear-with-price-or-not
+      // rule on the matching side. No "Contact for quote" fallback; if
+      // vendor cannot price the cart, vendor is hidden entirely. Paired
+      // with vendor-side display filter in lead-inbox.tsx + vendor-lead-
+      // stages.ts (real-price-required to render in vendor inbox).
       const result = totalsByVendor[v.id]
       return !!(result && result.coversAllServices && result.totalCents > 0)
     })

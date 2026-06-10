@@ -394,6 +394,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
           { id: 'aluminum', label: 'Aluminum' },
           { id: 'chain_link', label: 'Chain Link' },
           { id: 'wrought_iron', label: 'Wrought Iron' },
+          { id: 'concrete_panel', label: 'Concrete Panel' },
         ],
       },
       {

@@ -486,8 +486,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // confirmed vendor_id=3e0821aa has 4 Donald rows ZERO Demo Homeowner,
         // collapsing class to LS-persist-carry-forward at this merge.
         set((state) => {
-          const localCarryForward =
-            role === 'vendor' || role === 'account_rep' ? [] : state.sentProjects
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // Item-3 Option B: Supabase is the AUTHORITATIVE source for
+          // sentProjects across all roles + all browsers + all devices.
+          // localCarryForward = [] universally — never merge stale LS into the
+          // hydrated DB rows on this once/session hydrate. Eliminates the
+          // homeowner-side cross-browser drift Rod called "most important":
+          // every browser/device shows the identical Supabase truth. Brief
+          // pre-hydrate flash of stale LS is acceptable; hydrate replaces it.
+          // Vendor + account_rep branches were already [] per the prior
+          // demo-Vendor LS-stale fix; homeowner role now joins them.
+          const localCarryForward: SentProject[] = []
           const seen = new Set<string>()
           const merged: SentProject[] = []
           for (const p of [...dbProjects, ...localCarryForward]) {

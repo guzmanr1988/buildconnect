@@ -281,9 +281,13 @@ export default function VendorCatalog() {
                         />
                       )}
                       <CardTitle className="text-base font-heading">{service.name}</CardTitle>
-                      {enabled && (
+                      {enabled ? (
                         <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
                           Active
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">
+                          Inactive
                         </Badge>
                       )}
                     </div>
@@ -515,7 +519,7 @@ function CatalogGroupRenderer({
     (o) => !(o.subGroups && o.subGroups.length > 0)
   )
   const containerClass = hasLeafOptions
-    ? 'rounded-lg border border-foreground/10 bg-[oklch(0.905_0.012_255)] p-3 shadow-md'
+    ? 'rounded-xl border border-border/50 bg-muted/40 p-4'
     : ''
   const labelClass =
     depth === 0

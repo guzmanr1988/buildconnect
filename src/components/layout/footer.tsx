@@ -118,8 +118,8 @@ export function Footer({ className }: FooterProps) {
 
   return (
     <footer className={cn('mt-16 border-t bg-muted/30', className)}>
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-4">
+      <div className="@container mx-auto max-w-7xl px-6 py-12">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:gap-10 @4xl:grid-cols-4">
           {/* Col 1 — Support */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
@@ -303,7 +303,7 @@ export function Footer({ className }: FooterProps) {
 
         {/* Bottom strip */}
         <div className="mt-12 border-t pt-8">
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-center justify-center gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
             <p className="text-xs text-muted-foreground">
               © 2026 BuildConnect. All rights reserved.
             </p>

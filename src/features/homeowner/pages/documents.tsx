@@ -342,7 +342,7 @@ function PhotoIdSection({
             <button
               type="button"
               onClick={onPreviewOpen}
-              className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer"
+              className="w-16 h-16 md:w-40 md:h-40 lg:w-48 lg:h-48 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer"
             >
               <img src={idDocumentUrl} alt="ID Document" className="w-full h-full object-cover" />
             </button>

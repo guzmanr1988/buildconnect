@@ -17,6 +17,7 @@ import { useAgreementEventsStore } from '@/stores/agreement-events-store'
 import { supabase } from '@/lib/supabase'
 import type { Bug } from '@/types'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
+import { Footer } from '@/components/layout/footer'
 import { cn } from '@/lib/utils'
 
 type NavLeaf = { to: string; icon: typeof LayoutDashboard; label: string }
@@ -321,43 +322,71 @@ export function AdminLayout() {
       )}
 
       <div className={cn(!isMobile && 'ml-64')}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            {isMobile && (
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="sheet-floating flex w-52 flex-col p-0 pt-4">
-                  <div className="px-3 mb-3 shrink-0"><Logo /></div>
-                  {/* Ship #207 — scroll container on mobile sheet too,
-                      same rationale as desktop sidebar — 16+ nav entries
-                      can exceed viewport on shorter mobile devices. */}
-                  <div className="flex-1 overflow-y-auto">
-                    <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            )}
-            {isMobile && <Logo />}
-            {!isMobile && <h2 className="text-lg font-semibold font-heading">Admin Dashboard</h2>}
+        {/* Mobile floating-pill top header — Rev13 (Rod-direct 2026-06-09 via
+            kratos 1781053014662): port the homeowner rev8.2 mobile pill chrome
+            to admin role for cross-role parity. Mobile-only; desktop keeps the
+            sidebar-offset sticky bar with Admin Dashboard heading. */}
+        {isMobile && (
+          <div className="fixed top-0 left-0 right-0 z-50 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <header
+              data-admin-top-header-pill="true"
+              data-admin-header-glass="true"
+              className="flex h-16 items-center justify-between bg-background/65 dark:bg-background/85 backdrop-blur-xl backdrop-saturate-150 rounded-full shadow-[0_8px_24px_-4px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_28px_-4px_rgba(0,0,0,0.7)] ring-1 ring-black/[0.06] dark:ring-white/15 px-3"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Open navigation menu" className="h-10 w-10 shrink-0"><Menu className="h-5 w-5" /></Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="sheet-floating flex data-[side=left]:w-64 flex-col p-0 pt-4">
+                    <div className="px-3 mb-3 shrink-0"><Logo /></div>
+                    <div className="flex-1 overflow-y-auto">
+                      <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+                <Logo />
+              </div>
+              <div className="flex items-center">
+                <NotificationBell notifications={notifications} />
+                <ThemeToggle />
+                {profile && (
+                  <button
+                    onClick={() => navigate('/admin/profile')}
+                    className="cursor-pointer"
+                    aria-label="Profile"
+                  >
+                    <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="md" />
+                  </button>
+                )}
+              </div>
+            </header>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell notifications={notifications} />
-            <ThemeToggle />
-            {profile && (
-              <button
-                onClick={() => navigate('/admin/profile')}
-                className="cursor-pointer"
-                aria-label="Profile"
-              >
-                <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
-              </button>
-            )}
-          </div>
-        </header>
+        )}
 
-        <main className="p-4 sm:p-6">
+        {/* Desktop sticky top bar — unchanged; pairs with sidebar aside */}
+        {!isMobile && (
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b dark:border-white/15 bg-background/80 dark:bg-background/90 backdrop-blur-lg dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)] px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold font-heading">Admin Dashboard</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotificationBell notifications={notifications} />
+              <ThemeToggle />
+              {profile && (
+                <button
+                  onClick={() => navigate('/admin/profile')}
+                  className="cursor-pointer"
+                  aria-label="Profile"
+                >
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
+                </button>
+              )}
+            </div>
+          </header>
+        )}
+
+        <main className={cn(isMobile ? 'px-4 pt-24 pb-4' : 'p-6')}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -370,6 +399,12 @@ export function AdminLayout() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Wave-8 (Rod 2026-06-10) — render marketing Footer ONLY on the
+            admin main page (canonical /admin index + /admin/overview alias
+            that renders the same OverviewPage). All inner /admin/* routes
+            hide the footer. */}
+        {['/admin', '/admin/overview'].includes(location.pathname) && <Footer />}
       </div>
     </div>
   )

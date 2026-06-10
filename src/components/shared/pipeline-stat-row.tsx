@@ -53,7 +53,7 @@ export function PipelineStatRow({
   testIdPrefix = 'pipeline-stage',
 }: PipelineStatRowProps) {
   return (
-    <div className={cn('grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-between sm:gap-2', className)}>
+    <div className={cn('flex items-center gap-2 overflow-x-auto sm:overflow-x-visible sm:justify-between sm:gap-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}>
       {stages.map((stage, idx) => {
         const StageIcon = stage.icon
         const count = counts[stage.key] ?? 0
@@ -114,10 +114,10 @@ export function PipelineStatRow({
           )
         }
         return (
-          <div key={stage.key} className="flex items-center gap-1 sm:gap-1.5 flex-1">
+          <div key={stage.key} className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-28 sm:min-w-0">
             {card}
             {idx < stages.length - 1 && (
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 hidden sm:block" />
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
             )}
           </div>
         )

@@ -11,12 +11,16 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
-import { useEffectiveMockLeads, useEffectiveMockMessages } from '@/lib/mock-data-effective'
+import { useEffectiveLeads } from '@/lib/hooks/use-effective-leads'
+import { useLeadConversation } from '@/lib/hooks/use-lead-conversation'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
-import type { Message } from '@/types'
 
+// Mock-scope vendor key — used by the admin-thread tab (mock store) for the
+// vendor's display name and as the partition key into admin-messages-store.
+// Real-mode lead messaging uses profile.id from auth-store.
 const VENDOR_ID = 'v-1'
 
 function fmtTime(iso: string) {
@@ -39,43 +43,33 @@ const QUICK_REPLIES = [
 
 export default function VendorMessages() {
   const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
-  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
-  const mockLeads = useEffectiveMockLeads()
-  const mockMessages = useEffectiveMockMessages()
+  // Wave-9 9a — vendor lead-threads on the real messages table (?demo=1
+  // still falls back to mock through the hooks). Admin-thread tab stays on
+  // admin-messages-store per kratos directive (9b owns leadless platform
+  // threads + admin INSERT RLS).
+  const profile = useAuthStore((s) => s.profile)
+  const vendorIdentity = profile?.id ?? VENDOR_ID
 
   // Admin messages from shared store — single hook call to avoid hook count issues
   const adminStore = useAdminMessagesStore()
   const adminMessages = useMemo(() => adminStore.messages.filter((m) => m.vendorId === VENDOR_ID), [adminStore.messages])
   const addAdminMessage = adminStore.addMessage
 
-  // Get all leads for this vendor that have messages
-  const vendorLeads = useMemo(() => mockLeads.filter((l) => l.vendor_id === VENDOR_ID), [mockLeads])
-  const leadIds = useMemo(() => new Set(vendorLeads.map((l) => l.id)), [vendorLeads])
-  const relevantMessages = useMemo(() => mockMessages.filter((m) => leadIds.has(m.lead_id)), [leadIds, mockMessages])
-
-  // Group messages by lead
-  const threadLeads = useMemo(() => {
-    const leadIdsWithMessages = [...new Set(relevantMessages.map((m) => m.lead_id))]
-    return leadIdsWithMessages
-      .map((id) => vendorLeads.find((l) => l.id === id)!)
-      .filter(Boolean)
-  }, [relevantMessages, vendorLeads])
+  // All leads owned by this vendor (real-mode = supabase leads.vendor_id;
+  // demo-mode = MOCK_LEADS filter).
+  const threadLeads = useEffectiveLeads('vendor', vendorIdentity)
 
   // "admin" is a special thread ID for admin conversations
   const [activeThread, setActiveThread] = useState<string>('admin')
   const activeLead = activeThread !== 'admin' ? (threadLeads.find((l) => l.id === activeThread) || null) : null
-  const [messages, setMessages] = useState<Message[]>(relevantMessages)
   const [input, setInput] = useState('')
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quoteItems, setQuoteItems] = useState([{ name: '', price: '' }])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const activeMessages = useMemo(
-    () => {
-      if (activeThread === 'admin') return [] // Admin messages handled separately
-      return activeLead ? messages.filter((m) => m.lead_id === activeLead.id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : []
-    },
-    [messages, activeLead, activeThread]
+  const { messages: activeMessages, sendMessage: sendLeadMessage } = useLeadConversation(
+    activeLead?.id || null,
+    vendorIdentity,
   )
 
   useEffect(() => {
@@ -84,7 +78,7 @@ export default function VendorMessages() {
     }
   }, [activeMessages.length, adminMessages.length, activeThread])
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return
     if (activeThread === 'admin') {
       addAdminMessage({
@@ -98,19 +92,11 @@ export default function VendorMessages() {
       return
     }
     if (!activeLead) return
-    const newMsg: Message = {
-      id: `m-new-${Date.now()}`,
-      lead_id: activeLead.id,
-      sender_id: VENDOR_ID,
-      content: text.trim(),
-      message_type: 'text',
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, newMsg])
+    await sendLeadMessage(text.trim())
     setInput('')
   }
 
-  const sendQuote = () => {
+  const sendQuote = async () => {
     if (!activeLead) return
     const validItems = quoteItems.filter((i) => i.name.trim() && i.price.trim())
     if (validItems.length === 0) return
@@ -118,16 +104,7 @@ export default function VendorMessages() {
     const items = validItems.map((i) => ({ name: i.name, price: parseFloat(i.price) || 0 }))
     const total = items.reduce((s, i) => s + i.price, 0)
 
-    const newMsg: Message = {
-      id: `m-quote-${Date.now()}`,
-      lead_id: activeLead.id,
-      sender_id: VENDOR_ID,
-      content: '',
-      message_type: 'quote',
-      quote_data: { items, total },
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, newMsg])
+    await sendLeadMessage('', { message_type: 'quote', quote_data: { items, total } })
     setQuoteOpen(false)
     setQuoteItems([{ name: '', price: '' }])
   }
@@ -140,7 +117,7 @@ export default function VendorMessages() {
     setQuoteItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
   }
 
-  const isVendorMsg = (msg: Message) => msg.sender_id === VENDOR_ID
+  const isVendorMsg = (msg: { sender_id: string }) => msg.sender_id === vendorIdentity
 
   const container = {
     hidden: { opacity: 0 },
@@ -197,9 +174,6 @@ export default function VendorMessages() {
                 </>
               )}
               {threadLeads.map((lead) => {
-                const lastMsg = messages
-                  .filter((m) => m.lead_id === lead.id)
-                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
                 const isActive = activeThread === lead.id
                 return (
                   <button
@@ -217,13 +191,8 @@ export default function VendorMessages() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{lead.homeowner_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lastMsg?.message_type === 'quote' ? 'Quote sent' : lastMsg?.content || 'No messages'}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{lead.project}</p>
                     </div>
-                    {lastMsg && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastMsg.created_at)}</span>
-                    )}
                   </button>
                 )
               })}

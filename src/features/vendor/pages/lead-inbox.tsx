@@ -15,12 +15,10 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore, fetchProjectIdDocument } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
@@ -135,19 +133,10 @@ export default function LeadInbox() {
       })),
     })
   }, [sentProjects, VENDOR_ID, isMock, vendor?.id, vendor?.company])
-  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
-  const effectiveMockLeads = useEffectiveMockLeads()
-  const mockLeads = useMemo(() => {
-    if (!isMock) return []
-    const vendorScoped = effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
-    if (profile?.role === 'account_rep') {
-      return vendorScoped.filter(
-        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
-      )
-    }
-    return vendorScoped
-  }, [VENDOR_ID, isMock, effectiveMockLeads, profile?.role, profile?.id, accountRepIdByLead])
-
+  // Rod-go 2026-06-09 — mock/demo seed REMOVED entirely. Vendor inbox
+  // renders ONLY real homeowner-sent leads that have a real configured
+  // price. Apex's view starts empty until a real homeowner configures
+  // + sends a real-priced project.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
   const homeownerLeads: Lead[] = useMemo(() => sentProjects
     .filter((p) => {
@@ -160,6 +149,21 @@ export default function LeadInbox() {
       }
       return true
     })
+    .filter((p) => {
+      // Rod-go 2026-06-09 — APPEAR-WITH-PRICE-OR-ABSENT. Lead renders
+      // only if a real price exists: vendor's saleAmount, OR computed
+      // sum of real priceLineItems. No PRESET, no $0, no "Price pending".
+      // 2026-06-10 launch-night fix — quotedPriceCents is a real price
+      // frozen at booking time (Ship #355); accept alongside saleAmount +
+      // priceLineItems so a booked-with-quote-but-no-breakdown lead renders.
+      if (p.saleAmount && p.saleAmount > 0) return true
+      if (p.quotedPriceCents && p.quotedPriceCents > 0) return true
+      if (!p.priceLineItems || p.priceLineItems.length === 0) return false
+      const value = p.item?.serviceId === 'windows_doors'
+        ? computeWindowsDoorsCatalogTotal(p.item as any, p.priceLineItems, getVendorPrice)
+        : p.priceLineItems.reduce((s, l) => s + (l.amount || 0), 0)
+      return value > 0
+    })
     .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
@@ -171,14 +175,24 @@ export default function LeadInbox() {
       // Ship #349 — pre-sale projects compute headline from catalog-first
       // item totals (sum of all card prices). Sold projects keep saleAmount
       // (locked at sale time, includes Upsale line).
+      // Rod-go 2026-06-09 — no PRESET fallback. Empty priceLineItems => 0
+      // (renders as "Price pending" downstream). Matches lead-workflow.tsx rev2.
+      // 2026-06-10 launch-night fix — fall back to quotedPriceCents (cents→
+      // dollars) when both saleAmount and priceLineItems are absent. The
+      // contractor's booking-time quote IS a real price (Ship #355 freeze).
       value: p.saleAmount ?? (() => {
-        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
-          ? p.priceLineItems
-          : (PRICE_LINE_ITEM_PRESETS[p.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
-        if (p.item.serviceId === 'windows_doors') {
-          return computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+        if (p.priceLineItems && p.priceLineItems.length > 0) {
+          const lineItems = p.priceLineItems
+          if (p.item.serviceId === 'windows_doors') {
+            return computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+          }
+          const sum = lineItems.reduce((s, l) => s + l.amount, 0)
+          if (sum > 0) return sum
         }
-        return lineItems.reduce((s, l) => s + l.amount, 0)
+        if (p.quotedPriceCents && p.quotedPriceCents > 0) {
+          return Math.round(p.quotedPriceCents / 100)
+        }
+        return 0
       })(),
       address: p.item.roofMeasurement?.address ?? p.homeowner?.address ?? 'Pending site visit',
       phone: p.homeowner?.phone || '—',
@@ -192,7 +206,7 @@ export default function LeadInbox() {
       received_at: p.sentAt,
     })), [sentProjects, VENDOR_ID, vendor, getVendorPrice, profile?.role, profile?.id, accountRepIdByLead])
 
-  const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
+  const leads = homeownerLeads
   const assigneeMap = useAssigneeMap(VENDOR_ID)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
@@ -218,8 +232,8 @@ export default function LeadInbox() {
   // noise); multi-category vendors see all relevant category sections.
   // All sections open by default so the vendor sees everything at
   // once on arrival; click header to collapse. Within-category order
-  // preserves the existing leads-array sequence (homeownerLeads-first,
-  // then mockLeads, which matches the prior flat-list ordering).
+  // preserves the existing leads-array sequence (homeownerLeads only
+  // post-2026-06-09 mock-seed removal).
   const services = useCatalogStore((s) => s.services)
   const categoryLabelFor = useMemo(() => {
     const map: Record<string, string> = {}
@@ -336,7 +350,7 @@ export default function LeadInbox() {
                     <div className="grid gap-3">
                       {categoryLeads.map((lead) => {
             const isExpanded = expandedId === lead.id
-            const packEntries = Object.entries(lead.pack_items)
+            const packEntries = Object.entries(lead.pack_items ?? {})
             const statusBorderClass =
               lead.status === 'pending' ? 'border-l-4 border-l-amber-500'
               : lead.status === 'confirmed' ? 'border-l-4 border-l-emerald-500'

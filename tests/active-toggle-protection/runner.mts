@@ -108,11 +108,20 @@ function leg1_roundtrip(): LegResult {
   if (poolOpts && Object.keys(poolOpts).length > 0)
     failures.push('pool MUST have empty enabledOptions (only inactive row)')
 
-  // Price map should include ALL rows (active and inactive) — vendor's UI
-  // needs the price history so they can re-toggle ON without losing data.
-  const { priceBySvcOption } = buildPriceMapFromRows(priceRows, permitRows)
-  if (priceBySvcOption['pool']?.['pool_liner'] !== 9999)
-    failures.push('priceBySvcOption MUST include inactive rows (got: ' + JSON.stringify(priceBySvcOption['pool']) + ')')
+  // Rod-go 2026-06-09 — Price map must EXCLUDE inactive rows. Prior to this
+  // fix, inactive priced rows leaked into priceBySvcOption and shadowed real
+  // quotes (Rod: "I can't have mismatch prices ever"). Vendor UI re-toggle
+  // restores prices from the persisted `pricing` partialize map (see leg3),
+  // NOT from priceBySvcOption — so excluding inactive here is safe.
+  const { priceBySvcOption, permitByService } = buildPriceMapFromRows(priceRows, permitRows)
+  if (priceBySvcOption['pool']?.['pool_liner'] !== undefined)
+    failures.push('priceBySvcOption MUST EXCLUDE inactive rows (got: ' + JSON.stringify(priceBySvcOption['pool']) + ')')
+  if (priceBySvcOption['roofing']?.['shingle_asphalt'] !== 12500)
+    failures.push('priceBySvcOption MUST include active rows (got roofing.shingle_asphalt: ' + JSON.stringify(priceBySvcOption['roofing']?.['shingle_asphalt']) + ')')
+  if (permitByService['flooring'] !== undefined)
+    failures.push('permitByService MUST EXCLUDE inactive permits (got flooring: ' + JSON.stringify(permitByService['flooring']) + ')')
+  if (permitByService['roofing'] !== 45000)
+    failures.push('permitByService MUST include active permits (got roofing: ' + JSON.stringify(permitByService['roofing']) + ')')
 
   return {
     name: 'leg1_roundtrip_active_filter',

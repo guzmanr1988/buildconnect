@@ -44,7 +44,7 @@ export function VendorCatalogOptionsCardGrid({
 }: VendorCatalogOptionsCardGridProps) {
   return (
     <div
-      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"
+      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5"
       data-project-summary-grid
     >
       {options.map((option) => {
@@ -65,8 +65,10 @@ export function VendorCatalogOptionsCardGrid({
             data-option-id={option.id}
             data-group-id={groupId}
             className={cn(
-              'rounded-lg border bg-[oklch(0.968_0.020_255)] p-3 space-y-2 transition',
-              optEnabled ? 'border-primary/30 bg-primary/8' : 'border-[oklch(0.895_0.016_260)]'
+              'product-card rounded-xl border p-3 space-y-2',
+              optEnabled
+                ? 'product-card-selected border-primary/55 bg-primary/10'
+                : 'product-card-hover border-border/65 bg-card cursor-pointer'
             )}
           >
             <div className="flex items-center justify-between gap-2">
@@ -123,7 +125,7 @@ export function VendorCatalogOptionsCardGrid({
                       onPriceChange(serviceId, option.id, dollars * 100)
                     }}
                     placeholder="0"
-                    className="h-9 w-24 text-sm text-right"
+                    className="h-9 w-24 text-sm text-right bg-background border-border/70"
                   />
                 </div>
               )}

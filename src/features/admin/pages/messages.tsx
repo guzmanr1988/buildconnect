@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useAdminMessagesStore } from '@/stores/admin-messages-store'
+import { useAdminLiveConversations } from '@/lib/hooks/use-admin-live-conversations'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { matchesSearch } from '@/lib/search-match'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,55 @@ const fadeUp = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
 } satisfies Variants
+
+// Wave-9 9a — admin read-real / send-mock. Shows recent real lead-keyed
+// messages across the platform via the "Admins read all messages" RLS policy.
+// Send still flows through admin-messages-store (mock) until 9b adds an admin
+// INSERT policy + recipient_id schema for leadless platform threads.
+function LiveConversationsCard() {
+  const { messages, demoMode, loading } = useAdminLiveConversations()
+  if (demoMode) return null
+  return (
+    <Card className="rounded-xl shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-semibold">Live Conversations</p>
+          <p className="text-xs text-muted-foreground">Real-time lead messages across the platform</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Realtime
+        </span>
+      </div>
+      {loading ? (
+        <p className="text-xs text-muted-foreground py-4 text-center">Loading…</p>
+      ) : messages.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-4 text-center">No real lead messages yet</p>
+      ) : (
+        <div className="max-h-56 overflow-y-auto space-y-2">
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              data-admin-live-msg
+              className="flex items-start gap-3 rounded-lg border border-border/40 bg-muted/30 px-3 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="font-mono">{m.lead_id}</span>
+                  <span>·</span>
+                  <span>{new Date(m.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
+                <p className="text-sm text-foreground truncate">
+                  {m.message_type === 'quote' ? 'Quote sent' : m.content}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
 
 export default function AdminMessagesPage() {
   const [searchParams] = useSearchParams()
@@ -102,6 +152,8 @@ export default function AdminMessagesPage() {
   return (
     <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-6">
       <PageHeader title="Messages" description="Conversations with vendors" />
+
+      <LiveConversationsCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[500px]">
         {/* Vendor List */}

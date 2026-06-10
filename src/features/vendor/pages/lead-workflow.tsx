@@ -32,7 +32,6 @@ import { uploadDocAsVendor, getSignedUrl as getDocSignedUrl } from '@/lib/api/ho
 import { useAssociationDocForProject } from '@/features/vendor/lib/use-association-doc'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
@@ -215,17 +214,22 @@ export default function VendorLeadWorkflow() {
       const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
       if (p.saleAmount && p.saleAmount > 0) {
         map[leadId] = p.saleAmount
-      } else {
-        // Arc-39 hard-lock: pre-sale Price = catalog-sum only. Ripped
-        // quotedPriceCents fallback (homeowner /quote pre-stored amount)
-        // which was masking the catalog-sum and shadowing vendor-set prices.
-        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
-          ? p.priceLineItems
-          : (PRICE_LINE_ITEM_PRESETS[p.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+      } else if (p.priceLineItems && p.priceLineItems.length > 0) {
+        // Rod-go 2026-06-09 — STOP fabricating from PRICE_LINE_ITEM_PRESETS
+        // (was producing fake $14,950 on every unpriced roofing lead).
+        // Only sum REAL vendor-configured line items; if none, omit from
+        // map → display site shows "Price pending" instead of a fake number.
         const value = p.item?.serviceId === 'windows_doors'
-          ? computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
-          : lineItems.reduce((s: number, l: { amount: number }) => s + (l.amount || 0), 0)
+          ? computeWindowsDoorsCatalogTotal(p.item as any, p.priceLineItems, getVendorPrice)
+          : p.priceLineItems.reduce((s: number, l: { amount: number }) => s + (l.amount || 0), 0)
         if (value > 0) map[leadId] = value
+      } else if (p.quotedPriceCents && p.quotedPriceCents > 0) {
+        // 2026-06-10 launch-night fix — when no per-line breakdown exists
+        // but the homeowner saw a vendor quote at booking time (Ship #355
+        // freeze), surface the quote as the lead total (cents → dollars).
+        // Aligns with the price-or-no-show rule: a contractor-quoted price
+        // IS a real price.
+        map[leadId] = Math.round(p.quotedPriceCents / 100)
       }
     }
     return map

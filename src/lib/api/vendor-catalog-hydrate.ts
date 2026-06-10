@@ -84,6 +84,7 @@ export function buildPriceMapFromRows(
 ): PriceMaps {
   const priceBySvcOption: Record<string, Record<string, number>> = {}
   for (const row of priceRows) {
+    if (!row.active) continue
     const og = row.options?.option_groups
     if (!og) continue
     const svc = og.service_id
@@ -94,6 +95,7 @@ export function buildPriceMapFromRows(
   }
   const permitByService: Record<string, number> = {}
   for (const row of permitRows) {
+    if (!row.active) continue
     if (!row.service_id) continue
     permitByService[row.service_id] = row.permit_price_cents ?? 0
   }

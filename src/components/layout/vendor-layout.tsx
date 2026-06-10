@@ -391,39 +391,71 @@ export function VendorLayout() {
 
       {/* Main area */}
       <div className={cn(!isMobile && (sidebarCollapsed ? 'ml-[4.5rem]' : 'ml-64'), 'transition-all duration-200')}>
-        {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-12 sm:h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            {isMobile && (
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
-                  <div className="px-3 mb-3"><Logo /></div>
-                  <SidebarNav collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
-                </SheetContent>
-              </Sheet>
-            )}
-            {isMobile && <Logo />}
+        {/* Mobile floating-pill top header — Rev13 (Rod-direct 2026-06-09 via
+            kratos 1781053014662): port the homeowner rev8.2 mobile pill chrome
+            to vendor role for cross-role parity. Mobile-only; desktop keeps
+            the sidebar-offset sticky bar which pairs with the aside. Same
+            glass recipe + dark-contrast bump as homeowner pill (rev12). */}
+        {isMobile && (
+          <div className="fixed top-0 left-0 right-0 z-50 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <header
+              data-vendor-top-header-pill="true"
+              data-vendor-header-glass="true"
+              className="flex h-16 items-center justify-between bg-background/65 dark:bg-background/85 backdrop-blur-xl backdrop-saturate-150 rounded-full shadow-[0_8px_24px_-4px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_28px_-4px_rgba(0,0,0,0.7)] ring-1 ring-black/[0.06] dark:ring-white/15 px-3"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Open navigation menu" className="h-10 w-10 shrink-0"><Menu className="h-5 w-5" /></Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="sheet-floating flex data-[side=left]:w-64 flex-col p-0 pt-4">
+                    <div className="px-3 mb-3 shrink-0"><Logo /></div>
+                    <div className="flex-1 overflow-y-auto">
+                      <SidebarNav collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+                <Logo />
+              </div>
+              <div className="flex items-center">
+                <NotificationBell notifications={notifications} />
+                <ThemeToggle />
+                {profile && (
+                  <button
+                    onClick={() => navigate('/vendor/profile')}
+                    className="cursor-pointer"
+                    aria-label="Profile"
+                  >
+                    <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="md" />
+                  </button>
+                )}
+              </div>
+            </header>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell notifications={notifications} />
-            <ThemeToggle />
-            {profile && (
-              <button
-                onClick={() => navigate('/vendor/profile')}
-                className="cursor-pointer"
-                aria-label="Profile"
-              >
-                <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
-              </button>
-            )}
-          </div>
-        </header>
+        )}
+
+        {/* Desktop sticky top bar — unchanged; pairs with sidebar aside */}
+        {!isMobile && (
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b dark:border-white/15 bg-background/80 dark:bg-background/90 backdrop-blur-lg dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)] px-4 sm:px-6">
+            <div className="flex items-center gap-3" />
+            <div className="flex items-center gap-2">
+              <NotificationBell notifications={notifications} />
+              <ThemeToggle />
+              {profile && (
+                <button
+                  onClick={() => navigate('/vendor/profile')}
+                  className="cursor-pointer"
+                  aria-label="Profile"
+                >
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
+                </button>
+              )}
+            </div>
+          </header>
+        )}
 
         {/* Content */}
-        <main className="p-3 sm:p-6 w-full overflow-x-hidden">
+        <main className={cn('w-full overflow-x-hidden', isMobile ? 'px-3 pt-24 pb-3' : 'p-6')}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -440,8 +472,10 @@ export function VendorLayout() {
         {/* Footer — per-role shell mount inside sidebar-offset wrapper so
             the footer respects the sidebar width on desktop and spans
             full width on mobile. Off App.tsx root so /login + /signup +
-            admin do not leak. */}
-        <Footer />
+            admin do not leak.
+            Wave-8 (Rod 2026-06-10) — render ONLY on the vendor index page;
+            all inner /vendor/* routes hide the marketing footer. */}
+        {location.pathname === '/vendor' && <Footer />}
       </div>
 
       {/* Ship #270 — Non-circumvention agreement gate. Single insertion

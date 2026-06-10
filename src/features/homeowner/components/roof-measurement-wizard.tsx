@@ -298,10 +298,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPitch, setAdjPitch] = useState('')
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
-  // Inline pencil-edit overrides for AREA BREAKDOWN. Override input is RAW;
-  // display is POST-WASTE; cart payload is RAW (uniform with satellite path).
-  const [editingFlat, setEditingFlat] = useState(false)
-  const [editingPitched, setEditingPitched] = useState(false)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -359,8 +355,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     setShowAdjust(false)
     setAdjFlatArea('')
     setAdjPerimeterFt('')
-    setEditingFlat(false)
-    setEditingPitched(false)
     setStep(1)
   }, [open, defaultAddress])
 
@@ -546,22 +540,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                     flowPath={flowPath ?? null}
                     source="wizard-step2"
-                    editing={{
-                      pitched: {
-                        active: editingPitched,
-                        rawValue: adjArea,
-                        onChange: setAdjArea,
-                        onStart: () => setEditingPitched(true),
-                        onDone: () => setEditingPitched(false),
-                      },
-                      flat: {
-                        active: editingFlat,
-                        rawValue: adjFlatArea,
-                        onChange: setAdjFlatArea,
-                        onStart: () => setEditingFlat(true),
-                        onDone: () => setEditingFlat(false),
-                      },
-                    }}
                   />
 
                   <button
