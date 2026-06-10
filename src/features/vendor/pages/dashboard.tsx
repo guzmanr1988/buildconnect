@@ -57,18 +57,26 @@ export default function VendorDashboard() {
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
-  const { vendorId: VENDOR_ID } = useVendorScope()
+  const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
   const vendor = useResolvedVendor()
   const allMockLeads = useEffectiveMockLeads()
   const mockLeads = useMemo(() => {
-    const vendorScoped = allMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
+    // pin-20 — MOCK_LEADS are seeded against synthetic mock-vendor-ids
+    // ('v-1'..'v-5'). Only featured-mapped sessions (mockVendorId set)
+    // should ever see fixture leads; real Apex / synthesized vendors
+    // get an empty fixture set. Pre-fix this filtered on `vendorId`
+    // which was a mock-id when mapped but profile.id otherwise — the
+    // latter never equals a fixture vendor_id so it returned [] anyway,
+    // but the explicit mockVendorId form removes the foot-gun.
+    if (!mockVendorId) return []
+    const vendorScoped = allMockLeads.filter((l) => l.vendor_id === mockVendorId)
     if (profile?.role === 'account_rep') {
       return vendorScoped.filter(
         (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
       )
     }
     return vendorScoped
-  }, [allMockLeads, VENDOR_ID, profile?.role, profile?.id, accountRepIdByLead])
+  }, [allMockLeads, mockVendorId, profile?.role, profile?.id, accountRepIdByLead])
 
   // Auth-redirect guard: non-vendor-family profile shouldn't render this
   // page. Redirect homeowners + admins to their respective home routes.

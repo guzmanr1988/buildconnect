@@ -166,6 +166,15 @@ export function AuthBootstrap() {
         // are canonical from DB, not localStorage-only. Fire-and-forget;
         // errors logged inside the store.
         if (merged.role === 'vendor') {
+          // pin-20 — defense-in-depth: nuke the legacy demo-alias LS flag
+          // on every vendor hydrate so any residual key from a pre-pin-20
+          // session can't survive into the real-identity path. vendor-
+          // scope.ts no longer reads this key (the override branch was
+          // removed) — this is belt-and-suspenders cleanup so the flag
+          // doesn't sit in storage forever as a forensic foot-gun.
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('buildconnect-demo-mock-vendor-id')
+          }
           useVendorCatalogStore.getState().hydrateFromSupabase(userId)
         }
         // Surface-2: wire projects to Supabase for all authed roles.

@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useVendorSettingsStore } from '@/stores/vendor-settings-store'
 import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
@@ -194,16 +194,19 @@ export function VendorLayout() {
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
 
-  // Vendor notifications = pending leads awaiting action. Resolve the
-  // current vendor's id via useVendorScope so the demo-alias LS override
-  // (#222) and the DEMO_VENDOR_UUID_BY_MOCK_ID reverse-map both apply
-  // — pre-#264 this layout had its own inline reverse-lookup that
-  // missed the LS alias, so generic Vendor demo'd notification count
-  // could fall through. task_1776835392387_106 fix.
-  const { vendorId: vendorIdForLeads } = useVendorScope()
-  const pendingLeads = mockLeads.filter(
-    (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
-  )
+  // Vendor notifications = pending leads awaiting action.
+  // pin-20 — fixture filter switched to mockVendorId. Pre-fix this
+  // joined on `vendorId` which post-pin-20 is always profile.id (a real
+  // UUID) — fixture vendor_id fields are 'v-1'..'v-5' strings, so
+  // pendingLeads would resolve to [] for every authed session and the
+  // sidebar badge stops counting. Switching to mockVendorId (null for
+  // unmapped vendors) preserves the fixture-aware badge for the 3
+  // featured mock vendors AND yields [] correctly for everyone else.
+  const resolvedVendorForLayout = useResolvedVendor()
+  const { mockVendorId } = useVendorScope()
+  const pendingLeads = mockVendorId
+    ? mockLeads.filter((l) => l.vendor_id === mockVendorId && l.status === 'pending')
+    : []
 
   // Ship #240 — cross-role notification event derivations. Pattern is
   // "derive from state" (option A): each event-type filters the relevant
@@ -217,11 +220,18 @@ export function VendorLayout() {
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const RECENT_RESOLVED_WINDOW_MS = 24 * 60 * 60 * 1000 // 24h — resolved events surface briefly then drop off
 
+  // pin-20 — fixture leads gated by mockVendorId; sentProjects gated by
+  // contractorMatchesVendor() so the bidirectional mock↔UUID resolver
+  // catches both write schemes (booking writes mock-id, FE may resolve
+  // to UUID, or vice-versa). Pre-fix this used a single shadowed
+  // `vendorIdForLeads` that conflated fixture vs real-DB identity.
   const myLeadIds = new Set<string>([
-    ...mockLeads.filter((l) => l.vendor_id === vendorIdForLeads).map((l) => l.id),
-    ...sentProjects
-      .filter((p) => p.contractor?.vendor_id === vendorIdForLeads)
-      .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`),
+    ...(mockVendorId ? mockLeads.filter((l) => l.vendor_id === mockVendorId).map((l) => l.id) : []),
+    ...(resolvedVendorForLayout
+      ? sentProjects
+          .filter((p) => contractorMatchesVendor(p.contractor, resolvedVendorForLayout))
+          .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`)
+      : []),
   ])
 
   const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)

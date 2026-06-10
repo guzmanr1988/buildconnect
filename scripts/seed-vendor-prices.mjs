@@ -39,43 +39,12 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
 /* ---------------------------------------------------------------- */
 
 const FEATURED_VENDORS = [
-  {
-    mockId: 'v-1',
-    email: 'apex-demo@buildc.net',
-    password: process.env.SUPABASE_DEMO_VENDOR_PW || 'demoVendor!2026',
-    name: 'Carlos Mendez',
-    company: 'Apex Roofing & Solar',
-    phone: '(305) 555-1001',
-    address: '100 NW 7th St, Miami, FL 33136',
-    avatar_color: '#f59e0b',
-    service_categories: ['roofing', 'air_conditioning'],
-    /* Price generator per category — realistic SoFla construction ranges in CENTS. */
-    priceFor: ({ serviceId, groupId, optionId }) => {
-      if (serviceId === 'roofing') {
-        // Apex is the higher-quality roofer.
-        if (groupId === 'addons') {
-          // Linear-ft addons: price is per-lin-ft (multiplied by footage in engine).
-          // Flat-rate addons: price is a one-time amount.
-          const linearFtByOption = { gutters: 1_000, soffit_wood: 1_000, fascia_wood: 800 }
-          if (optionId in linearFtByOption) return linearFtByOption[optionId]
-          return 80_000 // flat-rate addons (insulation, solar_prep, etc.)
-        }
-        const baseByGroup = { roof_type: 1200_000, roofing_material: 800_000, scope: 150_000, payment: 0 }
-        const multByOption = { barrel_tile: 1.25, metal: 1.45, architectural: 0.9, flat_tile: 1.05, shingles: 0.8 }
-        const base = baseByGroup[groupId] ?? 60_000
-        const mult = multByOption[optionId] ?? 1.0
-        return Math.round(base * mult)
-      }
-      if (serviceId === 'air_conditioning') {
-        const baseByGroup = { system_type: 650_000, scope: 100_000, addons: 50_000, payment: 0 }
-        const multByOption = { central_3: 1.0, central_4: 1.25, central_5: 1.5, mini_split: 0.85, thermostat: 0.35 }
-        const base = baseByGroup[groupId] ?? 40_000
-        const mult = multByOption[optionId] ?? 1.0
-        return Math.round(base * mult)
-      }
-      return 0
-    },
-  },
+  // pin-20 — v-1 (Apex Roofing & Solar, apex-demo@buildc.net,
+  // fc0d8ff3) removed from the seed list. Legacy auth row stays
+  // LIVE in Supabase (do NOT drop the row — Rod may be signed in
+  // against it) but the reverse-map and re-seed path are gone so
+  // future runs don't regenerate the v-1↔fc0d8ff3 binding that
+  // was causing real Apex sessions to resolve as fixture-scoped.
   {
     mockId: 'v-2',
     email: 'shield-demo@buildc.net',

@@ -118,24 +118,19 @@ export function useVendorScope(): {
   const profile = useAuthStore((s) => s.profile)
   return useMemo(() => {
     if (!profile) return { mockVendorId: null, vendorId: '', isMock: false }
-    // Ship #222 — demo-alias LS override (priority-0, before UUID map).
-    // Vendor demo login handler in login.tsx sets 'buildconnect-demo-
-    // mock-vendor-id' = 'v-1' so the generic Vendor demo account
-    // resolves to Apex scope for this session. Lets Vendor demo see
-    // leads that homeowners send to Apex on vendor-compare. Cleared on
-    // Homeowner/Admin demo login so the alias doesn't leak cross-role.
-    if (typeof window !== 'undefined') {
-      const demoAlias = localStorage.getItem('buildconnect-demo-mock-vendor-id')
-      if (demoAlias && MOCK_VENDOR_IDS.has(demoAlias)) {
-        return { mockVendorId: demoAlias, vendorId: demoAlias, isMock: true }
-      }
-    }
+    // pin-20 — vendorId is ALWAYS the real profile.id. The Ship #222 LS-
+    // override branch (`buildconnect-demo-mock-vendor-id`) is removed:
+    // it caused real Apex vendor sessions to read `vendorId='v-1'` after
+    // a plain reload, dropping live homeowner leads on the floor because
+    // every DB query keyed on the mock string instead of the real UUID.
+    // mockVendorId is still derived from the reverse-map so fixture
+    // surfaces can scope MOCK_LEADS / MOCK_CLOSED_SALES — but it's a
+    // SEPARATE field, never mixed into vendorId.
     const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(
       ([, uuid]) => uuid === profile.id
     )
     const mockVendorId = entry ? entry[0] : null
-    const vendorId = mockVendorId ?? profile.id
-    return { mockVendorId, vendorId, isMock: !!mockVendorId }
+    return { mockVendorId, vendorId: profile.id, isMock: !!mockVendorId }
   }, [profile])
 }
 
