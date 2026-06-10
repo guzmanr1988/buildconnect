@@ -126,14 +126,24 @@ export function useAdminSupport(adminProfileId: string | null | undefined) {
     return { all: threads.length, open, answered, closed }
   }, [threads])
 
+  // kratos widen 1781113476902 — senderRole threaded from caller so the
+  // denormalized audit column (mig 089 L25-26) records the actual role at
+  // write time. admin_employee replies must NOT be relabeled as 'admin'.
+  // trg_support_admin_reply_flips_open_to_answered fires on
+  // sender_role IN (admin, admin_employee) per c4526f8, so the status
+  // flip works for either label.
   const reply = useCallback(
-    async (threadId: string, content: string): Promise<SendResult> => {
+    async (
+      threadId: string,
+      content: string,
+      senderRole: 'admin' | 'admin_employee',
+    ): Promise<SendResult> => {
       if (!adminProfileId) return { ok: false, error: 'no admin identity' }
       if (!content.trim()) return { ok: false, error: 'empty content' }
       const { error } = await supabase.from('support_messages').insert({
         thread_id: threadId,
         sender_id: adminProfileId,
-        sender_role: 'admin',
+        sender_role: senderRole,
         content: content.trim(),
       })
       if (error) return { ok: false, error: error.message }

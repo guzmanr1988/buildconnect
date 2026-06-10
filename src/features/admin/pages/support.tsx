@@ -117,9 +117,14 @@ export default function AdminSupportPage() {
 
   const onSend = async () => {
     if (!activeId || !replyText.trim() || sending) return
+    // kratos widen 1781113476902 — pass the caller's actual role so the
+    // denormalized sender_role audit column records admin_employee replies
+    // correctly. Default to 'admin' on the unlikely null/unknown branch.
+    const senderRole: 'admin' | 'admin_employee' =
+      adminProfile?.role === 'admin_employee' ? 'admin_employee' : 'admin'
     setSending(true)
     setErrorMsg(null)
-    const r = await reply(activeId, replyText)
+    const r = await reply(activeId, replyText, senderRole)
     setSending(false)
     if (!r.ok) {
       setErrorMsg(r.error)
