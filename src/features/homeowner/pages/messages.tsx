@@ -10,6 +10,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { MOCK_VENDORS, MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import { useEffectiveLeads } from '@/lib/hooks/use-effective-leads'
 import { useLeadConversation } from '@/lib/hooks/use-lead-conversation'
+import { useHomeownerSupportThread } from '@/lib/hooks/use-homeowner-support-thread'
 import { useMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,9 @@ export function HomeownerMessagesPage() {
     selectedLeadId || null,
     profile.id,
   )
+  // Wave-18 #3 — Platform Support thread (homeowner ↔ admin). Real-mode only;
+  // demoMode short-circuits the hook to empty state.
+  const support = useHomeownerSupportThread(profile.id)
   const selectedLead = userLeads.find((l) => l.id === selectedLeadId)
   // Wave-9 9b — vendor display resolves from MOCK_VENDORS (demo path) OR
   // from the frozen contractor.company snapshot carried on the LeadThread
@@ -83,10 +87,18 @@ export function HomeownerMessagesPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [leadMessages.length, showTyping])
+  }, [leadMessages.length, support.messages.length, showTyping])
 
   const sendMessage = async (content: string) => {
     if (!content.trim()) return
+    if (isPlatformSelected) {
+      // Wave-18 #3 — route Platform recipient through support_threads /
+      // support_messages. Hook handles SELECT-or-create with ON CONFLICT
+      // 23505 re-SELECT fallback (race-safe against unique partial index).
+      await support.sendSupportMessage(content)
+      setNewMessage('')
+      return
+    }
     await sendMsg(content)
     setNewMessage('')
     setShowTyping(true)
@@ -277,42 +289,97 @@ export function HomeownerMessagesPage() {
               </>
             ) : (
               <>
-                {isPlatformSelected && (
-                  <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-                    {isMobile && (
-                      <Button variant="ghost" size="icon-sm" onClick={() => setSelectedLeadId('')}>
-                        <ArrowLeft className="h-4 w-4" />
+                {isPlatformSelected ? (
+                  <>
+                    {/* Wave-18 #3 — Platform Support thread (homeowner ↔ admin). */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                      {isMobile && (
+                        <Button variant="ghost" size="icon-sm" onClick={() => setSelectedLeadId('')}>
+                          <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <AvatarInitials initials="BC" color="#2f6cf0" size="sm" />
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">BuildConnect</p>
+                        <p className="text-xs text-muted-foreground">Support & announcements</p>
+                      </div>
+                    </div>
+
+                    <ScrollArea className="flex-1 p-4" data-testid="homeowner-support-thread-view">
+                      <div className="flex flex-col gap-3">
+                        {support.messages.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                              <MessageSquare className="h-5 w-5 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">BuildConnect Support</p>
+                            <p className="mt-1 text-xs text-muted-foreground max-w-xs">
+                              Send your first message. Our team will review and reply.
+                            </p>
+                          </div>
+                        ) : (
+                          support.messages.map((msg) => {
+                            const isMe = msg.sender_role === 'homeowner'
+                            return (
+                              <motion.div
+                                key={msg.id}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                data-testid="homeowner-support-message-bubble"
+                                data-sender-role={msg.sender_role}
+                                className={cn('flex', isMe ? 'justify-end' : 'justify-start')}
+                              >
+                                <div
+                                  className={cn(
+                                    'max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm',
+                                    isMe
+                                      ? 'bg-primary text-primary-foreground rounded-br-md'
+                                      : 'bg-muted text-foreground rounded-bl-md',
+                                  )}
+                                >
+                                  {msg.content}
+                                </div>
+                              </motion.div>
+                            )
+                          })
+                        )}
+                        <div ref={chatEndRef} />
+                      </div>
+                    </ScrollArea>
+
+                    <div className="flex items-center gap-2 p-3 border-t border-border">
+                      <Input
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Message BuildConnect support..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            sendMessage(newMessage)
+                          }
+                        }}
+                        className="h-11 flex-1"
+                      />
+                      <Button
+                        size="icon-lg"
+                        onClick={() => sendMessage(newMessage)}
+                        disabled={!newMessage.trim()}
+                        className="shrink-0"
+                      >
+                        <Send className="h-4 w-4" />
                       </Button>
-                    )}
-                    <AvatarInitials initials="BC" color="#2f6cf0" size="sm" />
-                    <div>
-                      <p className="font-semibold text-sm text-foreground">BuildConnect</p>
-                      <p className="text-xs text-muted-foreground">Support & announcements</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center p-8">
+                    <div className="text-center max-w-xs">
+                      <Send className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">
+                        Select a conversation to start messaging
+                      </p>
                     </div>
                   </div>
                 )}
-                <div className="flex flex-1 items-center justify-center p-8">
-                  <div className="text-center max-w-xs">
-                    {isPlatformSelected ? (
-                      <>
-                        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                          <MessageSquare className="h-5 w-5 text-primary" />
-                        </div>
-                        <p className="text-sm font-medium text-foreground">BuildConnect Support</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Your message will be reviewed by our team. We will reply shortly.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">
-                          Select a conversation to start messaging
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
               </>
             )}
           </div>

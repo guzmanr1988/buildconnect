@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -36,6 +36,9 @@ const navItems: NavEntry[] = [
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/vendors', icon: Users, label: 'Vendors' },
   { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
+  // Wave-18 #3 — Platform Support v1 inbox. Admin-only (admin_employee
+  // route guard skipped — not in ADMIN_EMPLOYEE_ALLOWED_ROUTES).
+  { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
   // Ship #314 — BuildConnect contract review queue. Cross-functional
   // surface (vendor + homeowner + financial all touch) so top-level

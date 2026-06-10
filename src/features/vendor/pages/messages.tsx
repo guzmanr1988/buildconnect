@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { Send, FileText, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,25 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
 import { useEffectiveLeads } from '@/lib/hooks/use-effective-leads'
 import { useLeadConversation } from '@/lib/hooks/use-lead-conversation'
-import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
 
-// Mock-scope vendor key — used by the admin-thread tab (mock store) for the
-// vendor's display name and as the partition key into admin-messages-store.
-// Real-mode lead messaging uses profile.id from auth-store.
+// Wave-18 #3 — Mock-scope vendor key (legacy identity-shim) retained as the
+// real-mode fallback when no auth profile is resolved. The admin-thread tab
+// (useAdminMessagesStore + hardcoded SEED) was retired in wave-18 #3; vendor
+// ↔ admin chat now lives on the lead-scoped messages table (admin sees it
+// via the Live Conversations feed on /admin/messages).
 const VENDOR_ID = 'v-1'
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function fmt(n: number) {
@@ -42,30 +38,24 @@ const QUICK_REPLIES = [
 ]
 
 export default function VendorMessages() {
-  const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
-  // Wave-9 9a — vendor lead-threads on the real messages table (?demo=1
-  // still falls back to mock through the hooks). Admin-thread tab stays on
-  // admin-messages-store per kratos directive (9b owns leadless platform
-  // threads + admin INSERT RLS).
   const profile = useAuthStore((s) => s.profile)
   const vendorIdentity = profile?.id ?? VENDOR_ID
 
-  // Admin messages from shared store — single hook call to avoid hook count issues
-  const adminStore = useAdminMessagesStore()
-  const adminMessages = useMemo(() => adminStore.messages.filter((m) => m.vendorId === VENDOR_ID), [adminStore.messages])
-  const addAdminMessage = adminStore.addMessage
-
-  // All leads owned by this vendor (real-mode = supabase leads.vendor_id;
-  // demo-mode = MOCK_LEADS filter).
   const threadLeads = useEffectiveLeads('vendor', vendorIdentity)
 
-  // "admin" is a special thread ID for admin conversations
-  const [activeThread, setActiveThread] = useState<string>('admin')
-  const activeLead = activeThread !== 'admin' ? (threadLeads.find((l) => l.id === activeThread) || null) : null
+  const [activeThread, setActiveThread] = useState<string>('')
+  const activeLead = threadLeads.find((l) => l.id === activeThread) || null
   const [input, setInput] = useState('')
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quoteItems, setQuoteItems] = useState([{ name: '', price: '' }])
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Auto-select first lead once threads arrive.
+  useEffect(() => {
+    if (!activeThread && threadLeads.length > 0) {
+      setActiveThread(threadLeads[0].id)
+    }
+  }, [activeThread, threadLeads])
 
   const { messages: activeMessages, sendMessage: sendLeadMessage } = useLeadConversation(
     activeLead?.id || null,
@@ -76,21 +66,10 @@ export default function VendorMessages() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [activeMessages.length, adminMessages.length, activeThread])
+  }, [activeMessages.length, activeThread])
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return
-    if (activeThread === 'admin') {
-      addAdminMessage({
-        vendorId: VENDOR_ID,
-        senderId: VENDOR_ID,
-        senderName: vendor.name,
-        content: text.trim(),
-        isAdmin: false,
-      })
-      setInput('')
-      return
-    }
     if (!activeLead) return
     await sendLeadMessage(text.trim())
     setInput('')
@@ -136,42 +115,10 @@ export default function VendorMessages() {
           </CardHeader>
           <CardContent className="p-2">
             <div className="space-y-1">
-              {/* Admin Section */}
-              <div className="px-3 pt-2 pb-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Platform</p>
-              </div>
-              {(() => {
-                const lastAdminMsg = adminMessages.length > 0 ? adminMessages[adminMessages.length - 1] : null
-                return (
-                  <button
-                    onClick={() => setActiveThread('admin')}
-                    className={cn(
-                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-muted/80',
-                      activeThread === 'admin' && 'bg-muted'
-                    )}
-                  >
-                    <AvatarInitials initials="BC" color="#1e40af" size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">BuildConnect Admin</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lastAdminMsg ? (lastAdminMsg.isAdmin ? `Admin: ${lastAdminMsg.content}` : lastAdminMsg.content) : 'No messages yet'}
-                      </p>
-                    </div>
-                    {lastAdminMsg && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastAdminMsg.timestamp)}</span>
-                    )}
-                  </button>
-                )
-              })()}
-
-              {/* Homeowner Section */}
               {threadLeads.length > 0 && (
-                <>
-                  <div className="border-t my-2" />
-                  <div className="px-3 pt-1 pb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Homeowners</p>
-                  </div>
-                </>
+                <div className="px-3 pt-2 pb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Homeowners</p>
+                </div>
               )}
               {threadLeads.map((lead) => {
                 const isActive = activeThread === lead.id
@@ -202,71 +149,7 @@ export default function VendorMessages() {
 
         {/* Chat Area */}
         <Card className="rounded-xl shadow-sm flex flex-col">
-          {activeThread === 'admin' ? (
-            <>
-              {/* Admin Chat Header */}
-              <div className="flex items-center gap-3 p-4 border-b">
-                <AvatarInitials initials="BC" color="#1e40af" size="sm" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">BuildConnect Admin</p>
-                  <p className="text-xs text-muted-foreground">Platform Administration</p>
-                </div>
-              </div>
-
-              {/* Admin Messages */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: '420px' }}>
-                {adminMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground">No messages from admin yet</p>
-                  </div>
-                ) : (
-                  [...adminMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((msg) => {
-                    const fromVendor = !msg.isAdmin
-                    return (
-                      <div key={msg.id} className={cn('flex', fromVendor ? 'justify-end' : 'justify-start')}>
-                        <div
-                          className={cn(
-                            'max-w-[80%] rounded-2xl px-4 py-2.5',
-                            fromVendor
-                              ? 'bg-primary text-primary-foreground rounded-br-md'
-                              : 'bg-muted rounded-bl-md'
-                          )}
-                        >
-                          <p className="text-sm">{msg.content}</p>
-                          <p className={cn('text-[10px] mt-1', fromVendor ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                            {fmtTime(msg.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              {/* Input */}
-              <div className="p-4 border-t">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    sendMessage(input)
-                  }}
-                  className="flex gap-2"
-                >
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Reply to admin..."
-                    className="flex-1"
-                    aria-label="Reply to admin"
-                  />
-                  <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send reply to admin">
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </form>
-              </div>
-            </>
-          ) : activeLead ? (
+          {activeLead ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center gap-3 p-4 border-b">

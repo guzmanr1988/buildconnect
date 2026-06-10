@@ -1,9 +1,10 @@
-// Wave-9 9a — admin read-real / send-mock. Admin gets a small live-feed of
-// real lead-keyed messages across the platform (RLS policy "Admins read all
-// messages" allows the select). Send stays on admin-messages-store (mock)
-// until 9b adds an admin-INSERT policy + recipient_id schema for leadless
-// platform threads. Realtime subscription mounts on the messages table with
-// no filter so any insert across any lead surfaces immediately.
+// Wave-9 9a / wave-18 #3 — admin live-feed of real lead-scoped messages.
+// RLS "Admins read all messages" allows the SELECT. Wave-18 #3 retired the
+// useAdminMessagesStore Zustand send path; leadless homeowner support now
+// lives on support_threads/support_messages at /admin/support, and admin↔
+// vendor still rides this lead-scoped feed (no dedicated inbox v1).
+// Realtime subscription mounts on the messages table with no filter so any
+// insert across any lead surfaces immediately.
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useDemoMode } from '@/lib/hooks/use-demo-mode'
