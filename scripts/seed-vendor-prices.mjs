@@ -29,6 +29,10 @@ import { fileURLToPath } from 'url'
 const URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!URL || !KEY) { console.error('FATAL: need VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
+const VENDOR_PW = process.env.SUPABASE_DEMO_VENDOR_PW
+if (!VENDOR_PW) {
+  throw new Error('SUPABASE_DEMO_VENDOR_PW required — refusing to seed a hardcoded password to auth.users. Source /Users/rodolfoguzman/Sage/orgs/buildconnect/secrets.env first.')
+}
 
 const supabase = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } })
 
@@ -48,7 +52,7 @@ const FEATURED_VENDORS = [
   {
     mockId: 'v-2',
     email: 'shield-demo@buildc.net',
-    password: process.env.SUPABASE_DEMO_VENDOR_PW || 'demoVendor!2026',
+    password: VENDOR_PW,
     name: 'Tony Rivera',
     company: 'Shield Impact Windows',
     phone: '(786) 555-1002',
@@ -85,7 +89,7 @@ const FEATURED_VENDORS = [
   {
     mockId: 'v-3',
     email: 'paradise-demo@buildc.net',
-    password: process.env.SUPABASE_DEMO_VENDOR_PW || 'demoVendor!2026',
+    password: VENDOR_PW,
     name: 'Ana Martinez',
     company: 'Paradise Pools FL',
     phone: '(305) 555-1003',
