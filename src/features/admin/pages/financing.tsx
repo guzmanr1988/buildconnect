@@ -62,6 +62,7 @@ import {
   Building2,
   Wallet,
   ShieldAlert,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -179,6 +180,149 @@ function statusBadge(active: boolean) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Credit Unions tab (static, no migration)                           */
+/* ------------------------------------------------------------------ */
+
+type CUCounty = 'miami-dade' | 'broward' | 'palm-beach' | 'statewide'
+
+type CreditUnion = {
+  id: string
+  name: string
+  shortName: string
+  counties: CUCounty[]
+  products: string[]
+  applyUrl: string
+  specialty?: string
+  specialtyNote?: string
+  active: boolean
+}
+
+const COUNTY_LABELS: Record<CUCounty, string> = {
+  'miami-dade': 'Miami-Dade',
+  broward: 'Broward',
+  'palm-beach': 'Palm Beach',
+  statewide: 'Statewide',
+}
+
+function countyBadgeClass(county: string) {
+  return (
+    ({
+      'miami-dade': 'border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400',
+      broward: 'border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-400',
+      'palm-beach': 'border-green-300 text-green-700 dark:border-green-700 dark:text-green-400',
+      statewide: 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400',
+    } as Record<string, string>)[county] ?? ''
+  )
+}
+
+const CREDIT_UNIONS: CreditUnion[] = [
+  {
+    id: 'dcfcu',
+    name: 'Dade County Federal Credit Union',
+    shortName: 'DCFCU',
+    counties: ['miami-dade'],
+    products: ['Home Equity', 'Personal Loans', 'Auto'],
+    applyUrl: 'https://www.dcfcu.org/',
+    active: true,
+  },
+  {
+    id: 'pfcu',
+    name: 'Power Financial Credit Union',
+    shortName: 'PFCU',
+    counties: ['miami-dade', 'broward'],
+    products: ['Home Equity', 'HELOC', 'Personal Loans'],
+    applyUrl: 'https://www.powerfi.org/',
+    active: true,
+  },
+  {
+    id: 'we-florida',
+    name: 'We Florida Financial',
+    shortName: 'We Florida',
+    counties: ['broward', 'palm-beach'],
+    products: ['Home Improvement', 'HELOC', 'Personal Loans'],
+    applyUrl: 'https://www.wefloridafinancial.com/',
+    active: true,
+  },
+  {
+    id: 'tropical',
+    name: 'Tropical Financial Credit Union',
+    shortName: 'Tropical FCU',
+    counties: ['miami-dade', 'broward'],
+    products: ['Home Equity', 'Personal Loans'],
+    applyUrl: 'https://www.tropicalfcu.com/',
+    active: true,
+  },
+  {
+    id: 'brightstar',
+    name: 'BrightStar Credit Union',
+    shortName: 'BrightStar',
+    counties: ['broward'],
+    products: ['Home Equity', 'HELOC', 'Personal Loans'],
+    applyUrl: 'https://www.bscu.org/',
+    active: true,
+  },
+  {
+    id: 'sccu',
+    name: 'Space Coast Credit Union',
+    shortName: 'SCCU',
+    counties: ['statewide'],
+    products: ['Home Equity', 'HELOC', 'Personal Loans'],
+    applyUrl: 'https://www.sccu.com/',
+    active: true,
+  },
+  {
+    id: 'ucu',
+    name: 'University Credit Union',
+    shortName: 'UCU Miami',
+    counties: ['miami-dade'],
+    products: ['Personal Loans', 'Auto'],
+    applyUrl: 'https://www.ucumiami.org/',
+    active: true,
+  },
+  {
+    id: 'sfefcu',
+    name: 'South Florida Educational Federal Credit Union',
+    shortName: 'SFEFCU',
+    counties: ['miami-dade'],
+    products: ['Home Equity', 'Personal Loans'],
+    applyUrl: 'https://www.sfefcu.org/',
+    active: true,
+  },
+  {
+    id: 'jetstream',
+    name: 'JetStream Federal Credit Union',
+    shortName: 'JetStream FCU',
+    counties: ['miami-dade'],
+    products: ['Home Help Loan', 'Personal Loans'],
+    applyUrl: 'https://www.jsfcu.org/',
+    specialty: 'Contractor-Paid',
+    specialtyNote:
+      'Home Help Loan funds go direct to the contractor — strongest alignment with BuildConnect vendor flow. Miami-Dade only.',
+    active: true,
+  },
+  {
+    id: 'ithink',
+    name: 'iTHINK Financial',
+    shortName: 'iTHINK',
+    counties: ['broward', 'palm-beach'],
+    products: ['Home Equity', 'HELOC', 'Personal Loans'],
+    applyUrl: 'https://www.ithinkfi.org/',
+    specialtyNote:
+      'Does not serve Miami-Dade — only surface to homeowners in Broward or Palm Beach.',
+    active: true,
+  },
+  {
+    id: 'velocity',
+    name: 'Velocity Community Credit Union',
+    shortName: 'Velocity Community',
+    counties: ['palm-beach'],
+    products: ['Home Equity', 'Personal Loans'],
+    applyUrl: 'https://www.velocitycommunity.org/',
+    active: true,
+  },
+]
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -191,7 +335,12 @@ export default function AdminFinancingPage() {
   const [loading, setLoading] = useState(true)
 
   /* ---- Tabs ---- */
-  const [tab, setTab] = useState<'lenders' | 'approvals' | 'audit'>('lenders')
+  const [tab, setTab] = useState<'lenders' | 'approvals' | 'audit' | 'credit-unions'>('lenders')
+
+  /* ---- Credit Unions tab state (static, no DB) ---- */
+  const [creditUnions, setCreditUnions] = useState<CreditUnion[]>(CREDIT_UNIONS)
+  const [cuCountyFilter, setCuCountyFilter] = useState<string>('all')
+  const [cuSearch, setCuSearch] = useState('')
 
   /* ---- Filter state ---- */
   const [search, setSearch] = useState('')
@@ -306,6 +455,23 @@ export default function AdminFinancingPage() {
     }
     return { total: lenders.length, active, inactive: lenders.length - active, byCat }
   }, [lenders])
+
+  /* ---- Credit Unions derived ---- */
+  const filteredCUs = useMemo(
+    () =>
+      creditUnions.filter((cu) => {
+        const matchCounty =
+          cuCountyFilter === 'all' || cu.counties.includes(cuCountyFilter as CUCounty)
+        const matchSearch =
+          !cuSearch.trim() || cu.name.toLowerCase().includes(cuSearch.toLowerCase())
+        return matchCounty && matchSearch
+      }),
+    [creditUnions, cuCountyFilter, cuSearch],
+  )
+
+  function toggleCU(id: string, active: boolean) {
+    setCreditUnions((prev) => prev.map((cu) => (cu.id === id ? { ...cu, active } : cu)))
+  }
 
   /* ---- Mutations ---- */
   // Master + category toggles UPSERT a feature_flags row. Both the master row
@@ -654,6 +820,10 @@ export default function AdminFinancingPage() {
             <TabsTrigger value="audit" data-testid="admin-financing-tab-audit">
               Audit Log
             </TabsTrigger>
+            <TabsTrigger value="credit-unions" data-testid="admin-financing-tab-credit-unions">
+              <Building2 className="h-4 w-4" />
+              Credit Unions
+            </TabsTrigger>
           </TabsList>
 
           {/* ---------------------------------------------------- */}
@@ -964,6 +1134,151 @@ export default function AdminFinancingPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ---------------------------------------------------- */}
+          {/*  CREDIT UNIONS TAB — static, no DB                    */}
+          {/* ---------------------------------------------------- */}
+          <TabsContent value="credit-unions" className="space-y-4">
+            {/* Header row: title + county filter + search */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base font-semibold font-heading">South Florida Credit Unions</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Member-owned financing partners serving Miami-Dade, Broward, and Palm Beach.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select value={cuCountyFilter} onValueChange={(v) => setCuCountyFilter(v ?? 'all')}>
+                  <SelectTrigger className="h-8 w-36 text-xs">
+                    <SelectValue placeholder="All counties" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All counties</SelectItem>
+                    <SelectItem value="miami-dade">Miami-Dade</SelectItem>
+                    <SelectItem value="broward">Broward</SelectItem>
+                    <SelectItem value="palm-beach">Palm Beach</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={cuSearch}
+                    onChange={(e) => setCuSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="h-8 pl-8 text-xs w-36"
+                    data-testid="admin-financing-cu-search"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Specialty callout — JetStream Home Help Loan */}
+            <div className="rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 flex gap-3 items-start">
+              <div className="mt-0.5 h-5 w-5 rounded-full bg-amber-400/20 flex items-center justify-center shrink-0">
+                <Wallet className="h-3 w-3 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  JetStream FCU — Home Help Loan
+                </p>
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                  Contractor-paid home repair financing. Funds go direct to contractor — the strongest CU product for BuildConnect vendor alignment. Miami-Dade only.
+                </p>
+              </div>
+            </div>
+
+            {/* Card grid — container-query responsive (sidebar-offset doctrine) */}
+            <div className="@container">
+              <div className="grid grid-cols-1 @[768px]:grid-cols-2 gap-3">
+                {filteredCUs.map((cu, i) => (
+                  <motion.div key={cu.id} custom={i} variants={fadeUp} initial="hidden" animate="visible">
+                    <Card
+                      data-testid="admin-financing-cu-card"
+                      data-cu-id={cu.id}
+                      data-cu-active={cu.active ? 'true' : 'false'}
+                      className={cn(
+                        'rounded-xl border border-border bg-card',
+                        '[box-shadow:inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)]',
+                        'dark:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.08),0_2px_8px_rgba(0,0,0,0.35),0_1px_2px_rgba(0,0,0,0.25)]',
+                        'transition-all',
+                        !cu.active && 'opacity-60',
+                      )}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        {/* Header row: name + active toggle */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground font-heading">{cu.name}</p>
+                            {cu.specialty && (
+                              <Badge className="mt-1 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-0">
+                                {cu.specialty}
+                              </Badge>
+                            )}
+                          </div>
+                          <Switch
+                            checked={cu.active}
+                            onCheckedChange={(v) => toggleCU(cu.id, v)}
+                            data-testid="admin-financing-cu-toggle"
+                            data-cu-id={cu.id}
+                            className="shrink-0 mt-0.5"
+                          />
+                        </div>
+
+                        {/* County badges */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {cu.counties.map((c) => (
+                            <Badge key={c} variant="outline" className={cn('text-[10px]', countyBadgeClass(c))}>
+                              {COUNTY_LABELS[c]}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        {/* Product chips */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {cu.products.map((p) => (
+                            <span
+                              key={p}
+                              className="text-[11px] rounded-full bg-muted/70 px-2.5 py-0.5 text-muted-foreground"
+                            >
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Apply link */}
+                        <a
+                          href={cu.applyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          data-testid="admin-financing-cu-link"
+                          data-cu-id={cu.id}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {cu.applyUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </a>
+
+                        {/* Specialty note if present */}
+                        {cu.specialtyNote && (
+                          <p className="text-[11px] text-muted-foreground border-t border-border/50 pt-2 mt-1">
+                            {cu.specialtyNote}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* iTHINK warning note */}
+            <div className="rounded-lg border border-border/50 bg-muted/40 px-3 py-2.5 flex gap-2 items-start">
+              <ShieldAlert className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">
+                iTHINK Financial does not serve Miami-Dade — only display to homeowners in Broward or Palm Beach.
+              </p>
+            </div>
           </TabsContent>
         </Tabs>
       </motion.div>
