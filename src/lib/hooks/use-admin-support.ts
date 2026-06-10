@@ -14,7 +14,7 @@ import type { SupportThread, SupportMessage, SupportStatus } from '@/lib/hooks/u
 export type SupportThreadWithHomeowner = SupportThread & {
   homeowner?: {
     id: string
-    full_name: string | null
+    name: string | null
     email: string | null
     created_at: string
   } | null
@@ -37,7 +37,7 @@ export function useAdminSupport(adminProfileId: string | null | undefined) {
     setLoading(true)
     const { data: tData, error: tErr } = await supabase
       .from('support_threads')
-      .select('*, homeowner:profiles!support_threads_homeowner_id_fkey(id, full_name, email, created_at)')
+      .select('*, homeowner:profiles!support_threads_homeowner_id_fkey(id, name, email, created_at)')
       .order('last_activity_at', { ascending: false })
     if (tErr) {
       console.error('[wave-18 #3 useAdminSupport] threads fetch', tErr)

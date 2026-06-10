@@ -206,7 +206,7 @@ export default function AdminSupportPage() {
                 const msgs = messagesByThread[t.id] ?? []
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null
                 const preview = lastMsg ? lastMsg.content.slice(0, 40) : t.subject ?? 'No messages yet'
-                const homeownerName = t.homeowner?.full_name ?? t.homeowner?.email ?? 'Unknown'
+                const homeownerName = t.homeowner?.name ?? t.homeowner?.email ?? 'Unknown'
                 const isActive = activeId === t.id
                 const badge = STATUS_BADGE[t.status]
                 return (
@@ -253,13 +253,13 @@ export default function AdminSupportPage() {
             <>
               <div className="flex items-start gap-3 p-4 border-b bg-muted/30">
                 <AvatarInitials
-                  initials={initialsFrom(activeThread.homeowner?.full_name ?? activeThread.homeowner?.email)}
+                  initials={initialsFrom(activeThread.homeowner?.name ?? activeThread.homeowner?.email)}
                   color="#2f6cf0"
                   size="md"
                 />
                 <div className="flex-1 min-w-0" data-testid="admin-support-homeowner-context">
                   <p className="text-sm font-semibold truncate">
-                    {activeThread.homeowner?.full_name ?? activeThread.homeowner?.email ?? 'Unknown homeowner'}
+                    {activeThread.homeowner?.name ?? activeThread.homeowner?.email ?? 'Unknown homeowner'}
                   </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                     {activeThread.homeowner?.email && (
