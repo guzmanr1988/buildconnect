@@ -155,6 +155,23 @@ export const useAdminModerationStore = create<AdminModerationState>()(
           return { homeownerStatusOverrides: next }
         }),
     }),
-    { name: 'buildconnect-admin-moderation' }
+    {
+      name: 'buildconnect-admin-moderation',
+      // pin-22-v2 persist-version-bump migration. The pin-22 default-
+      // flip (false→true) only reaches first-touch sessions; every
+      // browser that already hydrated this store with the false default
+      // keeps persisted false on reload and STILL sees the seed leads.
+      // Bump version 0→1 + force-set demoDataHidden:true in migrate so
+      // existing persisted-false stores flip to true universally on
+      // next load. All other persisted fields (homeownerStatusOverrides,
+      // vendorCommissionOverrides, vendorProfileOverrides, matchRadius
+      // Miles, demoClearedAt) are preserved via spread. Pattern banks
+      // for every LS-only store the cross-device-sync wave touches.
+      version: 1,
+      migrate: (persistedState, _fromVersion) => {
+        const prev = (persistedState ?? {}) as Partial<AdminModerationState>
+        return { ...prev, demoDataHidden: true } as AdminModerationState
+      },
+    },
   )
 )
