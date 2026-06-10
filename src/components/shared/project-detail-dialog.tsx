@@ -932,6 +932,14 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         })()}
                         {(() => {
                           if (!pd.saleAmount || pd.status !== 'sold') return null
+                          // pin-22-v2 A2 — empty-snapshot guard. Without real
+                          // priceLineItems the catalogTotal collapses to 0 and
+                          // upsaleAmount = saleAmount, producing the misleading
+                          // "Upsale == Sale Total" row Rod flagged on Donald.
+                          // Hide the Upsale entirely when no real line items
+                          // are captured at sendProject time; deals with real
+                          // catalog data still render normally.
+                          if (!pd.priceLineItems || pd.priceLineItems.length === 0) return null
                           const catalogTotal = computeWindowsDoorsCatalogTotal(pd.item as any, lineItems, getVendorPrice)
                           const upsaleAmount = pd.saleAmount - catalogTotal
                           if (upsaleAmount <= 0) return null
@@ -965,10 +973,13 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const pd = selectedItem.project_data
                     const snapshot = pd.priceLineItems
                     const serviceId = pd.item?.serviceId
-                    const fallback = serviceId
-                      ? PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-                      : undefined
-                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
+                    // pin-22-v2 A1 — drop PRICE_LINE_ITEM_PRESETS[serviceId] fallback so
+                    // the Pricing Breakdown only renders when a real per-project snapshot
+                    // exists. Pre-fix the fallback let stale preset numbers display on
+                    // lead-detail views with empty priceLineItems, producing misleading
+                    // "Sale Total == Pricing Breakdown" rows Rod flagged on Donald. Empty
+                    // snapshot → null → existing length-0 gate hides the section.
+                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : null
                     if (!priceLineItems || priceLineItems.length === 0) return null
 
                     const isSold = pd.status === 'sold'
