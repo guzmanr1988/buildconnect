@@ -83,7 +83,14 @@ export const useAdminModerationStore = create<AdminModerationState>()(
         set({ matchRadiusMiles: clamped })
       },
 
-      demoDataHidden: false,
+      // pin-22 launch-day default flip — initial state is HIDDEN.
+      // Bundle SEED arrays (Maria Rodriguez / James Thompson / MK et al)
+      // were polluting admin Workflow on launch because the gate's
+      // initial value was false (seeds visible until admin clicks
+      // Clear Demo Data). DB is clean; this just inverts the default
+      // so launch starts empty-by-default. Restore Demo Data button
+      // still flips back to false for QA / demo flows.
+      demoDataHidden: true,
       setDemoDataHidden: (hidden) => set({ demoDataHidden: hidden }),
 
       demoClearedAt: null,
