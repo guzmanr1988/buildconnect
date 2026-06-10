@@ -1311,6 +1311,22 @@ export default function VendorLeadWorkflow() {
                   (PC uses column-gap to separate the info/ops sides). */}
               <Separator className="sm:hidden" />
 
+              {/* Appointment — PC-only slot. Pin-24: relocated from
+                  bottom→top of right col so the appointment time leads
+                  the operations side (under-Reschedule placement
+                  superseded by floating-menu empty-space fill spec).
+                  Sibling mobile-only block lives in the left column with
+                  `sm:hidden` so the mobile single-column stack is
+                  unchanged. Always rendered for all 4 lead states
+                  (pending/confirmed/completed/rejected). */}
+              <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2" data-testid="vendor-lead-detail-appointment">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
+                <div className="flex items-center gap-2 text-sm text-foreground/90">
+                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
+                </div>
+              </div>
+
               {/* Arc-35: Selections chips REPLACED by full-width
                   ProjectItemsCardGrid below the 2-col grid (per-card
                   pricing + section $Total badges supersede the flat
@@ -1694,22 +1710,6 @@ export default function VendorLeadWorkflow() {
                     </Button>
                   </>
                 )}
-              </div>
-              {/* Appointment — PC-only slot. Ship #323: paired below the
-                  Actions container so on PC (sm:+) the appointment time
-                  sits directly under Reschedule (visual association
-                  between the action and the data it modifies). Sibling
-                  mobile-only block lives in the left column with
-                  `sm:hidden` so the mobile single-column stack is
-                  unchanged. Always rendered for all 4 lead states
-                  (pending/confirmed/completed/rejected) — Appointment-
-                  visibility preserved across the matrix. */}
-              <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
-                <div className="flex items-center gap-2 text-sm text-foreground/90">
-                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
-                </div>
               </div>
               </div>
               </div>

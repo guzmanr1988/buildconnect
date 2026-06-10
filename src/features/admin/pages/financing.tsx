@@ -106,7 +106,7 @@ import { matchesSearch } from '@/lib/search-match'
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty' | 'pace'
+type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty' | 'pace' | 'credit_unions'
 
 type Lender = {
   id: string
@@ -133,6 +133,7 @@ const CATEGORY_LABELS: Record<LenderCategory, string> = {
   personal_loans: 'Personal Loans',
   solar_hi_specialty: 'Solar & HI Specialty',
   pace: 'PACE Financing',
+  credit_unions: 'Credit Unions',
 }
 
 const CATEGORY_KEYS: Record<LenderCategory, string> = {
@@ -140,6 +141,7 @@ const CATEGORY_KEYS: Record<LenderCategory, string> = {
   personal_loans: 'financing_category_personal_loans',
   solar_hi_specialty: 'financing_category_solar_hi_specialty',
   pace: 'financing_category_pace',
+  credit_unions: 'financing_category_credit_unions',
 }
 
 const MASTER_KEY = 'financing_enabled'
@@ -159,6 +161,7 @@ function categoryBadge(category: LenderCategory) {
     personal_loans: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
     solar_hi_specialty: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
     pace: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    credit_unions: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
   }
   return (
     <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', map[category])}>
@@ -447,6 +450,7 @@ export default function AdminFinancingPage() {
       personal_loans: 0,
       solar_hi_specialty: 0,
       pace: 0,
+      credit_unions: 0,
     }
     let active = 0
     for (const l of lenders) {
@@ -455,6 +459,11 @@ export default function AdminFinancingPage() {
     }
     return { total: lenders.length, active, inactive: lenders.length - active, byCat }
   }, [lenders])
+
+  /* ---- Credit Unions tab gate (pin-25) — driven by Category Gates toggle.
+     Default ON when flag row missing (matches gate-card render). When OFF,
+     hide TabsTrigger + TabsContent + redirect active tab to 'lenders'. */
+  const cuTabEnabled = flags[CATEGORY_KEYS.credit_unions] !== false
 
   /* ---- Credit Unions derived ---- */
   const filteredCUs = useMemo(
@@ -778,6 +787,11 @@ export default function AdminFinancingPage() {
               {(Object.keys(CATEGORY_LABELS) as LenderCategory[]).map((cat) => {
                 const flagKey = CATEGORY_KEYS[cat]
                 const checked = flags[flagKey] !== false // default ON when row missing
+                // Credit Unions live in a separate CREDIT_UNIONS dataset; count
+                // off creditUnions[] so the card reflects partners on this tab,
+                // not the lenders[] DB count (which is 0 for this category).
+                const count = cat === 'credit_unions' ? creditUnions.length : counts.byCat[cat]
+                const noun = cat === 'credit_unions' ? 'partner' : 'lender'
                 return (
                   <div
                     key={cat}
@@ -786,7 +800,7 @@ export default function AdminFinancingPage() {
                     <div>
                       <div className="text-sm font-medium">{CATEGORY_LABELS[cat]}</div>
                       <div className="text-xs text-muted-foreground">
-                        {counts.byCat[cat]} lender{counts.byCat[cat] === 1 ? '' : 's'}
+                        {count} {noun}{count === 1 ? '' : 's'}
                       </div>
                     </div>
                     <Switch
@@ -804,9 +818,12 @@ export default function AdminFinancingPage() {
         </Card>
       </motion.div>
 
-      {/* Tabs: Lenders / Approvals / Audit */}
+      {/* Tabs: Lenders / Approvals / Audit / Credit Unions (gated) */}
       <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <Tabs
+          value={cuTabEnabled || tab !== 'credit-unions' ? tab : 'lenders'}
+          onValueChange={(v) => setTab(v as typeof tab)}
+        >
           <TabsList>
             <TabsTrigger value="lenders" data-testid="admin-financing-tab-lenders">
               Lenders
@@ -820,10 +837,12 @@ export default function AdminFinancingPage() {
             <TabsTrigger value="audit" data-testid="admin-financing-tab-audit">
               Audit Log
             </TabsTrigger>
-            <TabsTrigger value="credit-unions" data-testid="admin-financing-tab-credit-unions">
-              <Building2 className="h-4 w-4" />
-              Credit Unions
-            </TabsTrigger>
+            {cuTabEnabled && (
+              <TabsTrigger value="credit-unions" data-testid="admin-financing-tab-credit-unions">
+                <Building2 className="h-4 w-4" />
+                Credit Unions
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ---------------------------------------------------- */}
@@ -1139,6 +1158,7 @@ export default function AdminFinancingPage() {
           {/* ---------------------------------------------------- */}
           {/*  CREDIT UNIONS TAB — static, no DB                    */}
           {/* ---------------------------------------------------- */}
+          {cuTabEnabled && (
           <TabsContent value="credit-unions" className="space-y-4">
             {/* Header row: title + county filter + search */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1280,6 +1300,7 @@ export default function AdminFinancingPage() {
               </p>
             </div>
           </TabsContent>
+          )}
         </Tabs>
       </motion.div>
 
