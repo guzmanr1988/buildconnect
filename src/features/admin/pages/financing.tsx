@@ -783,7 +783,7 @@ export default function AdminFinancingPage() {
                 Disable a category to hide its lenders from homeowner financing applications without removing the partner records.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {(Object.keys(CATEGORY_LABELS) as LenderCategory[]).map((cat) => {
                 const flagKey = CATEGORY_KEYS[cat]
                 const checked = flags[flagKey] !== false // default ON when row missing
