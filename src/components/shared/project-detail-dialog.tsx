@@ -297,7 +297,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
           Lead Detail Modal #308; #103 single-source-of-truth). Mobile
           portrait preserved exactly. Left column: identity + customer
           context. Right column: selections + audit + commission. */}
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-y-auto" data-testid="admin-project-detail-dialog">
         {selectedItem && (
           <>
             <DialogHeader>
@@ -527,20 +527,6 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       </div>
                     ))}
                   </div>
-
-                  {/* Roof Spec — shown for roofing items only */}
-                  {selectedItem.project_data.item.serviceId === 'roofing' && (() => {
-                    const item = selectedItem.project_data.item as any
-                    return (
-                      <RoofSpecCard
-                        roofMeasurement={item.roofMeasurement}
-                        metalRoofSelection={item.metalRoofSelection}
-                        roofAddonLinearFt={item.roofAddonLinearFt}
-                        gutterDropsConfig={item.gutterDropsConfig}
-                        flowPath={item.flowPath}
-                      />
-                    )
-                  })()}
 
                   {/* Permit — project-level, shown for any service when set.
                       Reads sentProject snapshot first; falls back to legacy
@@ -1260,6 +1246,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
               })()}
             </div>
             </div>
+            {/* pin-23 — Roof Spec full-width BELOW the 2-col grid, roofing only.
+                Was inline in the right column; moved out + widened so the spec
+                table breathes on the wide-modal layout. */}
+            {selectedItem.project_data?.item?.serviceId === 'roofing' && (() => {
+              const item = selectedItem.project_data!.item as any
+              return (
+                <div className="mt-4" data-testid="admin-project-detail-roof-spec">
+                  <RoofSpecCard
+                    roofMeasurement={item.roofMeasurement}
+                    metalRoofSelection={item.metalRoofSelection}
+                    roofAddonLinearFt={item.roofAddonLinearFt}
+                    gutterDropsConfig={item.gutterDropsConfig}
+                    flowPath={item.flowPath}
+                  />
+                </div>
+              )
+            })()}
             <Button variant="outline" className="w-full mt-2" onClick={onClose}>
               Close
             </Button>

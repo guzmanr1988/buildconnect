@@ -9,4 +9,4 @@
 // to avoid over-abstraction (the pattern is trivially small and varies
 // in inner content per consumer).
 export const DIALOG_HORIZONTAL_GRID =
-  'grid gap-3 sm:grid-cols-2 sm:gap-6 sm:items-start'
+  'grid gap-3 sm:grid-cols-2 sm:gap-6 lg:gap-8 sm:items-start'

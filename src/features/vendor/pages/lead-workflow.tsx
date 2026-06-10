@@ -917,7 +917,7 @@ export default function VendorLeadWorkflow() {
           + operations-right) on sm+. Mobile portrait preserved exactly
           as-is per Rodolfo "mobile no changes" strict directive. */}
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent className="max-w-md sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-y-auto" data-testid="vendor-lead-detail-dialog">
           {selected && (
             <div className="space-y-3">
               <DialogHeader className="space-y-1.5">
