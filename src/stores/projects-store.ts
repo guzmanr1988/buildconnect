@@ -395,7 +395,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // across reload + role switch. Demo-mode-only gate; production-
         // launch swaps this for service-role hard-delete or soft-delete.
         // Architecture-invariant-at-layer-boundary: same flag, every role.
-        if (useAdminModerationStore.getState().demoClearedAt) {
+        //
+        // pin-26 (Fix B from task_931 RCA): demoMode-AND-gate. Pre-fix the
+        // gate fired on demoClearedAt alone, so prod vendors (VITE_DEMO_MODE
+        // baked 'false' in secrets.env) whose localStorage carried a stale
+        // demoClearedAt from a prior demo session stayed at 0 leads forever
+        // — server replay never ran. Apollo live-repro confirmed Rod's
+        // /vendor dashboard hit this exact gate. Adding `demoMode &&` makes
+        // the gate dev/demo-only, matching the 12-callsite house idiom
+        // `(import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'`.
+        const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+        if (demoMode && useAdminModerationStore.getState().demoClearedAt) {
           return
         }
 

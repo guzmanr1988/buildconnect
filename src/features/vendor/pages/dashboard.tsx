@@ -94,6 +94,10 @@ export default function VendorDashboard() {
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
   const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
   const setDemoClearedAt = useAdminModerationStore((s) => s.setDemoClearedAt)
+  // pin-26 (Fix D from task_931 RCA): subscribe to demoClearedAt for the
+  // gate-aware banner below. demoMode-AND-gated so prod vendors with
+  // genuinely 0 leads never see a "demo data cleared" message.
+  const demoClearedAt = useAdminModerationStore((s) => s.demoClearedAt)
   const handleClearDemoData = () => {
     // Reset projects-store across ALL per-lead-keyed maps via callback-form
     // shallow-merge. Preserves _supabaseMigrationDone:true and _userUuid so
@@ -248,6 +252,30 @@ export default function VendorDashboard() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
+      {/* pin-26 (Fix D from task_931 RCA): demoClearedAt banner — visible
+          ONLY when demoMode AND demoClearedAt set AND no real sentProjects.
+          Gating on demoMode keeps the banner a dev/demo aid; in prod
+          (VITE_DEMO_MODE='false') demoMode=false so a real vendor with
+          genuinely 0 leads never sees a misleading "reset from
+          /admin/moderation" message. Paired with Fix B (projects-store
+          demoMode-AND-gate) so the gate-to-effect can never again be
+          silent: if the gate fires the banner explains why + points at
+          the reset surface. */}
+      {demoMode && demoClearedAt && sentProjects.length === 0 && (
+        <motion.div variants={item}>
+          <div
+            data-testid="vendor-dashboard-demo-cleared-banner"
+            className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100"
+          >
+            <span className="font-medium">Demo data cleared.</span>{' '}
+            Only real leads will appear here. Reset from{' '}
+            <a href="/admin/moderation" className="font-medium underline underline-offset-2 hover:opacity-80">
+              /admin/moderation
+            </a>
+            .
+          </div>
+        </motion.div>
+      )}
       {/* Vendor Profile Card — Ship #301 (refines #300):
           (1) Mobile portrait: badges (Verified + Active) drop to a
               bottom-left row below the identity block per Rodolfo
