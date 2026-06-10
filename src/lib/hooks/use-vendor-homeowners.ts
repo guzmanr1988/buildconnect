@@ -121,9 +121,15 @@ export function useVendorHomeowners(): VendorHomeownerEntry[] {
       })
       .forEach((sp) => {
         if (!sp.homeowner?.email) return
-        const fixtureMatch =
-          MOCK_HOMEOWNERS.find((h) => h.email === sp.homeowner!.email) ??
-          ADMIN_FIXTURE_HOMEOWNERS.find((h) => h.email === sp.homeowner!.email)
+        // pin-23 — demo-id gate. When demoDataHidden=true, seed-match
+        // returns null and the `??` ops downstream fall through to
+        // sp.homeowner.{name,phone,address} direct fields. Real-row
+        // path untouched. mk-standalone (admin-count tiles / admin
+        // reports) deferred to pin-24+ DB-query swap.
+        const fixtureMatch = !demoDataHidden
+          ? (MOCK_HOMEOWNERS.find((h) => h.email === sp.homeowner!.email) ??
+             ADMIN_FIXTURE_HOMEOWNERS.find((h) => h.email === sp.homeowner!.email))
+          : null
         bumpProjectCount({
           id: fixtureMatch?.id ?? sp.id,
           name: fixtureMatch?.name ?? sp.homeowner.name,
