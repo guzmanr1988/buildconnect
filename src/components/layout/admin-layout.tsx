@@ -36,8 +36,10 @@ const navItems: NavEntry[] = [
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/vendors', icon: Users, label: 'Vendors' },
   { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
-  // Wave-18 #3 — Platform Support v1 inbox. Admin-only (admin_employee
-  // route guard skipped — not in ADMIN_EMPLOYEE_ALLOWED_ROUTES).
+  // Wave-18 #3 — Platform Support v1 inbox. admin AND admin_employee
+  // (kratos widen 1781112259222) — RLS admits both roles + FE renders
+  // identically, so the nav must show + the route guard must admit.
+  // See ADMIN_EMPLOYEE_ALLOWED_ROUTES below.
   { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
   // Ship #314 — BuildConnect contract review queue. Cross-functional
@@ -68,14 +70,16 @@ function isNavGroup(item: NavEntry): item is NavGroup {
   return 'children' in item
 }
 
-// Slim sidebar for admin_employee: only Profile, Overview, Vendors, Users,
-// Messages — no Banking dropdown, Bug Tracker, Settings, etc.
+// Slim sidebar for admin_employee: Profile, Overview, Vendors, Users,
+// Messages, Support (wave-18 #3 — kratos widen 1781112259222) — no
+// Banking dropdown, Bug Tracker, Settings, etc.
 const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
   '/admin/profile',
   '/admin',
   '/admin/vendors',
   '/admin/users',
   '/admin/messages',
+  '/admin/support',
 ])
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {

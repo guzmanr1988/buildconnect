@@ -58,11 +58,14 @@ create trigger trg_support_bump_activity
   after insert on support_messages
   for each row execute function support_bump_thread_activity();
 
--- Trigger: when admin replies to an open thread, flip status to 'answered'
+-- Trigger: when admin OR admin_employee replies to an open thread, flip status
+-- to 'answered'. admin_employee included per kratos widen-scope directive
+-- (1781112259222) — FE treats admin/admin_employee identically for the reply
+-- box, so an admin_employee reply must also flip the thread state.
 create or replace function support_admin_reply_flips_open_to_answered()
 returns trigger language plpgsql as $$
 begin
-  if new.sender_role = 'admin' then
+  if new.sender_role in ('admin', 'admin_employee') then
     update support_threads
       set status = 'answered'
       where id = new.thread_id and status = 'open';
@@ -110,10 +113,10 @@ create policy "Homeowners create own support threads"
   with check (homeowner_id = auth.uid() and auth_role() = 'homeowner');
 
 create policy "Admins read all support threads"
-  on support_threads for select using (auth_role() = 'admin');
+  on support_threads for select using (auth_role() in ('admin', 'admin_employee'));
 
 create policy "Admins update support thread status"
-  on support_threads for update using (auth_role() = 'admin');
+  on support_threads for update using (auth_role() in ('admin', 'admin_employee'));
 
 -- ─── SUPPORT MESSAGES RLS ───
 alter table support_messages enable row level security;
@@ -139,13 +142,16 @@ create policy "Homeowners send to own threads"
   );
 
 create policy "Admins read all support messages"
-  on support_messages for select using (auth_role() = 'admin');
+  on support_messages for select using (auth_role() in ('admin', 'admin_employee'));
 
+-- admin + admin_employee can reply (kratos widen-scope 1781112259222). FE
+-- shows the reply box to both roles identically, so RLS must accept both
+-- INSERTs or the button is visibly broken for admin_employee.
 create policy "Admins reply to any thread"
   on support_messages for insert with check (
     sender_id = auth.uid()
-    and sender_role = 'admin'
-    and auth_role() = 'admin'
+    and sender_role in ('admin', 'admin_employee')
+    and auth_role() in ('admin', 'admin_employee')
   );
 
 -- INTENTIONAL: NO UPDATE policy, NO DELETE policy on support_messages.
