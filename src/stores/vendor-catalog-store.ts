@@ -3,18 +3,29 @@ import { persist } from 'zustand/middleware'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
+import {
+  buildEnabledStateFromRows,
+  buildPriceMapFromRows,
+  buildSubOptionIdsByService,
+  type HydratePriceRow,
+  type HydratePermitRow,
+  type HydrateSubOptionRow,
+} from '@/lib/api/vendor-catalog-hydrate'
 
-// Arc-32 close — pending-write queue for the cache-not-ready window.
-// setPrice/setServicePermit fire from input onChange handlers, which can race
-// AHEAD of hydrateFromSupabase building _optionDbIdCache / _subOptionDbIdCache.
-// Pre-fix: cache miss + no UUID → console.error + silent drop → Rod's typed
-// price lived only in zustand-persist localStorage and never reached Supabase
-// (canonical class: Apex VSOP=0 entirely 2026-05-24 forensic). Fix: when the
-// cache isn't ready, queue the write; replay on hydrate-complete; toast only
-// on genuine post-replay failure (cache-miss after hydrate OR upsert error).
+// PendingWrite union — writes that fire before hydrateFromSupabase completes
+// are queued here and drained at the tail of hydrate (after _hydrationStatus
+// flips to 'complete'). Three queue paths:
+//   'option' / 'permit' (Arc-32 close) — setPrice/setServicePermit race the
+//     option/sub-option DB UUID caches; pre-fix the typed price lived only
+//     in zustand-persist localStorage and never reached Supabase (canonical
+//     class: Apex VSOP=0 entirely 2026-05-24 forensic).
+//   'cascadeServiceActive' (EDIT 1.E, vendor-active-toggle law) —
+//     toggleService cascades vop+vsop+vsp.active when the cascade caches
+//     aren't ready yet. Drain collapses duplicates by serviceId (keep last).
 type PendingWrite =
   | { kind: 'option'; serviceId: string; optionId: string; cents: number }
   | { kind: 'permit'; serviceId: string; cents: number }
+  | { kind: 'cascadeServiceActive'; serviceId: string; isActive: boolean }
 
 type HydrationStatus = 'idle' | 'in_flight' | 'complete'
 
@@ -50,6 +61,10 @@ interface VendorCatalogState {
   // _optionDbIdCache; populated in hydrateFromSupabase. setPrice routes to
   // vendor_sub_option_prices when a price-input fires on a sub_option id.
   _subOptionDbIdCache: Record<string, string>
+  // EDIT 1.A — sub_option DB ids grouped by service_id. Built at hydrate
+  // time so cascadeServiceActive can flip vendor_sub_option_prices.active in
+  // one PostgREST round-trip (.in() filter) without a per-toggle lookup.
+  _subOptionDbIdsByService: Record<string, string[]>
   // One-time flag: have we migrated localStorage pricing to Supabase?
   _migrationDone: boolean
   // Arc-32 close — hydration lifecycle. setPrice queues if 'idle' | 'in_flight'.
@@ -85,18 +100,6 @@ interface VendorCatalogState {
   // the new vendor_id. Companion to catalog-store.resetToBundled() — wired
   // from AuthBootstrap SIGNED_OUT handler.
   resetVendorScopedState: () => void
-}
-
-type DbPriceRow = {
-  price_cents: number
-  active: boolean
-  options: { id: string; option_id: string; option_groups: { group_id: string; service_id: string } }
-}
-
-type DbPermitRow = {
-  service_id: string
-  permit_price_cents: number
-  active: boolean
 }
 
 type DbOptionRow = {
@@ -191,7 +194,33 @@ async function drainPendingWrites(
   const queue = getState()._pendingWrites
   if (queue.length === 0) return
   setState({ _pendingWrites: [] })
+
+  // EDIT 1.F — collapse cascadeServiceActive entries by serviceId (keep
+  // last). Rapid toggle-on/toggle-off in the pre-hydrate window must not
+  // replay every keystroke; only the latest intended state per service is
+  // material. Cascades run first because subsequent option/permit upserts
+  // for the same service may be racing the cascade's UPDATE on the same
+  // rows — running cascades first means the final option/permit upsert
+  // re-asserts active=true on its row regardless of cascade flip.
+  const cascadeByService = new Map<string, PendingWrite>()
   for (const w of queue) {
+    if (w.kind === 'cascadeServiceActive') {
+      cascadeByService.set(w.serviceId, w)
+    }
+  }
+  for (const w of cascadeByService.values()) {
+    if (w.kind !== 'cascadeServiceActive') continue
+    await cascadeServiceActive(
+      vendorUuid,
+      w.serviceId,
+      w.isActive,
+      getState()._optionDbIdCache,
+      getState()._subOptionDbIdsByService,
+    )
+  }
+
+  for (const w of queue) {
+    if (w.kind === 'cascadeServiceActive') continue
     if (w.kind === 'permit') {
       const { error } = await supabase
         .from('vendor_service_permits')
@@ -259,6 +288,52 @@ function syncServiceCategories(
     })
 }
 
+// EDIT 1.B — cascadeServiceActive: a service-level toggle is the UI
+// semantic (catalog.tsx has ONE Switch per service), so the WRITE path
+// cascades to ALL vendor_option_prices + vendor_sub_option_prices +
+// vendor_service_permits rows under that service. After the flip the
+// homeowner pricing.ts query (`.eq('active', true)`) drops the deactivated
+// rows from the priceMap; computeVendorTotal then reports
+// missing[]/!coversAllServices and Apex falls off Compare-Vendors via the
+// strict floor in vendor-compare.tsx (APEX FLOOR removed in this bundle).
+async function cascadeServiceActive(
+  vendorUuid: string,
+  serviceId: string,
+  isActive: boolean,
+  optionCache: Record<string, string>,
+  subOptionIdsByService: Record<string, string[]>,
+) {
+  const optionDbIds = Object.entries(optionCache)
+    .filter(([k]) => k.startsWith(`${serviceId}|`))
+    .map(([, id]) => id)
+  const subOptionDbIds = subOptionIdsByService[serviceId] ?? []
+
+  if (optionDbIds.length > 0) {
+    const { error } = await supabase
+      .from('vendor_option_prices')
+      .update({ active: isActive })
+      .eq('vendor_id', vendorUuid)
+      .in('option_id', optionDbIds)
+    if (error) console.error('[catalog] cascade vop.active failed:', error.message)
+  }
+
+  if (subOptionDbIds.length > 0) {
+    const { error } = await supabase
+      .from('vendor_sub_option_prices')
+      .update({ active: isActive })
+      .eq('vendor_id', vendorUuid)
+      .in('sub_option_id', subOptionDbIds)
+    if (error) console.error('[catalog] cascade vsop.active failed:', error.message)
+  }
+
+  const { error: permitErr } = await supabase
+    .from('vendor_service_permits')
+    .update({ active: isActive })
+    .eq('vendor_id', vendorUuid)
+    .eq('service_id', serviceId)
+  if (permitErr) console.error('[catalog] cascade vsp.active failed:', permitErr.message)
+}
+
 export const useVendorCatalogStore = create<VendorCatalogState>()(
   persist(
     (set, get) => ({
@@ -266,6 +341,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       _vendorUuid: null,
       _optionDbIdCache: {},
       _subOptionDbIdCache: {},
+      _subOptionDbIdsByService: {},
       _migrationDone: false,
       _hydrationStatus: 'idle',
       _pendingWrites: [],
@@ -280,13 +356,43 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       },
 
       toggleService: (serviceId) => {
+        // Flip local enabled (UI responsiveness).
         set((state) => ({
           services: state.services.map((s) =>
             s.serviceId === serviceId ? { ...s, enabled: !s.enabled } : s
           ),
         }))
+        const nextEnabled = get().services.find((s) => s.serviceId === serviceId)?.enabled ?? false
         const vendorUuid = resolveVendorUuid(get()._vendorUuid)
-        if (vendorUuid) syncServiceCategories(vendorUuid, get().services)
+        if (!vendorUuid) {
+          console.error('[catalog] toggleService: no vendor UUID — cascade dropped', { serviceId })
+          return
+        }
+        // EDIT 1.C — sync profiles.service_categories (homeowner match query)
+        // AND cascade vop/vsop/vsp.active. The .eq('active', true) filter on
+        // pricing.ts (getVendorPriceMap) + on profiles.service_categories =>
+        // featuredVendors filter together gate Apex out of Compare-Vendors
+        // when 0 services active.
+        syncServiceCategories(vendorUuid, get().services)
+        // Pre-hydrate baseline can be wrong (post-1.G partialize strip
+        // localStorage rehydrates enabled=false everywhere). Queue cascade
+        // writes until hydrateFromSupabase resolves DB truth, then drain.
+        if (get()._hydrationStatus !== 'complete') {
+          set((state) => ({
+            _pendingWrites: [
+              ...state._pendingWrites,
+              { kind: 'cascadeServiceActive', serviceId, isActive: nextEnabled },
+            ],
+          }))
+          return
+        }
+        cascadeServiceActive(
+          vendorUuid,
+          serviceId,
+          nextEnabled,
+          get()._optionDbIdCache,
+          get()._subOptionDbIdsByService,
+        )
       },
 
       toggleOption: (serviceId, groupId, optionId) => {
@@ -468,24 +574,28 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           return
         }
 
-        // 1. Load this vendor's existing prices from Supabase.
+        // EDIT 1.D — drop `.eq('active', true)` on hydrate-side reads ONLY
+        // (vop + vsp). The homeowner READ path getVendorPriceMap in
+        // pricing.ts KEEPS the filter — that's the gate that makes Apex
+        // disappear from Compare-Vendors when toggled off. Hydrate needs
+        // BOTH active and inactive rows so the vendor's UI can reconstruct
+        // their full pricing history (re-toggle ON restores prices).
         const { data: priceRows, error: priceErr } = await supabase
           .from('vendor_option_prices')
           .select('price_cents,active,options(id,option_id,option_groups(group_id,service_id))')
           .eq('vendor_id', vendorUuid)
-          .eq('active', true)
 
         if (priceErr) {
           console.error('[catalog] hydrate load failed:', priceErr.message)
+          set({ _hydrationStatus: 'complete' })
           return
         }
 
-        // 1b. Load this vendor's per-service permit prices (PR #118).
+        // 1b. Per-service permit prices — also drop active filter (EDIT 1.D).
         const { data: permitRows, error: permitErr } = await supabase
           .from('vendor_service_permits')
           .select('service_id,permit_price_cents,active')
           .eq('vendor_id', vendorUuid)
-          .eq('active', true)
 
         if (permitErr) {
           console.error('[catalog] permit hydrate load failed:', permitErr.message)
@@ -511,9 +621,11 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           console.error('[catalog] options load failed:', optErr.message)
         }
 
-        // 2b. Load ALL sub_options for the sub_option DB UUID cache. Walks
-        // sub_groups → options → option_groups so each sub_option pairs with
-        // the same serviceId used as the cacheKey prefix for option rows.
+        // 2b. Load ALL sub_options. Two consumers downstream:
+        //   - setPrice routing → keyed cache (serviceId|sub_option_id) → id
+        //   - EDIT 1.A cascadeServiceActive → per-service id list for .in()
+        // The select pulls id + sub_option_id + the service_id path; both
+        // downstream builders walk the same row set.
         const { data: allSubOptions, error: subOptErr } = await supabase
           .from('sub_options')
           .select('id,sub_option_id,sub_groups(options(option_groups(service_id)))')
@@ -530,7 +642,8 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           optionDbIdCache[cacheKey(og.service_id, opt.option_id)] = opt.id
         }
 
-        // 3b. Build sub_option DB UUID cache from all sub_options.
+        // 3b. Build sub_option DB UUID cache from all sub_options (setPrice
+        // routing — keyed by serviceId|sub_option_id).
         const subOptionDbIdCache: Record<string, string> = {}
         for (const so of (allSubOptions ?? []) as unknown as DbSubOptionRow[]) {
           const svcId = so.sub_groups?.options?.option_groups?.service_id
@@ -538,16 +651,29 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           subOptionDbIdCache[cacheKey(svcId, so.sub_option_id)] = so.id
         }
 
-        // 4. Build pricing maps from Supabase rows (Supabase is canonical).
-        const priceBySvcOption: Record<string, Record<string, number>> = {}
-        for (const row of (priceRows ?? []) as unknown as DbPriceRow[]) {
+        // 3c. Build sub_option DB ids grouped by service (EDIT 1.A —
+        // cascadeServiceActive flips vsop.active in one PostgREST round-trip).
+        const subOptionDbIdsByService = buildSubOptionIdsByService(
+          (allSubOptions ?? []) as unknown as HydrateSubOptionRow[],
+        )
+
+        // 4. Build pricing maps from Supabase rows via pure-fn helpers
+        // (extracted to vendor-catalog-hydrate.ts for unit testability).
+        // buildPriceMapFromRows iterates ALL rows (active and inactive) so
+        // the vendor's UI can restore prices on re-toggle ON.
+        const typedPriceRows = (priceRows ?? []) as unknown as HydratePriceRow[]
+        const typedPermitRows = (permitRows ?? []) as unknown as HydratePermitRow[]
+        const { priceBySvcOption, permitByService } = buildPriceMapFromRows(
+          typedPriceRows,
+          typedPermitRows,
+        )
+
+        // Backfill cache from priceRows (some rows may reference options
+        // not in allOptions due to RLS or ordering).
+        for (const row of typedPriceRows) {
           const opt = row.options
-          if (!opt?.option_groups) continue
-          const svcId = opt.option_groups.service_id
-          if (!priceBySvcOption[svcId]) priceBySvcOption[svcId] = {}
-          priceBySvcOption[svcId][opt.option_id] = row.price_cents
-          // Fill cache gaps (prefer allOptions, but backfill from priceRows too)
-          const ck = cacheKey(svcId, opt.option_id)
+          if (!opt?.option_groups || !opt.id) continue
+          const ck = cacheKey(opt.option_groups.service_id, opt.option_id)
           if (!optionDbIdCache[ck]) optionDbIdCache[ck] = opt.id
         }
 
@@ -565,23 +691,25 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           if (!subOptionDbIdCache[ck]) subOptionDbIdCache[ck] = so.id
         }
 
-        // 4b. Build per-service permit map (PR #118).
-        const permitByService: Record<string, number> = {}
-        for (const row of (permitRows ?? []) as unknown as DbPermitRow[]) {
-          if (!row.service_id) continue
-          permitByService[row.service_id] = row.permit_price_cents ?? 0
-        }
+        // 4b. EDIT 1.D KEYSTONE FOLD/MERGE — reconstruct services[].enabled
+        // and services[].enabledOptions from active=true rows. After the
+        // partialize strip (1.G) localStorage always rehydrates with
+        // enabled=false / enabledOptions={}, so DB truth is the only source.
+        const { enabledByService, enabledOptionsByService } =
+          buildEnabledStateFromRows(typedPriceRows, typedPermitRows)
 
-        // 5. Merge Supabase prices into local store (Supabase wins).
+        // 5. Merge Supabase prices + enabled state into local store.
         set((state) => ({
           _optionDbIdCache: optionDbIdCache,
           _subOptionDbIdCache: subOptionDbIdCache,
+          _subOptionDbIdsByService: subOptionDbIdsByService,
           services: state.services.map((s) => {
             const sbPricing = priceBySvcOption[s.serviceId]
             const sbPermit = permitByService[s.serviceId]
-            if (!sbPricing && sbPermit === undefined) return s
             return {
               ...s,
+              enabled: enabledByService[s.serviceId] ?? false,
+              enabledOptions: enabledOptionsByService[s.serviceId] ?? {},
               pricing: sbPricing ? { ...s.pricing, ...sbPricing } : s.pricing,
               permitCents: sbPermit !== undefined ? sbPermit : s.permitCents,
             }
@@ -645,8 +773,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           } else console.log(`[catalog] backfilled ${subUpsertRows.length} sub_option prices to Supabase`)
         }
 
-        // Arc-32 close — caches are now built; mark hydration complete and
-        // drain any writes that queued while we were 'in_flight' or 'idle'.
+        // EDIT 1.A/1.F + Arc-32 close — flip to 'complete' BEFORE draining so
+        // any toggleService / setPrice firing during the drain takes the
+        // direct-write path (no re-queue). drainPendingWrites handles all
+        // three queue kinds (option, permit, cascadeServiceActive).
         set({ _hydrationStatus: 'complete' })
         await drainPendingWrites(vendorUuid, get, set)
       },
@@ -656,6 +786,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           _vendorUuid: null,
           _optionDbIdCache: {},
           _subOptionDbIdCache: {},
+          _subOptionDbIdsByService: {},
           _migrationDone: false,
           _hydrationStatus: 'idle',
           _pendingWrites: [],
@@ -673,8 +804,24 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       // overwriting fresh values with stored localStorage state. Same-session
       // queue behaviour (typing during 'idle' → drain on hydrate-complete)
       // is preserved because _pendingWrites remains in memory.
+      //
+      // EDIT 1.G KEYSTONE — partialize strip on services[]. localStorage MUST
+      // NOT carry truthy enabled / enabledOptions. After mount, the only
+      // source of truth for what's active is the DB roundtrip in
+      // hydrateFromSupabase (which builds enabledByService from active=true
+      // rows). This closes the divergence surface where localStorage could
+      // override DB truth. Test 3 (build-time partialize-output assertion)
+      // is the load-bearing gate that pins this shape — see
+      // tests/active-toggle-protection/runner.mts.
       partialize: (state) => ({
-        services: state.services,
+        services: state.services.map((s) => ({
+          serviceId: s.serviceId,
+          enabled: false,
+          enabledOptions: {} as Record<string, string[]>,
+          pricing: s.pricing,
+          pricingPercent: s.pricingPercent,
+          permitCents: s.permitCents,
+        })),
         _migrationDone: state._migrationDone,
       }),
     }

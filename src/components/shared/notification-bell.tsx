@@ -26,10 +26,16 @@ export function NotificationBell({
   size = 'default',
 }: {
   notifications: NotificationItem[]
-  size?: 'default' | 'sm'
+  size?: 'default' | 'sm' | 'md'
 }) {
   const count = notifications.length
-  const btnClass = size === 'sm' ? 'relative rounded-full h-8 w-8' : 'relative rounded-full'
+  const btnClass =
+    size === 'sm'
+      ? 'relative rounded-full h-8 w-8'
+      : size === 'md'
+        ? 'relative rounded-full h-10 w-10'
+        : 'relative rounded-full'
+  const iconClass = size === 'md' ? 'h-5 w-5' : 'h-4 w-4'
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -39,7 +45,7 @@ export function NotificationBell({
           className={btnClass}
           aria-label={count > 0 ? `Notifications, ${count} new` : 'Notifications'}
         >
-          <Bell className={cn('h-4 w-4', count > 0 && 'animate-pulse text-primary')} />
+          <Bell className={cn(iconClass, count > 0 && 'animate-pulse text-primary')} />
           {count > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white ring-2 ring-background">
               {count > 9 ? '9+' : count}

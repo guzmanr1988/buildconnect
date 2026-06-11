@@ -4,7 +4,10 @@
 // (name, rating, avatar) to real-DB vendor_option_prices rows.
 
 export const DEMO_VENDOR_UUID_BY_MOCK_ID: Record<string, string> = {
-  "v-1": "fc0d8ff3-cc1c-4101-a4b3-068594753bbf",
+  // pin-20 — v-1 (fc0d8ff3, Apex Roofing) removed: stale legacy auth
+  // row, no longer the canonical Apex profile.id. Keeping v-1 here
+  // caused real Apex sessions to resolve mockVendorId='v-1' and route
+  // live homeowner leads to fixture-scoped queries.
   "v-2": "4c3f13c3-4647-48af-864d-ecbbb92a47f9",
   "v-3": "9d9c6608-8ef3-4502-a1f3-12f29dea1ca1"
 }

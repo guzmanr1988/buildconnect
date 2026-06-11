@@ -65,6 +65,13 @@ export default function VendorCatalog() {
     getPricePercent,
     getServicePermit,
   } = useVendorCatalogStore()
+  // EDIT 1.H — gate the Switch on hydration completion. Pre-1.G the toggle
+  // was always interactive; post-1.G the localStorage-rehydrated baseline
+  // is enabled=false everywhere until hydrateFromSupabase resolves DB truth.
+  // Disabling avoids a misleading "all-Inactive" baseline misrepresenting
+  // DB state during the hydrate window.
+  const hydrationStatus = useVendorCatalogStore((s) => s._hydrationStatus)
+  const hydrationComplete = hydrationStatus === 'complete'
 
   // Expand state is per-service, session-scoped (no persist — if vendor
   // refreshes, everything starts collapsed again). Tracking EXPANDED (flipped
@@ -274,9 +281,13 @@ export default function VendorCatalog() {
                         />
                       )}
                       <CardTitle className="text-base font-heading">{service.name}</CardTitle>
-                      {enabled && (
+                      {enabled ? (
                         <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
                           Active
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">
+                          Inactive
                         </Badge>
                       )}
                     </div>
@@ -328,6 +339,7 @@ export default function VendorCatalog() {
                       })()}
                       <Switch
                         checked={enabled}
+                        disabled={!hydrationComplete}
                         onCheckedChange={() => toggleService(service.id)}
                         aria-label={`${enabled ? 'Deactivate' : 'Activate'} ${service.name}`}
                       />
@@ -507,7 +519,7 @@ function CatalogGroupRenderer({
     (o) => !(o.subGroups && o.subGroups.length > 0)
   )
   const containerClass = hasLeafOptions
-    ? 'rounded-lg border border-foreground/10 bg-[oklch(0.905_0.012_255)] p-3 shadow-md'
+    ? 'rounded-xl border border-border/50 bg-muted/40 p-4'
     : ''
   const labelClass =
     depth === 0

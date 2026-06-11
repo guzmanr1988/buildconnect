@@ -72,6 +72,7 @@ import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
 import ReportsPage from '@/features/admin/pages/reports'
 import AdminMessagesPage from '@/features/admin/pages/messages'
+import AdminSupportPage from '@/features/admin/pages/support'
 import AdminTutorialsPage from '@/features/admin/pages/tutorials'
 import AdminActivityPage from '@/features/admin/pages/activity'
 import AdminFinancingPage from '@/features/admin/pages/financing'
@@ -185,6 +186,8 @@ export const router = createBrowserRouter([
           { path: 'vendors/:vendorId', element: <AdminVendorDetail />, handle: { title: 'Admin · Vendor' } },
           { path: 'employees', element: <EmployeesPage />, handle: { title: 'Admin · Employees' } },
           { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
+          // Wave-18 #3 — Platform Support v1: homeowner ↔ admin inbox.
+          { path: 'support', element: <AdminSupportPage />, handle: { title: 'Admin · Support' } },
           { path: 'transactions', element: <TransactionsPage />, handle: { title: 'Admin · Transactions' } },
           { path: 'reports', element: <ReportsPage />, handle: { title: 'Admin · Reports' } },
           { path: 'banking', element: <BankingPage />, handle: { title: 'Admin · Banking' } },

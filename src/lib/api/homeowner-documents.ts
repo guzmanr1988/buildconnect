@@ -146,6 +146,27 @@ export async function deleteDoc(id: string, storagePath: string): Promise<boolea
   return true
 }
 
+// task_1780776240716_817 — vendor surface fetches the Association permit doc
+// for a sent_project by sent_project_id + doc_type='permit'. RLS gates the
+// row to the owning vendor (sent_project_id IN vendor's sent_projects).
+export async function fetchAssociationDocForSentProject(
+  sentProjectId: string,
+): Promise<HomeownerDoc | null> {
+  const { data, error } = await supabase
+    .from('homeowner_documents')
+    .select('*')
+    .eq('sent_project_id', sentProjectId)
+    .eq('doc_type', 'permit')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.error('[homeowner-docs] fetchAssociationDocForSentProject failed:', error.message)
+    return null
+  }
+  return data ? rowToDoc(data as DbRow) : null
+}
+
 export async function getSignedUrl(storagePath: string): Promise<string | null> {
   const { data, error } = await supabase.storage
     .from(BUCKET)

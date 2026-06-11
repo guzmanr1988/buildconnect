@@ -72,6 +72,12 @@ export default function VendorMembershipPage() {
   const activateMembership = useVendorMembershipStore((s) => s.activateMembership)
   const cancelMembership = useVendorMembershipStore((s) => s.cancelMembership)
   const membership = useVendorMembershipStore((s) => s.membershipByVendor[vendorId])
+  const hydrateMembership = useVendorMembershipStore((s) => s.hydrate)
+  const membershipHydrated = useVendorMembershipStore((s) => s.hydratedVendors.has(vendorId))
+
+  useEffect(() => {
+    void hydrateMembership(vendorId)
+  }, [vendorId, hydrateMembership])
 
   // Ship #189 — membership displays the first method tagged 'membership'
   // or 'both'. Update button edits that method in place. Full multi-
@@ -94,11 +100,16 @@ export default function VendorMembershipPage() {
   // flips the membership to active. For users who landed here from a
   // pre-#180 session without that activation, seed gently so the page
   // doesn't render empty. Billing day seeded from today.
+  //
+  // Gated on hydration-complete so the seed doesn't race ahead of the DB
+  // canonical row — without the gate a cancelled vendor would briefly see
+  // `membership === undefined` before hydrate lands and the seed would
+  // overwrite cancelled with active.
   useEffect(() => {
-    if (!membership) {
-      activateMembership(vendorId)
+    if (!membership && membershipHydrated) {
+      void activateMembership(vendorId)
     }
-  }, [membership, vendorId, activateMembership])
+  }, [membership, membershipHydrated, vendorId, activateMembership])
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [editPaymentOpen, setEditPaymentOpen] = useState(false)

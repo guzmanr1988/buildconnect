@@ -11,6 +11,7 @@ export type ActivityEventType =
   | 'cancellation_denied'
   | 'sold'
   | 'completed'
+  | 'work_started'
   | 'review_set'
   | 'review_reset'
 

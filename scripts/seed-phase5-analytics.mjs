@@ -34,6 +34,10 @@ import { fileURLToPath } from 'url'
 const URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!URL || !KEY) { console.error('FATAL: need VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
+const HOMEOWNER_PW = process.env.SUPABASE_DEMO_HOMEOWNER_PW
+if (!HOMEOWNER_PW) {
+  throw new Error('SUPABASE_DEMO_HOMEOWNER_PW required — refusing to seed a hardcoded password to auth.users. Source /Users/rodolfoguzman/Sage/orgs/buildconnect/secrets.env first.')
+}
 
 const supabase = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } })
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
@@ -100,7 +104,7 @@ async function ensureHomeowner(ho) {
   }
   const { data, error } = await supabase.auth.admin.createUser({
     email: ho.email,
-    password: process.env.SUPABASE_DEMO_HOMEOWNER_PW || 'demoHomeowner!2026',
+    password: HOMEOWNER_PW,
     email_confirm: true,
     user_metadata: { name: ho.name, role: 'homeowner' },
   })

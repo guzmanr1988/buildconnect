@@ -113,6 +113,7 @@ async function seedService(service, serviceIdx) {
         option_id: o.id,
         label: o.label,
         description: o.description ?? null,
+        image_url: o.image_url ?? null,
         sort_order: oi,
       });
 
@@ -134,6 +135,7 @@ async function seedService(service, serviceIdx) {
             sub_option_id: so.id,
             label: so.label,
             description: so.description ?? null,
+            image_url: so.image_url ?? null,
             sort_order: soi,
           });
         }

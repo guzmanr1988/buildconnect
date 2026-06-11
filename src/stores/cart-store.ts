@@ -109,12 +109,23 @@ export interface CartItem {
   // here when present to sum same-rate sqft across structures; absence
   // falls back to scalar areaSqft (legacy single-structure path).
   structureMeasurements?: Record<string, { sqft: number; color: string }>
+  // Interior Remodel measurements (ship #475+1). Captured by the
+  // remodel configurator; consumed at booking-confirmation snapshot time
+  // by computeRemodelLineItems → PriceLineItem[] (preset_calculated source).
+  remodelMeasurements?: { length: number; width: number; ceilingHeight: number; numWalls: number }
+  // Bathroom Remodel measurements (ship #475+2). Captured by the bathroom
+  // configurator; consumed at booking-confirmation snapshot time by
+  // computeBathroomLineItems → PriceLineItem[] (preset_calculated source).
+  // tileCoverageHeight uses 3 canonical values: 4 (wainscot), 6 (mid-wall),
+  // or matches ceilingHeight (full-to-ceiling).
+  bathroomMeasurements?: { length: number; width: number; ceilingHeight: number; tileCoverageHeight: number; includesTub: boolean }
   addedAt: string
   itemPhotos?: string[]
   itemNotes?: string
 }
 
 export type ProjectPermitChoice = 'yes' | 'no'
+export type ProjectYesNoChoice = 'yes' | 'no'
 
 export interface ProjectPermitWaiver {
   acknowledged: boolean
@@ -136,6 +147,23 @@ interface CartState {
   // Captured when projectPermit === 'no'. Single waiver covers the whole
   // project (all items in cart). Null when permit is yes or not yet set.
   projectPermitWaiver: ProjectPermitWaiver | null
+  // Project-level HOA / association question. Asked above Permit on every
+  // service configurator. When 'yes', the homeowner must upload an
+  // "Association permit form" (id captured in projectAssociationDocId) before
+  // the step can advance.
+  projectAssociation: ProjectYesNoChoice | null
+  // homeowner_documents.id for the uploaded association doc, captured when
+  // projectAssociation === 'yes'. Reconciled to sent_projects on submit so
+  // the vendor sees it under their assigned project's documents.
+  projectAssociationDocId: string | null
+  // Pool-only — "Do you have the survey of the property?" Plain Yes/No, no
+  // upload. NULL on non-pool projects (other configurators don't ask it).
+  poolSurvey: ProjectYesNoChoice | null
+  // Lazy-generated UUID that becomes sent_projects.id at submit time. Used
+  // as the FK target for the association document upload that happens BEFORE
+  // sendProject mints the row. clearCart resets it so a new project gets a
+  // fresh id.
+  pendingProjectId: string | null
   setIdDocument: (dataUrl: string | null) => void
   addItem: (item: Omit<CartItem, 'id' | 'addedAt'>) => void
   removeItem: (id: string) => void
@@ -144,6 +172,11 @@ interface CartState {
   setNotes: (notes: string) => void
   setProjectPermit: (choice: ProjectPermitChoice | null) => void
   setProjectPermitWaiver: (waiver: ProjectPermitWaiver | null) => void
+  setProjectAssociation: (choice: ProjectYesNoChoice | null) => void
+  setProjectAssociationDocId: (docId: string | null) => void
+  setPoolSurvey: (choice: ProjectYesNoChoice | null) => void
+  ensurePendingProjectId: () => string
+  clearPendingProjectId: () => void
   addPhoto: (dataUrl: string) => void
   removePhoto: (index: number) => void
   clearCart: () => void
@@ -160,6 +193,10 @@ export const useCartStore = create<CartState>()(
       idDocument: null,
       projectPermit: null,
       projectPermitWaiver: null,
+      projectAssociation: null,
+      projectAssociationDocId: null,
+      poolSurvey: null,
+      pendingProjectId: null,
       setIdDocument: (dataUrl) => set({ idDocument: dataUrl }),
 
       addItem: (item) => {
@@ -185,6 +222,17 @@ export const useCartStore = create<CartState>()(
       setNotes: (notes) => set({ notes }),
       setProjectPermit: (choice) => set({ projectPermit: choice }),
       setProjectPermitWaiver: (waiver) => set({ projectPermitWaiver: waiver }),
+      setProjectAssociation: (choice) => set({ projectAssociation: choice }),
+      setProjectAssociationDocId: (docId) => set({ projectAssociationDocId: docId }),
+      setPoolSurvey: (choice) => set({ poolSurvey: choice }),
+      ensurePendingProjectId: () => {
+        const existing = get().pendingProjectId
+        if (existing) return existing
+        const fresh = crypto.randomUUID()
+        set({ pendingProjectId: fresh })
+        return fresh
+      },
+      clearPendingProjectId: () => set({ pendingProjectId: null }),
       addPhoto: (dataUrl) => set((state) => ({ photos: state.photos.length < 20 ? [...state.photos, dataUrl] : state.photos })),
       removePhoto: (index) => set((state) => ({ photos: state.photos.filter((_, i) => i !== index) })),
 
@@ -197,6 +245,10 @@ export const useCartStore = create<CartState>()(
           idDocument: null,
           projectPermit: null,
           projectPermitWaiver: null,
+          projectAssociation: null,
+          projectAssociationDocId: null,
+          poolSurvey: null,
+          pendingProjectId: null,
         }),
 
       itemCount: () => get().items.length,

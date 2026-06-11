@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, Blinds, Fence } from 'lucide-react'
+import { ChevronRight, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, Blinds, Fence, Wrench } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type { ServiceConfig, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   garage: Hammer,
   house_painting: PaintRoller,
   blinds: Blinds,
+  remodel: Wrench,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
@@ -33,6 +34,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   garage: 'from-slate-400 to-slate-600',
   house_painting: 'from-rose-400 to-pink-500',
   blinds: 'from-indigo-400 to-purple-500',
+  remodel: 'from-fuchsia-400 to-pink-600',
 }
 
 interface ServiceCardProps {
@@ -91,7 +93,7 @@ export function ServiceCard({ service, isExpanded, onToggle }: ServiceCardProps)
         ) : null}
       </div>
 
-      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug truncate">
+      <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug line-clamp-2">
         {service.name}
       </h3>
 

@@ -21,7 +21,7 @@ import { PITCHED_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt
 import { computeRoofTotal } from '@/lib/roof-area-math'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
+import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 // PR-#430 — bundled fallback. The linear-ft addon ID set is FE-routing
 // logic (drives step visibility) so the IDs stay hardcoded; only the
@@ -175,6 +175,7 @@ export function RoofingWizard({
   const setProjectPermitWaiver = useCartStore((s) => s.setProjectPermitWaiver)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
   const getFlag = useFeatureFlagsStore((s) => s.getFlag)
 
   const [flowPath, setFlowPathState] = useState<FlowPath | null>(() => inferFlowPath(editItem))
@@ -461,7 +462,7 @@ export function RoofingWizard({
           (step === 5 && tileSelected && (!tileSelection.tileType || !tileSelection.tileColor)) ||
           (step === 6 && flowPath === 'addons_only' && (selections['addons'] ?? []).length === 0) ||
           (step === 7 && (selections['addons'] ?? []).includes('gutters') && gutterFloors === null) ||
-          (step === 8 && !isProjectPermitValid(projectPermit, projectPermitWaiver)) ||
+          (step === 8 && (!isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null))) ||
           (step === 10 && submitting)
         }
       >

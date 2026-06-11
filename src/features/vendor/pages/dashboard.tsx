@@ -21,7 +21,6 @@ import { useCommissionPaymentsStore } from '@/stores/commission-payments-store'
 import { useVendorPermitsStore } from '@/stores/vendor-permits-store'
 import { useVendorEventsStore } from '@/stores/vendor-events-store'
 import { useAgreementEventsStore } from '@/stores/agreement-events-store'
-import { useAdminMessagesStore } from '@/stores/admin-messages-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { LEAD_STAGES, STAGE_PULSE_BY_KEY, useVendorLeadStages } from '@/lib/vendor-lead-stages'
@@ -58,18 +57,26 @@ export default function VendorDashboard() {
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
-  const { vendorId: VENDOR_ID } = useVendorScope()
+  const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
   const vendor = useResolvedVendor()
   const allMockLeads = useEffectiveMockLeads()
   const mockLeads = useMemo(() => {
-    const vendorScoped = allMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
+    // pin-20 — MOCK_LEADS are seeded against synthetic mock-vendor-ids
+    // ('v-1'..'v-5'). Only featured-mapped sessions (mockVendorId set)
+    // should ever see fixture leads; real Apex / synthesized vendors
+    // get an empty fixture set. Pre-fix this filtered on `vendorId`
+    // which was a mock-id when mapped but profile.id otherwise — the
+    // latter never equals a fixture vendor_id so it returned [] anyway,
+    // but the explicit mockVendorId form removes the foot-gun.
+    if (!mockVendorId) return []
+    const vendorScoped = allMockLeads.filter((l) => l.vendor_id === mockVendorId)
     if (profile?.role === 'account_rep') {
       return vendorScoped.filter(
         (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
       )
     }
     return vendorScoped
-  }, [allMockLeads, VENDOR_ID, profile?.role, profile?.id, accountRepIdByLead])
+  }, [allMockLeads, mockVendorId, profile?.role, profile?.id, accountRepIdByLead])
 
   // Auth-redirect guard: non-vendor-family profile shouldn't render this
   // page. Redirect homeowners + admins to their respective home routes.
@@ -87,6 +94,10 @@ export default function VendorDashboard() {
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
   const setDemoDataHidden = useAdminModerationStore((s) => s.setDemoDataHidden)
   const setDemoClearedAt = useAdminModerationStore((s) => s.setDemoClearedAt)
+  // pin-26 (Fix D from task_931 RCA): subscribe to demoClearedAt for the
+  // gate-aware banner below. demoMode-AND-gated so prod vendors with
+  // genuinely 0 leads never see a "demo data cleared" message.
+  const demoClearedAt = useAdminModerationStore((s) => s.demoClearedAt)
   const handleClearDemoData = () => {
     // Reset projects-store across ALL per-lead-keyed maps via callback-form
     // shallow-merge. Preserves _supabaseMigrationDone:true and _userUuid so
@@ -111,15 +122,12 @@ export default function VendorDashboard() {
     useFlagThreadStore.setState({ threadsByProject: {} })
     useCommissionPaymentsStore.setState({ paymentsBySale: {} })
     // Vendor-keyed demo state that accumulates across test cycles.
-    useVendorPermitsStore.setState({ permits: [] })
+    useVendorPermitsStore.setState({ permits: [], hydratedVendors: new Set() })
     useVendorEventsStore.setState({ eventsByVendor: {} })
     useAgreementEventsStore.setState({ events: [] })
-    // Admin-vendor chat thread fixtures — useAdminMessagesStore default
-    // state is non-empty (SEED), so removeItem would reseed on reload.
-    // setState({messages:[]}) auto-persists empty via zustand persist
-    // middleware; default-merge resolves persisted-wins on reload, keeping
-    // the surface empty post-Clear-Demo. Surfaces /vendor/messages.
-    useAdminMessagesStore.setState({ messages: [] })
+    // Wave-18 #3 — useAdminMessagesStore retired; admin-vendor chat now
+    // rides the lead-scoped messages table (real DB) and is wiped via the
+    // normal lead-data reset path above.
     try {
       // NOTE: do NOT removeItem('buildconnect-projects') or rewrite it slim.
       // The setState above already shallow-merged + zustand persist auto-
@@ -134,10 +142,9 @@ export default function VendorDashboard() {
       localStorage.removeItem('buildconnect-vendor-permits')
       localStorage.removeItem('buildconnect-vendor-events')
       localStorage.removeItem('buildconnect-agreement-events')
-      // Note: NO removeItem('buildconnect-admin-messages') — the store's
-      // default state is non-empty (SEED), so removing the persisted entry
-      // would let SEED re-hydrate on reload. The setState({messages:[]})
-      // above auto-persists empty via the persist middleware instead.
+      // Wave-18 #3 cleanup — sweep the legacy SEED key from any browser
+      // that still carries the persisted Zustand snapshot from pre-#3 builds.
+      localStorage.removeItem('buildconnect-admin-messages')
       localStorage.removeItem('buildconnect-pending-item')
       localStorage.removeItem('buildconnect-selected-contractor')
       localStorage.removeItem('buildconnect-selected-booking')
@@ -245,6 +252,30 @@ export default function VendorDashboard() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-6">
+      {/* pin-26 (Fix D from task_931 RCA): demoClearedAt banner — visible
+          ONLY when demoMode AND demoClearedAt set AND no real sentProjects.
+          Gating on demoMode keeps the banner a dev/demo aid; in prod
+          (VITE_DEMO_MODE='false') demoMode=false so a real vendor with
+          genuinely 0 leads never sees a misleading "reset from
+          /admin/moderation" message. Paired with Fix B (projects-store
+          demoMode-AND-gate) so the gate-to-effect can never again be
+          silent: if the gate fires the banner explains why + points at
+          the reset surface. */}
+      {demoMode && demoClearedAt && sentProjects.length === 0 && (
+        <motion.div variants={item}>
+          <div
+            data-testid="vendor-dashboard-demo-cleared-banner"
+            className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100"
+          >
+            <span className="font-medium">Demo data cleared.</span>{' '}
+            Only real leads will appear here. Reset from{' '}
+            <a href="/admin/moderation" className="font-medium underline underline-offset-2 hover:opacity-80">
+              /admin/moderation
+            </a>
+            .
+          </div>
+        </motion.div>
+      )}
       {/* Vendor Profile Card — Ship #301 (refines #300):
           (1) Mobile portrait: badges (Verified + Active) drop to a
               bottom-left row below the identity block per Rodolfo

@@ -19,6 +19,17 @@ import {
 } from '@/lib/configurator-catalog-price'
 import type { CartItem, ConfiguratorEntry } from '@/stores/cart-store'
 import type { ServiceConfig } from '@/types'
+import type { VendorServiceRateMap } from '@/lib/api/vendor-service-rates'
+import {
+  computeRemodelLineItems,
+  sumRemodelLineItems,
+  isMeasurementsValid as isRemodelMeasurementsValid,
+} from '@/lib/remodel-pricing'
+import {
+  computeBathroomLineItems,
+  sumBathroomContractorLineItems,
+  isBathroomMeasurementsValid,
+} from '@/lib/bathroom-pricing'
 
 /*
  * Pricing API — Phase 3+4.
@@ -241,6 +252,13 @@ export function computeVendorTotal(
   // Vendors who set 0 are filtered out at getVendorPermitMap (zero/missing
   // rows skipped), so absence = opt-out. Optional for back-compat.
   permitMap?: VendorPermitMap,
+  // Mig 068 — measurement-driven service rate maps (remodel + bathroom).
+  // Keyed by service_category string. Cart items for those services have
+  // no selections; pricing comes from per-line rates in vendor_service_rates.
+  // Vendor counts as covering the category iff their rate map has ≥1 row
+  // (same coverage rule as VendorPriceMap). Vendors without seeded rows
+  // drop out of vendor-compare for those services.
+  serviceRateMaps?: Record<string, VendorServiceRateMap>,
 ): VendorTotalResult {
   let hasSelections = false
   let totalCents = 0
@@ -460,6 +478,37 @@ export function computeVendorTotal(
       // GarageDoor fields store sub_option ids directly (no label→id map);
       // single unit (quantity = 1 implicit).
       accumulateSubOpts('garage_doors', [gd.type, gd.size, gd.color, gd.glass], 1)
+    }
+  }
+
+  // Mig 068 — measurement-driven services (remodel + bathroom). These cart
+  // items carry empty `selections` and price off remodelMeasurements /
+  // bathroomMeasurements + the per-vendor vendor_service_rates rate map.
+  // Coverage rule mirrors VendorPriceMap: vendor must have ≥1 seeded row
+  // in vendor_service_rates for the category, otherwise they don't render
+  // on vendor-compare for that cart (same drop-out behavior).
+  for (const item of cartItems) {
+    if (item.serviceId === 'remodel' && item.remodelMeasurements) {
+      const rateMap = serviceRateMaps?.['remodel']
+      const vendorCovers = (rateMap?.size ?? 0) > 0
+      if (!vendorCovers) continue
+      if (!isRemodelMeasurementsValid(item.remodelMeasurements)) continue
+      hasSelections = true
+      const lines = computeRemodelLineItems(item.remodelMeasurements, rateMap)
+      const subtotalDollars = sumRemodelLineItems(lines)
+      totalCents += Math.round(subtotalDollars * 100)
+      coveredServices.add('remodel')
+    }
+    if (item.serviceId === 'bathroom' && item.bathroomMeasurements) {
+      const rateMap = serviceRateMaps?.['bathroom']
+      const vendorCovers = (rateMap?.size ?? 0) > 0
+      if (!vendorCovers) continue
+      if (!isBathroomMeasurementsValid(item.bathroomMeasurements)) continue
+      hasSelections = true
+      const lines = computeBathroomLineItems(item.bathroomMeasurements, rateMap)
+      const subtotalDollars = sumBathroomContractorLineItems(lines)
+      totalCents += Math.round(subtotalDollars * 100)
+      coveredServices.add('bathroom')
     }
   }
 

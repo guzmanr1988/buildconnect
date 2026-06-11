@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import type { CartItem } from '@/stores/cart-store'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
-import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { PermitDisplayRow, AssociationDisplayRow, PoolSurveyDisplayRow } from '@/features/homeowner/components/permit-step-section'
 import { shouldAskProjectPermit } from '@/lib/permit-rules'
 import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
 import { applyAreaWaste } from '@/lib/area-waste'
@@ -93,6 +93,8 @@ export function CartPage() {
     projectPermit,
     setProjectPermit,
     setProjectPermitWaiver,
+    projectAssociation,
+    poolSurvey,
   } = useCartStore()
   const { sentProjects } = useProjectsStore()
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
@@ -196,6 +198,7 @@ export function CartPage() {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
     pergolas: 'Pergolas & Terraces', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
     wall_paneling: 'Wall Paneling', garage: 'Remodel', house_painting: 'Painting',
+    remodel: 'Interior Remodel',
   }
   const autoProjectName = profile
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`
@@ -913,6 +916,13 @@ export function CartPage() {
                   )}
                   {/* Permit — project-level (cart-store), legacy per-item fallback. */}
                   <PermitDisplayRow permit={projectPermit ?? viewItem.roofPermit} />
+                  {/* Association — project-level, all services. task_1780776240716_817.
+                      Homeowner cart review surface; download link omitted (homeowner
+                      already has the file). */}
+                  <AssociationDisplayRow association={projectAssociation} />
+                  {/* Pool survey — Pool-only; null on every other service so the
+                      component returns null cleanly via its own null-gate. */}
+                  <PoolSurveyDisplayRow survey={poolSurvey} />
                   {/* Measured area — driveways + pergolas items with satellite measurement.
                       Display routes through applyAreaWaste so driveway shows raw × 1.03
                       while pergolas passes raw through unchanged. Cost layer mirrors

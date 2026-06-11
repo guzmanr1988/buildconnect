@@ -160,14 +160,32 @@ type GroupFormData = {
 const emptyGroupForm: GroupFormData = { id: '', label: '', description: '', required: true, type: 'single' }
 
 type PriceUnit = 'flat' | 'square' | 'sqft' | 'linear_ft'
-type OptionFormData = { id: string; label: string; description: string; priceUnit: PriceUnit }
-const emptyOptionForm: OptionFormData = { id: '', label: '', description: '', priceUnit: 'flat' }
+type InputType = 'tile-select' | 'number-input'
+type OptionFormData = {
+  id: string
+  label: string
+  description: string
+  priceUnit: PriceUnit
+  inputType: InputType
+}
+const emptyOptionForm: OptionFormData = {
+  id: '',
+  label: '',
+  description: '',
+  priceUnit: 'flat',
+  inputType: 'tile-select',
+}
 
 const PRICE_UNIT_OPTIONS: Array<{ value: PriceUnit; label: string; helper: string }> = [
   { value: 'flat', label: 'Flat ($)', helper: 'Single dollar amount' },
   { value: 'square', label: 'Per Square ($/sq)', helper: '1 square = 100 sqft (roofing)' },
   { value: 'sqft', label: 'Per Sq Ft ($/sqft)', helper: 'Multiplied by measured area' },
   { value: 'linear_ft', label: 'Per Linear Ft ($/lin ft)', helper: 'Multiplied by linear feet' },
+]
+
+const INPUT_TYPE_OPTIONS: Array<{ value: InputType; label: string; helper: string }> = [
+  { value: 'tile-select', label: 'Tile / Chip Select', helper: 'Default — chip or image tile the homeowner picks' },
+  { value: 'number-input', label: 'Number Input', helper: 'Empty number field — price = quantity × base price' },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -680,7 +698,7 @@ export default function ProductsAdminPage() {
   function openEditOption(
     serviceId: string,
     groupId: string,
-    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setOptionContext({ serviceId, groupId })
     setEditingOptionId(opt.id)
@@ -689,6 +707,7 @@ export default function ProductsAdminPage() {
       label: opt.label,
       description: opt.description ?? '',
       priceUnit: opt.priceUnit ?? 'flat',
+      inputType: opt.inputType ?? 'tile-select',
     })
     setOptionDialogOpen(true)
   }
@@ -715,6 +734,7 @@ export default function ProductsAdminPage() {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       } else {
         await addOption(optionContext.serviceId, optionContext.groupId, {
@@ -722,6 +742,7 @@ export default function ProductsAdminPage() {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       }
       setOptionDialogOpen(false)
@@ -858,7 +879,7 @@ export default function ProductsAdminPage() {
     groupId: string,
     optionId: string,
     subGroupId: string,
-    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
     setEditingSubOptionId(subOpt.id)
@@ -867,6 +888,7 @@ export default function ProductsAdminPage() {
       label: subOpt.label,
       description: subOpt.description ?? '',
       priceUnit: subOpt.priceUnit ?? 'flat',
+      inputType: subOpt.inputType ?? 'tile-select',
     })
     setSubOptionDialogOpen(true)
   }
@@ -895,6 +917,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       } else {
@@ -908,6 +931,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       }
@@ -1043,7 +1067,7 @@ export default function ProductsAdminPage() {
             transition={{ delay: idx * 0.04, duration: 0.3 }}
           >
             <AccordionItem value={service.id} className="border-0">
-              <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+              <Card className="rounded-xl border border-border bg-card [box-shadow:inset_0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.05)] dark:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.28),0_1px_3px_rgba(0,0,0,0.18)] transition">
                 <CardHeader
                   data-admin-service-sticky-header="true"
                   className="pb-2 sticky top-0 z-20 bg-card rounded-t-xl border-b border-transparent data-[expanded=true]:border-border"
@@ -1244,7 +1268,7 @@ export default function ProductsAdminPage() {
                                   {...dragProps.row}
                                   data-admin-option-group-card={group.id}
                                   className={cn(
-                                    'rounded-lg border-dashed transition-all h-full',
+                                    'rounded-lg border border-border bg-card [box-shadow:inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] dark:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.08),0_2px_8px_rgba(0,0,0,0.35),0_1px_2px_rgba(0,0,0,0.25)] hover:-translate-y-0.5 hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.9),0_4px_16px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.08)] dark:hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.08),0_4px_16px_rgba(0,0,0,0.40),0_2px_4px_rgba(0,0,0,0.30)] transition-all h-full',
                                     dragState.isDragging && 'opacity-60 scale-[0.98] shadow-lg cursor-grabbing',
                                     dragState.dragOver && 'ring-2 ring-primary ring-offset-1',
                                     dragState.anyDragging && 'select-none',
@@ -1346,7 +1370,7 @@ export default function ProductsAdminPage() {
                                                   data-admin-option-tile={opt.id}
                                                   data-admin-option-tile-expanded={tileExpanded ? 'true' : 'false'}
                                                   className={cn(
-                                                    'rounded-md border bg-card transition-all group/tile',
+                                                    'rounded-md border border-border/60 bg-primary/[0.06] dark:bg-primary/[0.08] shadow-sm transition-all group/tile',
                                                     tileExpanded && 'sm:col-span-2 ring-1 ring-primary/40',
                                                     optDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
                                                     optDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
@@ -2361,6 +2385,29 @@ export default function ProductsAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {PRICE_UNIT_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{p.label}</span>
+                        <span className="text-xs text-muted-foreground">{p.helper}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Input Type</Label>
+              <Select
+                value={optionForm.inputType}
+                onValueChange={(v) => setOptionForm((f) => ({ ...f, inputType: v as InputType }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    <span>{INPUT_TYPE_OPTIONS.find((p) => p.value === optionForm.inputType)?.label ?? 'Tile / Chip Select'}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {INPUT_TYPE_OPTIONS.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
                       <div className="flex flex-col">
                         <span className="text-sm">{p.label}</span>

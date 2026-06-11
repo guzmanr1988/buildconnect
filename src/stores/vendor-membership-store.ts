@@ -1,41 +1,35 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { supabase } from '@/lib/supabase'
 
 /*
  * Vendor membership store — per-vendor subscription status for the $25/mo
- * portal membership. Ship #180 (Rodolfo-direct 2026-04-21 pivot #4). Holds
- * status + billing-day-of-month so the /vendor/membership page can render
- * the "next charge on the Nth" circle cleanly. Amount is fixed at $25 per
- * Rodolfo spec; would move to a per-vendor config when tiered pricing
- * lands post-launch.
+ * portal membership. DB-canonical via public.vendor_memberships
+ * (RLS: vendor_id = auth.uid()). Local vendor IDs (v-1/v-2/v-3 demos)
+ * remain in-memory.
  *
  * Cancellation semantics (per Rodolfo): status='cancelled' disables
  * portal access — user can still log in but nothing works until they
- * reactivate. Actual route-guard enforcement is a separate layer on top
- * of this store's status field.
+ * reactivate. Route-guard reads `status` from the canonical DB row.
  */
 
 export type MembershipStatus = 'active' | 'cancelled'
 
 export interface VendorMembership {
   status: MembershipStatus
-  // Day-of-month the recurring charge runs. Seeded to the signup day;
-  // clamped to 1-28 to avoid month-boundary edge cases.
   billingDay: number
-  // Set on first activation; kept through cancellations so the UI can
-  // show "member since" if we want.
   activatedAt: string
-  // Last time status flipped to cancelled; null if never.
   cancelledAt: string | null
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isLocalVendorId = (id: string) => !UUID_RE.test(id)
+
 interface VendorMembershipState {
   membershipByVendor: Record<string, VendorMembership>
-  // Activate or ensure-active for a vendor. Seeds with signup-day billing
-  // if no prior membership exists; preserves activatedAt + billingDay on
-  // reactivation so the charge schedule doesn't drift.
-  activateMembership: (vendorId: string, billingDay?: number) => void
-  cancelMembership: (vendorId: string) => void
+  hydratedVendors: Set<string>
+  hydrate: (vendorId: string) => Promise<void>
+  activateMembership: (vendorId: string, billingDay?: number) => Promise<void>
+  cancelMembership: (vendorId: string) => Promise<void>
   getMembership: (vendorId: string) => VendorMembership | undefined
 }
 
@@ -54,49 +48,106 @@ function todayClamped(): number {
   return d > 28 ? 28 : d
 }
 
-export const useVendorMembershipStore = create<VendorMembershipState>()(
-  persist(
-    (set, get) => ({
-      membershipByVendor: {},
+function rowToMembership(row: Record<string, unknown>): VendorMembership {
+  return {
+    status: row.status as MembershipStatus,
+    billingDay: row.billing_day as number,
+    activatedAt: row.activated_at as string,
+    cancelledAt: (row.cancelled_at as string) ?? null,
+  }
+}
 
-      activateMembership: (vendorId, billingDay) =>
-        set((state) => {
-          const prior = state.membershipByVendor[vendorId]
-          const resolvedDay = prior?.billingDay ?? safeBillingDay(billingDay)
-          const next: VendorMembership = {
-            status: 'active',
-            billingDay: resolvedDay,
-            activatedAt: prior?.activatedAt ?? new Date().toISOString(),
-            cancelledAt: null,
-          }
-          return {
-            membershipByVendor: { ...state.membershipByVendor, [vendorId]: next },
-          }
-        }),
+export const useVendorMembershipStore = create<VendorMembershipState>()((set, get) => ({
+  membershipByVendor: {},
+  hydratedVendors: new Set(),
 
-      cancelMembership: (vendorId) =>
-        set((state) => {
-          const prior = state.membershipByVendor[vendorId]
-          if (!prior) return state
-          return {
-            membershipByVendor: {
-              ...state.membershipByVendor,
-              [vendorId]: {
-                ...prior,
-                status: 'cancelled',
-                cancelledAt: new Date().toISOString(),
-              },
-            },
-          }
-        }),
+  hydrate: async (vendorId) => {
+    if (isLocalVendorId(vendorId)) {
+      // Local demo IDs have no DB row; mark hydrated so seed-on-empty
+      // gates (membership.tsx auto-activate) can fire.
+      if (!get().hydratedVendors.has(vendorId)) {
+        set((state) => ({
+          hydratedVendors: new Set([...state.hydratedVendors, vendorId]),
+        }))
+      }
+      return
+    }
+    if (get().hydratedVendors.has(vendorId)) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+    const { data } = await supabase
+      .from('vendor_memberships')
+      .select('*')
+      .eq('vendor_id', vendorId)
+      .maybeSingle()
+    set((state) => ({
+      membershipByVendor: data
+        ? { ...state.membershipByVendor, [vendorId]: rowToMembership(data) }
+        : state.membershipByVendor,
+      hydratedVendors: new Set([...state.hydratedVendors, vendorId]),
+    }))
+  },
 
-      getMembership: (vendorId) => get().membershipByVendor[vendorId],
-    }),
-    { name: 'buildconnect-vendor-membership' },
-  ),
-)
+  activateMembership: async (vendorId, billingDay) => {
+    const prior = get().membershipByVendor[vendorId]
+    const resolvedDay = prior?.billingDay ?? safeBillingDay(billingDay)
+    const next: VendorMembership = {
+      status: 'active',
+      billingDay: resolvedDay,
+      activatedAt: prior?.activatedAt ?? new Date().toISOString(),
+      cancelledAt: null,
+    }
+    if (isLocalVendorId(vendorId)) {
+      set((state) => ({
+        membershipByVendor: { ...state.membershipByVendor, [vendorId]: next },
+      }))
+      return
+    }
+    const { data, error } = await supabase
+      .from('vendor_memberships')
+      .upsert({
+        vendor_id: vendorId,
+        status: 'active',
+        billing_day: resolvedDay,
+        activated_at: next.activatedAt,
+        cancelled_at: null,
+      })
+      .select()
+      .single()
+    if (error) throw error
+    set((state) => ({
+      membershipByVendor: { ...state.membershipByVendor, [vendorId]: rowToMembership(data) },
+    }))
+  },
 
-// Human-readable ordinal for the billing day circle — "15th", "1st", etc.
+  cancelMembership: async (vendorId) => {
+    const prior = get().membershipByVendor[vendorId]
+    if (!prior) return
+    const cancelledAt = new Date().toISOString()
+    if (isLocalVendorId(vendorId)) {
+      set((state) => ({
+        membershipByVendor: {
+          ...state.membershipByVendor,
+          [vendorId]: { ...prior, status: 'cancelled', cancelledAt },
+        },
+      }))
+      return
+    }
+    const { data, error } = await supabase
+      .from('vendor_memberships')
+      .update({ status: 'cancelled', cancelled_at: cancelledAt })
+      .eq('vendor_id', vendorId)
+      .select()
+      .single()
+    if (error) throw error
+    set((state) => ({
+      membershipByVendor: { ...state.membershipByVendor, [vendorId]: rowToMembership(data) },
+    }))
+  },
+
+  getMembership: (vendorId) => get().membershipByVendor[vendorId],
+}))
+
 export function ordinal(n: number): string {
   const abs = Math.abs(n)
   const mod100 = abs % 100

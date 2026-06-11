@@ -8,6 +8,8 @@
     "city-permit/doral": true,
     "city-permit/cutler-bay": true,
     "city-permit/homestead": true,
+    "city-permit/opa-locka": false,
+    "city-permit/miami-gardens": false,
     "city-permit/orlando": false,
     "city-permit/tampa": false,
     "city-permit/naples": false,

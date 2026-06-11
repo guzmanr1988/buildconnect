@@ -77,12 +77,11 @@ export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> =
     lineItem('kit-permit', 'Permit Price', 400),
     lineItem('kit-install', 'Install Labor', 6100),
   ],
-  bathroom: [
-    lineItem('bath-fixtures', 'Fixtures', 4500),
-    lineItem('bath-tile', 'Tile & Surfaces', 3200),
-    lineItem('bath-permit', 'Permit Price', 350),
-    lineItem('bath-install', 'Install Labor', 5400),
-  ],
+  // Ship #475+2 — Bathroom moved to measurement-driven compute via
+  // computeBathroomLineItems at booking-confirmation snapshot time. Empty
+  // preset means cart items written by the bathroom configurator carry
+  // bathroomMeasurements, not flat preset lines (mirror remodel:[]).
+  bathroom: [],
   wall_paneling: [
     lineItem('wp-material', 'Material Price', 1800),
     lineItem('wp-install', 'Install Labor', 1400),
@@ -100,4 +99,10 @@ export const PRICE_LINE_ITEM_PRESETS: Record<ServiceCategory, PriceLineItem[]> =
     lineItem('bld-product', 'Product Price', 950),
     lineItem('bld-install', 'Install Labor', 450),
   ],
+  // Interior Remodel uses a per-measurement compute engine
+  // (computeRemodelLineItems in src/lib/remodel-pricing.ts) called at
+  // booking-confirmation snapshot time — same pattern as roofing's
+  // buildRoofingLineItems. Preset stays empty so no preset-fallback path
+  // ever fires on the remodel category.
+  remodel: [],
 }

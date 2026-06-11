@@ -78,15 +78,23 @@ export default function AdminHomeownerDetail() {
   const { homeownerId: rawId } = useParams<{ homeownerId: string }>()
   const homeownerEmail = rawId ? decodeURIComponent(rawId) : ''
 
+  // pin-23 — demo-id gate. When demoDataHidden=true, suppress the
+  // seed-match branch so the Supabase from(profiles).maybeSingle()
+  // fallthrough @L97-119 wins and admin only sees real homeowners.
+  // Real-uuid + Supabase paths untouched.
+  const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
+
   // Resolve homeowner from either inline HOMEOWNERS or MOCK_HOMEOWNERS
   // by email (URL key). Falls back to lookup-by-id if email not found
   // (legacy URL safety).
   const fixtureHomeowner = useMemo(
     () =>
-      HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
-      MOCK_HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
-      HOMEOWNERS.find((h) => h.id === homeownerEmail),
-    [homeownerEmail],
+      !demoDataHidden
+        ? (HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
+           MOCK_HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
+           HOMEOWNERS.find((h) => h.id === homeownerEmail))
+        : null,
+    [homeownerEmail, demoDataHidden],
   )
 
   // Supabase fallback: when email not in fixtures, query profiles by email.

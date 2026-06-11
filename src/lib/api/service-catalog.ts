@@ -80,6 +80,8 @@ type DbOption = {
   label: string
   description: string | null
   price_unit: string | null
+  input_type: string | null
+  image_url: string | null
   sort_order: number
   sub_groups: DbSubGroup[]
 }
@@ -101,6 +103,8 @@ type DbSubOption = {
   label: string
   description: string | null
   price_unit: string | null
+  input_type: string | null
+  image_url: string | null
   sort_order: number
 }
 
@@ -113,13 +117,21 @@ function priceUnitFromDb(v: string | null): ServiceOption['priceUnit'] | undefin
   return undefined
 }
 
+function inputTypeFromDb(v: string | null): ServiceOption['inputType'] | undefined {
+  if (v === 'tile-select' || v === 'number-input') return v
+  return undefined
+}
+
 function subOptionFromRow(r: DbSubOption): ServiceOption {
   const priceUnit = priceUnitFromDb(r.price_unit)
+  const inputType = inputTypeFromDb(r.input_type)
   return {
     id: r.sub_option_id,
     label: r.label,
     ...(r.description ? { description: r.description } : {}),
     ...(priceUnit ? { priceUnit } : {}),
+    ...(inputType ? { inputType } : {}),
+    ...(r.image_url ? { image_url: r.image_url } : {}),
   }
 }
 
@@ -143,11 +155,14 @@ function optionFromRow(r: DbOption): ServiceOption {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(subGroupFromRow)
   const priceUnit = priceUnitFromDb(r.price_unit)
+  const inputType = inputTypeFromDb(r.input_type)
   return {
     id: r.option_id,
     label: r.label,
     ...(r.description ? { description: r.description } : {}),
     ...(priceUnit ? { priceUnit } : {}),
+    ...(inputType ? { inputType } : {}),
+    ...(r.image_url ? { image_url: r.image_url } : {}),
     ...(subGroups.length > 0 ? { subGroups } : {}),
   }
 }
@@ -365,6 +380,7 @@ export async function createOption(
       label: option.label,
       description: option.description ?? null,
       price_unit: option.priceUnit ?? null,
+      input_type: option.inputType ?? null,
       sort_order: 999,
     })
     .select()
@@ -383,6 +399,7 @@ export async function updateOption(
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
+  if (patch.inputType !== undefined) dbPatch.input_type = patch.inputType ?? null
   const { data, error } = await supabase
     .from('options')
     .update(dbPatch)
@@ -528,6 +545,7 @@ export async function createSubOption(
       label: subOption.label,
       description: subOption.description ?? null,
       price_unit: subOption.priceUnit ?? null,
+      input_type: subOption.inputType ?? null,
       sort_order: 999,
     })
     .select()
@@ -548,6 +566,7 @@ export async function updateSubOption(
   if (patch.label !== undefined) dbPatch.label = patch.label
   if (patch.description !== undefined) dbPatch.description = patch.description ?? null
   if (patch.priceUnit !== undefined) dbPatch.price_unit = patch.priceUnit ?? null
+  if (patch.inputType !== undefined) dbPatch.input_type = patch.inputType ?? null
   const { data, error } = await supabase
     .from('sub_options')
     .update(dbPatch)

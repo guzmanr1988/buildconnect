@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -41,7 +41,7 @@ import { useUsersStore } from '@/stores/users-store'
 import { useVendorPaymentsStore } from '@/stores/vendor-payments-store'
 import { useCommissionPaymentsStore, type CommissionPayment } from '@/stores/commission-payments-store'
 import { useRepPayConfigStore, type RepPayMode } from '@/stores/rep-pay-config-store'
-import { useVendorScope } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
 
@@ -186,13 +186,18 @@ function fmtDate(iso: string) {
 }
 
 export default function VendorBanking() {
-  // Ship #234 — swap VENDOR_ID='v-1' hardcode for useVendorScope so banking
-  // keys the SAME vendor as dashboard/lead-inbox/profile/messages. Resolves
-  // the LS-alias-first, UUID-map-second, profile.id-fallback chain per the
-  // banked useVendorScope discipline. Previously banking was v-1-only and
-  // invisible to v-2..v-5 demo vendors.
-  const { vendorId: VENDOR_ID } = useVendorScope()
-  const vendor = MOCK_VENDORS.find((v) => v.id === VENDOR_ID) ?? MOCK_VENDORS[0]
+  // pin-20 — fixture lookup uses mockVendorId (synthetic 'v-1'..'v-5'
+  // key), real-DB sale synthesis matches via contractorMatchesVendor()
+  // bidirectional resolver. Pre-pin-20 this conflated the two: VENDOR_ID
+  // was a mock-id when mapped but profile.id otherwise, so real Apex
+  // sessions saw MOCK_VENDORS[0] (Apex fallback) instead of their own
+  // synthesized vendor and `sentProjects.contractor.vendor_id === VENDOR_ID`
+  // missed legitimate mock-id-stamped bookings. VENDOR_ID retained for
+  // the billingVendorId fallback and override-key path where it's been
+  // semantically stable since #234.
+  const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
+  const resolvedVendor = useResolvedVendor()
+  const vendor = (mockVendorId ? MOCK_VENDORS.find((v) => v.id === mockVendorId) : null) ?? resolvedVendor ?? MOCK_VENDORS[0]
 
   // Ship #234 — admin commission-% override propagation. Matches the
   // admin/overview resolveCommissionPct pattern (admin/overview.tsx
@@ -211,33 +216,37 @@ export default function VendorBanking() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const mockClosedSales = useEffectiveMockClosedSales()
   const sales = useMemo<ClosedSale[]>(() => {
-    const fixture = mockClosedSales.filter((s) => s.vendor_id === VENDOR_ID)
-    const live = sentProjects
-      .filter((p) =>
-        p.contractor?.vendor_id === VENDOR_ID
-          && p.status === 'sold'
-          && typeof p.saleAmount === 'number'
-          && p.saleAmount > 0,
-      )
-      .map<ClosedSale>((p) => {
-        const saleAmount = p.saleAmount as number
-        const commission = Math.round(saleAmount * (commPct / 100))
-        return {
-          id: `live-${p.id}`,
-          lead_id: `L-${p.id.slice(0, 4).toUpperCase()}`,
-          vendor_id: VENDOR_ID,
-          homeowner_id: 'live',
-          sale_amount: saleAmount,
-          vendor_share: saleAmount - commission,
-          commission,
-          commission_paid: false,
-          closed_at: p.soldAt ?? p.sentAt,
-          homeowner_name: p.homeowner?.name ?? 'Customer',
-          project: p.item?.serviceName ?? '',
-        }
-      })
+    const fixture = mockVendorId
+      ? mockClosedSales.filter((s) => s.vendor_id === mockVendorId)
+      : []
+    const live = resolvedVendor
+      ? sentProjects
+          .filter((p) =>
+            contractorMatchesVendor(p.contractor, resolvedVendor)
+              && p.status === 'sold'
+              && typeof p.saleAmount === 'number'
+              && p.saleAmount > 0,
+          )
+          .map<ClosedSale>((p) => {
+            const saleAmount = p.saleAmount as number
+            const commission = Math.round(saleAmount * (commPct / 100))
+            return {
+              id: `live-${p.id}`,
+              lead_id: `L-${p.id.slice(0, 4).toUpperCase()}`,
+              vendor_id: VENDOR_ID,
+              homeowner_id: 'live',
+              sale_amount: saleAmount,
+              vendor_share: saleAmount - commission,
+              commission,
+              commission_paid: false,
+              closed_at: p.soldAt ?? p.sentAt,
+              homeowner_name: p.homeowner?.name ?? 'Customer',
+              project: p.item?.serviceName ?? '',
+            }
+          })
+      : []
     return [...fixture, ...live]
-  }, [sentProjects, VENDOR_ID, commPct, mockClosedSales])
+  }, [sentProjects, VENDOR_ID, mockVendorId, resolvedVendor, commPct, mockClosedSales])
 
   // Ship #188 / #189 — payment methods are a list per vendor. Source
   // is vendor-billing-store.paymentMethodsByVendor (post-#189 migrate
@@ -272,6 +281,11 @@ export default function VendorBanking() {
   const bankEnabledMap = useVendorEmployeesStore((s) => s.bankEnabledByVendor)
   const payrollBankEnabled = bankEnabledMap[payrollVendorId] ?? false
   const setPayrollBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
+  const hydrateSettings = useVendorEmployeesStore((s) => s.hydrateSettings)
+
+  useEffect(() => {
+    void hydrateSettings(payrollVendorId)
+  }, [payrollVendorId, hydrateSettings])
 
   // Per-rep pay config — config-only (no payout math per banked
   // project_buildconnect_vendor_compensation_private rule).

@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,7 @@ import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
 import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
+import { PermitStepSection, PoolSurveySection, isProjectPermitValid, isProjectAssociationValid, isPoolSurveyValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
@@ -40,6 +40,8 @@ import { ColorCircle } from '@/components/ui/color-circle'
 import { applyAreaWaste } from '@/lib/area-waste'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateRoofMeasurementPdf } from '@/lib/generate-roof-measurement-pdf'
+import { RemodelConfigurator } from '../components/remodel-configurator'
+import { BathroomConfigurator } from '../components/bathroom-configurator'
 
 // Polygon colors used to bind pergolas structure chips to map polygons.
 // POLYGON_COLORS[0] matches polygon-draw.tsx MAIN_COLOR; POLYGON_COLORS[1]
@@ -127,7 +129,7 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     addons: { border: Square, lighting: Lightbulb, drainage: Droplets },
   },
   fencing: {
-    material: { wood: TreePine, vinyl: Square, aluminum: Cog, chain_link: Grid3X3, wrought_iron: Triangle },
+    material: { wood: TreePine, vinyl: Square, aluminum: Cog, chain_link: Grid3X3, wrought_iron: Triangle, concrete_panel: BrickWall },
     height: { '4ft': ChevronsUp, '6ft': ChevronsUp, '8ft': ChevronsUp },
     addons: { gates: DoorOpen, post_caps: CircleDot, privacy_slats: AlignJustify },
   },
@@ -191,7 +193,7 @@ function isTileModeGroup(serviceId: string | undefined, groupId: string): boolea
 import { AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/use-document-title'
-import { getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { applyRoofingMaterialPitchedSingleton } from '@/lib/roofing-rules'
 import { geocodeAddressToCoords } from '@/lib/geo-distance'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
@@ -246,6 +248,7 @@ const SERVICE_ICONS: Record<ServiceCategory, React.ElementType> = {
   garage: Hammer,
   house_painting: PaintRoller,
   blinds: Blinds,
+  remodel: Wrench,
 }
 
 const ICON_GRADIENTS: Record<ServiceCategory, string> = {
@@ -262,6 +265,7 @@ const ICON_GRADIENTS: Record<ServiceCategory, string> = {
   garage: 'from-slate-400 to-slate-600',
   house_painting: 'from-rose-400 to-pink-500',
   blinds: 'from-indigo-400 to-purple-500',
+  remodel: 'from-fuchsia-400 to-pink-600',
 }
 
 // Legacy metalRoofSelection.roofSize values were sqft strings (e.g. "2916").
@@ -282,6 +286,19 @@ export function ServiceDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Ship #475+1 — Interior Remodel is measurement-driven (L/W/H/numWalls)
+  // not chip-driven. Short-circuit to the bespoke configurator instead of
+  // shoehorning the optionGroups pattern. Edit-payload handoff still
+  // travels via location.state ({ editItem }) below for cart edits.
+  if (serviceId === 'remodel') {
+    return <RemodelConfigurator />
+  }
+  // Ship #475+2 — Bathroom Remodel is measurement-driven (L/W/H/tile-coverage
+  // + tub-toggle) with a fixtures-as-$0 split. Same short-circuit pattern.
+  if (serviceId === 'bathroom') {
+    return <BathroomConfigurator />
+  }
+
   // Edit payload travels on the router's location.state — tied to the
   // navigation, not to a component mount instance. This survives React's
   // double-mount pattern (StrictMode dev + some prod reconciler paths that
@@ -300,9 +317,11 @@ export function ServiceDetailPage() {
   const [selectionQuantities, setSelectionQuantities] = useState<Record<string, number>>(
     (editItemForService?.selectionQuantities as Record<string, number>) || {}
   )
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
   const [activeAddonMenu, setActiveAddonMenu] = useState<string | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
   const editAddons = editItemForService?.addonQuantities as { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number } | undefined
   const [laminarJets, setLaminarJets] = useState(editAddons?.laminarJets || 0)
   const [waterfalls, setWaterfalls] = useState(editAddons?.waterfalls || 0)
@@ -453,6 +472,8 @@ export function ServiceDetailPage() {
   const cartItems = useCartStore((s) => s.items)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const poolSurvey = useCartStore((s) => s.poolSurvey)
   const cartCount = cartItems.length
   // Single-project-per-service-per-cart gate (kratos msg 1776669325145 Rod
   // pivot from state-reset approach). Before Add-to-Project fires, check if
@@ -842,6 +863,32 @@ export function ServiceDetailPage() {
     (selections['addons']?.length ?? 0) >= 1 &&
     !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
   const allRequiredDone = completedRequired === requiredGroups.length
+
+  // Per-step plain-English gating message — names the topmost missing item.
+  // Order matches the on-screen group order, then the secondary structural
+  // gates (permit / association / pool survey / addon-ack / pergolas assign).
+  function gatingReason(): string {
+    const missingGroup = requiredGroups.find(
+      (g) => (selections[g.id]?.length ?? 0) === 0,
+    )
+    if (missingGroup) return `Pick a ${missingGroup.label.toLowerCase()} to continue.`
+    if (!isProjectAssociationValid(projectAssociation ?? null)) {
+      return 'Answer the association question to continue.'
+    }
+    if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+      return 'Choose a permit option to continue.'
+    }
+    if (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) {
+      return 'Complete the pool survey to continue.'
+    }
+    if (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) {
+      return 'Acknowledge the flat-only order to continue.'
+    }
+    if (!pergolasStructuresAllAssigned) {
+      return 'Assign a structure to each measured area to continue.'
+    }
+    return 'Complete all required selections to continue.'
+  }
 
   // PR-223 Option B — pergolas force-pick gate. Every drawn measurement
   // square must have a structure assigned via the in-card picker before
@@ -1266,7 +1313,7 @@ export function ServiceDetailPage() {
         )}
 
         {/* Option groups */}
-        <div className="flex flex-col gap-6">
+        <div className={serviceId === 'wall_paneling' ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-6'}>
           {service.optionGroups.filter((group) => {
             // Generic conditional reveal — e.g., windows_doors install_preference
             // waits on `scope` (Permit/No Permit) being answered first.
@@ -1328,6 +1375,10 @@ export function ServiceDetailPage() {
               isRoofingPerimeterOnly && group.id === 'addons'
                 ? group.options.filter((o) => ADDON_LINEAR_FT_IDS.includes(o.id))
                 : group.options
+            const isExpanded = expandedGroups[group.id] === true
+            const hasSelection = selected.length > 0
+            const useAccordion = serviceId === 'wall_paneling'
+            const bodyVisible = !useAccordion || isExpanded
             return (
               <div
                 key={group.id}
@@ -1337,7 +1388,76 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
+                {...(useAccordion
+                  ? {
+                      'data-group-expanded': isExpanded ? 'true' : 'false',
+                      'data-group-has-selection': hasSelection ? 'true' : 'false',
+                    }
+                  : {})}
+                style={useAccordion && isExpanded ? { gridColumn: '1 / -1' } : undefined}
               >
+                {useAccordion ? (
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !isExpanded }))}
+                  className={cn(
+                    'rounded-lg border bg-card hover:bg-accent/30 transition-colors',
+                    isExpanded
+                      ? 'w-full flex items-center gap-2 px-3 py-2.5 text-left'
+                      : 'w-full flex flex-col items-center justify-center gap-1.5 px-4 py-5 h-[136px] text-center'
+                  )}
+                  data-group-header={group.id}
+                  data-group-card={isExpanded ? 'expanded' : 'collapsed'}
+                  aria-expanded={isExpanded}
+                >
+                  <span className="text-sm font-semibold text-foreground shrink-0" data-group-label={groupLabel}>
+                    {groupLabel}
+                  </span>
+                  {group.required ? (
+                    <span className="text-destructive text-xs shrink-0">*</span>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5 shrink-0">
+                      Optional
+                    </span>
+                  )}
+                  {!isExpanded && hasSelection && (
+                    <span className="flex flex-nowrap items-center gap-1.5 ml-1 min-w-0 flex-1 overflow-hidden" data-group-summary={group.id}>
+                      {selected.map((optId) => {
+                        const opt = renderOptions.find((o) => o.id === optId)
+                        if (!opt) return null
+                        const qty = selectionQuantities[optId]
+                        return (
+                          <span
+                            key={optId}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground max-w-full"
+                            data-group-summary-chip={optId}
+                            data-group-summary-qty={qty ?? ''}
+                          >
+                            {opt.image_url ? (
+                              <img src={opt.image_url} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                            ) : null}
+                            <span className="truncate max-w-[10rem]">{opt.label}</span>
+                            {qty != null && qty > 0 ? (
+                              <span className="text-muted-foreground shrink-0">· {qty} LF</span>
+                            ) : null}
+                          </span>
+                        )
+                      })}
+                    </span>
+                  )}
+                  <span
+                    aria-hidden="true"
+                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md ring-1 ring-foreground/20 backdrop-blur-sm transition-colors shrink-0"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        isExpanded && 'rotate-180'
+                      )}
+                    />
+                  </span>
+                </button>
+                ) : (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
                     {groupLabel}
@@ -1350,6 +1470,9 @@ export function ServiceDetailPage() {
                     </span>
                   )}
                 </div>
+                )}
+                {bodyVisible && (
+                <div className={useAccordion ? 'mt-3' : ''}>
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
                     ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
@@ -1358,7 +1481,8 @@ export function ServiceDetailPage() {
                   {renderOptions.map((option) => {
                     const isSelected = selected.includes(option.id)
                     const isCardTile = isTileModeGroup(serviceId, group.id)
-                    const TileIcon = isCardTile
+                    const isImageTile = isCardTile && !!option.image_url
+                    const TileIcon = isCardTile && !isImageTile
                       ? SERVICE_TILE_ICONS[serviceId ?? '']?.[group.id]?.[option.id]
                       : undefined
                     // PR — roofing material primary lock. Once a non-flat material is
@@ -1446,9 +1570,108 @@ export function ServiceDetailPage() {
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
                         : roofingAddonSubPickLabel ?? option.label
-                    return (
+                    // PR-#462 — per-option number-input rendering. Vendor/admin
+                    // flips an option's inputType to 'number-input' (catalog
+                    // column, mapped through service-catalog.ts) and the
+                    // configurator surfaces an empty number Input bound to
+                    // selectionQuantities[option.id]; the option is auto-toggled
+                    // into `selected` when qty > 0 so the existing
+                    // prunedQuantities loop (L2576) and pricing.ts
+                    // requiresQuantity branch pick it up. Mirrors install_windows
+                    // mechanism (requiresQuantity flag) — no per-option pricing
+                    // path, reuses qty × basePrice.
+                    //
+                    // Combo path (image_url + inputType=number-input): AUGMENT
+                    // — render the image tile chip THEN the Input below, so the
+                    // homeowner sees the visual sample AND enters a quantity
+                    // (e.g. wall-paneling linear-ft). Plain number-input (no
+                    // image_url) still REPLACES the chip with the Input row.
+                    const isNumberInput = option.inputType === 'number-input'
+                    const isImageNumberInput = isNumberInput && !!option.image_url
+                    const renderNumberInputRow = () => {
+                      const qty = selectionQuantities[option.id]
+                      const unitSuffix =
+                        option.priceUnit === 'linear_ft'
+                          ? 'Linear ft'
+                          : option.priceUnit === 'sqft'
+                            ? 'Sq ft'
+                            : option.priceUnit === 'square'
+                              ? 'Sq'
+                              : null
+                      return (
+                        <div
+                          data-option-input-row={option.id}
+                          className="flex items-center gap-2 mt-2"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <label
+                            htmlFor={`option-number-input-${option.id}`}
+                            className="text-xs font-medium text-muted-foreground"
+                          >
+                            {unitSuffix ?? 'Quantity'}
+                          </label>
+                          <Input
+                            id={`option-number-input-${option.id}`}
+                            data-testid="option-number-input"
+                            data-option-id={option.id}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            placeholder="0"
+                            disabled={isLocked}
+                            value={qty ?? ''}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              const n = raw === '' ? undefined : Number(raw)
+                              setSelectionQuantities((prev) => {
+                                const next = { ...prev }
+                                if (n === undefined || isNaN(n) || n <= 0) {
+                                  delete next[option.id]
+                                } else {
+                                  next[option.id] = n
+                                }
+                                return next
+                              })
+                              const shouldBeSelected = n !== undefined && !isNaN(n) && n > 0
+                              const isCurrentlySelected = selected.includes(option.id)
+                              if (shouldBeSelected !== isCurrentlySelected) {
+                                handleSelect(group, option.id)
+                              }
+                            }}
+                            onBlur={() => {
+                              const committed = selectionQuantities[option.id]
+                              if (committed != null && committed > 0) {
+                                setExpandedGroups((prev) => ({ ...prev, [group.id]: false }))
+                              }
+                            }}
+                            className="h-9 w-24"
+                          />
+                        </div>
+                      )
+                    }
+                    if (isNumberInput && !isImageNumberInput) {
+                      return (
+                        <div
+                          key={option.id}
+                          data-option-id={option.id}
+                          data-option-group={group.id}
+                          data-option-input-type="number-input"
+                          className="flex items-center gap-2"
+                        >
+                          <label
+                            htmlFor={`option-number-input-${option.id}`}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            {optionLabel}
+                          </label>
+                          {renderNumberInputRow()}
+                        </div>
+                      )
+                    }
+                    const chipButton = (
                       <button
-                        key={option.id}
                         type="button"
                         data-chip-id={option.id}
                         data-chip-group={group.id}
@@ -1696,6 +1919,40 @@ export function ServiceDetailPage() {
                             )}
                           </div>
                         )}
+                        {isImageTile && (
+                          <div className="relative w-full">
+                            <img
+                              src={option.image_url}
+                              alt={option.label || 'Design'}
+                              loading="lazy"
+                              className="w-full aspect-video rounded-lg object-cover bg-muted"
+                            />
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Zoom ${option.label || 'design'} image`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (option.image_url) {
+                                  setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  if (option.image_url) {
+                                    setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                  }
+                                }
+                              }}
+                              data-zoom-trigger={option.id}
+                              className="absolute top-2 right-2 inline-flex h-11 w-11 min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full bg-background/95 text-foreground shadow-md ring-1 ring-foreground/20 backdrop-blur-sm transition-colors hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              <ZoomIn className="h-5 w-5" strokeWidth={2.25} />
+                            </span>
+                          </div>
+                        )}
                         {!isCardTile && group.type === 'multi' && isSelected && (
                           <Check className="h-3.5 w-3.5" />
                         )}
@@ -1711,7 +1968,9 @@ export function ServiceDetailPage() {
                         })()}
                         {isCardTile ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            {optionLabel && optionLabel.trim() !== '' && (
+                              <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                            )}
                             {option.description ? (
                               <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
                             ) : null}
@@ -1889,6 +2148,27 @@ export function ServiceDetailPage() {
                         )}
                       </button>
                     )
+                    if (isImageNumberInput) {
+                      // Rod 2026-06-03 declutter: linear-ft input reveals only
+                      // when the tile is selected (isSelected = data-chip-state
+                      // 'active'). Cart-state selectionQuantities[option.id]
+                      // persists across deselect+reselect (handleSelect L933-
+                      // 1024 never touches it), so the value survives the
+                      // visibility toggle and reappears prefilled on reselect.
+                      return (
+                        <div
+                          key={option.id}
+                          data-option-wrapper={option.id}
+                          data-option-input-type="image-number-input"
+                          data-option-input-revealed={isSelected ? 'true' : 'false'}
+                          className="flex flex-col"
+                        >
+                          {chipButton}
+                          {isSelected && renderNumberInputRow()}
+                        </div>
+                      )
+                    }
+                    return <div key={option.id} className="contents">{chipButton}</div>
                   })}
                 </div>
                 {/* Stone-scoped Linear feet input (Kitchen vertical only).
@@ -2401,6 +2681,8 @@ export function ServiceDetailPage() {
                     )}
                   </>
                 )}
+                </div>
+                )}
               </div>
             )
           })}
@@ -2469,23 +2751,34 @@ export function ServiceDetailPage() {
             Which property is this for?
           </label>
           <Select value={addressKey} onValueChange={(value) => setAddressKey(value ?? '')}>
-            <SelectTrigger id="address-select" className="h-11 text-sm">
-              <span
-                className={cn(
-                  'flex-1 text-left truncate',
-                  !selectedAddress.full && !selectedAddress.label && 'text-muted-foreground'
-                )}
-              >
-                {selectedAddress.full || selectedAddress.label || 'Select a property'}
+            <SelectTrigger id="address-select" className="h-auto min-h-[3.25rem] py-2 text-sm">
+              <span className="flex flex-1 flex-col items-start gap-1 min-w-0 text-left">
+                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                  {selectedAddress.label || 'Property'}
+                </span>
+                <span
+                  className={cn(
+                    'text-sm whitespace-normal break-words leading-tight',
+                    !selectedAddress.full && 'text-muted-foreground'
+                  )}
+                >
+                  {selectedAddress.full || 'Select a property'}
+                </span>
               </span>
             </SelectTrigger>
             <SelectContent>
               {addressOptions.map((opt) => (
-                <SelectItem key={opt.key} value={opt.key}>
-                  <span className="font-medium">{opt.label}</span>
-                  {opt.full && (
-                    <span className="ml-2 text-xs text-muted-foreground">{opt.full}</span>
-                  )}
+                <SelectItem key={opt.key} value={opt.key} className="py-2 pr-10">
+                  <span className="flex flex-1 flex-col items-start gap-1 min-w-0">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                      {opt.label}
+                    </span>
+                    {opt.full && (
+                      <span className="text-xs text-muted-foreground whitespace-normal break-words leading-tight">
+                        {opt.full}
+                      </span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -2499,10 +2792,17 @@ export function ServiceDetailPage() {
 
         {/* Project-permit step — same shape + copy as roofing wizard step 8.
             Inline configurator path (windows_doors / kitchen / bathroom);
-            wizards render PermitStepSection inside their step list. */}
+            wizards render PermitStepSection inside their step list.
+            Pool-only: render PoolSurveySection above (spec order:
+            pool_survey → association → permit). */}
         <div className="mt-6 pt-6 border-t border-border/50">
           <h3 className="text-base font-semibold text-foreground mb-1">{PERMIT_HEADING}</h3>
           <p className="text-sm text-muted-foreground mb-3">{PERMIT_SUBTITLE}</p>
+          {serviceId === 'pool' && (
+            <div className="mb-6">
+              <PoolSurveySection />
+            </div>
+          )}
           <PermitStepSection />
         </div>
 
@@ -2563,7 +2863,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -2575,7 +2875,8 @@ export function ServiceDetailPage() {
               const prunedQuantities: Record<string, number> = {}
               for (const [gid, optIds] of Object.entries(selections)) {
                 for (const oid of optIds) {
-                  if (!getOptionMetadata(oid, serviceId).requiresQuantity) continue
+                  const catOpt = serviceId ? findCatalogOption(services, serviceId, oid) : undefined
+                  if (!getOptionMetadata(oid, serviceId, catOpt).requiresQuantity) continue
                   if (serviceId === 'windows_doors' && oid === 'install_windows') {
                     prunedQuantities[oid] = windowTotal
                   } else if (serviceId === 'windows_doors' && oid === 'install_doors') {
@@ -2832,9 +3133,16 @@ export function ServiceDetailPage() {
               Project Details
             </Button>
           )}
-          {!allRequiredDone && !alreadyInCart && (
+          {!alreadyInCart && !added && (
+            !allRequiredDone ||
+            !isProjectPermitValid(projectPermit, projectPermitWaiver) ||
+            !isProjectAssociationValid(projectAssociation ?? null) ||
+            (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
+            (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) ||
+            !pergolasStructuresAllAssigned
+          ) && (
             <p className="text-xs text-muted-foreground text-center">
-              Complete all required selections to continue
+              {gatingReason()}
             </p>
           )}
           {alreadyInCart && (
@@ -3234,6 +3542,22 @@ export function ServiceDetailPage() {
               Close
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={lightboxImage !== null} onOpenChange={(open) => { if (!open) setLightboxImage(null) }}>
+        <DialogContent
+          showCloseButton
+          className="max-w-[95vw] sm:max-w-[95vw] md:max-w-[95vw] lg:max-w-[95vw] max-h-[90vh] p-2 bg-popover"
+        >
+          <DialogTitle className="sr-only">{lightboxImage?.alt || 'Design preview'}</DialogTitle>
+          {lightboxImage && (
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.alt}
+              className="w-full max-h-[86vh] rounded-lg object-contain bg-muted"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

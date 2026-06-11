@@ -269,7 +269,22 @@ export function VendorProjectDocumentsPanel({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            {/* Root-cause fix for Rod-direct task_1780804150936_308:
+                Base UI Select defaults to alignItemWithTrigger=true, which
+                vertically centers the SELECTED item over the trigger and
+                extends earlier items UPWARD — that's what visually bled
+                over the Project Details card above the documents panel.
+                Forcing align-to-bottom (side="bottom", alignItemWithTrigger
+                =false) makes the dropdown open BELOW the trigger only,
+                like a traditional dropdown, removing the upward overhang.
+                Global ui/select.tsx left untouched; this is a call-site
+                fix per banked dropdown-overlap-root-cause-first guardrail. */}
+            <SelectContent
+              alignItemWithTrigger={false}
+              side="bottom"
+              sideOffset={4}
+              align="start"
+            >
               {DOC_TYPE_ORDER.map((t) => (
                 <SelectItem key={t} value={t}>
                   {DOC_TYPE_LABEL[t]}

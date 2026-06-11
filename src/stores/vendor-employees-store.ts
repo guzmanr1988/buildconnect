@@ -349,20 +349,23 @@ interface VendorEmployeesState {
   employeesByVendor: Record<string, VendorEmployee[]>
   bankEnabledByVendor: Record<string, boolean>
   hydratedVendors: Set<string>
+  hydratedSettings: Set<string>
   hydrateVendor: (vendorId: string) => Promise<void>
   hydrateAdmin: (vendorId: string) => Promise<void>
+  hydrateSettings: (vendorId: string) => Promise<void>
   addEmployee: (vendorId: string, input: VendorEmployeeInput) => Promise<void>
   updateEmployee: (vendorId: string, id: string, patch: Partial<VendorEmployeeInput>) => Promise<void>
   deactivateEmployee: (vendorId: string, id: string) => Promise<void>
   reactivateEmployee: (vendorId: string, id: string) => Promise<void>
   removeEmployee: (vendorId: string, id: string) => Promise<void>
-  setBankEnabled: (vendorId: string, enabled: boolean) => void
+  setBankEnabled: (vendorId: string, enabled: boolean) => Promise<void>
 }
 
 export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get) => ({
   employeesByVendor: SEED_EMPLOYEES,
   bankEnabledByVendor: SEED_BANK_ENABLED,
   hydratedVendors: new Set(),
+  hydratedSettings: new Set(),
 
   hydrateVendor: async (vendorId) => {
     if (isLocalVendorId(vendorId)) return
@@ -526,10 +529,39 @@ export const useVendorEmployeesStore = create<VendorEmployeesState>()((set, get)
     }))
   },
 
-  setBankEnabled: (vendorId, enabled) =>
+  hydrateSettings: async (vendorId) => {
+    if (isLocalVendorId(vendorId)) return
+    if (get().hydratedSettings.has(vendorId)) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+    const { data } = await supabase
+      .from('vendor_settings')
+      .select('bank_enabled')
+      .eq('vendor_id', vendorId)
+      .maybeSingle()
+    set((state) => ({
+      bankEnabledByVendor: data
+        ? { ...state.bankEnabledByVendor, [vendorId]: data.bank_enabled as boolean }
+        : state.bankEnabledByVendor,
+      hydratedSettings: new Set([...state.hydratedSettings, vendorId]),
+    }))
+  },
+
+  setBankEnabled: async (vendorId, enabled) => {
+    if (isLocalVendorId(vendorId)) {
+      set((state) => ({
+        bankEnabledByVendor: { ...state.bankEnabledByVendor, [vendorId]: enabled },
+      }))
+      return
+    }
+    const { error } = await supabase
+      .from('vendor_settings')
+      .upsert({ vendor_id: vendorId, bank_enabled: enabled })
+    if (error) throw error
     set((state) => ({
       bankEnabledByVendor: { ...state.bankEnabledByVendor, [vendorId]: enabled },
-    })),
+    }))
+  },
 }))
 
 export const EMPLOYEE_STATUS_LABELS: Record<EmploymentStatus, string> = {

@@ -46,6 +46,7 @@ import type {
 const DOC_TYPE_OPTIONS: HomeownerDocType[] = [
   'license',
   'permit',
+  'association_permit',
   'sketch',
   'measurement',
   'agreement',
@@ -58,6 +59,7 @@ const DOC_TYPE_OPTIONS: HomeownerDocType[] = [
 const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
   license: 'License',
   permit: 'Permit',
+  association_permit: 'Association/HOA permit',
   sketch: 'Sketch',
   measurement: 'Measurement',
   agreement: 'Agreement',

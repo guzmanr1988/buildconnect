@@ -17,7 +17,9 @@ import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
-import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { PermitDisplayRow, AssociationDisplayRow, PoolSurveyDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { fetchAssociationDocForSentProject, getSignedUrl } from '@/lib/api/homeowner-documents'
+import type { HomeownerDoc } from '@/stores/homeowner-documents-store'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -94,6 +96,27 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     })
     return () => { cancelled = true }
   }, [open, projectId, sentProjects])
+
+  // Association permit doc — fetched by sent_project_id + doc_type='permit'.
+  // RLS gates the row to the owning vendor / admin.
+  const [associationDoc, setAssociationDoc] = useState<HomeownerDoc | null>(null)
+  useEffect(() => {
+    setAssociationDoc(null)
+    if (!open || !projectId) return
+    const sp = sentProjects.find((p) => p.id === projectId)
+    if (!sp) return
+    let cancelled = false
+    fetchAssociationDocForSentProject(projectId).then((doc) => {
+      if (!cancelled) setAssociationDoc(doc)
+    })
+    return () => { cancelled = true }
+  }, [open, projectId, sentProjects])
+
+  const handleAssociationDocDownload = async () => {
+    if (!associationDoc) return
+    const url = await getSignedUrl(associationDoc.storagePath)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -274,7 +297,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
           Lead Detail Modal #308; #103 single-source-of-truth). Mobile
           portrait preserved exactly. Left column: identity + customer
           context. Right column: selections + audit + commission. */}
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-y-auto" data-testid="admin-project-detail-dialog">
         {selectedItem && (
           <>
             <DialogHeader>
@@ -374,120 +397,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 )
               })()}
 
-              {/* Audit Trail — admin-workflow mode: left col under Commission. */}
-              {(() => {
-                if (!isAdminWorkflow) return null
-                const extra = selectedItem as typeof selectedItem & {
-                  _bookingDate?: string
-                  _bookingTime?: string
-                  _confirmedAt?: string
-                  _repAssignedAt?: string
-                  _rescheduleRequest?: { requestedBy: string; proposedDate: string; proposedTime: string; originalDate: string; originalTime: string; status: string; reason?: string }
-                  _cancellationRequest?: { status: string; reason?: string; explanation?: string }
-                  _idDocument?: string
-                  _homeownerId?: string
-                }
-                const hasAny =
-                  extra._bookingDate ||
-                  extra._confirmedAt ||
-                  extra._repAssignedAt ||
-                  extra._rescheduleRequest ||
-                  extra._cancellationRequest ||
-                  extra._idDocument ||
-                  extra._homeownerId
-                if (!hasAny) return null
-                return (
-                  <div className="rounded-xl border p-4 space-y-3">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Trail</h4>
-                    <div className="space-y-2 text-sm">
-                      {extra._bookingDate && (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Booked slot</span>
-                          <span className="font-medium">
-                            {extra._bookingDate}{extra._bookingTime ? ` · ${extra._bookingTime}` : ''}
-                          </span>
-                        </div>
-                      )}
-                      {extra._confirmedAt && (
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Vendor confirmed</span>
-                          <span className="font-medium">{fmtDate(extra._confirmedAt)}</span>
-                        </div>
-                      )}
-                      {extra._repAssignedAt && (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Rep assigned</span>
-                          <span className="font-medium">{fmtDate(extra._repAssignedAt)}</span>
-                        </div>
-                      )}
-                      {extra._cancellationRequest && (
-                        <div className="flex items-start gap-2">
-                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[108px]">Cancellation</span>
-                              <Badge variant="outline" className="text-[10px] capitalize">{extra._cancellationRequest.status}</Badge>
-                            </p>
-                            {extra._cancellationRequest.reason && (
-                              <p className="text-xs text-muted-foreground italic mt-0.5">
-                                "{extra._cancellationRequest.reason}"
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {extra._rescheduleRequest && (
-                        <div className="flex items-start gap-2">
-                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <div className="flex-1 space-y-0.5">
-                            <p className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[108px]">Reschedule</span>
-                              <Badge variant="outline" className="text-[10px] capitalize">{extra._rescheduleRequest.status}</Badge>
-                              <span className="text-[10px] text-muted-foreground">
-                                {extra._rescheduleRequest.requestedBy}-initiated
-                              </span>
-                            </p>
-                            <p className="text-xs text-foreground/80">
-                              {extra._rescheduleRequest.proposedDate} · {extra._rescheduleRequest.proposedTime}
-                              <span className="text-muted-foreground ml-1.5">
-                                (was {extra._rescheduleRequest.originalDate} · {extra._rescheduleRequest.originalTime})
-                              </span>
-                            </p>
-                            {extra._rescheduleRequest.reason && (
-                              <p className="text-xs text-muted-foreground italic">
-                                "{extra._rescheduleRequest.reason}"
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {extra._idDocument && (
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">ID on file</span>
-                          <img
-                            src={extra._idDocument}
-                            alt="Customer ID"
-                            className="h-12 w-20 rounded border object-cover"
-                          />
-                        </div>
-                      )}
-                      {extra._homeownerId && (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Homeowner ID</span>
-                          <span className="font-mono text-[11px] text-foreground/80 break-all">
-                            {extra._homeownerId}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* Pin-24: left-col Audit Trail IIFE removed; right-col version
+                  now renders for all viewModes (was admin-workflow-only). */}
             </div>
             {/* RIGHT COLUMN — selections + audit + commission */}
             <div className="space-y-4">
@@ -505,20 +416,6 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     ))}
                   </div>
 
-                  {/* Roof Spec — shown for roofing items only */}
-                  {selectedItem.project_data.item.serviceId === 'roofing' && (() => {
-                    const item = selectedItem.project_data.item as any
-                    return (
-                      <RoofSpecCard
-                        roofMeasurement={item.roofMeasurement}
-                        metalRoofSelection={item.metalRoofSelection}
-                        roofAddonLinearFt={item.roofAddonLinearFt}
-                        gutterDropsConfig={item.gutterDropsConfig}
-                        flowPath={item.flowPath}
-                      />
-                    )
-                  })()}
-
                   {/* Permit — project-level, shown for any service when set.
                       Reads sentProject snapshot first; falls back to legacy
                       per-item roofPermit for entries persisted pre-PR-140. */}
@@ -528,6 +425,20 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ?? (selectedItem.project_data.item as any).roofPermit
                     }
                   />
+
+                  {/* Association — project-level, shown for any service.
+                      task_1780776240716_817. When yes + doc uploaded, the
+                      vendor gets a click-to-download signed-URL link. */}
+                  <AssociationDisplayRow
+                    association={selectedItem.project_data.projectAssociation ?? null}
+                    docFilename={associationDoc?.filename}
+                    onDownload={handleAssociationDocDownload}
+                  />
+
+                  {/* Pool survey — Pool-only. Other services leave value NULL
+                      so the row hides cleanly via the null-gate in the
+                      component. */}
+                  <PoolSurveyDisplayRow survey={selectedItem.project_data.poolSurvey ?? null} />
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
                     const pd = selectedItem.project_data
@@ -895,6 +806,14 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         })()}
                         {(() => {
                           if (!pd.saleAmount || pd.status !== 'sold') return null
+                          // pin-22-v2 A2 — empty-snapshot guard. Without real
+                          // priceLineItems the catalogTotal collapses to 0 and
+                          // upsaleAmount = saleAmount, producing the misleading
+                          // "Upsale == Sale Total" row Rod flagged on Donald.
+                          // Hide the Upsale entirely when no real line items
+                          // are captured at sendProject time; deals with real
+                          // catalog data still render normally.
+                          if (!pd.priceLineItems || pd.priceLineItems.length === 0) return null
                           const catalogTotal = computeWindowsDoorsCatalogTotal(pd.item as any, lineItems, getVendorPrice)
                           const upsaleAmount = pd.saleAmount - catalogTotal
                           if (upsaleAmount <= 0) return null
@@ -928,10 +847,13 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const pd = selectedItem.project_data
                     const snapshot = pd.priceLineItems
                     const serviceId = pd.item?.serviceId
-                    const fallback = serviceId
-                      ? PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-                      : undefined
-                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
+                    // pin-22-v2 A1 — drop PRICE_LINE_ITEM_PRESETS[serviceId] fallback so
+                    // the Pricing Breakdown only renders when a real per-project snapshot
+                    // exists. Pre-fix the fallback let stale preset numbers display on
+                    // lead-detail views with empty priceLineItems, producing misleading
+                    // "Sale Total == Pricing Breakdown" rows Rod flagged on Donald. Empty
+                    // snapshot → null → existing length-0 gate hides the section.
+                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : null
                     if (!priceLineItems || priceLineItems.length === 0) return null
 
                     const isSold = pd.status === 'sold'
@@ -1061,9 +983,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 </>
               )}
 
-              {/* Audit Trail — default mode only; admin-workflow moves this to left col. */}
+              {/* Audit Trail — pin-24: renders in right col for all viewModes. */}
               {(() => {
-                if (isAdminWorkflow) return null
                 const extra = selectedItem as typeof selectedItem & {
                   _bookingDate?: string
                   _bookingTime?: string
@@ -1084,7 +1005,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   extra._homeownerId
                 if (!hasAny) return null
                 return (
-                  <div className="rounded-xl border p-4 space-y-3">
+                  <div className="rounded-xl border p-4 space-y-3" data-testid="admin-project-detail-audit-trail">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Trail</h4>
                     <div className="space-y-2 text-sm">
                       {extra._bookingDate && (
@@ -1212,6 +1133,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
               })()}
             </div>
             </div>
+            {/* pin-23 — Roof Spec full-width BELOW the 2-col grid, roofing only.
+                Was inline in the right column; moved out + widened so the spec
+                table breathes on the wide-modal layout. */}
+            {selectedItem.project_data?.item?.serviceId === 'roofing' && (() => {
+              const item = selectedItem.project_data!.item as any
+              return (
+                <div className="mt-4" data-testid="admin-project-detail-roof-spec">
+                  <RoofSpecCard
+                    roofMeasurement={item.roofMeasurement}
+                    metalRoofSelection={item.metalRoofSelection}
+                    roofAddonLinearFt={item.roofAddonLinearFt}
+                    gutterDropsConfig={item.gutterDropsConfig}
+                    flowPath={item.flowPath}
+                  />
+                </div>
+              )
+            })()}
             <Button variant="outline" className="w-full mt-2" onClick={onClose}>
               Close
             </Button>
