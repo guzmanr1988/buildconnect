@@ -38,6 +38,7 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   garage: 'Garage',
   house_painting: 'House Painting',
   blinds: 'Blinds',
+  remodel: 'Interior Remodel',
 }
 
 // Ship #284 — admin per-vendor detail page (Rodolfo-direct, mock-data

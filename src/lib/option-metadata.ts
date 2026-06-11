@@ -173,19 +173,36 @@ export const OPTION_METADATA_BY_SERVICE: Record<string, Record<string, OptionMet
 export function getOptionMetadata(
   optionId: string,
   serviceId?: string,
-  option?: { priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft' },
+  option?: {
+    priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft'
+    inputType?: 'tile-select' | 'number-input'
+  },
 ): OptionMetadata {
   // Catalog-overlay wins (admin-edited per option); falls back to the static
-  // map below for older rows that don't carry priceUnit yet. Only priceUnit
-  // is admin-editable today — other flags (requiresQuantity / supportsPercentMarkup)
-  // remain static FE config.
+  // map below for older rows that don't carry priceUnit / inputType yet. The
+  // static map remains the source of truth for install_windows / install_doors /
+  // install_storm_front (where requiresQuantity has been wired since 2026-04-19);
+  // catalog-overlay extends that mechanism to net-new options that carry
+  // inputType='number-input' as catalog data (migration 063+).
   const fallback: OptionMetadata = serviceId
     ? OPTION_METADATA_BY_SERVICE[serviceId]?.[optionId] ?? OPTION_METADATA[optionId] ?? {}
     : OPTION_METADATA[optionId] ?? {}
+  let overlay: OptionMetadata = fallback
   if (option?.priceUnit) {
-    return { ...fallback, priceUnit: option.priceUnit }
+    overlay = { ...overlay, priceUnit: option.priceUnit }
   }
-  return fallback
+  if (option?.inputType === 'number-input') {
+    // Per-option inputType opts INTO the requiresQuantity rendering+pricing path.
+    // Quantity range defaults to a generous 1..9999 when no static entry exists;
+    // static entries (install_windows/doors/storm_front) keep their tighter 1..50
+    // bounds via the fallback merge order.
+    overlay = {
+      ...overlay,
+      requiresQuantity: true,
+      ...(overlay.quantityRange ? {} : { quantityRange: { min: 1, max: 9999 } }),
+    }
+  }
+  return overlay
 }
 
 // Walk a service's option-groups + sub-groups for an option by id. Used by

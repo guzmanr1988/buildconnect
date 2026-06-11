@@ -11,9 +11,12 @@ const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getSt
   useActivityLogStore.getState().logEvent(entry)
 
 function upsertProject(fields: Record<string, unknown> & { id: string }) {
-  supabase.from('sent_projects')
+  return supabase.from('sent_projects')
     .upsert(fields, { onConflict: 'id' })
-    .then(({ error }) => { if (error) console.error('[projects] upsert failed:', error.message) })
+    .then(({ error }) => {
+      if (error) console.error('[projects] upsert failed:', error.message)
+      return { error }
+    })
 }
 
 function updateProject(id: string, fields: Record<string, unknown>) {
@@ -168,6 +171,12 @@ export interface SentProject {
     signedName: string
     signedAt: string
   } | null
+  // Migration 064 — project-level association question (every service) and
+  // Pool-only survey question, both snapshotted from cart-store at sendProject
+  // time alongside projectPermit. poolSurvey stays undefined for non-Pool
+  // services so the vendor surface can hide the row cleanly.
+  projectAssociation?: 'yes' | 'no'
+  poolSurvey?: 'yes' | 'no'
   // PR-330 — homeowner-allocated financing for this sent_project. Both
   // NULL pre-allocation; both set together via the Edge Fn apply_allocation
   // path (writes are gated server-side by envelope-cap re-check). Slot-
@@ -175,6 +184,13 @@ export interface SentProject {
   // allocate to pending + approved + sold projects after approval.
   applied_financing_amount_cents?: number | null
   applied_financing_application_id?: string | null
+  // Migration 066 — vendor-marked transition from sold/won to actively
+  // working. Written by markWorkStarted on the gated Start Work button
+  // (lead-workflow sold-branch). Gated client-side by association-doc
+  // presence when projectAssociation='yes'; column itself has no DB
+  // constraint so the gate stays UI-only (matches the Y/N flow's
+  // pattern). NULL pre-start; timestamptz post-start.
+  workStartedAt?: string
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -275,6 +291,12 @@ interface ProjectsState {
   // immediately. Acceleration of the existing 90d age-based auto-
   // transition; not a status change (still 'sold').
   markCompleted: (id: string) => void
+  // Migration 066 — stamps workStartedAt + persists to sent_projects.
+  // Triggered by the vendor "Start Work" button in the Sold/Active
+  // branch. Client-side gate (association_permit doc presence when
+  // projectAssociation='yes') lives in lead-workflow.tsx; this action
+  // doesn't re-check the gate (writes assume caller already gated).
+  markWorkStarted: (id: string) => void
   // Ship #311 — lead-id-keyed manual-completion override map. Mirrors
   // existing leadStatusOverrides / leadConfirmedAtByLead patterns so
   // MOCK_LEADS without sentProject backing still get the manual-
@@ -373,7 +395,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // across reload + role switch. Demo-mode-only gate; production-
         // launch swaps this for service-role hard-delete or soft-delete.
         // Architecture-invariant-at-layer-boundary: same flag, every role.
-        if (useAdminModerationStore.getState().demoClearedAt) {
+        //
+        // pin-26 (Fix B from task_931 RCA): demoMode-AND-gate. Pre-fix the
+        // gate fired on demoClearedAt alone, so prod vendors (VITE_DEMO_MODE
+        // baked 'false' in secrets.env) whose localStorage carried a stale
+        // demoClearedAt from a prior demo session stayed at 0 leads forever
+        // — server replay never ran. Apollo live-repro confirmed Rod's
+        // /vendor dashboard hit this exact gate. Adding `demoMode &&` makes
+        // the gate dev/demo-only, matching the 12-callsite house idiom
+        // `(import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'`.
+        const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+        if (demoMode && useAdminModerationStore.getState().demoClearedAt) {
           return
         }
 
@@ -391,7 +423,9 @@ export const useProjectsStore = create<ProjectsState>()(
           'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
           'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
           'cancellation_request, applied_financing_amount_cents, ' +
-          'applied_financing_application_id'
+          'applied_financing_application_id, project_permit, ' +
+          'project_permit_waiver, project_association, pool_survey, ' +
+          'work_started_at'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -438,6 +472,11 @@ export const useProjectsStore = create<ProjectsState>()(
           quotedPriceCents:row.quoted_price_cents ?? undefined,
           applied_financing_amount_cents:    row.applied_financing_amount_cents ?? null,
           applied_financing_application_id:  row.applied_financing_application_id ?? null,
+          projectPermit:        row.project_permit ?? undefined,
+          projectPermitWaiver:  row.project_permit_waiver ?? undefined,
+          projectAssociation:   row.project_association ?? undefined,
+          poolSurvey:           row.pool_survey ?? undefined,
+          workStartedAt:        row.work_started_at ?? undefined,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
@@ -457,8 +496,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // confirmed vendor_id=3e0821aa has 4 Donald rows ZERO Demo Homeowner,
         // collapsing class to LS-persist-carry-forward at this merge.
         set((state) => {
-          const localCarryForward =
-            role === 'vendor' || role === 'account_rep' ? [] : state.sentProjects
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // Item-3 Option B: Supabase is the AUTHORITATIVE source for
+          // sentProjects across all roles + all browsers + all devices.
+          // localCarryForward = [] universally — never merge stale LS into the
+          // hydrated DB rows on this once/session hydrate. Eliminates the
+          // homeowner-side cross-browser drift Rod called "most important":
+          // every browser/device shows the identical Supabase truth. Brief
+          // pre-hydrate flash of stale LS is acceptable; hydrate replaces it.
+          // Vendor + account_rep branches were already [] per the prior
+          // demo-Vendor LS-stale fix; homeowner role now joins them.
+          const localCarryForward: SentProject[] = []
           const seen = new Set<string>()
           const merged: SentProject[] = []
           for (const p of [...dbProjects, ...localCarryForward]) {
@@ -574,6 +622,15 @@ export const useProjectsStore = create<ProjectsState>()(
         const cartState = useCartStore.getState()
         const projectPermitSnapshot = cartState.projectPermit ?? undefined
         const projectPermitWaiverSnapshot = cartState.projectPermitWaiver ?? undefined
+        const projectAssociationSnapshot = cartState.projectAssociation ?? undefined
+        const poolSurveySnapshot = cartState.poolSurvey ?? undefined
+        // Deferred-FK reconcile (task_1780776240716_817 Option B): Association
+        // permit doc was uploaded with sent_project_id=NULL (FK accepts null;
+        // no draft sent_projects row exists, so vendor list stays clean by
+        // construction). cart-store stored the doc id in projectAssociationDocId
+        // at upload time. After upsertProject lands the sent_projects row, we
+        // reconcile by UPDATEing the doc's sent_project_id to the new row id.
+        const projectAssociationDocId = cartState.projectAssociationDocId
         const next: SentProject = {
           id: crypto.randomUUID(),
           item,
@@ -590,6 +647,8 @@ export const useProjectsStore = create<ProjectsState>()(
             : {}),
           ...(projectPermitSnapshot ? { projectPermit: projectPermitSnapshot } : {}),
           ...(projectPermitWaiverSnapshot ? { projectPermitWaiver: projectPermitWaiverSnapshot } : {}),
+          ...(projectAssociationSnapshot ? { projectAssociation: projectAssociationSnapshot } : {}),
+          ...(poolSurveySnapshot ? { poolSurvey: poolSurveySnapshot } : {}),
         }
         set((state) => {
           if (state.sentProjects.some((p) => p.item.id === item.id)) return state
@@ -611,7 +670,7 @@ export const useProjectsStore = create<ProjectsState>()(
         })
         logEvent({ eventType: 'submitted', projectId: undefined, meta: { serviceName: item.serviceName, vendor: contractor.company } })
         if (next.contractor.vendor_id) {
-          upsertProject({
+          const upsertPromise = upsertProject({
             id: next.id,
             vendor_id: next.contractor.vendor_id,
             homeowner_id: next.homeowner_id ?? null,
@@ -628,8 +687,36 @@ export const useProjectsStore = create<ProjectsState>()(
             id_document: next.idDocument ?? null,
             price_line_items: next.priceLineItems ?? null,
             quoted_price_cents: next.quotedPriceCents ?? null,
+            project_permit: next.projectPermit ?? null,
+            project_permit_waiver: next.projectPermitWaiver ?? null,
+            project_association: next.projectAssociation ?? null,
+            pool_survey: next.poolSurvey ?? null,
           })
+          // task_817 Option B reconcile — backfill sent_project_id on the
+          // association doc uploaded with NULL FK. MUST serialize AFTER
+          // sent_projects upsert resolves; firing in parallel races the
+          // network and the PATCH lands before the INSERT, tripping
+          // homeowner_documents_sent_project_id_fkey (23503). Apollo P-A2
+          // pinned this race on 0332faf. Early-return on upsert error so we
+          // don't fire a reconcile guaranteed to FK-violate.
+          if (projectAssociationDocId) {
+            upsertPromise.then(({ error }) => {
+              if (error) return
+              supabase.from('homeowner_documents')
+                .update({ sent_project_id: next.id })
+                .eq('id', projectAssociationDocId)
+                .then(({ error: reconcileError }) => {
+                  if (reconcileError) console.error('[projects] assoc doc reconcile failed:', reconcileError.message)
+                })
+            })
+          }
         }
+        // task_817 — clear cart-side FK refs after submit so a second
+        // sendProject in the same cart session starts fresh. pendingProjectId
+        // is no longer load-bearing (Option B uses deferred reconcile) but
+        // clearing it is still correct hygiene.
+        useCartStore.getState().clearPendingProjectId()
+        useCartStore.getState().setProjectAssociationDocId(null)
         return next.id
       },
 
@@ -741,6 +828,17 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
         logEvent({ eventType: 'completed', projectId: id })
         updateProject(id, { completed_at: completedAt })
+      },
+
+      markWorkStarted: (id) => {
+        const workStartedAt = new Date().toISOString()
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === id ? { ...p, workStartedAt } : p
+          ),
+        }))
+        logEvent({ eventType: 'work_started', projectId: id })
+        updateProject(id, { work_started_at: workStartedAt })
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {

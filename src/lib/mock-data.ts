@@ -52,22 +52,20 @@ export const MOCK_VENDORS: Vendor[] = [
 export const MOCK_ADMIN: Profile = { id: 'admin-1', email: 'admin@buildconnect.com', name: 'BuildConnect Admin', role: 'admin', phone: '(305) 555-9999', address: '1 BuildConnect Plaza, Miami, FL 33101', avatar_color: '#1e40af', initials: 'BC', status: 'active', created_at: '2025-10-01T00:00:00Z' }
 
 // ─── Leads ───
-// Ship #233 — demo-mode seed trimmed to v-1 entries only so admin workflow
-// count matches vendor view. Per Rodolfo directive (option C): "admin has to
-// show the same as vendor." MOCK_VENDORS, MOCK_CATALOG, MOCK_TRANSACTIONS
-// kept intact — those drive marketplace-browse + cross-vendor admin surfaces
-// which still need multi-vendor data to render meaningfully.
-export const MOCK_LEADS: Lead[] = [
-  // account_rep_id stamps: demo rep uid (a8358341...) = profile.id when account_rep@buildc.net logs in.
-  { id: 'L-0001', homeowner_id: 'ho-1', vendor_id: 'v-1', account_rep_id: 'a8358341-9c11-4d99-8c44-7885a5c45e48', project: 'Full Roof Replacement — Barrel Tile', value: 28500, status: 'pending', slot: '2026-04-14T09:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['barrel_tile'], service_type: ['replace'], addons: ['gutters'] }, sq_ft: 2100, financing: false, address: '1234 Coral Way, Miami, FL 33145', latitude: 25.7514, longitude: -80.2587, phone: '(305) 555-0101', email: 'maria@email.com', homeowner_name: 'Maria Rodriguez', received_at: '2026-04-07T14:22:00Z' },
-  { id: 'L-0005', homeowner_id: 'ho-2', vendor_id: 'v-1', account_rep_id: 'a8358341-9c11-4d99-8c44-7885a5c45e48', project: 'Metal Roof + Solar Prep', value: 35000, status: 'pending', slot: '2026-04-17T14:00:00Z', permit_choice: true, service_category: 'roofing', pack_items: { material: ['metal'], service_type: ['replace'], addons: ['solar_prep', 'insulation'] }, sq_ft: 2400, financing: true, address: '5678 Kendall Dr, Miami, FL 33156', latitude: 25.6789, longitude: -80.3253, phone: '(786) 555-0202', email: 'james@email.com', homeowner_name: 'James Thompson', received_at: '2026-04-09T08:15:00Z' },
-]
+// pin-22-v2 — pure-demo seed array emptied for launch. Maria/James (L-0001/
+// L-0005) were polluting admin Workflow with fixture leads alongside real
+// homeowner activity. demoDataHidden gate + persist version-bump already
+// hides via useEffectiveMockLeads at user-visible surfaces; source-level
+// emptying provides defense-in-depth so any raw `MOCK_LEADS` import path
+// (analytics, routing, vendor-scope resolution) also returns [] without
+// leaking the fixtures.
+export const MOCK_LEADS: Lead[] = []
 
 // ─── Closed Sales ───
-// Ship #233 — trimmed to v-1 entries only to match MOCK_LEADS trim.
-export const MOCK_CLOSED_SALES: ClosedSale[] = [
-  { id: 'cs-3', lead_id: 'L-0001', vendor_id: 'v-1', homeowner_id: 'ho-1', sale_amount: 28500, vendor_share: 25650, commission: 2850, commission_paid: false, closed_at: '2026-04-08T16:00:00Z', homeowner_name: 'Maria Rodriguez', project: 'Full Roof Replacement — Barrel Tile' },
-]
+// pin-22-v2 — pure-demo seed array emptied for launch (sibling to
+// MOCK_LEADS trim above). cs-3 Maria Rodriguez sale was polluting
+// admin Workflow sold pipeline + revenue rollups.
+export const MOCK_CLOSED_SALES: ClosedSale[] = []
 
 // ─── Catalog Items ───
 export const MOCK_CATALOG: CatalogItem[] = [
@@ -100,25 +98,16 @@ export const MOCK_CATALOG: CatalogItem[] = [
 ]
 
 // ─── Messages ───
-// Ship #233 — trimmed m-5/m-6 (L-0002 thread) after MOCK_LEADS trim.
-export const MOCK_MESSAGES: Message[] = [
-  { id: 'm-1', lead_id: 'L-0001', sender_id: 'ho-1', content: 'Hi, I wanted to confirm the barrel tile option includes removal of the old roof?', message_type: 'text', created_at: '2026-04-07T15:00:00Z' },
-  { id: 'm-2', lead_id: 'L-0001', sender_id: 'v-1', content: 'Yes absolutely! Full tear-off, new underlayment, and barrel tile installation are all included. I\'ll also handle the permit filing.', message_type: 'text', created_at: '2026-04-07T15:12:00Z' },
-  { id: 'm-3', lead_id: 'L-0001', sender_id: 'v-1', content: '', message_type: 'quote', quote_data: { items: [{ name: 'Barrel Tile Roof (2,100 sq ft)', price: 18375 }, { name: 'Tear-off & Disposal', price: 4200 }, { name: 'Gutter Installation', price: 3600 }, { name: 'Permit & Inspection', price: 2325 }], total: 28500 }, created_at: '2026-04-07T15:15:00Z' },
-  { id: 'm-4', lead_id: 'L-0001', sender_id: 'ho-1', content: 'That looks great! See you on the 14th.', message_type: 'text', created_at: '2026-04-07T15:30:00Z' },
-]
+// pin-22-v2 — pure-demo seed array emptied for launch. m-1..m-4 L-0001
+// thread (Maria↔Carlos quote exchange) sibling to MOCK_LEADS trim.
+export const MOCK_MESSAGES: Message[] = []
 
 // ─── Transactions ───
-export const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: 'tx-1', type: 'commission', vendor_id: 'v-4', company: 'Elite Paving Co', detail: 'Stamped Concrete Driveway', customer: 'James Thompson', amount: 1800, date: '2026-04-12T10:00:00Z', status: 'paid' },
-  { id: 'tx-2', type: 'commission', vendor_id: 'v-3', company: 'Paradise Pools FL', detail: 'Resort Pool with Spa & LED', customer: 'Sarah Chen', amount: 9750, date: '2026-04-09T12:00:00Z', status: 'pending' },
-  { id: 'tx-3', type: 'commission', vendor_id: 'v-1', company: 'Apex Roofing & Solar', detail: 'Full Roof Replacement', customer: 'Maria Rodriguez', amount: 2850, date: '2026-04-08T16:00:00Z', status: 'pending' },
-  { id: 'tx-4', type: 'membership', vendor_id: 'v-1', company: 'Apex Roofing & Solar', detail: 'Monthly Subscription', amount: 35, date: '2026-04-01T00:00:00Z', status: 'paid' },
-  { id: 'tx-5', type: 'membership', vendor_id: 'v-2', company: 'Shield Impact Windows', detail: 'Monthly Subscription', amount: 35, date: '2026-04-01T00:00:00Z', status: 'paid' },
-  { id: 'tx-6', type: 'membership', vendor_id: 'v-3', company: 'Paradise Pools FL', detail: 'Monthly Subscription', amount: 35, date: '2026-04-01T00:00:00Z', status: 'paid' },
-  { id: 'tx-7', type: 'membership', vendor_id: 'v-4', company: 'Elite Paving Co', detail: 'Monthly Subscription', amount: 35, date: '2026-04-01T00:00:00Z', status: 'paid' },
-  { id: 'tx-8', type: 'payout', vendor_id: 'v-4', company: 'Elite Paving Co', detail: 'Monthly Payout', amount: 10200, date: '2026-04-15T00:00:00Z', status: 'pending' },
-]
+// pin-22-v2 — pure-demo seed array emptied for launch. 8 demo tx entries
+// (Maria commission, James payout, vendor memberships) were polluting
+// admin /transactions and /banking surfaces alongside real revenue.
+// Real payouts/commissions populate from Supabase tx ledger post-launch.
+export const MOCK_TRANSACTIONS: Transaction[] = []
 
 export const MOCK_BANK_ACCOUNTS: BankAccount[] = [
   { id: 'ba-1', vendor_id: 'v-1', bank_name: 'Chase', account_holder: 'Apex Roofing LLC', routing_last4: '2891', account_last4: '4523', account_type: 'checking', linked_at: '2025-11-15T10:00:00Z' },

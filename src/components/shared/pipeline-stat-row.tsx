@@ -12,6 +12,14 @@ import type { LeadStageMeta, LeadStageKey } from '@/lib/vendor-lead-stages'
 // pattern (N=1) and the vendor port creates 2 new sites (N=2/N=3),
 // so we extract on first detection.
 //
+// Density (Rod-direct task_1780800858474_952): compact single row
+// from `sm` upward (the pre-D1 baseline Rodolfo asked back for) with
+// a 2-col wrap below `sm` so narrow phones (<640px, incl. iPhone SE
+// 375px) don't clip the 5th tile against the right edge — the bug
+// D1's earlier grid-cols-3 + lg:flex was solving by forcing larger
+// tiles. Tiles read tighter (p-2/text-xl/text-[10px] label) so 5
+// fit in a single row from sm/tablet up.
+//
 // Click behavior resolves in this precedence order:
 //   1. hrefForStage(key) → wrap each card in <Link> (admin dashboard
 //      deep-link contract — currently /vendor/lead-workflow?stage=)
@@ -45,24 +53,24 @@ export function PipelineStatRow({
   testIdPrefix = 'pipeline-stage',
 }: PipelineStatRowProps) {
   return (
-    <div className={cn('flex items-center justify-between gap-2 sm:gap-4', className)}>
+    <div className={cn('flex items-center gap-2 overflow-x-auto sm:overflow-x-visible sm:justify-between sm:gap-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}>
       {stages.map((stage, idx) => {
         const StageIcon = stage.icon
         const count = counts[stage.key] ?? 0
         const pulse = pulseByKey ? pulseByKey[stage.key] : stage.pulse
         const cardClass = cn(
-          'flex-1 rounded-xl border p-3 sm:p-4 text-center transition',
+          'flex-1 rounded-xl border p-2 sm:p-2.5 text-center transition',
           stage.bgColor,
           stage.borderColor,
           (hrefForStage || onStageClick) && 'hover:shadow-md cursor-pointer',
         )
         const cardInner = (
           <>
-            <div className={cn('inline-flex items-center justify-center rounded-lg p-2 mb-2', stage.color, pulse && 'animate-pulse')}>
-              <StageIcon className="h-4 w-4 text-white" />
+            <div className={cn('inline-flex items-center justify-center rounded-lg p-1.5 mb-1.5', stage.color, pulse && 'animate-pulse')}>
+              <StageIcon className="h-3.5 w-3.5 text-white" />
             </div>
-            <p className="text-2xl font-bold font-heading">{count}</p>
-            <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{stage.title}</p>
+            <p className="text-xl font-bold font-heading leading-none">{count}</p>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1 leading-tight">{stage.title}</p>
           </>
         )
         let card: React.ReactNode
@@ -106,10 +114,10 @@ export function PipelineStatRow({
           )
         }
         return (
-          <div key={stage.key} className="flex items-center gap-2 sm:gap-3 flex-1">
+          <div key={stage.key} className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-28 sm:min-w-0">
             {card}
             {idx < stages.length - 1 && (
-              <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0 hidden lg:block" />
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
             )}
           </div>
         )

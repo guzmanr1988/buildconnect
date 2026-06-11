@@ -12,7 +12,9 @@ import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { getVendorPriceMap, getVendorPermitMap, getPermitForItem, resolveOptionPriceKey } from '@/lib/api/pricing'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
+import { computeRemodelLineItems } from '@/lib/remodel-pricing'
+import { computeBathroomLineItems } from '@/lib/bathroom-pricing'
+import { getVendorServiceRateMap } from '@/lib/api/vendor-service-rates'
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import { useCatalogStore } from '@/stores/catalog-store'
@@ -344,35 +346,46 @@ export function BookingConfirmationPage() {
             const services = useCatalogStore.getState().services
             const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined, services)
             if (built) computedLineItems = built
-          } else if (contractor.vendor_id) {
-            // PR #118 fix-forward — for non-roofing services, snapshot a
-            // permit-line from vendor's flat per-service permit fee
-            // (vendor_service_permits) instead of PRICE_LINE_ITEM_PRESETS'
-            // static category-permit. Other line categories (Material,
-            // Install, etc.) keep using PRESETS shape until per-vendor
-            // pricing for those exists too.
-            const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id]
-            if (vendorUuid) {
-              try {
-                const permitMap = await getVendorPermitMap(vendorUuid)
-                const permitCents = getPermitForItem(pendingItem, permitMap)
-                const presets = PRICE_LINE_ITEM_PRESETS[pendingItem.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? []
-                if (presets.length > 0) {
-                  const nonPermit = presets.filter((p) => !/permit/i.test(p.id))
-                  const permitLine: PriceLineItem = {
-                    id: `${pendingItem.serviceId}-permit`,
-                    label: 'Permit Price',
-                    amount: Math.round(permitCents) / 100,
-                    originalAmount: Math.round(permitCents) / 100,
-                    source: 'preset',
-                  }
-                  computedLineItems = [...nonPermit.map((p) => ({ ...p })), permitLine]
-                }
-              } catch {
-                // fall through — undefined keeps PRESETS fallback on display surfaces
-              }
+          } else if (pendingItem.serviceId === 'remodel' && pendingItem.remodelMeasurements) {
+            // Ship #475+1 — Interior Remodel: every line auto-computed from
+            // L×W×H×numWalls via REMODEL_RATES (per-line rate + measurement-
+            // derived qty stamped as preset_calculated, same snapshot
+            // semantics as roofing).
+            //
+            // Mig 068 — per-vendor unit-rate overlay via vendor_service_rates.
+            // When contractor.vendor_id maps to a real UUID, fetch the per-
+            // vendor rate map and pass it to the compute engine; otherwise
+            // the engine falls back to the in-code MEDIAN baseline.
+            let remodelRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { remodelRateMap = await getVendorServiceRateMap(vendorUuid, 'remodel') } catch { /* silent fallback */ }
             }
+            computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements, remodelRateMap)
+          } else if (pendingItem.serviceId === 'bathroom' && pendingItem.bathroomMeasurements) {
+            // Ship #475+2 — Bathroom Remodel: line scope from L×W×H×tile-coverage
+            // + tub toggle via BATHROOM_RATES. FIXTURES rows ($0 client-provided)
+            // are included in the snapshot so the vendor inbox sees the full
+            // scope, but contractor subtotal === grand total by construction.
+            //
+            // Mig 068 — per-vendor unit-rate overlay (same pattern as remodel).
+            let bathroomRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { bathroomRateMap = await getVendorServiceRateMap(vendorUuid, 'bathroom') } catch { /* silent fallback */ }
+            }
+            computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements, bathroomRateMap)
           }
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // PRESET-fallback assembly for non-roof/remodel/bath services is
+          // KILLED. Rod rule: a lead appears WITH a real per-vendor price or
+          // does NOT appear at all (no "Price pending", no "$0", no PRESET
+          // fallback). Roofing / remodel / bathroom compute paths above are
+          // UNTOUCHED (they pull real per-vendor catalog math). For everything
+          // else, computedLineItems remains undefined — the rev4 display
+          // filter on lead-inbox / lead-workflow / lead-stages then hides any
+          // lead whose priceLineItems are empty / fall below total>0, matching
+          // the marketplace-matching rule (coversAllServices && totalCents>0).
 
           // Ship #269 — pass profile.id as homeowner_id snapshot for admin
           // auditing. Optional on the SentProject side, so undefined here

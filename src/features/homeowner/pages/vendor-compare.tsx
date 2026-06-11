@@ -24,6 +24,10 @@ import {
   type VendorPermitMap,
   type VendorTotalResult,
 } from '@/lib/api/pricing'
+import {
+  getVendorServiceRateMap,
+  type VendorServiceRateMap,
+} from '@/lib/api/vendor-service-rates'
 import { useVendorPriceRealtime } from '@/lib/hooks/use-vendor-price-realtime'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -32,7 +36,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 // while we test the chain end-to-end before opening to other vendors.
 // Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
 // other code changes (the guards below collapse to no-ops).
-const APEX_ONLY_MODE = true
+const APEX_ONLY_MODE = false
 // PR-#437 — swap from fc0d8ff3 (suspended "(legacy)" apex profile) to
 // 3e0821aa (active canonical apex). useRealVendors filters status='active'
 // so the legacy UUID never returned a row; APEX_ONLY guard at L101 then
@@ -127,6 +131,14 @@ export function VendorComparePage() {
   // into the Compare-Vendors total. getVendorPermitMap filters zero/missing
   // rows, so absence in the map = vendor opt-out for that service.
   const [permitMaps, setPermitMaps] = useState<Record<string, VendorPermitMap>>({})
+  // Mig 068 — per-vendor remodel + bathroom rate maps (measurement-driven
+  // services). Same fetch-and-pass pattern as priceMaps; computeVendorTotal
+  // uses vendor's vendor_service_rates rows to drive the configurator engine,
+  // so different vendors show DIFFERENT believable totals across remodel /
+  // bathroom carts. Coverage rule mirrors priceMaps: zero rows → drop out.
+  const [serviceRateMapsByVendor, setServiceRateMapsByVendor] = useState<
+    Record<string, Record<string, VendorServiceRateMap>>
+  >({})
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -149,19 +161,31 @@ export function VendorComparePage() {
           const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
           // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
           if (!UUID_RE.test(uuid)) {
-            return [v.id, new Map() as VendorPriceMap, new Map() as VendorPermitMap] as const
+            return [
+              v.id,
+              new Map() as VendorPriceMap,
+              new Map() as VendorPermitMap,
+              { remodel: new Map(), bathroom: new Map() } as Record<string, VendorServiceRateMap>,
+            ] as const
           }
-          // Parallel-fetch price + permit maps so a slow permit query doesn't
-          // serialize behind priceMap. computeVendorTotal sums both.
-          const [map, permits] = await Promise.all([
+          // Parallel-fetch price + permit + measurement-rate maps so a slow
+          // query doesn't serialize the others. computeVendorTotal sums all.
+          const [map, permits, remodelRates, bathroomRates] = await Promise.all([
             getVendorPriceMap(uuid),
             getVendorPermitMap(uuid),
+            getVendorServiceRateMap(uuid, 'remodel').catch(() => new Map<string, number>()),
+            getVendorServiceRateMap(uuid, 'bathroom').catch(() => new Map<string, number>()),
           ])
-          return [v.id, map, permits] as const
+          const rateMaps: Record<string, VendorServiceRateMap> = {
+            remodel: remodelRates,
+            bathroom: bathroomRates,
+          }
+          return [v.id, map, permits, rateMaps] as const
         })
       )
       setPriceMaps(Object.fromEntries(entries.map(([id, map]) => [id, map])))
       setPermitMaps(Object.fromEntries(entries.map(([id, , permits]) => [id, permits])))
+      setServiceRateMapsByVendor(Object.fromEntries(entries.map(([id, , , rateMaps]) => [id, rateMaps])))
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
     } finally {
@@ -188,10 +212,10 @@ export function VendorComparePage() {
     for (const v of featuredVendors) {
       const map = priceMaps[v.id]
       if (!map) continue
-      out[v.id] = computeVendorTotal(map, cartItems, services, permitMaps[v.id])
+      out[v.id] = computeVendorTotal(map, cartItems, services, permitMaps[v.id], serviceRateMapsByVendor[v.id])
     }
     return out
-  }, [priceMaps, permitMaps, cartItems, services])
+  }, [priceMaps, permitMaps, serviceRateMapsByVendor, cartItems, services])
 
   // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
   // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.
@@ -203,14 +227,18 @@ export function VendorComparePage() {
       // Mock vendors (non-UUID id or in DEMO map) already passed PRODUCT-IS-GOD.
       const isMock = !UUID_RE_DISPLAY.test(v.id) || v.id in DEMO_VENDOR_UUID_BY_MOCK_ID
       if (isMock) return true
-      // Apex floor: real Apex always renders even with partial pricing — the
-      // availability-gap UX (badge + deducted total + small-letters note)
-      // informs the homeowner instead of hiding the only contractor.
-      if (v.id === APEX_REAL_UUID) {
-        const r = totalsByVendor[v.id]
-        return !!(r && r.hasSelections)
-      }
-      // Other real vendors: PRODUCT-IS-GOD strict floor.
+      // All real vendors (incl. Apex) gated by PRODUCT-IS-GOD strict floor.
+      // Rod-chosen behavior: when vendor toggles a service OFF in their
+      // catalog, the cascaded vop.active=false drops it from the priceMap;
+      // computeVendorTotal reports !coversAllServices and Apex disappears
+      // from Compare-Vendors for any cart needing that service. APEX FLOOR
+      // (previously rendered Apex with partial pricing via .hasSelections)
+      // removed in vendor-active-toggle-law bundle.
+      // Rod-confirmed 2026-06-09 — this IS the appear-with-price-or-not
+      // rule on the matching side. No "Contact for quote" fallback; if
+      // vendor cannot price the cart, vendor is hidden entirely. Paired
+      // with vendor-side display filter in lead-inbox.tsx + vendor-lead-
+      // stages.ts (real-price-required to render in vendor inbox).
       const result = totalsByVendor[v.id]
       return !!(result && result.coversAllServices && result.totalCents > 0)
     })

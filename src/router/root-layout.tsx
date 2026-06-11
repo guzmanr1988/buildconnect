@@ -1,5 +1,5 @@
 import { useLayoutEffect } from 'react'
-import { Outlet, useMatches } from 'react-router-dom'
+import { Outlet, ScrollRestoration, useMatches } from 'react-router-dom'
 
 /**
  * Root route wrapper: reads the deepest matched route's `handle.title`,
@@ -26,5 +26,10 @@ export function RootLayout() {
     document.title = leafTitle ? `${leafTitle} — BuildConnect` : 'BuildConnect'
   }, [leafTitle])
 
-  return <Outlet />
+  return (
+    <>
+      <ScrollRestoration />
+      <Outlet />
+    </>
+  )
 }

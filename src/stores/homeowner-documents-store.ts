@@ -21,6 +21,7 @@ export type HomeownerDocUploadedBy = 'system' | 'homeowner' | 'vendor'
 export type HomeownerDocType =
   | 'license'
   | 'permit'
+  | 'association_permit'
   | 'sketch'
   | 'measurement'
   | 'agreement'
