@@ -168,10 +168,11 @@ export default function VendorDashboard() {
   // shared helper (same source-of-truth as /vendor/lead-workflow
   // tile counts). KPI derivations below remain inline for now —
   // they use slightly different bucketing semantics (cancellation-
-  // filtered active-leads, pipelineValue summed across confirmed
-  // + sold). format-SoT-shared-helper #103 trigger ALSO met for
-  // KPI logic at n=3 consumers but holding extraction until those
-  // semantics align.
+  // filtered active-leads, pipelineValue summed across active +
+  // sold per pin-27 Rod-intent "sold = booked revenue").
+  // format-SoT-shared-helper #103 trigger ALSO met for KPI logic
+  // at n=3 consumers but holding extraction until those semantics
+  // align.
   const { counts: leadStageCounts } = useVendorLeadStages()
 
   // Leads-derivation for KPI counts (cancellation-aware bucketing).
@@ -192,7 +193,11 @@ export default function VendorDashboard() {
       homeowner_name: p.homeowner?.name || 'New Customer',
       project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
-      value: 0,
+      // pin-27 (task_1781159869876_405): carry saleAmount as Lead.value
+      // for sold projects so Pipeline Value KPI reflects booked revenue
+      // per Rod-intent "sold = booked revenue". Non-sold leads stay at 0
+      // (homeowner-submitted projects don't carry a price upfront).
+      value: p.saleAmount ?? 0,
       address: p.homeowner?.address || 'Pending site visit',
       phone: p.homeowner?.phone || '—',
       email: p.homeowner?.email || '—',
@@ -224,9 +229,16 @@ export default function VendorDashboard() {
   const activeLeads = leads.filter((l) =>
     !isCancelled(l) && (l.status === 'pending' || l.status === 'confirmed' || l.status === 'rescheduled'),
   )
-  const pipelineValue = activeLeads.reduce((sum, l) => sum + l.value, 0)
+  // pin-27 (task_1781159869876_405): sold = booked revenue, per Rod
+  // intent. Sold projects (statusMap 'sold'->'completed') feed both
+  // Pipeline Value (sum sale_amount) and Booked This Month (count).
+  // Active Leads count stays unchanged — sold ≠ active.
+  const soldLeads = leads.filter((l) => !isCancelled(l) && l.status === 'completed')
+  const pipelineValue =
+    activeLeads.reduce((sum, l) => sum + l.value, 0) +
+    soldLeads.reduce((sum, l) => sum + l.value, 0)
   const confirmedLeads = leads.filter((l) => !isCancelled(l) && l.status === 'confirmed')
-  const bookedThisMonth = confirmedLeads.length
+  const bookedThisMonth = confirmedLeads.length + soldLeads.length
   const totalDecided = leads.filter((l) =>
     !isCancelled(l) && ['confirmed', 'completed', 'rejected', 'cancelled'].includes(l.status),
   ).length + leads.filter(isCancelled).length
