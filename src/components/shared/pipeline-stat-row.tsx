@@ -114,10 +114,10 @@ export function PipelineStatRow({
           )
         }
         return (
-          <div key={stage.key} className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-28 sm:min-w-0">
+          <div key={stage.key} className="flex items-center gap-1 sm:gap-1.5 flex-1 sm:min-w-0">
             {card}
             {idx < stages.length - 1 && (
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+              <ArrowRight className="hidden sm:block h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
             )}
           </div>
         )
