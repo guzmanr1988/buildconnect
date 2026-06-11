@@ -177,9 +177,11 @@ function profileToVendor(p: Profile): Vendor {
     financing_available: false,
     total_reviews: 0,
     // Ship #290 — Rodolfo-direct: platform-default commission for new
-    // vendor signups is 10%. Admin override via setVendorCommission
-    // takes precedence per existing vendorCommissionOverrides resolution.
-    commission_pct: 10,
+    // vendor signups. pin-28: 10% -> 12% (Rod task_1781160469050_489).
+    // Read live at runtime, so 10->12 applies to ALL real vendors w/o
+    // a vendorCommissionOverrides entry. Admin per-vendor override via
+    // setVendorCommission still takes precedence.
+    commission_pct: 12,
   }
 }
 
