@@ -824,26 +824,28 @@ export default function AdminFinancingPage() {
           value={cuTabEnabled || tab !== 'credit-unions' ? tab : 'lenders'}
           onValueChange={(v) => setTab(v as typeof tab)}
         >
-          <TabsList>
-            <TabsTrigger value="lenders" data-testid="admin-financing-tab-lenders">
-              Lenders
-              <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px]">
-                {counts.total}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="approvals" data-testid="admin-financing-tab-approvals">
-              Approvals
-            </TabsTrigger>
-            <TabsTrigger value="audit" data-testid="admin-financing-tab-audit">
-              Audit Log
-            </TabsTrigger>
-            {cuTabEnabled && (
-              <TabsTrigger value="credit-unions" data-testid="admin-financing-tab-credit-unions">
-                <Building2 className="h-4 w-4" />
-                Credit Unions
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList className="w-max">
+              <TabsTrigger value="lenders" data-testid="admin-financing-tab-lenders">
+                Lenders
+                <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px]">
+                  {counts.total}
+                </Badge>
               </TabsTrigger>
-            )}
-          </TabsList>
+              <TabsTrigger value="approvals" data-testid="admin-financing-tab-approvals">
+                Approvals
+              </TabsTrigger>
+              <TabsTrigger value="audit" data-testid="admin-financing-tab-audit">
+                Audit Log
+              </TabsTrigger>
+              {cuTabEnabled && (
+                <TabsTrigger value="credit-unions" data-testid="admin-financing-tab-credit-unions">
+                  <Building2 className="h-4 w-4" />
+                  Credit Unions
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           {/* ---------------------------------------------------- */}
           {/*  LENDERS TAB                                          */}

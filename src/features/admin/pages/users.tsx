@@ -374,7 +374,7 @@ export default function UsersPage() {
                     <TableHead className="font-semibold">Role</TableHead>
                     <TableHead className="font-semibold">Status</TableHead>
                     <TableHead className="font-semibold">Joined</TableHead>
-                    <TableHead className="font-semibold text-right">Actions</TableHead>
+                    <TableHead className="font-semibold text-right sticky right-0 bg-background">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -404,7 +404,7 @@ export default function UsersPage() {
                             year: 'numeric',
                           })}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right sticky right-0 bg-background">
                           <div className="flex items-center justify-end gap-1" data-admin-employee-users-edit-hidden={isAdminEmployee ? 'true' : undefined}>
                             {!isAdminEmployee && (
                               <Button variant="ghost" size="icon" onClick={() => openEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}>
