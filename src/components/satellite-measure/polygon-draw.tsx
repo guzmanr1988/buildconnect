@@ -168,6 +168,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         position: google.maps.ControlPosition.TOP_LEFT,
       },
       gestureHandling: 'greedy',
+      draggableCursor: 'pointer',
     })
     mapRef.current = map
 
