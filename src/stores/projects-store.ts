@@ -7,6 +7,8 @@ import { useActivityLogStore } from './activity-log-store'
 import { useAdminModerationStore } from './admin-moderation-store'
 import { supabase } from '@/lib/supabase'
 import { reconcileLines, reconcileLinesEquivalent } from '@/lib/reconcile-lines'
+import { buildRoofingBaseLines, sumRoofingBaseLines } from '@/lib/roofing-base-lines'
+import { getVendorPriceMap, getVendorPermitMap, type VendorPriceMap, type VendorPermitMap } from '@/lib/api/pricing'
 
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
   useActivityLogStore.getState().logEvent(entry)
@@ -546,6 +548,93 @@ export const useProjectsStore = create<ProjectsState>()(
             cancellationRequestsByLead:  newCancellationByLead,
           }
         })
+
+        // pin-31 — legacy hydrate backfill (runs BEFORE the pin-29 reconcile
+        // sweep). For sold roofing projects whose priceLineItems carry no
+        // preset_calculated base rows (only auto_sold_adjustment, or empty),
+        // rebuild base lines via the shared buildRoofingBaseLines helper so
+        // the per-unit math display has rows to render and sum-to-total
+        // holds end-to-end.
+        //
+        // Sanity gate — write only when sum(base lines) === quoted_price_cents
+        // (cent-exact). On divergence the row is left as-is (one-honest-
+        // residual-line fallback) so a human can investigate; pin-29 sweep
+        // still keeps the existing total-line invariant downstream.
+        // Idempotent: a second hydrate sees preset_calculated rows already
+        // present and skips the candidate set entirely.
+        const backfillState = get()
+        const backfillCandidates = backfillState.sentProjects.filter((p) => {
+          if (p.status !== 'sold' || p.quotedPriceCents == null) return false
+          if (p.item?.serviceId !== 'roofing') return false
+          const vendorUuid = p.vendor_id ?? p.contractor?.vendor_id
+          if (!vendorUuid) return false
+          const hasBase = (p.priceLineItems ?? []).some(
+            (l) => l.source === 'preset_calculated',
+          )
+          return !hasBase
+        })
+        if (backfillCandidates.length > 0) {
+          const vendorUuids = Array.from(
+            new Set(
+              backfillCandidates
+                .map((p) => p.vendor_id ?? p.contractor?.vendor_id)
+                .filter((v): v is string => !!v),
+            ),
+          )
+          const priceMaps = new Map<string, VendorPriceMap>()
+          const permitMaps = new Map<string, VendorPermitMap>()
+          for (const vid of vendorUuids) {
+            try {
+              const [pm, perm] = await Promise.all([
+                getVendorPriceMap(vid),
+                getVendorPermitMap(vid),
+              ])
+              priceMaps.set(vid, pm)
+              permitMaps.set(vid, perm)
+            } catch (err) {
+              console.warn('[projects] pin-31 backfill vendor maps fetch failed:', vid, err)
+            }
+          }
+          const backfillWrites: Array<{ id: string; nextLines: PriceLineItem[] }> = []
+          set((state) => ({
+            sentProjects: state.sentProjects.map((p) => {
+              if (!backfillCandidates.some((c) => c.id === p.id)) return p
+              const vendorUuid = p.vendor_id ?? p.contractor?.vendor_id
+              if (!vendorUuid) return p
+              const priceMap = priceMaps.get(vendorUuid)
+              if (!priceMap) return p
+              const permitMap = permitMaps.get(vendorUuid)
+              const baseLines = buildRoofingBaseLines(
+                p.item,
+                p.projectPermit,
+                priceMap,
+                permitMap,
+              )
+              if (!baseLines) return p
+              const baseCents = Math.round(sumRoofingBaseLines(baseLines) * 100)
+              if (baseCents !== p.quotedPriceCents) {
+                console.warn(
+                  '[projects] pin-31 backfill divergence — leaving as-is:',
+                  p.id,
+                  'base_cents',
+                  baseCents,
+                  'quoted_price_cents',
+                  p.quotedPriceCents,
+                )
+                return p
+              }
+              const existingAutos = (p.priceLineItems ?? []).filter(
+                (l) => l.source === 'auto_sold_adjustment',
+              )
+              const nextLines: PriceLineItem[] = [...baseLines, ...existingAutos]
+              backfillWrites.push({ id: p.id, nextLines })
+              return { ...p, priceLineItems: nextLines }
+            }),
+          }))
+          for (const u of backfillWrites) {
+            updateProject(u.id, { price_line_items: u.nextLines })
+          }
+        }
 
         // pin-29 — one-shot backfill sweep: reconcile every legacy sold
         // project to the sum(priceLineItems) == saleAmount invariant.

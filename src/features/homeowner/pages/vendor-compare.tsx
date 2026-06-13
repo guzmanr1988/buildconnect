@@ -49,6 +49,11 @@ const APEX_REAL_UUID = '3e0821aa-89e7-4140-bff8-c4f7f985f561'
 export function VendorComparePage() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
+  // pin-31 — homeowner permit choice drives the permit-line gate in
+  // computeVendorTotal so vendor-compare totals match the eventual
+  // booking-time breakdown (resolves the pre-pin-31 overcharge where
+  // projectPermit='no' quotes still included the vendor permit fee).
+  const projectPermit = useCartStore((s) => s.projectPermit)
   const profile = useAuthStore((s) => s.profile)
   const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
@@ -212,10 +217,17 @@ export function VendorComparePage() {
     for (const v of featuredVendors) {
       const map = priceMaps[v.id]
       if (!map) continue
-      out[v.id] = computeVendorTotal(map, cartItems, services, permitMaps[v.id], serviceRateMapsByVendor[v.id])
+      out[v.id] = computeVendorTotal(
+        map,
+        cartItems,
+        services,
+        permitMaps[v.id],
+        serviceRateMapsByVendor[v.id],
+        projectPermit ?? undefined,
+      )
     }
     return out
-  }, [priceMaps, permitMaps, serviceRateMapsByVendor, cartItems, services])
+  }, [priceMaps, permitMaps, serviceRateMapsByVendor, cartItems, services, projectPermit])
 
   // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
   // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.

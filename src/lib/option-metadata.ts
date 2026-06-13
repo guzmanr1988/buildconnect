@@ -36,7 +36,10 @@ export type OptionMetadata = {
 // Dev-mode invariant: result × 100 is within ±50 sqft of the input.
 export function sqftToSquares(sqft: number): number {
   const squares = Math.round(sqft / 100)
-  if (import.meta.env.DEV) {
+  // Dev-mode invariant — safe-guarded for non-Vite contexts (test runners
+  // load this module without an import.meta.env stub).
+  const env = (import.meta as { env?: { DEV?: boolean } }).env
+  if (env?.DEV) {
     console.assert(
       Math.abs(squares * 100 - sqft) <= 50,
       `[roof-squares] rounding gap > 50: ${squares * 100} vs ${sqft}`,

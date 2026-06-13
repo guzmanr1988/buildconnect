@@ -259,6 +259,18 @@ export function computeVendorTotal(
   // (same coverage rule as VendorPriceMap). Vendors without seeded rows
   // drop out of vendor-compare for those services.
   serviceRateMaps?: Record<string, VendorServiceRateMap>,
+  // pin-31 — projectPermit gate. The cart-store project_permit choice
+  // (set on the wizard's permit-step-section) drives whether the per-
+  // service permit_price_cents is included in the total. 'no' means the
+  // homeowner signed the cash-only waiver opting out of pulling a permit
+  // → permit fee is NOT charged. 'yes' or undefined (back-compat default
+  // — preserves Arc-32 PR-B behavior for callers not yet wired up) bills
+  // the vendor's permit_price_cents per covered service as before.
+  // Resolves the pre-pin-31 divergence where computeVendorTotal billed
+  // permit unconditionally while buildRoofingBaseLines gated on the same
+  // homeowner choice — base lines failed to sum to the quote for any
+  // projectPermit='no' flow.
+  projectPermit?: 'yes' | 'no',
 ): VendorTotalResult {
   let hasSelections = false
   let totalCents = 0
@@ -518,7 +530,11 @@ export function computeVendorTotal(
     cartServiceIds.size > 0 &&
     Array.from(cartServiceIds).every((id) => coveredServices.has(id))
 
-  if (permitMap) {
+  // pin-31 — permit gated on projectPermit. 'no' = customer opted out
+  // (signed cash-only waiver) → no permit dollars billed. 'yes' / undefined
+  // (legacy callers) preserve the Arc-32 PR-B unconditional-charge
+  // behavior so existing test fixtures + non-cart callers don't shift.
+  if (permitMap && projectPermit !== 'no') {
     for (const serviceId of coveredServices) {
       const permitCents = permitMap.get(serviceId) ?? 0
       totalCents += permitCents
