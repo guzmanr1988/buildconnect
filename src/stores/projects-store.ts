@@ -6,6 +6,7 @@ import type { VendorRep, PriceLineItem } from '@/types'
 import { useActivityLogStore } from './activity-log-store'
 import { useAdminModerationStore } from './admin-moderation-store'
 import { supabase } from '@/lib/supabase'
+import { reconcileLines, reconcileLinesEquivalent } from '@/lib/reconcile-lines'
 
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
   useActivityLogStore.getState().logEvent(entry)
@@ -546,6 +547,29 @@ export const useProjectsStore = create<ProjectsState>()(
           }
         })
 
+        // pin-29 — one-shot backfill sweep: reconcile every legacy sold
+        // project to the sum(priceLineItems) == saleAmount invariant.
+        // Content-guarded: each row is re-reconciled in memory, but the DB
+        // persist fires ONLY when the reconcile result differs from the
+        // currently-stored lines (ignoring the volatile id + timestamp
+        // suffix on auto_sold_adjustment rows). Already-reconciled rows
+        // are detected and skipped, so a second hydrate produces zero DB
+        // writes. saleAmount or baseLine changes after the sweep correctly
+        // re-trigger a write.
+        const sweepUpdates: Array<{ id: string; nextLines: PriceLineItem[] }> = []
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) => {
+            if (p.status !== 'sold' || p.saleAmount == null) return p
+            const nextLines = reconcileLines(p.saleAmount, p.priceLineItems)
+            if (reconcileLinesEquivalent(p.priceLineItems, nextLines)) return p
+            sweepUpdates.push({ id: p.id, nextLines })
+            return { ...p, priceLineItems: nextLines }
+          }),
+        }))
+        for (const u of sweepUpdates) {
+          updateProject(u.id, { price_line_items: u.nextLines })
+        }
+
         // 4. One-time migration: upsert homeowner localStorage-only rows to Supabase.
         if (role !== 'homeowner' || get()._supabaseMigrationDone) {
           set({ _supabaseMigrationDone: true })
@@ -747,63 +771,34 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       markSold: (id, saleAmount) => {
-        // Ship #343 Phase A — auto-inject 'EXTRA $' line when newSaleAmount
-        // exceeds sum-of-preset-originals so Pricing Breakdown total
-        // matches sold-final per Rodolfo "auto populated to what the
-        // vendor outputs". HIGHER-case-only this Phase A; LOWER-case
-        // (newSaleAmount < sum-original) leaves Pricing Breakdown at
-        // sum-of-originals as-is — TBD pending Rodolfo verdict on
-        // discount-line vs leave-as-is vs block-entirely.
+        // pin-29 — reconcile invariant: sum(priceLineItems) == saleAmount
+        // for every sold project, in every render surface. Achieved by
+        // anchoring delta to sum(non-auto_sold_adjustment lines) — the
+        // ACTUAL set that renders in Pricing Breakdown — so the invariant
+        // is a property of the data at write-time, not of any render.
         //
-        // Per banked rodolfo-vocabulary-preference-as-label-discipline:
-        // exact-string label 'EXTRA $' + delta-amount per Rodolfo verbatim.
+        // Symmetric labels: delta > 0 → 'Upsale' (Rod's term); delta < 0
+        // → 'Discount' (plain-language symmetric, Rod-voiced). delta == 0
+        // → no row appended.
         //
-        // Per banked new-feature-as-display-extension-not-flow-bypass:
-        // existing #316 contract-upload + #313 admin-review enforcement
-        // UNCHANGED. Auto-line is display + commission-source addition
-        // (commission still = saleAmount × commission_pct; no canonical-
-        // source divergence introduced).
+        // Integer-cent guarantee: saleAmount + baseLine amounts are
+        // integer dollars; delta = integer - sum(integers) = integer.
+        // No fractional cents possible. No rounding gap.
+        //
+        // Downstream financial calc unaffected: commission/revenue read
+        // saleAmount directly (transactions.tsx:284 + sales.ts createSale
+        // RPC), never priceLineItems — verified pre-merge zero-consumer
+        // audit across admin/revenue + banking + reports + overview +
+        // analytics + supabase. priceLineItems is display-only.
         set((state) => ({
           sentProjects: state.sentProjects.map((p) => {
             if (p.id !== id) return p
-            // Compute auto-adjustment delta from preset-source originals only.
-            // vendor_edit + auto_sold_adjustment lines are excluded so re-marks
-            // don't double-count prior adjustments.
-            const presetSum = (p.priceLineItems ?? [])
-              .filter((line) => (line.source ?? 'preset') === 'preset')
-              .reduce((sum, line) => sum + (line.originalAmount ?? line.amount ?? 0), 0)
-            // Upsale anchor = what homeowner saw at booking (quotedPriceCents frozen
-            // at vendor-select per Ship #355). Falls back to presetSum for legacy
-            // records without quotedPriceCents. Fixes Upsale = saleAmount minus
-            // catalog-total (not minus flat-preset) per Rodolfo clarification.
-            const anchor = (p.quotedPriceCents && p.quotedPriceCents > 0)
-              ? Math.round(p.quotedPriceCents / 100)
-              : presetSum
-            // Strip prior auto_sold_adjustment lines so re-mark replaces
-            // (not appends) the EXTRA $ line.
-            const baseLines = (p.priceLineItems ?? []).filter(
-              (line) => line.source !== 'auto_sold_adjustment',
-            )
-            const delta = saleAmount - anchor
-            const nextLineItems =
-              delta > 0
-                ? [
-                    ...baseLines,
-                    {
-                      id: `auto-extra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      label: `Upsale`,
-                      amount: delta,
-                      originalAmount: 0,
-                      source: 'auto_sold_adjustment' as const,
-                    },
-                  ]
-                : baseLines
             return {
               ...p,
               status: 'sold' as const,
               soldAt: new Date().toISOString(),
               saleAmount,
-              priceLineItems: nextLineItems,
+              priceLineItems: reconcileLines(saleAmount, p.priceLineItems),
             }
           }),
         }))

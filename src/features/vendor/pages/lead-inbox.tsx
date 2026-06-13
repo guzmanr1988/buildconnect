@@ -515,10 +515,16 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
-                            {/* Pricing Breakdown — generic card for all non-windows_doors services.
-                                Windows/Doors already has per-unit price cards above; skip for that service.
-                                Strict: only renders when sp.priceLineItems is populated (no PRESETS fallback). */}
-                            {sp.item.serviceId !== 'windows_doors' && resolvedLineItems && resolvedLineItems.length > 0 && (() => {
+                            {/* Pricing Breakdown — generic card for ALL services
+                                including windows_doors. pin-29: removed serviceId filter
+                                so the contractor sees the itemized breakdown + auto
+                                Upsale/Discount adjustment row on every project.
+                                Reconcile invariant holds by construction: markSold
+                                stamps a final auto_sold_adjustment row so
+                                sum(priceLineItems) == saleAmount; the header total
+                                above (lead.value) equals saleAmount for sold projects,
+                                so the breakdown total here matches the header by data. */}
+                            {resolvedLineItems && resolvedLineItems.length > 0 && (() => {
                               const total = resolvedLineItems.reduce((s: number, l: any) => s + (l.amount ?? 0), 0)
                               if (total === 0) return null
                               return (

@@ -1333,8 +1333,11 @@ export default function VendorLeadWorkflow() {
                   Selections chips). */}
 
               {/* Pricing Breakdown — strict render: only when sp.priceLineItems is
-                  populated at sendProject time. No PRESETS fallback, no reconciliation,
-                  no Upsale injection. Hide > wrong number per MATH IS GOD. */}
+                  populated at sendProject time. No PRESETS fallback, no display-side
+                  reconciliation. pin-29 reconcile invariant — sum(priceLineItems) ==
+                  saleAmount — is baked into markSold at write time (Upsale / Discount
+                  appended as an auto_sold_adjustment row), so this surface just
+                  iterates lines + sums. Hide > wrong number per MATH IS GOD. */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                 if (!sp?.priceLineItems || sp.priceLineItems.length === 0) return null

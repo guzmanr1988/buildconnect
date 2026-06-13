@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts",
     "active-toggle-protection": "tsx tests/active-toggle-protection/runner.mts",
-    "face1-data-truth-trifecta": "tsx tests/face1-data-truth-trifecta/runner.mts"
+    "face1-data-truth-trifecta": "tsx tests/face1-data-truth-trifecta/runner.mts",
+    "upsale-reconcile": "tsx tests/upsale-reconcile/runner.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

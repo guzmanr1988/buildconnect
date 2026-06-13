@@ -12,7 +12,7 @@ import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-d
 import { deriveInitials } from '@/lib/initials'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
@@ -804,29 +804,12 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                             </div>
                           )
                         })()}
-                        {(() => {
-                          if (!pd.saleAmount || pd.status !== 'sold') return null
-                          // pin-22-v2 A2 — empty-snapshot guard. Without real
-                          // priceLineItems the catalogTotal collapses to 0 and
-                          // upsaleAmount = saleAmount, producing the misleading
-                          // "Upsale == Sale Total" row Rod flagged on Donald.
-                          // Hide the Upsale entirely when no real line items
-                          // are captured at sendProject time; deals with real
-                          // catalog data still render normally.
-                          if (!pd.priceLineItems || pd.priceLineItems.length === 0) return null
-                          const catalogTotal = computeWindowsDoorsCatalogTotal(pd.item as any, lineItems, getVendorPrice)
-                          const upsaleAmount = pd.saleAmount - catalogTotal
-                          if (upsaleAmount <= 0) return null
-                          return (
-                            <div className="rounded-xl border p-4 space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upsale</h4>
-                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                                <span className="text-muted-foreground">Upsale</span>
-                                <span className="font-bold text-primary">{fmtD(upsaleAmount)}</span>
-                              </div>
-                            </div>
-                          )
-                        })()}
+                        {/* pin-29 — standalone Upsale block removed. The
+                            Upsale (or symmetric Discount) line now lives
+                            inline in the Pricing Breakdown via the
+                            auto_sold_adjustment row appended by markSold,
+                            so the breakdown total == saleAmount by
+                            construction and the duplicate render is dead. */}
                       </>
                     )
                   })()}
@@ -934,10 +917,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       const catalogSum = catalogLines.reduce((s, l) => s + l.amount, 0)
                       if (catalogSum > 0) {
                         const saleAmt = selectedItem.saleAmount ?? 0
-                        const upsale = isSold && saleAmt > catalogSum ? saleAmt - catalogSum : 0
-                        const finalLines: LineItem[] = upsale > 0
-                          ? [...catalogLines, { id: 'upsale-adj', label: 'Upsale', amount: upsale }]
-                          : catalogLines
+                        // pin-29 — symmetric reconcile: append Upsale when
+                        // saleAmt > catalogSum, Discount when saleAmt <
+                        // catalogSum, nothing when equal. Keeps the
+                        // windows_doors catalog-rehydration path consistent
+                        // with the markSold reconcile invariant: breakdown
+                        // total == saleAmount in every case.
+                        const delta = isSold ? saleAmt - catalogSum : 0
+                        const finalLines: LineItem[] = delta === 0
+                          ? catalogLines
+                          : [
+                              ...catalogLines,
+                              {
+                                id: 'upsale-adj',
+                                label: delta > 0 ? 'Upsale' : 'Discount',
+                                amount: delta,
+                              },
+                            ]
                         displayLineItems = finalLines
                         displayTotal = finalLines.reduce((s, l) => s + l.amount, 0)
                       }
