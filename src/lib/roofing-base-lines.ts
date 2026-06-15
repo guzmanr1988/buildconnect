@@ -14,19 +14,15 @@
 // to sum to the total. Folding the gate into the shared helper closes the
 // divergence at source — quote, display, and hydrate now mirror one another.
 
-import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
+import { findCatalogOption, getOptionMetadata } from '@/lib/option-metadata'
+import { isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
 import {
-  isRepairOption,
-  resolveRepairAreaSqft,
-  PITCHED_WASTE_FACTOR,
-  FLAT_WASTE_FACTOR,
-} from '@/lib/roof-pricing'
+  resolveRoofingLinearFtQty,
+  resolveRoofingSquareQty,
+} from '@/lib/roofing-qty'
 import { resolveOptionPriceKey, type VendorPriceMap, type VendorPermitMap } from '@/lib/api/pricing'
-import { resolveOptionQty } from '@/lib/resolve-option-qty'
 import type { CartItem } from '@/stores/cart-store'
 import type { PriceLineItem, ServiceConfig } from '@/types'
-
-const FLAT_ROOF_OPTION_ID = 'flat_roof'
 
 export type ProjectPermitChoice = 'yes' | 'no' | undefined
 
@@ -51,28 +47,6 @@ export function buildRoofingBaseLines(
   permitMap: VendorPermitMap | undefined,
   services?: ServiceConfig[],
 ): PriceLineItem[] | null {
-  const areaSqft = item.roofMeasurement?.areaSqft ?? 0
-  const pitchedAreaSqft = item.roofMeasurement?.pitchedAreaSqft
-  const flatAreaSqft = item.roofMeasurement?.flatAreaSqft
-  const hasFlatSection =
-    item.roofMeasurement?.pitchedAreaSqft !== undefined &&
-    item.roofMeasurement?.flatAreaSqft !== undefined
-
-  const allMaterialIds = Object.values(item.selections ?? {}).flat()
-  const hasFlatRoofSelected =
-    allMaterialIds.includes(FLAT_ROOF_OPTION_ID) || allMaterialIds.includes('repair_flat_roof')
-  const hasPitchedSelected = allMaterialIds.some((id) => {
-    if (id === FLAT_ROOF_OPTION_ID || id === 'repair_flat_roof') return false
-    const sib = services ? findCatalogOption(services, 'roofing', id) : undefined
-    const u = getOptionMetadata(id, 'roofing', sib).priceUnit
-    return u === 'square' || u === 'sqft'
-  })
-  const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
-  const includeFlatAreaOpt = item.roofMeasurement?.includeFlatArea !== false
-  const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
-  const useSplit =
-    hasFlatSection && hasFlatRoofSelected && hasPitchedSelected && includeMaterialOrderOpt
-
   const lines: PriceLineItem[] = []
   let anyComputed = false
 
@@ -108,34 +82,12 @@ export function buildRoofingBaseLines(
           anyComputed = true
           continue
         }
-        const isFlat = optionId === FLAT_ROOF_OPTION_ID
+        const { qty, useSplit, isFlat, note } = resolveRoofingSquareQty(
+          item,
+          optionId,
+          services,
+        )
         const useSquares = meta.priceUnit === 'square'
-        const sliceZeroed = !includeMaterialOrderOpt || (isFlat && !includeFlatAreaOpt)
-        let rawSqft: number
-        let note: string | undefined
-        if (sliceZeroed) {
-          rawSqft = 0
-        } else if (useSplit) {
-          if (isFlat) {
-            rawSqft = flatAreaSqft ?? 0
-            if (rawSqft === 0)
-              note = 'No flat section detected by satellite imagery — confirm with vendor.'
-          } else {
-            rawSqft = pitchedAreaSqft ?? 0
-            if (rawSqft === 0)
-              note = 'No pitched section detected by satellite imagery — confirm with vendor.'
-          }
-        } else if (isFlat) {
-          rawSqft = flatAreaSqft ?? areaSqft
-        } else {
-          rawSqft = pitchedAreaSqft ?? areaSqft
-        }
-        // PITCHED_WASTE_FACTOR / FLAT_WASTE_FACTOR — single SoT, also used by
-        // computeVendorTotal so the two paths produce identical squares.
-        const wasteFactor = isFlat ? FLAT_WASTE_FACTOR : PITCHED_WASTE_FACTOR
-        const qty = useSquares
-          ? sqftToSquares(Math.round(rawSqft * wasteFactor))
-          : rawSqft
         const amount = Math.round(unitRateDollars * qty * 100) / 100
         const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
         const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''
@@ -152,8 +104,8 @@ export function buildRoofingBaseLines(
         } as PriceLineItem & { note?: string })
         anyComputed = true
       } else if (meta.priceUnit === 'linear_ft') {
-        if (!includePerimeterOpt) continue
-        const effectiveLinFt = resolveOptionQty(item, optionId, 'roofing', catalogOption)
+        const { effectiveLinFt, gated } = resolveRoofingLinearFtQty(item, optionId)
+        if (gated) continue
         if (effectiveLinFt > 0) {
           const amount = Math.round(unitRateDollars * effectiveLinFt * 100) / 100
           lines.push({
