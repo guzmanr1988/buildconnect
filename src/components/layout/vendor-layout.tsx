@@ -162,8 +162,8 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
               <div className={cn(
                 'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  ? 'bg-white/10 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-primary'
+                  : 'text-slate-300 hover:bg-white/[0.06] hover:text-white',
                 collapsed && 'justify-center px-2'
               )}>
                 <Icon className="h-4.5 w-4.5 shrink-0" />
@@ -374,7 +374,7 @@ export function VendorLayout() {
       {/* Desktop sidebar */}
       {!isMobile && (
         <aside className={cn(
-          'fixed inset-y-0 left-0 z-30 border-r bg-sidebar transition-all duration-200',
+          'fixed inset-y-0 left-0 z-30 bg-slate-900 dark:bg-slate-950 transition-all duration-200',
           sidebarCollapsed ? 'w-[4.5rem]' : 'w-64'
         )}>
           {/* Ship #331 — collapsed-state header per Rodolfo "the button to
@@ -384,14 +384,14 @@ export function VendorLayout() {
               the toggle shows, centered. Matches Linear/Notion/GitHub
               collapsed-sidebar pattern. Expanded-state unchanged. */}
           <div className={cn(
-            'flex h-16 items-center border-b',
+            'flex h-16 items-center border-b border-white/10',
             sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4',
           )}>
-            {!sidebarCollapsed && <Logo collapsed={false} />}
+            {!sidebarCollapsed && <Logo collapsed={false} className="text-white" />}
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 text-slate-300 hover:text-white hover:bg-white/10"
               onClick={toggleSidebarCollapsed}
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-expanded={!sidebarCollapsed}
