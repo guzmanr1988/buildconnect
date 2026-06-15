@@ -6,6 +6,7 @@ import {
   stormFrontCatalogUnitPrice,
   garageDoorCatalogUnitPrice,
 } from '@/lib/configurator-catalog-price'
+import { resolveOptionQty } from '@/lib/resolve-option-qty'
 import type { CartItem } from '@/stores/cart-store'
 
 type ResolvedLineItem = { id: string; label?: string; amount: number }
@@ -90,7 +91,12 @@ function chipsForOption(item: CartItem, optionId: string): SummarySpec[] {
 }
 
 // Per-group catalog $sum across selected options. Used for non-WD section
-// totalLabel when showPricing=true.
+// totalLabel when showPricing=true. Qty source is branched off the option's
+// resolved priceUnit via resolveOptionQty (single SoT shared with the
+// snapshot writer in roofing-base-lines.ts) — pre-fix this used a flat
+// selectionQuantities ?? 1 fallback, which silently displayed qty=1 for
+// every roofing linear_ft addon and area material, materially undercounting
+// vendor totals on the project-details dialog.
 function sectionTotalCents(
   item: CartItem,
   groupId: string,
@@ -101,7 +107,7 @@ function sectionTotalCents(
   for (const optId of optionIds) {
     const base = getPrice(item.serviceId, optId)
     if (!base) continue
-    const qty = item.selectionQuantities?.[optId] ?? 1
+    const qty = resolveOptionQty(item, optId, item.serviceId)
     sum += base * qty
   }
   return sum
