@@ -1,5 +1,5 @@
 import { motion, type Variants } from 'framer-motion'
-import { Settings2, UsersRound } from 'lucide-react'
+import { Settings2, UsersRound, CreditCard } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,8 @@ const fadeUp = {
 export default function VendorSettingsPage() {
   const usersTabEnabled = useVendorSettingsStore((s) => s.usersTabEnabled)
   const setUsersTabEnabled = useVendorSettingsStore((s) => s.setUsersTabEnabled)
+  const financingEnabled = useVendorSettingsStore((s) => s.financingEnabled)
+  const setFinancingEnabled = useVendorSettingsStore((s) => s.setFinancingEnabled)
 
   return (
     <div className="space-y-6">
@@ -48,6 +50,29 @@ export default function VendorSettingsPage() {
                 id="users-tab-toggle"
                 checked={usersTabEnabled}
                 onCheckedChange={setUsersTabEnabled}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <Label
+                    htmlFor="financing-tab-toggle"
+                    className="text-sm font-medium cursor-pointer"
+                  >
+                    Financing
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Show the Financing tab and let homeowners apply through your selected partners.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="financing-tab-toggle"
+                checked={financingEnabled}
+                onCheckedChange={setFinancingEnabled}
+                data-testid="vendor-settings-financing-toggle"
               />
             </div>
           </CardContent>

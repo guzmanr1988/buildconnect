@@ -52,6 +52,7 @@ import VendorHomeowners from '@/features/vendor/pages/homeowners'
 import VendorHomeownerDetail from '@/features/vendor/pages/homeowner-detail'
 import VendorReportsPage from '@/features/vendor/pages/reports'
 import VendorPermitsPage from '@/features/vendor/pages/permits'
+import VendorFinancingPage from '@/features/vendor/pages/financing'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -153,6 +154,7 @@ export const router = createBrowserRouter([
           // BUG-001: /vendor/products was used in older deep-links; redirect to canonical /vendor/catalog
           { path: 'products', element: <Navigate to="/vendor/catalog" replace /> },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
+          { path: 'financing', element: <VendorFinancingPage />, handle: { title: 'Vendor · Financing' } },
           { path: 'account-reps', element: <VendorAccountRepsPage />, handle: { title: 'Vendor · Account Reps' } },
           { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
           { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
