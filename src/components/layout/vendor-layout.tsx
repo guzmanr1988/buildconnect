@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2 } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2, CreditCard } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -38,6 +38,7 @@ const navItems = [
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
+  { to: '/vendor/financing', icon: CreditCard, label: 'Financing' },
   { to: '/vendor/reports', icon: FileText, label: 'Tax Reports' },
   { to: '/vendor/permits', icon: FileCheck2, label: 'Project Permits' },
   { to: '/vendor/employees', icon: UsersRound, label: 'Account Reps' },
@@ -68,14 +69,17 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   // Rodolfo "Calendar up" framing. vendor sees full sidebar unchanged.
   const profileForGate = useAuthStore((s) => s.profile)
   const usersTabEnabled = useVendorSettingsStore((s) => s.usersTabEnabled)
+  const financingEnabled = useVendorSettingsStore((s) => s.financingEnabled)
   const visibleNavItems = useMemo(() => {
     if (profileForGate?.role === 'account_rep') {
       return navItems.filter((item) => REP_VISIBLE_ROUTES.has(item.to))
     }
-    return navItems.filter((item) =>
-      item.to !== '/vendor/account-reps' || usersTabEnabled
-    )
-  }, [profileForGate?.role, usersTabEnabled])
+    return navItems.filter((item) => {
+      if (item.to === '/vendor/account-reps' && !usersTabEnabled) return false
+      if (item.to === '/vendor/financing' && !financingEnabled) return false
+      return true
+    })
+  }, [profileForGate?.role, usersTabEnabled, financingEnabled])
 
   // Ship #328 — nav-badges per Rodolfo "in projects how the number of
   // projects next to the name and on lead workflow show only new lead
