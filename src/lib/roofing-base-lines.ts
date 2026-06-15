@@ -16,13 +16,13 @@
 
 import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
 import {
-  computeGutterTotalLinFt,
   isRepairOption,
   resolveRepairAreaSqft,
   PITCHED_WASTE_FACTOR,
   FLAT_WASTE_FACTOR,
 } from '@/lib/roof-pricing'
 import { resolveOptionPriceKey, type VendorPriceMap, type VendorPermitMap } from '@/lib/api/pricing'
+import { resolveOptionQty } from '@/lib/resolve-option-qty'
 import type { CartItem } from '@/stores/cart-store'
 import type { PriceLineItem, ServiceConfig } from '@/types'
 
@@ -153,9 +153,7 @@ export function buildRoofingBaseLines(
         anyComputed = true
       } else if (meta.priceUnit === 'linear_ft') {
         if (!includePerimeterOpt) continue
-        const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
-        const effectiveLinFt =
-          optionId === 'gutters' ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig) : linFt
+        const effectiveLinFt = resolveOptionQty(item, optionId, 'roofing', catalogOption)
         if (effectiveLinFt > 0) {
           const amount = Math.round(unitRateDollars * effectiveLinFt * 100) / 100
           lines.push({
