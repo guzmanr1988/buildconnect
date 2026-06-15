@@ -265,7 +265,7 @@ export default function VendorFinancingPage() {
         </div>
       )}
 
-      {!masterOn && !loading && (
+      {!showMasterOffBanner && !masterOn && !loading && (
         <div className="rounded-2xl border border-muted bg-muted/30 p-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 shrink-0 text-muted-foreground mt-0.5" />
           <div className="text-sm">
@@ -358,7 +358,7 @@ export default function VendorFinancingPage() {
                           htmlFor={`vendor-lender-toggle-${lender.id}`}
                           className="text-xs text-muted-foreground cursor-pointer"
                         >
-                          {active ? 'Active' : 'Inactive'}
+                          Active
                         </Label>
                         <Switch
                           id={`vendor-lender-toggle-${lender.id}`}
