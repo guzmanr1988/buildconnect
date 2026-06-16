@@ -10,6 +10,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { formatProjectTitle } from '@/lib/format-project-title'
+import { useReferralStore } from '@/stores/referral-store'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { FinancingCard } from '@/features/financing/components/financing-card'
@@ -200,7 +201,18 @@ export function HomeownerHome() {
     if (!referFields.lastName.trim()) errs.lastName = 'Last name required'
     if (!referFields.email.trim() && !referFields.phone.trim()) errs.contact = 'Email or phone required'
     if (Object.keys(errs).length) { setReferErrors(errs); return }
-    // TODO: call referral API — POST /api/referrals with { referrer_id: profile.id, firstName, lastName, email, phone }
+    // Persist invite locally so MyReferralsCard shows it immediately
+    if (profile?.id) {
+      useReferralStore.getState().addReferral(profile.id, {
+        firstName: referFields.firstName,
+        lastName: referFields.lastName,
+        email: referFields.email,
+        phone: referFields.phone,
+        referrerId: profile.id,
+      })
+    }
+    // TODO: call hephaestus referral-invite edge fn when contract arrives:
+    // supabase.functions.invoke('referral-invite', { body: { friendEmail: referFields.email, friendName: referFields.firstName, referrerName: profile?.full_name ?? '', referralId: <uuid from store> } })
     setReferSent(true)
   }
 

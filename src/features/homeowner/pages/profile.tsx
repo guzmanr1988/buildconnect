@@ -25,6 +25,7 @@ import type { SecondaryAddress } from '@/types'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
 import { HomeownerBankingPayoutsSquare } from '@/features/homeowner/components/banking-payouts-square'
+import { MyReferralsCard } from '@/features/homeowner/components/my-referrals-card'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
 const emptyAddressForm: AddressFormData = { label: '', street: '', city: '', state: '', zip: '' }
@@ -343,6 +344,9 @@ export function HomeownerProfilePage() {
           1781574203384). Receives referral bonuses + financing-disbursement
           returns once Rod-provided test keys are set in Edge Function env. */}
       <HomeownerBankingPayoutsSquare />
+
+      {/* My Referrals & Rewards — sits directly below Banking/Payouts square */}
+      <MyReferralsCard />
 
       {/* Day/Night Mode */}
       <motion.div

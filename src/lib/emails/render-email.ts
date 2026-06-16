@@ -331,6 +331,57 @@ function renderBookingConfirmation(data: BookingConfirmationPayload): string {
   return shell(`Booking confirmed — ${data.serviceName}`, body)
 }
 
+// ── 5. Referral Invite ────────────────────────────────────────────────────────
+export interface ReferralInvitePayload {
+  friendName: string    // {{friendName}}
+  referrerName: string  // {{referrerName}}
+  signupUrl: string     // {{signupUrl}}
+}
+
+function renderReferralInvite(data: ReferralInvitePayload): string {
+  const body = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="background-color:${C.primaryLight};border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0;font-size:13px;font-weight:600;color:${C.primary};text-transform:uppercase;letter-spacing:0.5px;">
+            You're Invited
+          </p>
+        </td>
+      </tr>
+    </table>
+    <h1 style="margin:0 0 10px;font-size:26px;font-weight:700;color:${C.textDark};letter-spacing:-0.4px;">
+      You've been invited to BuildConnect
+    </h1>
+    <p style="margin:0 0 20px;font-size:15px;color:${C.textMuted};line-height:1.6;">
+      Hi ${data.friendName}, <strong style="color:${C.textDark};">${data.referrerName}</strong> thinks
+      you'd love BuildConnect — the easiest way to find trusted, licensed contractors for any home project in South Florida.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="border:1px solid ${C.border};border-radius:10px;padding:20px 24px;margin-bottom:8px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 14px;font-size:14px;font-weight:600;color:${C.textDark};">
+            What you get with BuildConnect
+          </p>
+          <ul style="margin:0;padding-left:20px;font-size:14px;color:${C.textDark};line-height:1.9;">
+            <li>Get quotes from vetted, insured contractors — fast</li>
+            <li>Compare prices and reviews in one place</li>
+            <li>Track your project from booking to completion</li>
+            <li>No sales pressure, no hidden fees</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+    ${ctaButton('Join BuildConnect', data.signupUrl)}
+    ${divider}
+    <p style="margin:0;font-size:13px;color:${C.textMuted};line-height:1.6;">
+      You received this invitation because ${data.referrerName} shared your contact with us.
+      If you did not expect this email, you can safely ignore it — no account has been created.
+    </p>`
+  return shell(`${data.referrerName} invited you to BuildConnect`, body)
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export type EmailPayload =
   | { type: 'welcome'; data: WelcomePayload }
@@ -338,6 +389,7 @@ export type EmailPayload =
   | { type: 'password-reset'; data: PasswordResetPayload }
   | { type: 'quote-received'; data: QuoteReceivedPayload }
   | { type: 'booking-confirmation'; data: BookingConfirmationPayload }
+  | { type: 'referral-invite'; data: ReferralInvitePayload }
 
 export function renderEmail(payload: EmailPayload): { subject: string; html: string } {
   switch (payload.type) {
@@ -365,6 +417,11 @@ export function renderEmail(payload: EmailPayload): { subject: string; html: str
       return {
         subject: `Booking confirmed — ${payload.data.serviceName}`,
         html: renderBookingConfirmation(payload.data),
+      }
+    case 'referral-invite':
+      return {
+        subject: `${payload.data.referrerName} invited you to BuildConnect`,
+        html: renderReferralInvite(payload.data),
       }
   }
 }
