@@ -26,6 +26,7 @@ export type HomeownerDocType =
   | 'measurement'
   | 'agreement'
   | 'contract'
+  | 'project_report'
   | 'quote'
   | 'photo'
   | 'other'
