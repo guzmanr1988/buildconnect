@@ -102,8 +102,8 @@ export function HomeownerBankingPayoutsSquare() {
   const refreshMutation = useRefreshConnectOnboarding('homeowner');
 
   const handleCta = async () => {
-    const returnUrl = `${window.location.origin}/homeowner/profile?connect=return`;
-    const refreshUrl = `${window.location.origin}/homeowner/profile?connect=refresh`;
+    const returnUrl = `${window.location.origin}/home/profile?connect=return`;
+    const refreshUrl = `${window.location.origin}/home/profile?connect=refresh`;
 
     try {
       const useRefresh = state !== 'not_connected' && account?.stripeAccountId;
