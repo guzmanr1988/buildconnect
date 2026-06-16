@@ -1,6 +1,26 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// Derive escrow_accounts.status from a Stripe account.updated payload.
+// Mirrors the state machine in src/lib/financing/escrow/constants.ts —
+// stripe-side facts → DB status enum the FE reads via useConnectAccount.
+//   active               charges + payouts both enabled, no disabled_reason
+//   rejected             disabled_reason starts with 'rejected.'
+//   restricted           any other disabled_reason set (listed / under_review /
+//                        platform_paused / requirements.* past_due, etc.)
+//   pending_verification onboarding in flight (default)
+function deriveStatus(account: {
+  charges_enabled?: boolean
+  payouts_enabled?: boolean
+  requirements?: { disabled_reason?: string | null } | null
+}): 'pending_verification' | 'active' | 'restricted' | 'rejected' {
+  const disabled = account.requirements?.disabled_reason ?? null
+  if (disabled && disabled.startsWith('rejected.')) return 'rejected'
+  if (disabled) return 'restricted'
+  if (account.charges_enabled && account.payouts_enabled) return 'active'
+  return 'pending_verification'
+}
+
 serve(async (req) => {
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')
@@ -34,6 +54,80 @@ serve(async (req) => {
     }
     case 'invoice.payment_failed': {
       // TODO: Handle failed payment — notify vendor, update status
+      break
+    }
+    case 'account.updated': {
+      // Stripe Connect account state change. Flip escrow_accounts row
+      // to track charges/payouts/requirements + derived status. Onboarded_at
+      // stamps on first transition to 'active' and is left alone after.
+      const account = event.data.object as {
+        id: string
+        charges_enabled?: boolean
+        payouts_enabled?: boolean
+        requirements?: {
+          currently_due?: string[]
+          past_due?: string[]
+          eventually_due?: string[]
+          disabled_reason?: string | null
+          pending_verification?: string[]
+        } | null
+      }
+      if (!account?.id) break
+
+      const status = deriveStatus(account)
+      const chargesEnabled = !!account.charges_enabled
+      const payoutsEnabled = !!account.payouts_enabled
+
+      // Persist the full requirements blob (not just status) — currently_due
+      // and disabled_reason are the load-bearing pieces for both the UI
+      // recovery path (re-link button) and operator triage.
+      const requirements = account.requirements
+        ? {
+            currently_due: account.requirements.currently_due ?? [],
+            past_due: account.requirements.past_due ?? [],
+            eventually_due: account.requirements.eventually_due ?? [],
+            pending_verification: account.requirements.pending_verification ?? [],
+            disabled_reason: account.requirements.disabled_reason ?? null,
+          }
+        : null
+
+      // Look up the existing row first so we can decide onboarded_at —
+      // first transition to 'active' stamps; subsequent updates leave it.
+      const { data: existing, error: lookupErr } = await supabase
+        .from('escrow_accounts')
+        .select('id, status, onboarded_at')
+        .eq('stripe_account_id', account.id)
+        .maybeSingle()
+
+      if (lookupErr) {
+        console.error('escrow_accounts lookup failed', lookupErr.message)
+        break
+      }
+      if (!existing) {
+        // No row for this stripe_account_id — onboarding flow never
+        // persisted it, or the event is for an account we didn't create.
+        // Don't manufacture a row here; the create path owns insertion.
+        console.warn('account.updated received for unknown stripe_account_id', account.id)
+        break
+      }
+
+      const onboardedAt =
+        existing.onboarded_at ?? (status === 'active' ? new Date().toISOString() : null)
+
+      const { error: updateErr } = await supabase
+        .from('escrow_accounts')
+        .update({
+          charges_enabled: chargesEnabled,
+          payouts_enabled: payoutsEnabled,
+          requirements,
+          status,
+          onboarded_at: onboardedAt,
+        })
+        .eq('id', existing.id)
+
+      if (updateErr) {
+        console.error('escrow_accounts update failed', updateErr.message)
+      }
       break
     }
   }

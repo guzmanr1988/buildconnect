@@ -78,6 +78,9 @@ export function useConnectAccount({ partyType, enabled = true }: ConnectQueryArg
     queryFn: () => fetchConnectAccount(partyType),
     enabled,
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'pending_verification' ? 30_000 : false,
   });
 }
 

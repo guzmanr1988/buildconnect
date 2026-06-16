@@ -500,13 +500,15 @@ export function ServiceDetailPage() {
       full: [a.street, a.city, a.state, a.zip].filter(Boolean).join(', '),
     })),
   ]
+  // Property selector starts empty — user must actively pick before Add-to-Project.
+  // Edit mode restores the previously-saved address so updates don't lose it.
   const [addressKey, setAddressKey] = useState<string>(() => {
     const edit = editItemForService?.address as CartItemAddress | undefined
-    if (!edit) return 'primary'
+    if (!edit) return ''
     const match = addressOptions.find((o) => o.label === edit.label)
-    return match?.key ?? 'primary'
+    return match?.key ?? ''
   })
-  const selectedAddress = addressOptions.find((o) => o.key === addressKey) ?? addressOptions[0]
+  const selectedAddress = addressOptions.find((o) => o.key === addressKey)
 
   const handleWizardComplete = (result: RoofWizardResult) => {
     // Pitched-only formula (canonical): Solar split when present, else
@@ -872,6 +874,9 @@ export function ServiceDetailPage() {
       (g) => (selections[g.id]?.length ?? 0) === 0,
     )
     if (missingGroup) return `Pick a ${missingGroup.label.toLowerCase()} to continue.`
+    if (!addressKey) {
+      return 'Select a property to continue.'
+    }
     if (!isProjectAssociationValid(projectAssociation ?? null)) {
       return 'Answer the association question to continue.'
     }
@@ -2752,19 +2757,23 @@ export function ServiceDetailPage() {
           </label>
           <Select value={addressKey} onValueChange={(value) => setAddressKey(value ?? '')}>
             <SelectTrigger id="address-select" className="h-auto min-h-[3.25rem] py-2 text-sm">
-              <span className="flex flex-1 flex-col items-start gap-1 min-w-0 text-left">
-                <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
-                  {selectedAddress.label || 'Property'}
+              {selectedAddress ? (
+                <span className="flex flex-1 flex-col items-start gap-1 min-w-0 text-left">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                    {selectedAddress.label || 'Property'}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-sm whitespace-normal break-words leading-tight',
+                      !selectedAddress.full && 'text-muted-foreground'
+                    )}
+                  >
+                    {selectedAddress.full || 'Select a property'}
+                  </span>
                 </span>
-                <span
-                  className={cn(
-                    'text-sm whitespace-normal break-words leading-tight',
-                    !selectedAddress.full && 'text-muted-foreground'
-                  )}
-                >
-                  {selectedAddress.full || 'Select a property'}
-                </span>
-              </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Select a property</span>
+              )}
             </SelectTrigger>
             <SelectContent>
               {addressOptions.map((opt) => (
@@ -2863,7 +2872,7 @@ export function ServiceDetailPage() {
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
               added && 'bg-green-600 hover:bg-green-700'
             )}
-            disabled={!allRequiredDone || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }

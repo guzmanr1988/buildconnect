@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, ShoppingCart, Plus } from 'lucide-react'
@@ -282,7 +282,6 @@ function ReviewStep({
 export function RemodelConfigurator() {
   const navigate = useNavigate()
   const location = useLocation()
-  const profile = useAuthStore((s) => s.profile)
   const addItem = useCartStore((s) => s.addItem)
   const updateItem = useCartStore((s) => s.updateItem)
   const projectPermit = useCartStore((s) => s.projectPermit)
@@ -300,17 +299,17 @@ export function RemodelConfigurator() {
   const [measurements, setMeasurements] = useState<RemodelMeasurements>(
     (editItem?.remodelMeasurements as RemodelMeasurements) ?? DEFAULT_MEASUREMENTS,
   )
-  const [addressKey, setAddressKey] = useState<string>('primary')
+  // Property selector starts empty — user must actively pick on the address step
+  // before the next-gate clears. Edit mode restores the previously-saved value.
+  const [addressKey, setAddressKey] = useState<string>(() => {
+    const edit = editItem?.address as CartItemAddress | undefined
+    if (!edit) return ''
+    return edit.label === 'Primary' ? 'primary' : ''
+  })
   const [address, setAddress] = useState<CartItemAddress | null>(
     (editItem?.address as CartItemAddress | undefined) ?? null,
   )
   const [added, setAdded] = useState(false)
-
-  // Seed default address from primary on first render when not editing.
-  useEffect(() => {
-    if (address || !profile?.address) return
-    setAddress({ label: 'Primary', full: profile.address })
-  }, [address, profile?.address])
 
   const lines = useMemo(() => {
     if (!isMeasurementsValid(measurements)) return []
