@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
+import { useShallow } from 'zustand/shallow'
 import { useReferralStore, type LocalReferral } from '@/stores/referral-store'
 
 // ---- types ----
@@ -155,8 +156,8 @@ function localToEntry(r: LocalReferral): ReferralEntry {
 
 export function MyReferralsCard() {
   const profile = useAuthStore((s) => s.profile)
-  const localReferrals = useReferralStore((s) =>
-    profile?.id ? (s.referralsByReferrer[profile.id] ?? []) : []
+  const localReferrals = useReferralStore(
+    useShallow((s) => (profile?.id ? (s.referralsByReferrer[profile.id] ?? []) : []))
   )
 
   const [entries, setEntries] = useState<ReferralEntry[]>([])
