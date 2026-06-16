@@ -71,6 +71,9 @@ export default function SettingsPage() {
     mapsApiKey: '',
     applicationFeeBps: 0,
     homeownerPayoutFeeBps: 0,
+    // Migration 092 — default-false floor; toggle below opts admin views of
+    // the project-report PDF into rendering the Margin row.
+    showMarginOnProjectReport: false,
   })
 
   // Phase 1 Stripe wiring (kratos msg 1781569611114) — load + save the
@@ -85,6 +88,7 @@ export default function SettingsPage() {
         stripeEnabled: platformSettings.data.stripeEnabled,
         applicationFeeBps: platformSettings.data.applicationFeeBps,
         homeownerPayoutFeeBps: platformSettings.data.homeownerPayoutFeeBps,
+        showMarginOnProjectReport: platformSettings.data.showMarginOnProjectReport,
       }))
     }
   }, [platformSettings.data])
@@ -95,6 +99,7 @@ export default function SettingsPage() {
         stripeEnabled: ext.stripeEnabled,
         applicationFeeBps: ext.applicationFeeBps,
         homeownerPayoutFeeBps: ext.homeownerPayoutFeeBps,
+        showMarginOnProjectReport: ext.showMarginOnProjectReport,
       })
     } catch {
       // platform_settings save failure is non-fatal for the rest of the
@@ -405,6 +410,25 @@ export default function SettingsPage() {
                   onChange={(e) => setExt((p) => ({ ...p, mapsApiKey: e.target.value }))}
                 />
                 <p className="text-xs text-muted-foreground">Used for address verification and service area mapping</p>
+              </div>
+              {/* Migration 092 — admin-only "show margin on project report"
+                  toggle. Default-false floor: customer copies stored on
+                  homeowner_documents never carry margin. When ON, admin
+                  views of the project-report PDF regenerate with the
+                  Margin row visible. Customer-stored copy is unaffected. */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Show margin on project report (admin view)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Customer copies never show margin. ON renders the Margin row in admin-side
+                    project-report PDFs only.
+                  </p>
+                </div>
+                <Switch
+                  aria-label="Show margin on project report"
+                  checked={ext.showMarginOnProjectReport}
+                  onCheckedChange={(val) => setExt((p) => ({ ...p, showMarginOnProjectReport: val }))}
+                />
               </div>
             </CardContent>
           </Card>

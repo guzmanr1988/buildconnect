@@ -29,6 +29,7 @@ import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { uploadDocAsVendor, getSignedUrl as getDocSignedUrl } from '@/lib/api/homeowner-documents'
+import { maybeGenerateProjectReportOnSold } from '@/lib/project-report-on-sold'
 import { useAssociationDocForProject } from '@/features/vendor/lib/use-association-doc'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
@@ -2046,6 +2047,17 @@ export default function VendorLeadWorkflow() {
                         console.error('[lead-workflow] contract upload failed:', err)
                       }
                     })()
+                  }
+                  // Mark-as-Sold project-report trigger. Reads back the
+                  // post-markSold sp from the store (markSold has just
+                  // appended status='sold' + soldAt + saleAmount + the
+                  // auto_sold_adjustment line synchronously). Helper has
+                  // its own idempotent guard against duplicate generation.
+                  if (sp) {
+                    const updatedSp = useProjectsStore.getState().sentProjects.find((p) => p.id === sp.id)
+                    if (updatedSp) {
+                      void maybeGenerateProjectReportOnSold(updatedSp)
+                    }
                   }
                 }
                 setSoldDialogOpen(false)
