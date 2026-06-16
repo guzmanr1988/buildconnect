@@ -10,6 +10,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { formatProjectTitle } from '@/lib/format-project-title'
+import { supabase } from '@/lib/supabase'
 import { useReferralStore } from '@/stores/referral-store'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
@@ -194,25 +195,40 @@ export function HomeownerHome() {
 
   function handleReferOpen() { setReferOpen(true); setReferSent(false); setReferErrors({}) }
   function handleReferClose() { setReferOpen(false); setReferSent(false); setReferFields({ firstName: '', lastName: '', email: '', phone: '' }); setReferErrors({}) }
-  function handleReferSubmit(e: React.FormEvent) {
+  async function handleReferSubmit(e: React.FormEvent) {
     e.preventDefault()
     const errs: Record<string, string> = {}
     if (!referFields.firstName.trim()) errs.firstName = 'First name required'
     if (!referFields.lastName.trim()) errs.lastName = 'Last name required'
     if (!referFields.email.trim() && !referFields.phone.trim()) errs.contact = 'Email or phone required'
     if (Object.keys(errs).length) { setReferErrors(errs); return }
-    // Persist invite locally so MyReferralsCard shows it immediately
-    if (profile?.id) {
-      useReferralStore.getState().addReferral(profile.id, {
-        firstName: referFields.firstName,
-        lastName: referFields.lastName,
-        email: referFields.email,
-        phone: referFields.phone,
-        referrerId: profile.id,
-      })
+
+    if (!profile?.id) return
+
+    const store = useReferralStore.getState()
+    const referralId = store.addReferral(profile.id, {
+      firstName: referFields.firstName,
+      lastName: referFields.lastName,
+      email: referFields.email,
+      phone: referFields.phone,
+      referrerId: profile.id,
+    })
+
+    const { data, error } = await supabase.functions.invoke('referral-invite', {
+      body: {
+        friendEmail: referFields.email,
+        friendName: `${referFields.firstName} ${referFields.lastName}`.trim(),
+        referrerName: profile.name || profile.email,
+        referralId,
+      },
+    })
+
+    if (error || !data?.ok) {
+      store.removeReferral(profile.id, referralId)
+      setReferErrors({ contact: data?.error ?? 'Could not send invite — please try again.' })
+      return
     }
-    // TODO: call hephaestus referral-invite edge fn when contract arrives:
-    // supabase.functions.invoke('referral-invite', { body: { friendEmail: referFields.email, friendName: referFields.firstName, referrerName: profile?.full_name ?? '', referralId: <uuid from store> } })
+
     setReferSent(true)
   }
 

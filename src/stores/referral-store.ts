@@ -24,18 +24,20 @@ export type LocalReferral = {
 
 type ReferralStore = {
   referralsByReferrer: Record<string, LocalReferral[]>
-  addReferral: (referrerId: string, entry: Omit<LocalReferral, 'id' | 'invitedAt' | 'status'>) => void
+  addReferral: (referrerId: string, entry: Omit<LocalReferral, 'id' | 'invitedAt' | 'status'>, id?: string) => string
+  removeReferral: (referrerId: string, id: string) => void
 }
 
 export const useReferralStore = create<ReferralStore>()(
   persist(
     (set) => ({
       referralsByReferrer: {},
-      addReferral: (referrerId, entry) =>
+      addReferral: (referrerId, entry, id) => {
+        const newId = id ?? crypto.randomUUID()
         set((prev) => {
           const existing = prev.referralsByReferrer[referrerId] ?? []
           const newEntry: LocalReferral = {
-            id: crypto.randomUUID(),
+            id: newId,
             referrerId,
             firstName: entry.firstName,
             lastName: entry.lastName,
@@ -50,7 +52,16 @@ export const useReferralStore = create<ReferralStore>()(
               [referrerId]: [...existing, newEntry],
             },
           }
-        }),
+        })
+        return newId
+      },
+      removeReferral: (referrerId, id) =>
+        set((prev) => ({
+          referralsByReferrer: {
+            ...prev.referralsByReferrer,
+            [referrerId]: (prev.referralsByReferrer[referrerId] ?? []).filter((r) => r.id !== id),
+          },
+        })),
     }),
     { name: 'buildconnect-referrals' },
   ),
