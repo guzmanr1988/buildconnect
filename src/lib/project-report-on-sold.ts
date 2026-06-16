@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { resolveProjectReport } from './project-report-data'
 import { generateProjectReportPdf } from './generate-project-report-pdf'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
-import type { SentProject } from '@/types'
+import type { SentProject } from '@/stores/projects-store'
 
 export async function maybeGenerateProjectReportOnSold(sp: SentProject): Promise<void> {
   if (!sp.homeowner_id || sp.status !== 'sold' || !sp.saleAmount) {
@@ -46,7 +46,12 @@ export async function maybeGenerateProjectReportOnSold(sp: SentProject): Promise
   try {
     const input = resolveProjectReport({ sp, showMargin: false })
     const { bytes } = await generateProjectReportPdf(input)
-    const blob = new Blob([bytes], { type: 'application/pdf' })
+    // Re-copy into a fresh ArrayBuffer-backed Uint8Array. pdf-lib returns a
+    // Uint8Array<ArrayBufferLike> which TS treats as possibly SharedArrayBuffer
+    // and Blob's BlobPart type rejects; the copy normalizes the backing store.
+    const buf = new Uint8Array(bytes.byteLength)
+    buf.set(bytes)
+    const blob = new Blob([buf], { type: 'application/pdf' })
 
     const stamp = new Date().toISOString().slice(0, 10)
     const filename = `project-report-${sp.id.slice(0, 8)}-${stamp}.pdf`

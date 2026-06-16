@@ -42,7 +42,9 @@ import type {
 //   surface; Sold Projects + Documents are the two operational concerns
 //   vendor cares about per-homeowner
 
-// PR-331 — 9-val doc_type set (banked w/ homeowner_documents.doc_type CHECK)
+// PR-331 — 9-val doc_type set (banked w/ homeowner_documents.doc_type CHECK).
+// project_report (Mark-as-Sold trigger) intentionally OMITTED from vendor
+// upload options — it's a system-generated doc_type, not vendor-uploadable.
 const DOC_TYPE_OPTIONS: HomeownerDocType[] = [
   'license',
   'permit',
@@ -64,6 +66,7 @@ const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
   measurement: 'Measurement',
   agreement: 'Agreement',
   contract: 'Contract',
+  project_report: 'Project Report',
   quote: 'Quote',
   photo: 'Photo',
   other: 'Other',

@@ -24,7 +24,6 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb, PageSizes } from 'pd
 import type {
   ProjectReportInput,
   ProjectReportMeasurement,
-  ProjectReportPricingLine,
   ProjectReportScopeItem,
 } from './project-report-data'
 

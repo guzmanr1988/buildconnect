@@ -20,7 +20,8 @@
 //   - poolSurvey kept under PERMITS (iris call); resolver populates only
 //     when sp.poolSurvey !== undefined so non-pool services hide cleanly.
 
-import type { SentProject, ServiceCategory, PriceLineItem } from '@/types'
+import type { SentProject } from '@/stores/projects-store'
+import type { ServiceCategory, PriceLineItem } from '@/types'
 
 export interface ProjectReportPermitWaiver {
   acknowledged: boolean
