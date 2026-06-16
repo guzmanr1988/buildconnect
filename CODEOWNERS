@@ -1,9 +1,13 @@
-# Pricing-protection snapshot baselines — fixture mutations require explicit
-# review from argus (regression-class lock keeper) and analyst (pricing-truth
-# arbiter). Both expected_outputs and recorded Solar JSON are in scope.
+# Approval governance — every change to live code requires the repo owner's review.
+# Added 2026-06-16 at Rod's request: write collaborators cannot land changes to
+# main without Rodolfo's (@guzmanr1988) explicit approval.
+* @guzmanr1988
+
+# Pricing-protection snapshot baselines — fixture mutations also require the
+# owner's review (was previously @argus/@analyst, who are not collaborators here).
 # Updating any fixture file requires:
 #   1. A reason in the PR description (lands in __meta.reason).
 #   2. A bumped __meta.snapshotSHA to the new commit.
 #   3. Updated __meta.recordedAt if the Solar response was re-captured.
 # See tests/snapshots/quote-protection/README.md for full update flow.
-tests/snapshots/quote-protection/ @argus @analyst
+tests/snapshots/quote-protection/ @guzmanr1988
