@@ -480,59 +480,67 @@ export function HomeownerHome() {
         </motion.div>
       )}
 
-      {/* How it works — 4-step walkthrough, single-open accordion, default collapsed */}
+      {/* How it works — outer section-toggle, default collapsed; inner 4-step accordion preserved */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.55 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-          How it works
-        </p>
-        <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible defaultValue={[]} className="w-full">
-            {howItWorks.map((step) => (
-              <AccordionItem key={step.n} value={`step-${step.n}`} className="px-5">
-                <AccordionTrigger className="py-4 text-[14px]">
-                  <span className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {step.n}
-                    </span>
-                    <span className="font-semibold font-heading text-foreground">{step.t}</span>
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed pl-10">
-                  {step.d}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+        <Accordion type="single" collapsible defaultValue={[]} className="w-full">
+          <AccordionItem value="section-howitworks" className="rounded-2xl border bg-card overflow-hidden">
+            <AccordionTrigger className="px-5 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest hover:no-underline">
+              How it works
+            </AccordionTrigger>
+            <AccordionContent className="px-0 pb-0">
+              <Accordion type="single" collapsible defaultValue={[]} className="w-full border-t">
+                {howItWorks.map((step) => (
+                  <AccordionItem key={step.n} value={`step-${step.n}`} className="px-5">
+                    <AccordionTrigger className="py-4 text-[14px]">
+                      <span className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {step.n}
+                        </span>
+                        <span className="font-semibold font-heading text-foreground">{step.t}</span>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed pl-10">
+                      {step.d}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </motion.div>
 
-      {/* Frequently asked — single-open accordion, default collapsed */}
+      {/* Frequently asked — outer section-toggle, default collapsed; inner per-Q accordion preserved */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-          Frequently asked
-        </p>
-        <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible defaultValue={[]} className="w-full">
-            {faq.map((qa, i) => (
-              <AccordionItem key={qa.q} value={`faq-${i}`} className="px-5">
-                <AccordionTrigger className="py-4 text-[14px] font-medium text-foreground">
-                  {qa.q}
-                </AccordionTrigger>
-                <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed">
-                  {qa.a}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+        <Accordion type="single" collapsible defaultValue={[]} className="w-full">
+          <AccordionItem value="section-faq" className="rounded-2xl border bg-card overflow-hidden">
+            <AccordionTrigger className="px-5 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest hover:no-underline">
+              Frequently asked
+            </AccordionTrigger>
+            <AccordionContent className="px-0 pb-0">
+              <Accordion type="single" collapsible defaultValue={[]} className="w-full border-t">
+                {faq.map((qa, i) => (
+                  <AccordionItem key={qa.q} value={`faq-${i}`} className="px-5">
+                    <AccordionTrigger className="py-4 text-[14px] font-medium text-foreground">
+                      {qa.q}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed">
+                      {qa.a}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </motion.div>
 
       {/* Refer-a-Friend CTA — sits in empty space between FAQ and footer */}

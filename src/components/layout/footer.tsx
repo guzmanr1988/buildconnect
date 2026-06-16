@@ -313,7 +313,9 @@ export function Footer({ className }: FooterProps) {
                 rounds + adds primary tint. */}
             <div className="flex items-center gap-2">
               <a
-                href="#"
+                href="https://www.instagram.com/buildconnect_/"
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label="Instagram"
                 className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted hover:text-primary"
               >
