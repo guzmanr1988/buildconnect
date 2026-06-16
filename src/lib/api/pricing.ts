@@ -131,8 +131,8 @@ export function resolveOptionPriceKey(
 
 export async function getVendorPriceMap(vendorUuid: string): Promise<VendorPriceMap> {
   // Arc-43 — auth-bootstrap-race guard. vendor_option_prices + vendor_sub_option_prices
-  // RLS gates SELECT on authenticated role. /homeowner/vendor-compare and
-  // /homeowner/booking-confirmation can fire this loader before the Supabase
+  // RLS gates SELECT on authenticated role. /home/vendor-compare and
+  // /home/booking/confirmed can fire this loader before the Supabase
   // session JWT is attached → anon SELECTs return [] → priceMap empty →
   // strikethrough/Contact-for-quote misfires. The use-vendor-price-realtime
   // hook subscribes to onAuthStateChange so the caller re-fires loadPriceMaps
