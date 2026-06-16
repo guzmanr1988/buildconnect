@@ -15,6 +15,9 @@ import { useVendorHomeowners } from '@/lib/hooks/use-vendor-homeowners'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
+import { usePlatformSettings } from '@/lib/hooks/use-platform-settings'
+import { resolveProjectReport } from '@/lib/project-report-data'
+import { generateProjectReportPdf } from '@/lib/generate-project-report-pdf'
 import {
   uploadDocAsVendor,
   listDocsForVendorHomeowner,
@@ -25,6 +28,7 @@ import type {
   HomeownerDoc,
   HomeownerDocType,
 } from '@/stores/homeowner-documents-store'
+import type { SentProject } from '@/stores/projects-store'
 
 // Ship #278 — vendor-side per-homeowner detail page. Two sections:
 // (1) Sold Projects — sold sentProjects for this vendor×homeowner +
@@ -92,6 +96,7 @@ export default function VendorHomeownerDetail() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const mockLeads = useEffectiveMockLeads()
   const mockClosedSales = useEffectiveMockClosedSales()
+  const platformSettings = usePlatformSettings()
 
   // PR-331 — vendor sent_projects scoped to this homeowner; drives the
   // project-picker dropdown on upload + resolves homeowner_id (DB UUID,
@@ -274,6 +279,33 @@ export default function VendorHomeownerDetail() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+  }
+
+  // Admin-margin viewer: regenerates the project_report PDF on demand with
+  // showMargin=true and opens as a blob. Never persisted — the only stored
+  // copy on homeowner_documents is the customer copy (showMargin=false).
+  // Route is already role-gated (RequireRole vendor/account_rep); this
+  // button is additionally feature-flagged by platform_settings.
+  const handleOpenAdminMargin = async (sp: SentProject) => {
+    try {
+      const input = resolveProjectReport({ sp, showMargin: true })
+      const { bytes } = await generateProjectReportPdf(input)
+      const buf = new Uint8Array(bytes.byteLength)
+      buf.set(bytes)
+      const blob = new Blob([buf], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      console.error('[homeowner-detail] admin-margin PDF failed:', err)
+      toast.error('Failed to open admin report.')
+    }
   }
 
   return (
@@ -481,6 +513,17 @@ export default function VendorHomeownerDetail() {
                         <Download className="h-3.5 w-3.5" />
                         Download
                       </Button>
+                      {d.docType === 'project_report' && project && platformSettings.data?.showMarginOnProjectReport && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => handleOpenAdminMargin(project)}
+                          data-vendor-doc-admin-margin={d.id}
+                        >
+                          View with margin
+                        </Button>
+                      )}
                       {isMine && (
                         <Button
                           variant="ghost"
