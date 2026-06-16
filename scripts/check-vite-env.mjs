@@ -1,11 +1,20 @@
 #!/usr/bin/env node
 // Build-time preflight guard for VITE_ env surface.
 //
-// Fails the build if any `import.meta.env.VITE_*` referenced in `src/`
-// is missing from `process.env` or is the empty string.
+// Three failure classes (two-rail bake-defense + FU-1 literal-placeholder rail):
+//   1. MISSING — `import.meta.env.VITE_*` referenced in src/ but unset in process.env
+//   2. EMPTY   — set to ""
+//   3. POISONED — set to a value that is clearly a placeholder that escaped expansion
+//                 (literal $VAR / ${VAR} / "undefined" / .env.example-style stubs).
+//                 FU-1 rail; banked discipline `feedback_two_rail_defense` extended.
+//                 Specific incident motivating this rail: pin-33 preview white-screen
+//                 caused by VITE_SUPABASE_URL set to the literal string "$SUPABASE_URL"
+//                 (shell substitution did not fire; non-empty so EMPTY check did not catch).
 //
-// Anchor: banked discipline `feedback_vite_env_full_surface_audit_before_local_wrangler_deploy`
-// (2026-05-30 N=2 BC demo-login arc — round-1 PWs missing + round-2 SUPABASE_URL/key missing).
+// Anchors:
+//   - `feedback_vite_env_full_surface_audit_before_local_wrangler_deploy`
+//     (2026-05-30 N=2 BC demo-login arc — round-1 PWs missing + round-2 SUPABASE_URL/key missing)
+//   - `feedback_two_rail_defense` (FU-1: fold third rail for literal-placeholder)
 //
 // Runs as `prebuild` (npm runs prebuild → build automatically).
 // Local invocation: `node scripts/check-vite-env.mjs` (after sourcing secrets.env).
@@ -30,6 +39,47 @@ const OPTIONAL = new Set([
   // endpoint. Override only if the upstream endpoint moves. Prod-safe fallback.
   'VITE_PARCEL_FL_URL',
 ])
+
+// FU-1 literal-placeholder rail. A value matching ANY of these patterns is
+// rejected even when non-empty. Patterns chosen from observed real failures
+// + .env.example template values that should never reach a real build.
+//
+// Anti-overmatch: each pattern is anchored or specific enough that a real
+// secret cannot accidentally match (e.g. an anon key starting with "your-"
+// would still pass MISSING and EMPTY but be flagged here — and indeed
+// "your-anon-key-here" IS the .env.example stub we want to catch).
+const POISON_PATTERNS = [
+  // 1a. Whole-value literal shell-variable token that did not expand (the pin-33 trigger).
+  //     Matches "$NAME" or "${NAME}" as the entire value.
+  { re: /^\$\{?[A-Z_][A-Z0-9_]*\}?$/, label: 'literal shell variable ($VAR / ${VAR})' },
+  // 1b. Substring literal shell-variable token — catches partial-substitution
+  //     failures like "https://${SUPABASE_URL}/foo" where shell expansion
+  //     silently dropped the variable mid-string. More common hand-edit
+  //     failure mode than whole-literal. Anchored on at least 2 chars after
+  //     the leading char so single-letter false positives (e.g. "$1") don't
+  //     trip; real secrets don't contain "${UPPER_TOKEN}" or "$UPPER_TOKEN"
+  //     substrings.
+  { re: /\$\{?[A-Z_][A-Z0-9_]+\}?/, label: 'embedded shell variable (partial substitution failure)' },
+  // 2. Literal "undefined" / "null" / "NaN" — JS-stringify failure mode
+  //    (e.g. `${process.env.FOO ?? null}` resolving to the literal string "null").
+  { re: /^(undefined|null|NaN)$/, label: 'literal JS-stringify token (undefined/null/NaN)' },
+  // 3. .env.example placeholders. Case-insensitive — .env.example stubs
+  //    frequently use mixed case ("your-API-key-here").
+  { re: /^your-[a-z0-9-]+-here$/i, label: '.env.example placeholder ("your-..-here")' },
+  { re: /^[a-z]{2,5}_test_xxx+$/i, label: '.env.example placeholder ("xxx" stub)' },
+  // (Google AIza-prefix pattern removed: real Google API keys also start with
+  // "AIza" and the prior narrow regex risked future false-positives. Patterns
+  // 3 + 4 below already catch "your-google-key-here" / "changeme" stubs.)
+  // 4. Generic placeholder words that should never be a real value.
+  { re: /^(your[-_]?[a-z]+|placeholder|todo|tbd|fixme|changeme)$/i, label: 'generic placeholder word' },
+]
+
+function findPoisonMatch(value) {
+  for (const p of POISON_PATTERNS) {
+    if (p.re.test(value)) return p.label
+  }
+  return null
+}
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -64,18 +114,28 @@ function check() {
   const referenced = collectVars()
   const missing = []
   const empty = []
+  const poisoned = []
   const present = []
 
   for (const [name, files] of referenced) {
     if (OPTIONAL.has(name)) continue
     const val = process.env[name]
-    if (val === undefined) missing.push({ name, files: [...files] })
-    else if (val === '') empty.push({ name, files: [...files] })
-    else present.push(name)
+    if (val === undefined) {
+      missing.push({ name, files: [...files] })
+    } else if (val === '') {
+      empty.push({ name, files: [...files] })
+    } else {
+      const poisonLabel = findPoisonMatch(val)
+      if (poisonLabel) {
+        poisoned.push({ name, files: [...files], value: val, label: poisonLabel })
+      } else {
+        present.push(name)
+      }
+    }
   }
 
   const total = referenced.size
-  const failed = missing.length + empty.length
+  const failed = missing.length + empty.length + poisoned.length
 
   if (failed === 0) {
     console.log(`[check-vite-env] ✓ ${present.length}/${total} VITE_ vars present in build env`)
@@ -103,6 +163,21 @@ function check() {
       for (const f of files.slice(0, 3)) console.error(`      ${f}`)
       if (files.length > 3) console.error(`      ...and ${files.length - 3} more`)
     }
+    console.error('[check-vite-env]')
+  }
+  if (poisoned.length) {
+    console.error(`[check-vite-env] POISONED (${poisoned.length}) — value looks like an unexpanded placeholder:`)
+    for (const { name, value, label, files } of poisoned) {
+      console.error(`  - ${name} = ${JSON.stringify(value)}  [${label}]`)
+      for (const f of files.slice(0, 3)) console.error(`      ${f}`)
+      if (files.length > 3) console.error(`      ...and ${files.length - 3} more`)
+    }
+    console.error('[check-vite-env]')
+    console.error('[check-vite-env] Most common cause: shell variable substitution did not')
+    console.error('[check-vite-env] fire (single-quoted heredoc, missing `set -a`, daemon-shell')
+    console.error('[check-vite-env] sourced secrets.env in a subshell whose env did not propagate).')
+    console.error('[check-vite-env] Fix: `set -a && source orgs/buildconnect/secrets.env && set +a`')
+    console.error('[check-vite-env] in the SAME shell as `npm run build`.')
     console.error('[check-vite-env]')
   }
   console.error('[check-vite-env] Fix: source orgs/buildconnect/secrets.env (or the')
