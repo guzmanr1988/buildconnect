@@ -17,27 +17,56 @@
 
 set -euo pipefail
 
-# Locate secrets.env. Default to the conventional path on this dev machine;
-# allow override via SECRETS_ENV_PATH for CI / other environments.
-DEFAULT_SECRETS="/Users/rodolfoguzman/Sage/orgs/buildconnect/secrets.env"
-SECRETS_ENV_PATH="${SECRETS_ENV_PATH:-$DEFAULT_SECRETS}"
+# Resolve secrets file location.
+#
+# Resolution order (first match wins):
+#   1. SECRETS_ENV_PATH=skip  → trust caller env (CI mode: secrets injected as env vars,
+#                                no file on disk). Skip the source step entirely.
+#   2. SECRETS_ENV_PATH=<path> → source the explicit path (hard-error if missing — caller
+#                                set it deliberately, so an absent file is a real failure).
+#   3. ${HOME}/Sage/orgs/buildconnect/secrets.env (default fallback, machine-agnostic)
+#      → source if present; otherwise fall through to (4).
+#   4. No file + already-populated env (VITE_SUPABASE_URL set non-empty) → trust caller env.
+#   5. No file + empty env → hard-error with guidance.
+#
+# This shape closes the prior "DEFAULT_SECRETS hardcoded user path + hard-error if missing"
+# leak: CI can inject env directly with no file, local dev gets the default fallback,
+# explicit override path stays hard-error to fail loud on typos.
 
-if [[ ! -f "$SECRETS_ENV_PATH" ]]; then
-  echo "[with-build-env] ERROR: secrets file not found at $SECRETS_ENV_PATH" >&2
-  echo "[with-build-env] Set SECRETS_ENV_PATH to an existing file, or place" >&2
-  echo "[with-build-env] secrets at the default path." >&2
-  exit 2
+if [[ "${SECRETS_ENV_PATH:-}" == "skip" ]]; then
+  echo "[with-build-env] SECRETS_ENV_PATH=skip — trusting caller env, not sourcing any file." >&2
+elif [[ -n "${SECRETS_ENV_PATH:-}" ]]; then
+  if [[ ! -f "$SECRETS_ENV_PATH" ]]; then
+    echo "[with-build-env] ERROR: SECRETS_ENV_PATH=$SECRETS_ENV_PATH set but file does not exist." >&2
+    echo "[with-build-env] Either fix the path, unset SECRETS_ENV_PATH to use the default," >&2
+    echo "[with-build-env] or set SECRETS_ENV_PATH=skip to trust caller-provided env." >&2
+    exit 2
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "$SECRETS_ENV_PATH"
+  set +a
+else
+  DEFAULT_SECRETS="${HOME}/Sage/orgs/buildconnect/secrets.env"
+  if [[ -f "$DEFAULT_SECRETS" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$DEFAULT_SECRETS"
+    set +a
+  elif [[ -n "${VITE_SUPABASE_URL:-}" ]]; then
+    echo "[with-build-env] No secrets file; caller env already populated (VITE_SUPABASE_URL set). Proceeding." >&2
+  else
+    echo "[with-build-env] ERROR: no secrets file at $DEFAULT_SECRETS and caller env is empty." >&2
+    echo "[with-build-env] Either place secrets at the default path, set SECRETS_ENV_PATH to an" >&2
+    echo "[with-build-env] explicit file, or set SECRETS_ENV_PATH=skip after injecting required" >&2
+    echo "[with-build-env] VITE_* / SUPABASE_* / STRIPE_* vars directly into the env." >&2
+    exit 2
+  fi
 fi
-
-# `set -a` makes every subsequently sourced assignment automatically exported.
-set -a
-# shellcheck disable=SC1090
-source "$SECRETS_ENV_PATH"
-set +a
 
 if [[ $# -eq 0 ]]; then
   echo "[with-build-env] Usage: $0 <command> [args...]" >&2
-  echo "[with-build-env] Sourced $SECRETS_ENV_PATH; no command given." >&2
+  echo "[with-build-env] Env prepared; no command given." >&2
   exit 1
 fi
 

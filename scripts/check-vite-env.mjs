@@ -49,18 +49,27 @@ const OPTIONAL = new Set([
 // would still pass MISSING and EMPTY but be flagged here — and indeed
 // "your-anon-key-here" IS the .env.example stub we want to catch).
 const POISON_PATTERNS = [
-  // 1. Literal shell-variable token that did not expand (the pin-33 trigger).
-  //    Matches "$NAME" or "${NAME}" anywhere; common when single-quoted in a
-  //    shell heredoc, when set -a was missed, or when daemon-shell sourcing
-  //    failed silently.
+  // 1a. Whole-value literal shell-variable token that did not expand (the pin-33 trigger).
+  //     Matches "$NAME" or "${NAME}" as the entire value.
   { re: /^\$\{?[A-Z_][A-Z0-9_]*\}?$/, label: 'literal shell variable ($VAR / ${VAR})' },
-  // 2. Literal "undefined" string — happens when a JS layer coerced an
-  //    undefined value with `String(x)` before passing to env.
-  { re: /^undefined$/, label: 'literal string "undefined"' },
-  // 3. .env.example placeholders.
-  { re: /^your-[a-z0-9-]+-here$/, label: '.env.example placeholder ("your-..-here")' },
+  // 1b. Substring literal shell-variable token — catches partial-substitution
+  //     failures like "https://${SUPABASE_URL}/foo" where shell expansion
+  //     silently dropped the variable mid-string. More common hand-edit
+  //     failure mode than whole-literal. Anchored on at least 2 chars after
+  //     the leading char so single-letter false positives (e.g. "$1") don't
+  //     trip; real secrets don't contain "${UPPER_TOKEN}" or "$UPPER_TOKEN"
+  //     substrings.
+  { re: /\$\{?[A-Z_][A-Z0-9_]+\}?/, label: 'embedded shell variable (partial substitution failure)' },
+  // 2. Literal "undefined" / "null" / "NaN" — JS-stringify failure mode
+  //    (e.g. `${process.env.FOO ?? null}` resolving to the literal string "null").
+  { re: /^(undefined|null|NaN)$/, label: 'literal JS-stringify token (undefined/null/NaN)' },
+  // 3. .env.example placeholders. Case-insensitive — .env.example stubs
+  //    frequently use mixed case ("your-API-key-here").
+  { re: /^your-[a-z0-9-]+-here$/i, label: '.env.example placeholder ("your-..-here")' },
   { re: /^[a-z]{2,5}_test_xxx+$/i, label: '.env.example placeholder ("xxx" stub)' },
-  { re: /^AIza[A-Z]{3,}$/, label: 'Google API key placeholder' },
+  // (Google AIza-prefix pattern removed: real Google API keys also start with
+  // "AIza" and the prior narrow regex risked future false-positives. Patterns
+  // 3 + 4 below already catch "your-google-key-here" / "changeme" stubs.)
   // 4. Generic placeholder words that should never be a real value.
   { re: /^(your[-_]?[a-z]+|placeholder|todo|tbd|fixme|changeme)$/i, label: 'generic placeholder word' },
 ]

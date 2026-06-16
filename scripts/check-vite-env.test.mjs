@@ -54,13 +54,26 @@ function buildBaselineEnv() {
 }
 
 const cases = [
-  { name: 'literal $VAR', poison: '$SUPABASE_URL' },
-  { name: 'literal ${VAR}', poison: '${SUPABASE_URL}' },
+  { name: 'literal $VAR (whole)', poison: '$SUPABASE_URL' },
+  { name: 'literal ${VAR} (whole)', poison: '${SUPABASE_URL}' },
+  { name: 'embedded $VAR (partial)', poison: 'https://$SUPABASE_URL/foo' },
+  { name: 'embedded ${VAR} (partial)', poison: 'https://${SUPABASE_URL}/foo' },
   { name: 'literal "undefined"', poison: 'undefined' },
-  { name: 'your-..-here stub', poison: 'your-anon-key-here' },
+  { name: 'literal "null"', poison: 'null' },
+  { name: 'literal "NaN"', poison: 'NaN' },
+  { name: 'your-..-here stub (lower)', poison: 'your-anon-key-here' },
+  { name: 'your-..-here stub (mixed)', poison: 'your-API-key-here' },
   { name: 'pk_test_xxx stub', poison: 'pk_test_xxx' },
   { name: 'generic placeholder', poison: 'changeme' },
 ]
+
+// OPTIONAL list — must mirror check-vite-env.mjs:37-42. Kept duplicated here
+// rather than imported because the guard script has a top-level
+// `process.exit(check())` that runs on import. If the OPTIONAL list grows,
+// update both places (or refactor the guard to export and run-on-main only).
+const OPTIONAL_VARS = new Set([
+  'VITE_PARCEL_FL_URL',
+])
 
 const baseline = buildBaselineEnv()
 const referenced = Object.keys(baseline)
@@ -68,7 +81,14 @@ if (referenced.length === 0) {
   console.error('No VITE_ vars found in src/ — cannot run smoke test.')
   process.exit(2)
 }
-const target = referenced[0]
+// Pick a REQUIRED slot (not in OPTIONAL). If we poisoned an OPTIONAL var,
+// the guard skips it (`if (OPTIONAL.has(name)) continue`) and the test would
+// pass for the wrong reason — target-skipped, not target-validated.
+const target = referenced.find((n) => !OPTIONAL_VARS.has(n))
+if (!target) {
+  console.error('No REQUIRED VITE_ var found (all are in OPTIONAL_VARS?) — cannot run smoke test.')
+  process.exit(2)
+}
 let failed = 0
 
 for (const c of cases) {
