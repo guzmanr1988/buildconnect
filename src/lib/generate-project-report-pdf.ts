@@ -237,10 +237,9 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   sectionHeader(c, 'PRICING')
   const labelX = MARGIN
   const amountX = c.width - MARGIN - 80
-  // Customer copy (option A) renders each line LABEL-ONLY — no $ amount
-  // shown. The resolver guarantees amountCents === undefined for every
-  // line in the customer pricing list, so the renderer cannot invent a
-  // dollar figure even by mistake. Margin leak is structurally impossible.
+  // Customer copy (option B, kratos msg 1781647952503): pricing.lines is
+  // empty — section renders ONLY the Project Total row. Admin copy: full
+  // itemized lines + Upsale + Margin (when showMargin=true).
   for (const line of pricing.lines) {
     ensureRoom(c, LINE)
     drawText(c, line.label, labelX, { size: 9 })
@@ -250,7 +249,8 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
     c.y -= LINE
   }
   // Total — a divider above, then bold. ALWAYS shown (both audiences).
-  // Customer total = saleAmount = exactly what the customer signed for.
+  // Customer total = saleAmount = exactly what the customer signed for,
+  // and the only dollar figure in PRICING on the customer copy.
   ensureRoom(c, LINE + 6)
   c.y -= 4
   c.page.drawLine({
@@ -271,7 +271,9 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
     drawText(c, formatCents(pricing.marginCents), amountX, { size: 9, color: gray })
     c.y -= LINE
   }
-  divLine(c)
+  // No trailing divLine — PRICING is the last content section, footer
+  // pins at y=30 on the current page (iris GAP B: avoids orphan page 2
+  // when divLine→ensureRoom→newPage at section tail).
 }
 
 function drawFooter(c: Cursor, input: ProjectReportInput): void {

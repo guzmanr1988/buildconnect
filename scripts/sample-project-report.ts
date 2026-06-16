@@ -158,15 +158,17 @@ async function main() {
     )
   }
 
-  // 4. CORE LEAK ASSERTION (kratos directive): every customer PRICING line
-  //    must be label-only (amountCents === undefined). If even one line
-  //    has a dollar amount, the renderer will draw it → markup leaks.
-  for (const line of customer.pricing.lines) {
-    if (line.amountCents !== undefined) {
-      throw new Error(
-        `MARGIN-LEAK: customer copy line "${line.label}" carries amountCents=${line.amountCents} — must be undefined`,
-      )
-    }
+  // 4. OPTION B CORE LEAK ASSERTION (kratos msg 1781647952503-kratos-pbb03):
+  //    customer PRICING section MUST contain exactly ONE dollar figure
+  //    (the Project Total = saleAmount) and ZERO item rows. Empty lines
+  //    array structurally guarantees this — renderer's for-loop is a no-op,
+  //    only the Total row renders. Showing real per-item amounts would
+  //    reopen the leak because baseSum ($14,950) vs Total ($16,800) makes
+  //    the $1,850 markup visibly subtractable even without a Margin row.
+  if (customer.pricing.lines.length !== 0) {
+    throw new Error(
+      `OPTION-B BREACH: customer pricing.lines must be empty — got ${customer.pricing.lines.length} item(s): ${customer.pricing.lines.map((l) => l.label).join(', ')}`,
+    )
   }
 
   // 5. Admin copy MUST be fully itemized.

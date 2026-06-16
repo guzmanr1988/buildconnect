@@ -270,23 +270,19 @@ export function resolveProjectReport(input: ResolveProjectReportInput): ProjectR
     marginCents = totalCents - presetSum
   }
 
-  // CUSTOMER COPY PRICING (option A, kratos msg 1781647591818-kratos-3dz6f):
-  //   - Filter out auto_sold_adjustment lines (Upsale/Discount = Rod markup).
-  //   - Strip amountCents from remaining lines so they render label-only.
-  //   - Total = saleAmount (what the customer signed for).
-  // No per-item dollar shown → no $1,850 arithmetic gap → no markup leak.
+  // CUSTOMER COPY PRICING (option B, kratos msg 1781647952503-kratos-pbb03):
+  //   - Drop ALL line items — bare label-only rows visually parsed as a
+  //     render error per iris round 2, and showing real amounts would
+  //     reopen the leak (baseSum $14,950 vs Total $16,800 = $1,850 markup
+  //     visibly subtractable).
+  //   - PRICING section renders ONLY the "Project Total: $X" row where
+  //     X = saleAmount. Items are already enumerated in SCOPE OF WORK
+  //     above, so Rod's "all items in the report" intent is met without
+  //     itemized pricing.
+  //   - Total = saleAmount = exactly what the customer signed for.
+  // No per-item rows, no arithmetic gap, single dollar figure = leak-safe.
   const audience: 'customer' | 'admin' = showMargin ? 'admin' : 'customer'
-  const pricingLines: ProjectReportPricingLine[] =
-    audience === 'admin'
-      ? fullLines
-      : fullLines
-          .filter((l) => l.source !== 'auto_sold_adjustment')
-          .map((l) => ({
-            label: l.label,
-            amountCents: undefined,
-            originalAmountCents: undefined,
-            source: l.source,
-          }))
+  const pricingLines: ProjectReportPricingLine[] = audience === 'admin' ? fullLines : []
 
   const projectPermit = sp.projectPermit ?? sp.item.roofPermit ?? null
   const permitWaiver = sp.projectPermitWaiver ?? sp.item.permitWaiver ?? null
