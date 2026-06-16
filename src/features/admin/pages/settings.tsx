@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import {
   Settings, Wrench, Eye, Layers,
@@ -22,6 +22,10 @@ import {
   FEATURE_CATEGORY_LABEL,
   FEATURE_CATEGORY_ORDER,
 } from '@/lib/feature-flags-inventory'
+import {
+  usePlatformSettings,
+  useSavePlatformSettings,
+} from '@/lib/hooks/use-platform-settings'
 import type { AppSettings } from '@/types'
 
 const fadeUp = {
@@ -65,9 +69,38 @@ export default function SettingsPage() {
     stripeEnabled: false,
     stripeKey: '',
     mapsApiKey: '',
+    applicationFeeBps: 0,
+    homeownerPayoutFeeBps: 0,
   })
 
-  const handleSave = () => {
+  // Phase 1 Stripe wiring (kratos msg 1781569611114) — load + save the
+  // Stripe-relevant subset to platform_settings. Other ext.* fields stay
+  // local-state-only until each gets its own migration.
+  const platformSettings = usePlatformSettings()
+  const savePlatformSettings = useSavePlatformSettings()
+  useEffect(() => {
+    if (platformSettings.data) {
+      setExt((p) => ({
+        ...p,
+        stripeEnabled: platformSettings.data.stripeEnabled,
+        applicationFeeBps: platformSettings.data.applicationFeeBps,
+        homeownerPayoutFeeBps: platformSettings.data.homeownerPayoutFeeBps,
+      }))
+    }
+  }, [platformSettings.data])
+
+  const handleSave = async () => {
+    try {
+      await savePlatformSettings.mutateAsync({
+        stripeEnabled: ext.stripeEnabled,
+        applicationFeeBps: ext.applicationFeeBps,
+        homeownerPayoutFeeBps: ext.homeownerPayoutFeeBps,
+      })
+    } catch {
+      // platform_settings save failure is non-fatal for the rest of the
+      // form (which is still local-state-only); toast stays positive but
+      // the row will simply re-fetch on next page load.
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -312,19 +345,52 @@ export default function SettingsPage() {
                 <Switch aria-label="Stripe Payment Gateway" checked={ext.stripeEnabled} onCheckedChange={(val) => setExt((p) => ({ ...p, stripeEnabled: val }))} />
               </div>
               {ext.stripeEnabled && (
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                    Stripe API Key
-                  </Label>
-                  <Input
-                    aria-label="Stripe API Key"
-                    type="password"
-                    placeholder="sk_live_..."
-                    value={ext.stripeKey}
-                    onChange={(e) => setExt((p) => ({ ...p, stripeKey: e.target.value }))}
-                  />
-                </div>
+                <>
+                  <div className="rounded-md border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">Stripe secret key is stored server-side.</p>
+                    <p className="mt-1">
+                      Production and test secrets live in Supabase Edge Function secrets
+                      (<code className="text-[10px]">supabase secrets set STRIPE_SECRET_KEY=...</code>),
+                      never in this database. See the Stripe ops runbook for the configured-status check.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+                      Application Fee (basis points)
+                    </Label>
+                    <Input
+                      aria-label="Application Fee Basis Points"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      step={25}
+                      value={ext.applicationFeeBps}
+                      onChange={(e) => setExt((p) => ({ ...p, applicationFeeBps: Number(e.target.value) || 0 }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      BuildConnect cut on each milestone release. 100 bps = 1%. Per-customer overrides live in <code className="text-[10px]">application_fee_overrides</code>.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+                      Homeowner Payout Fee (basis points)
+                    </Label>
+                    <Input
+                      aria-label="Homeowner Payout Fee Basis Points"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      step={25}
+                      value={ext.homeownerPayoutFeeBps}
+                      onChange={(e) => setExt((p) => ({ ...p, homeownerPayoutFeeBps: Number(e.target.value) || 0 }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Fee taken from referral / financing-disbursement payouts to homeowners. Default 0 (referrer keeps full payout).
+                    </p>
+                  </div>
+                </>
               )}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
