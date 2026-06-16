@@ -103,10 +103,16 @@ function divLine(c: Cursor): void {
   c.y -= SECTION_GAP
 }
 
+// iris GAP 3 — uniform 200pt absolute value-offset across all field rows
+// (MARGIN + 150 = 200 from page edge). Replaces the prior +110 offset that
+// caused "HOA / Association required:Yes" + "Pitched area (waste-incl.):"
+// label-value collisions iris flagged.
+const FIELD_VALUE_OFFSET = 150
+
 function fieldRow(c: Cursor, label: string, value: string): void {
   ensureRoom(c, LINE)
   drawText(c, `${label}:`, MARGIN, { size: 9, f: c.bold })
-  drawText(c, value, MARGIN + 110, { size: 9 })
+  drawText(c, value, MARGIN + FIELD_VALUE_OFFSET, { size: 9 })
   c.y -= LINE
 }
 
@@ -138,6 +144,11 @@ function drawSummary(c: Cursor, input: ProjectReportInput): void {
     'Contractor',
     `${input.summary.contractorCompany} (${input.summary.contractorName})`,
   )
+  // iris GAP 4 — Sold row directly under Contractor when set; absent
+  // pre-sale. Reads from the resolver-formatted summary.soldAt.
+  if (input.summary.soldAt) {
+    fieldRow(c, 'Sold', input.summary.soldAt)
+  }
   fieldRow(c, 'Scheduled', `${input.summary.bookingDate} at ${input.summary.bookingTime}`)
   if (input.summary.homeownerName) {
     fieldRow(c, 'Homeowner', input.summary.homeownerName)
@@ -155,7 +166,7 @@ function drawScope(c: Cursor, items: ProjectReportScopeItem[]): void {
     ensureRoom(c, LINE)
     drawText(c, `•  ${it.label}`, MARGIN, { size: 9 })
     if (it.detail) {
-      drawText(c, it.detail, MARGIN + 200, { size: 9, color: gray })
+      drawText(c, it.detail, MARGIN + 250, { size: 9, color: gray })
     }
     c.y -= LINE
   }
@@ -226,13 +237,20 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   sectionHeader(c, 'PRICING')
   const labelX = MARGIN
   const amountX = c.width - MARGIN - 80
+  // Customer copy (option A) renders each line LABEL-ONLY — no $ amount
+  // shown. The resolver guarantees amountCents === undefined for every
+  // line in the customer pricing list, so the renderer cannot invent a
+  // dollar figure even by mistake. Margin leak is structurally impossible.
   for (const line of pricing.lines) {
     ensureRoom(c, LINE)
     drawText(c, line.label, labelX, { size: 9 })
-    drawText(c, formatCents(line.amountCents), amountX, { size: 9 })
+    if (line.amountCents !== undefined) {
+      drawText(c, formatCents(line.amountCents), amountX, { size: 9 })
+    }
     c.y -= LINE
   }
-  // Total — a divider above, then bold.
+  // Total — a divider above, then bold. ALWAYS shown (both audiences).
+  // Customer total = saleAmount = exactly what the customer signed for.
   ensureRoom(c, LINE + 6)
   c.y -= 4
   c.page.drawLine({
@@ -241,7 +259,7 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
     thickness: 0.5,
     color: dividerColor,
   })
-  drawText(c, 'Total', labelX, { size: 10, f: c.bold })
+  drawText(c, 'Project Total', labelX, { size: 10, f: c.bold })
   drawText(c, formatCents(pricing.totalCents), amountX, { size: 10, f: c.bold })
   c.y -= LINE
   // MARGIN ROW — gated on marginCents being defined. Customer-default copy

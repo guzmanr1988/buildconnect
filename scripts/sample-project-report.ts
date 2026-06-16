@@ -123,12 +123,66 @@ async function main() {
     recordIdOverride: 'BC-SAMPLE-ADMIN',
   })
 
-  // Sanity check the margin-gate
+  // ── MARGIN-LEAK GUARDRAIL ASSERTIONS ──
+  // kratos msg 1781647591818-kratos-3dz6f: option A means the customer
+  // PDF must contain NO per-item dollar amount in PRICING + the only
+  // dollar in PRICING equals saleAmount. The resolver is the source of
+  // truth — the renderer is a pure function of the resolver output, so
+  // these data-layer assertions structurally guarantee the rendered PDF
+  // cannot leak markup (the renderer mathematically cannot draw a dollar
+  // for a line whose amountCents is undefined).
+
+  // 1. Audience tag.
+  if (customer.pricing.audience !== 'customer') {
+    throw new Error(`Customer copy audience must be 'customer' — got '${customer.pricing.audience}'`)
+  }
+  if (admin.pricing.audience !== 'admin') {
+    throw new Error(`Admin copy audience must be 'admin' — got '${admin.pricing.audience}'`)
+  }
+
+  // 2. Margin gate.
   if (customer.pricing.marginCents !== undefined) {
     throw new Error('MARGIN-GATE BREACH: customer copy computed marginCents — must be undefined')
   }
   if (admin.pricing.marginCents === undefined) {
     throw new Error('Admin copy missing marginCents — resolver did not compute when showMargin=true')
+  }
+
+  // 3. Customer copy must NOT carry auto_sold_adjustment (Upsale/Discount = markup).
+  const customerLeakedAdjustment = customer.pricing.lines.find(
+    (l) => l.source === 'auto_sold_adjustment',
+  )
+  if (customerLeakedAdjustment) {
+    throw new Error(
+      `MARGIN-LEAK: customer copy carries auto_sold_adjustment line "${customerLeakedAdjustment.label}"`,
+    )
+  }
+
+  // 4. CORE LEAK ASSERTION (kratos directive): every customer PRICING line
+  //    must be label-only (amountCents === undefined). If even one line
+  //    has a dollar amount, the renderer will draw it → markup leaks.
+  for (const line of customer.pricing.lines) {
+    if (line.amountCents !== undefined) {
+      throw new Error(
+        `MARGIN-LEAK: customer copy line "${line.label}" carries amountCents=${line.amountCents} — must be undefined`,
+      )
+    }
+  }
+
+  // 5. Admin copy MUST be fully itemized.
+  for (const line of admin.pricing.lines) {
+    if (line.amountCents === undefined) {
+      throw new Error(`Admin copy line "${line.label}" missing amountCents — must be set`)
+    }
+  }
+
+  // 6. The customer totalCents MUST equal saleAmount (what the customer signed
+  //    for). Anything else means the total is fabricated.
+  const expectedSaleCents = Math.round((FIXTURE_SP.saleAmount ?? 0) * 100)
+  if (customer.pricing.totalCents !== expectedSaleCents) {
+    throw new Error(
+      `Customer totalCents ${customer.pricing.totalCents} !== saleAmount cents ${expectedSaleCents}`,
+    )
   }
 
   const customerOut = await generateProjectReportPdf(customer)
@@ -143,11 +197,17 @@ async function main() {
   console.log('Admin PDF (showMargin=true):    ', adminPath, `(${adminOut.bytes.length} bytes)`)
   console.log()
   console.log('Customer pricing:')
-  console.log('  total:', customer.pricing.totalCents, 'cents')
+  console.log('  audience:', customer.pricing.audience)
+  console.log('  total:', customer.pricing.totalCents, 'cents (== saleAmount)')
   console.log('  margin:', customer.pricing.marginCents, '(must be undefined)')
+  console.log('  lines:', customer.pricing.lines.length, 'all label-only (amountCents=undefined)')
   console.log('Admin pricing:')
+  console.log('  audience:', admin.pricing.audience)
   console.log('  total:', admin.pricing.totalCents, 'cents')
   console.log('  margin:', admin.pricing.marginCents, 'cents')
+  console.log('  lines:', admin.pricing.lines.length, 'fully itemized')
+  console.log()
+  console.log('All margin-leak guardrails PASS ✓')
 }
 
 main().catch((err) => {

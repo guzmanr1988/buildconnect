@@ -40,10 +40,15 @@ export interface ProjectReportScopeItem {
 
 export interface ProjectReportPricingLine {
   label: string
-  amountCents: number
+  // CUSTOMER COPY: undefined — the renderer draws the line label-only, no
+  // dollar amount. ADMIN COPY: set to the line's amount in cents.
+  // This is the structural half of the margin-leak guardrail (option A,
+  // kratos msg 1781647591818-kratos-3dz6f): if amountCents is undefined,
+  // the renderer cannot invent a dollar figure to show.
+  amountCents?: number
   // Phase-B vendor-edit arrows (#344) — when amount differs from
-  // originalAmount the PDF can render a ▲/▼ marker. originalAmountCents
-  // is omitted on auto_sold_adjustment lines (delta-only).
+  // originalAmount the admin PDF can render a ▲/▼ marker. Customer copy
+  // never has amountCents so this is ignored there.
   originalAmountCents?: number
   source?: PriceLineItem['source']
 }
@@ -61,6 +66,9 @@ export interface ProjectReportInput {
     contractorName: string
     bookingDate: string
     bookingTime: string
+    // Formatted soldAt — undefined when sp.soldAt is unset (project not
+    // marked sold). Renderer skips the row when undefined (iris GAP 4).
+    soldAt?: string
     homeownerName: string
     homeownerAddress: string
   }
@@ -92,12 +100,21 @@ export interface ProjectReportInput {
 
   // ── PRICING ──
   pricing: {
+    // CUSTOMER COPY: auto_sold_adjustment lines (Upsale / Discount) are
+    // filtered out + remaining base lines carry no amountCents (label-only).
+    // ADMIN COPY: full lines including Upsale row, each with amountCents.
+    // Filter happens in the resolver; renderer is a pure function of this
+    // shape so the markup cannot leak through a rendering bug.
     lines: ProjectReportPricingLine[]
     totalCents: number
     // ONLY populated when showMargin=true. Customer-default copy
     // (showMargin=false) leaves this undefined. PDF generator skips the
     // entire margin row when undefined.
     marginCents?: number
+    // Audience tag — derived from showMargin. Harness asserts on this to
+    // structurally prove the customer copy never carries per-item dollar
+    // amounts in the lines array (option A, kratos msg 1781647591818).
+    audience: 'customer' | 'admin'
   }
 }
 
@@ -227,7 +244,9 @@ export interface ResolveProjectReportInput {
 export function resolveProjectReport(input: ResolveProjectReportInput): ProjectReportInput {
   const { sp, showMargin, generatedAtOverride, recordIdOverride } = input
 
-  const lines: ProjectReportPricingLine[] = (sp.priceLineItems ?? []).map((p) => ({
+  // Full line set — preset / preset_calculated / vendor_edit / auto_sold_adjustment.
+  // Used for the admin copy + as the source for the margin computation.
+  const fullLines: ProjectReportPricingLine[] = (sp.priceLineItems ?? []).map((p) => ({
     label: p.label,
     amountCents: Math.round(p.amount * 100),
     originalAmountCents:
@@ -237,19 +256,37 @@ export function resolveProjectReport(input: ResolveProjectReportInput): ProjectR
 
   const totalCents = sp.saleAmount
     ? Math.round(sp.saleAmount * 100)
-    : lines.reduce((sum, l) => sum + l.amountCents, 0)
+    : fullLines.reduce((sum, l) => sum + (l.amountCents ?? 0), 0)
 
   // MARGIN-GATE: only compute when showMargin=true. The customer-default
   // copy (showMargin=false) never even sees this number — undefined here
   // means the generator structurally cannot render it.
   let marginCents: number | undefined
   if (showMargin) {
-    const presetSum = lines.reduce(
-      (sum, l) => sum + (l.originalAmountCents ?? l.amountCents),
+    const presetSum = fullLines.reduce(
+      (sum, l) => sum + (l.originalAmountCents ?? l.amountCents ?? 0),
       0,
     )
     marginCents = totalCents - presetSum
   }
+
+  // CUSTOMER COPY PRICING (option A, kratos msg 1781647591818-kratos-3dz6f):
+  //   - Filter out auto_sold_adjustment lines (Upsale/Discount = Rod markup).
+  //   - Strip amountCents from remaining lines so they render label-only.
+  //   - Total = saleAmount (what the customer signed for).
+  // No per-item dollar shown → no $1,850 arithmetic gap → no markup leak.
+  const audience: 'customer' | 'admin' = showMargin ? 'admin' : 'customer'
+  const pricingLines: ProjectReportPricingLine[] =
+    audience === 'admin'
+      ? fullLines
+      : fullLines
+          .filter((l) => l.source !== 'auto_sold_adjustment')
+          .map((l) => ({
+            label: l.label,
+            amountCents: undefined,
+            originalAmountCents: undefined,
+            source: l.source,
+          }))
 
   const projectPermit = sp.projectPermit ?? sp.item.roofPermit ?? null
   const permitWaiver = sp.projectPermitWaiver ?? sp.item.permitWaiver ?? null
@@ -266,6 +303,12 @@ export function resolveProjectReport(input: ResolveProjectReportInput): ProjectR
       contractorName: sp.contractor.name,
       bookingDate: sp.booking.date,
       bookingTime: sp.booking.time,
+      soldAt: sp.soldAt
+        ? new Date(sp.soldAt).toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
+        : undefined,
       homeownerName: sp.homeowner?.name ?? '',
       homeownerAddress: sp.homeowner?.address ?? sp.item.address?.full ?? '',
     },
@@ -285,9 +328,10 @@ export function resolveProjectReport(input: ResolveProjectReportInput): ProjectR
       poolSurveyRequired: sp.poolSurvey,
     },
     pricing: {
-      lines,
+      lines: pricingLines,
       totalCents,
       marginCents,
+      audience,
     },
   }
 }
