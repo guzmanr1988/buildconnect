@@ -46,3 +46,27 @@ export const STRIPE_EVENTS_NEEDED = [
   'charge.refunded',
   'charge.dispute.created',
 ] as const;
+
+// Referral program defaults — applied when no row in referral_bonus_overrides
+// for a given referrer. Kept in sync with platform_settings.default_referral_bonus_cents
+// (migration 072 ALTER ADD COLUMN). The DB column is the source of truth for
+// admin-editable defaults; this constant is a build-time fallback used when
+// platform_settings hasn't been loaded yet (initial render, network failure).
+export const DEFAULT_REFERRAL_BONUS_CENTS = 50_000; // $500 per kratos directive
+
+// Phase 2 onboarding endpoints — Edge Functions deployed alongside migration 069.
+export const STRIPE_CONNECT_ONBOARDING_FN = 'stripe-connect-onboarding' as const;
+export const STRIPE_CONNECT_REFRESH_FN = 'stripe-connect-refresh' as const;
+
+// Connected-account status state machine surfaced in the Banking/Payouts UI.
+// Mirrors escrow_accounts.status enum from migration 069, with one synthetic
+// state — 'not_connected' — for the "no row yet" case the DB doesn't have to
+// represent.
+export const CONNECT_UI_STATES = [
+  'not_connected',
+  'pending_verification',
+  'active',
+  'restricted',
+  'rejected',
+] as const;
+export type ConnectUiState = (typeof CONNECT_UI_STATES)[number];

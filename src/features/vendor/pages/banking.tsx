@@ -43,6 +43,7 @@ import { useCommissionPaymentsStore, type CommissionPayment } from '@/stores/com
 import { useRepPayConfigStore, type RepPayMode } from '@/stores/rep-pay-config-store'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
+import { VendorConnectPayoutsCard } from '@/features/vendor/components/connect-payouts-card'
 import { cn } from '@/lib/utils'
 
 interface PartialPaymentDialogProps {
@@ -621,6 +622,12 @@ export default function VendorBanking() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Stripe Connect Express payouts CTA — Phase 2 of stripe-connect-preview
+          (task_132 directive #3). Lands after Payment Methods, before Account
+          Rep Payments. Receives milestone releases + commission payouts once
+          Rod-provided test keys are set in Edge Function env. */}
+      <VendorConnectPayoutsCard />
 
       {/* Ship #21 — Account Rep Payments toggle. Shared state with
           the header toggle on /vendor/account-reps via
