@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy, Gift } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -58,6 +58,7 @@ const navItems: NavEntry[] = [
     ],
   },
   { to: '/admin/financing', icon: Wallet, label: 'Financing' },
+  { to: '/admin/referral-program', icon: Gift, label: 'Referral Program' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
   { to: '/admin/workflow', icon: GitBranch, label: 'Workflow' },
   { to: '/admin/activity', icon: ActivityIcon, label: 'Activity' },
