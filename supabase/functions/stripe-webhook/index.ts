@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno'
 
 // Derive escrow_accounts.status from a Stripe account.updated payload.
 // Mirrors the state machine in src/lib/financing/escrow/constants.ts —
@@ -25,11 +26,39 @@ serve(async (req) => {
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')
 
-  // TODO: Verify Stripe webhook signature
-  // const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!)
-  // const event = stripe.webhooks.constructEvent(body, sig, Deno.env.get('STRIPE_WEBHOOK_SECRET')!)
+  // Signature verification — anything mutating escrow_accounts (status /
+  // charges_enabled / payouts_enabled) MUST be proven to come from Stripe.
+  // constructEventAsync uses Web Crypto (Deno-compatible); the sync variant
+  // requires Node crypto and will not run here. Reject on missing header,
+  // missing secrets, or signature mismatch — never fall through to parse.
+  const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || ''
+  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || ''
+  if (!stripeKey || !webhookSecret) {
+    return new Response(JSON.stringify({ error: 'stripe_not_configured' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  if (!sig) {
+    return new Response(JSON.stringify({ error: 'missing_stripe_signature' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
-  const event = JSON.parse(body)
+  const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
+
+  let event: Stripe.Event
+  try {
+    event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('stripe webhook signature verification failed', msg)
+    return new Response(JSON.stringify({ error: 'invalid_signature' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -39,14 +68,18 @@ serve(async (req) => {
   switch (event.type) {
     case 'invoice.paid': {
       // Record subscription payment
-      const vendorId = event.data.object.metadata?.vendor_id
+      const invoice = event.data.object as Stripe.Invoice & {
+        metadata?: Record<string, string> | null
+        customer_name?: string | null
+      }
+      const vendorId = invoice.metadata?.vendor_id
       if (vendorId) {
         await supabase.from('transactions').insert({
           type: 'membership',
           vendor_id: vendorId,
-          company: event.data.object.customer_name || '',
+          company: invoice.customer_name || '',
           detail: 'Monthly Subscription',
-          amount: event.data.object.amount_paid / 100,
+          amount: (invoice.amount_paid ?? 0) / 100,
           status: 'paid',
         })
       }
@@ -60,18 +93,7 @@ serve(async (req) => {
       // Stripe Connect account state change. Flip escrow_accounts row
       // to track charges/payouts/requirements + derived status. Onboarded_at
       // stamps on first transition to 'active' and is left alone after.
-      const account = event.data.object as {
-        id: string
-        charges_enabled?: boolean
-        payouts_enabled?: boolean
-        requirements?: {
-          currently_due?: string[]
-          past_due?: string[]
-          eventually_due?: string[]
-          disabled_reason?: string | null
-          pending_verification?: string[]
-        } | null
-      }
+      const account = event.data.object as Stripe.Account
       if (!account?.id) break
 
       const status = deriveStatus(account)
