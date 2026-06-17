@@ -17,6 +17,12 @@ export interface PlatformSettings {
   stripeEnabled: boolean;
   applicationFeeBps: number;
   homeownerPayoutFeeBps: number;
+  // Migration 092 — admin-only "show margin on project report" toggle.
+  // Default-false floor: customer copies never expose Rod's margin. When
+  // true, the admin view of the project report PDF computes + renders the
+  // Margin row. Stored copy on homeowner_documents is always the customer
+  // copy (showMargin=false); the admin copy is regenerated on demand.
+  showMarginOnProjectReport: boolean;
   updatedAt: string | null;
 }
 
@@ -26,13 +32,14 @@ const DEFAULTS: PlatformSettings = {
   stripeEnabled: false,
   applicationFeeBps: DEFAULT_APPLICATION_FEE_BPS,
   homeownerPayoutFeeBps: DEFAULT_HOMEOWNER_PAYOUT_FEE_BPS,
+  showMarginOnProjectReport: false,
   updatedAt: null,
 };
 
 async function fetchPlatformSettings(): Promise<PlatformSettings> {
   const { data, error } = await supabase
     .from('platform_settings')
-    .select('stripe_enabled, application_fee_bps, homeowner_payout_fee_bps, updated_at')
+    .select('stripe_enabled, application_fee_bps, homeowner_payout_fee_bps, show_margin_on_project_report, updated_at')
     .eq('id', 1)
     .maybeSingle();
 
@@ -43,6 +50,7 @@ async function fetchPlatformSettings(): Promise<PlatformSettings> {
     stripeEnabled: !!data.stripe_enabled,
     applicationFeeBps: data.application_fee_bps ?? DEFAULT_APPLICATION_FEE_BPS,
     homeownerPayoutFeeBps: data.homeowner_payout_fee_bps ?? DEFAULT_HOMEOWNER_PAYOUT_FEE_BPS,
+    showMarginOnProjectReport: !!data.show_margin_on_project_report,
     updatedAt: data.updated_at ?? null,
   };
 }
@@ -54,6 +62,7 @@ async function savePlatformSettings(input: Omit<PlatformSettings, 'updatedAt'>):
       stripe_enabled: input.stripeEnabled,
       application_fee_bps: input.applicationFeeBps,
       homeowner_payout_fee_bps: input.homeownerPayoutFeeBps,
+      show_margin_on_project_report: input.showMarginOnProjectReport,
     })
     .eq('id', 1);
   if (error) throw error;
