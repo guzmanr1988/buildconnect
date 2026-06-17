@@ -8,6 +8,7 @@ import {
   Plus,
   MapPin,
   User2,
+  Loader2,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -76,6 +77,9 @@ export function HomeownerDocumentsPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const [idPreviewOpen, setIdPreviewOpen] = useState(false)
   const [idBusy, setIdBusy] = useState(false)
+  const [previewDoc, setPreviewDoc] = useState<HomeownerDoc | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => {
     if (profile?.id && initializedFor !== profile.id) {
@@ -221,24 +225,25 @@ export function HomeownerDocumentsPage() {
     })
   }, [myDocs, sentProjects])
 
-  const handleDownload = async (doc: HomeownerDoc) => {
-    // Pre-open a placeholder window in the user-gesture tick — Chrome /
-    // Safari treat a window.open() that happens AFTER an await as a
-    // non-gesture popup and silently block it. We open empty here, await
-    // the signed URL, then point the placeholder at the URL. If the
-    // browser still blocked the popup (popup-blocker extension), fall
-    // back to same-tab navigation so the file always opens.
-    const placeholder = window.open('', '_blank', 'noopener,noreferrer')
+  const handleDocPreview = async (doc: HomeownerDoc) => {
+    setPreviewDoc(doc)
+    setPreviewUrl(null)
+    setPreviewLoading(true)
     const url = await getSignedUrl(doc.storagePath)
+    setPreviewLoading(false)
     if (!url) {
-      if (placeholder && !placeholder.closed) placeholder.close()
-      toast.error('Could not generate download link. Please try again.')
+      setPreviewDoc(null)
+      toast.error('Could not load document. Please try again.')
       return
     }
-    if (placeholder && !placeholder.closed) {
-      placeholder.location.href = url
-    } else {
-      window.location.assign(url)
+    setPreviewUrl(url)
+  }
+
+  const handlePreviewOpenChange = (open: boolean) => {
+    if (!open) {
+      setPreviewDoc(null)
+      setPreviewUrl(null)
+      setPreviewLoading(false)
     }
   }
 
@@ -310,14 +315,103 @@ export function HomeownerDocumentsPage() {
             <ProjectBox
               key={group.sentProjectId ?? '__customer__'}
               group={group}
-              onDownload={handleDownload}
+              onPreview={handleDocPreview}
               onRemove={handleRemove}
               onUpload={handleUploadToBox}
             />
           ))}
         </div>
       )}
+
+      <DocPreviewDialog
+        doc={previewDoc}
+        url={previewUrl}
+        loading={previewLoading}
+        onOpenChange={handlePreviewOpenChange}
+      />
     </div>
+  )
+}
+
+function DocPreviewDialog({
+  doc,
+  url,
+  loading,
+  onOpenChange,
+}: {
+  doc: HomeownerDoc | null
+  url: string | null
+  loading: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  if (!doc) return null
+  const filename = doc.filename || friendlyDocTitle(doc)
+  const isPdf =
+    doc.mimeType === 'application/pdf' || /\.pdf(\?|$)/i.test(filename)
+  const isImage =
+    doc.mimeType?.startsWith('image/') ||
+    /\.(png|jpe?g|gif|webp|heic|avif|svg)(\?|$)/i.test(filename)
+  return (
+    <Dialog open={!!doc} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-3xl p-3 gap-3"
+        data-testid="doc-preview-modal"
+      >
+        <div className="pr-8">
+          <p
+            className="text-sm font-semibold text-foreground truncate"
+            data-testid="doc-preview-title"
+          >
+            {friendlyDocTitle(doc)}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-muted/20 overflow-hidden flex items-center justify-center min-h-[40vh]">
+          {loading || !url ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-xs">Loading preview…</span>
+            </div>
+          ) : isPdf ? (
+            <iframe
+              src={url}
+              title={filename}
+              className="w-full h-[70vh] bg-white"
+              data-testid="doc-preview-iframe"
+            />
+          ) : isImage ? (
+            <img
+              src={url}
+              alt={filename}
+              className="max-h-[70vh] w-auto object-contain"
+              data-testid="doc-preview-image"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground text-center px-6">
+              <FileText className="h-8 w-8 text-muted-foreground/60" />
+              <p className="text-xs">
+                Preview not available for this file type. Use Download below to
+                open it.
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          {url && (
+            <a
+              href={url}
+              download={filename}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition"
+              data-testid="doc-preview-download"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -418,12 +512,12 @@ function PhotoIdSection({
 
 function ProjectBox({
   group,
-  onDownload,
+  onPreview,
   onRemove,
   onUpload,
 }: {
   group: SentProjectGroup
-  onDownload: (doc: HomeownerDoc) => void
+  onPreview: (doc: HomeownerDoc) => void
   onRemove: (id: string) => void
   onUpload: (group: SentProjectGroup, docType: HomeownerDocType, file: File) => Promise<void>
 }) {
@@ -538,7 +632,7 @@ function ProjectBox({
                   <DocRow
                     key={doc.id}
                     doc={doc}
-                    onDownload={onDownload}
+                    onPreview={onPreview}
                     onRemove={onRemove}
                   />
                 ))}
@@ -602,11 +696,11 @@ function ProjectBox({
 
 function DocRow({
   doc,
-  onDownload,
+  onPreview,
   onRemove,
 }: {
   doc: HomeownerDoc
-  onDownload: (doc: HomeownerDoc) => void
+  onPreview: (doc: HomeownerDoc) => void
   onRemove: (id: string) => void
 }) {
   const chip = uploaderChip(doc)
@@ -614,16 +708,20 @@ function DocRow({
     <div
       data-doc-id={doc.id}
       data-doc-type={doc.docType ?? 'unknown'}
-      className="flex items-start gap-2 rounded-lg border bg-background px-3 py-2"
+      role="button"
+      tabIndex={0}
+      onClick={() => onPreview(doc)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPreview(doc)
+        }
+      }}
+      className="flex items-start gap-2 rounded-lg border bg-background px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-doc-open-trigger
     >
       <FileText className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-      <button
-        type="button"
-        onClick={() => onDownload(doc)}
-        className="flex-1 min-w-0 text-left cursor-pointer hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-        data-doc-open-trigger
-        title="Open"
-      >
+      <div className="flex-1 min-w-0">
         <p className="text-xs font-medium text-foreground truncate">{friendlyDocTitle(doc)}</p>
         <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground mt-0.5">
           <span>{formatDocDate(doc.createdAt)}</span>
@@ -634,22 +732,16 @@ function DocRow({
             </>
           )}
         </div>
-      </button>
+      </div>
       <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
-          onClick={() => onDownload(doc)}
-          title="Download"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(doc.id)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove(doc.id)
+          }}
           title="Remove"
         >
           <Trash2 className="h-3.5 w-3.5" />
