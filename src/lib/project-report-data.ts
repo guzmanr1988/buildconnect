@@ -122,36 +122,36 @@ export interface ProjectReportInput {
 function formatCartItemMaterials(item: SentProject['item']): string[] {
   const out: string[] = []
   if (item.shingleSelection) {
-    out.push(`Shingle — ${item.shingleSelection.color}`)
+    out.push(`Shingle — ${humanize(item.shingleSelection.color)}`)
   } else if (item.shingleColor) {
-    out.push(`Shingle — ${item.shingleColor}`)
+    out.push(`Shingle — ${humanize(item.shingleColor)}`)
   }
   if (item.tileSelection) {
-    out.push(`${capitalize(item.tileSelection.tileType)} tile — ${item.tileSelection.tileColor}`)
+    out.push(`${humanize(item.tileSelection.tileType)} tile — ${humanize(item.tileSelection.tileColor)}`)
   } else if (item.tileType && item.tileColor) {
-    out.push(`${capitalize(item.tileType)} tile — ${item.tileColor}`)
+    out.push(`${humanize(item.tileType)} tile — ${humanize(item.tileColor)}`)
   }
   if (item.metalRoofSelection) {
-    out.push(`Metal roof — ${item.metalRoofSelection.color}`)
+    out.push(`Metal roof — ${humanize(item.metalRoofSelection.color)}`)
   }
   if (item.aluminumSelection) {
-    out.push(`Aluminum roof — ${item.aluminumSelection.color}`)
+    out.push(`Aluminum roof — ${humanize(item.aluminumSelection.color)}`)
   }
   if (item.flatRoofSelection) {
     out.push(`Flat roof — ${formatMembrane(item.flatRoofSelection.membraneType)}`)
   }
   if (item.garageDoorSelection) {
     const g = item.garageDoorSelection
-    out.push(`Garage door — ${g.type}, ${g.size}, ${g.color}${g.glass ? `, ${g.glass}` : ''}`)
+    out.push(`Garage door — ${humanize(g.type)}, ${humanize(g.size)}, ${humanize(g.color)}${g.glass ? `, ${humanize(g.glass)}` : ''}`)
   }
   for (const w of item.windowSelections ?? []) {
-    out.push(`Window × ${w.quantity} — ${w.type}, ${w.size}, ${w.frameColor} frame, ${w.glassColor} ${w.glassType}`)
+    out.push(`Window × ${w.quantity} — ${humanize(w.type)}, ${humanize(w.size)}, ${humanize(w.frameColor)} frame, ${humanize(w.glassColor)} ${humanize(w.glassType)}`)
   }
   for (const d of item.doorSelections ?? []) {
-    out.push(`Door × ${d.quantity} — ${d.type}, ${d.size}, ${d.frameColor} frame, ${d.glassColor} ${d.glassType}`)
+    out.push(`Door × ${d.quantity} — ${humanize(d.type)}, ${humanize(d.size)}, ${humanize(d.frameColor)} frame, ${humanize(d.glassColor)} ${humanize(d.glassType)}`)
   }
   for (const s of item.stormFrontSelections ?? []) {
-    out.push(`Storm front × ${s.quantity} — ${s.type}, ${s.size}, ${s.frameColor} frame, ${s.glassColor} ${s.glassType}`)
+    out.push(`Storm front × ${s.quantity} — ${humanize(s.type)}, ${humanize(s.size)}, ${humanize(s.frameColor)} frame, ${humanize(s.glassColor)} ${humanize(s.glassType)}`)
   }
   return out
 }
@@ -160,10 +160,6 @@ function formatMembrane(m: 'tpo' | 'epdm' | 'modified_bitumen'): string {
   if (m === 'tpo') return 'TPO membrane'
   if (m === 'epdm') return 'EPDM membrane'
   return 'Modified Bitumen membrane'
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function formatCartItemMeasurements(item: SentProject['item']): ProjectReportMeasurement[] {
@@ -191,7 +187,7 @@ function formatCartItemMeasurements(item: SentProject['item']): ProjectReportMea
   if (item.structureMeasurements) {
     for (const [key, m] of Object.entries(item.structureMeasurements)) {
       out.push({
-        label: humanizeOptionId(key),
+        label: humanize(key),
         value: `${m.sqft.toLocaleString()} sq ft`,
       })
     }
@@ -218,15 +214,15 @@ function buildScopeItems(item: SentProject['item']): ProjectReportScopeItem[] {
   for (const [groupId, selections] of Object.entries(item.selections ?? {})) {
     for (const optId of selections) {
       const qty = qtyMap[optId]
-      const label = humanizeOptionId(optId)
-      const detail = qty ? `Qty: ${qty} (in ${humanizeOptionId(groupId)})` : humanizeOptionId(groupId)
+      const label = humanize(optId)
+      const detail = qty ? `Qty: ${qty} (in ${humanize(groupId)})` : humanize(groupId)
       out.push({ label, detail })
     }
   }
   return out
 }
 
-function humanizeOptionId(id: string): string {
+function humanize(id: string): string {
   return id
     .split(/[_-]/)
     .map((part) => (part.length ? part.charAt(0).toUpperCase() + part.slice(1) : ''))
