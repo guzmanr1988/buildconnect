@@ -204,6 +204,55 @@ function drawPricing(c, pricing) {
   }
 }
 
+function wrapText(font, text, size, maxWidth) {
+  const words = text.split(/\s+/)
+  const lines = []
+  let cur = ''
+  for (const w of words) {
+    const trial = cur ? `${cur} ${w}` : w
+    if (font.widthOfTextAtSize(trial, size) > maxWidth && cur) {
+      lines.push(cur)
+      cur = w
+    } else {
+      cur = trial
+    }
+  }
+  if (cur) lines.push(cur)
+  return lines
+}
+
+function drawDisclaimer(c) {
+  const text = 'This Project Report is provided for informational and planning purposes only and does not constitute a contract, offer, or binding agreement. The official contract will be prepared by the licensed contractor awarded this project, and all figures and scope shown here are an estimate summary subject to the final contract terms.'
+  const labelSize = 8
+  const bodySize = 8
+  const bodyLine = 11
+  const padX = 10
+  const padTop = 10
+  const padBot = 9
+  const labelGap = 5
+  const innerWidth = c.width - MARGIN * 2 - padX * 2
+  const lines = wrapText(c.font, text, bodySize, innerWidth)
+  const blockHeight = padTop + labelSize + labelGap + bodySize + (lines.length - 1) * bodyLine + padBot
+  ensureRoom(c, blockHeight + SECTION_GAP)
+  c.y -= SECTION_GAP * 0.5
+  const boxTop = c.y
+  const boxBottom = boxTop - blockHeight
+  c.page.drawRectangle({
+    x: MARGIN, y: boxBottom, width: c.width - MARGIN * 2, height: blockHeight,
+    color: rgb(0.97, 0.98, 0.99),
+    borderColor: rgb(0.85, 0.87, 0.9),
+    borderWidth: 0.5,
+  })
+  let cursorY = boxTop - padTop - labelSize
+  c.page.drawText('NOTICE', { x: MARGIN + padX, y: cursorY, size: labelSize, font: c.bold, color: gray })
+  cursorY -= labelGap + bodySize
+  for (const line of lines) {
+    c.page.drawText(line, { x: MARGIN + padX, y: cursorY, size: bodySize, font: c.font, color: gray })
+    cursorY -= bodyLine
+  }
+  c.y = boxBottom - SECTION_GAP * 0.5
+}
+
 function drawFooter(c, input) {
   const footerY = 30
   c.page.drawLine({
@@ -285,6 +334,7 @@ drawMaterials(c, sample.materials)
 drawMeasurements(c, sample.measurements)
 drawPermits(c, sample.permits)
 drawPricing(c, sample.pricing)
+drawDisclaimer(c)
 drawFooter(c, sample)
 
 const bytes = await doc.save()
