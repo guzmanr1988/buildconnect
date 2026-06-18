@@ -583,17 +583,17 @@ export function HomeownerHome() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) handleReferClose() }}
             data-testid="refer-modal-backdrop"
           >
             <motion.div
               key="refer-sheet"
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 24 }}
-              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="w-full max-w-md rounded-3xl bg-card shadow-[0_8px_40px_rgba(0,0,0,0.18)] overflow-hidden"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-card shadow-[0_8px_40px_rgba(0,0,0,0.18)]"
               data-testid="refer-modal"
             >
               <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border/50">
