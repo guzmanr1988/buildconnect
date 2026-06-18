@@ -271,11 +271,11 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   // Total — a divider above, then bold. ALWAYS shown (both audiences).
   // Customer total = saleAmount = exactly what the customer signed for,
   // and the only dollar figure in PRICING on the customer copy.
-  ensureRoom(c, LINE + 6)
-  c.y -= 4
+  ensureRoom(c, LINE + 10)
+  c.y -= 10
   c.page.drawLine({
-    start: { x: MARGIN, y: c.y + 6 },
-    end: { x: c.width - MARGIN, y: c.y + 6 },
+    start: { x: MARGIN, y: c.y + 14 },
+    end: { x: c.width - MARGIN, y: c.y + 14 },
     thickness: 0.5,
     color: dividerColor,
   })
@@ -286,7 +286,8 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   // (showMargin=false in resolver) leaves it undefined, so this branch is
   // structurally unreachable. Second of the two layers in the margin-gate.
   if (pricing.marginCents !== undefined) {
-    ensureRoom(c, LINE)
+    ensureRoom(c, LINE + 6)
+    c.y -= 6
     c.page.drawRectangle({
       x: MARGIN - 4,
       y: c.y - 3,
