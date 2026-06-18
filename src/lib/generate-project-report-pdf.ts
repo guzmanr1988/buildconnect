@@ -91,6 +91,13 @@ function drawDivider(c: Cursor): void {
 
 function sectionHeader(c: Cursor, label: string): void {
   ensureRoom(c, LINE + SECTION_GAP)
+  c.page.drawRectangle({
+    x: MARGIN - 4,
+    y: c.y - 3,
+    width: c.width - MARGIN * 2 + 8,
+    height: LINE + 4,
+    color: rgb(0.96, 0.97, 0.98),
+  })
   drawText(c, label, MARGIN, { size: 8, f: c.bold, color: gray })
   c.y -= LINE
 }
@@ -125,9 +132,22 @@ function formatCents(cents: number): string {
 }
 
 function drawHeader(c: Cursor, input: ProjectReportInput): void {
+  c.page.drawRectangle({
+    x: 0,
+    y: c.y - 60,
+    width: c.width,
+    height: 70,
+    color: rgb(0.93, 0.96, 1.0),
+  })
   drawText(c, 'BuildConnect', MARGIN, { size: 20, f: c.bold, color: accent })
   c.y -= 22
   drawText(c, 'Project Report', MARGIN, { size: 12, f: c.bold, color: dark })
+  const vendorName = input.summary.contractorCompany
+  if (vendorName) {
+    const vendorSize = 10
+    const vendorWidth = c.font.widthOfTextAtSize(vendorName, vendorSize)
+    drawText(c, vendorName, c.width - MARGIN - vendorWidth, { size: vendorSize, color: dark })
+  }
   c.y -= LINE
   drawText(c, `Generated: ${input.generatedAt}`, MARGIN, { size: 9, color: gray })
   c.y -= LINE * 0.5
@@ -161,11 +181,12 @@ function drawSummary(c: Cursor, input: ProjectReportInput): void {
 function drawScope(c: Cursor, items: ProjectReportScopeItem[]): void {
   if (items.length === 0) return
   sectionHeader(c, 'SCOPE OF WORK')
+  const amountX = c.width - MARGIN - 80
   for (const it of items) {
     ensureRoom(c, LINE)
     drawText(c, `•  ${it.label}`, MARGIN, { size: 9 })
     if (it.detail) {
-      drawText(c, it.detail, MARGIN + 250, { size: 9, color: gray })
+      drawText(c, it.detail, amountX, { size: 8, color: gray })
     }
     c.y -= LINE
   }
@@ -253,19 +274,26 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   ensureRoom(c, LINE + 6)
   c.y -= 4
   c.page.drawLine({
-    start: { x: amountX, y: c.y + 6 },
+    start: { x: MARGIN, y: c.y + 6 },
     end: { x: c.width - MARGIN, y: c.y + 6 },
     thickness: 0.5,
     color: dividerColor,
   })
-  drawText(c, 'Project Total', labelX, { size: 10, f: c.bold })
-  drawText(c, formatCents(pricing.totalCents), amountX, { size: 10, f: c.bold })
+  drawText(c, 'Project Total', labelX, { size: 11, f: c.bold })
+  drawText(c, formatCents(pricing.totalCents), amountX, { size: 11, f: c.bold, color: accent })
   c.y -= LINE
   // MARGIN ROW — gated on marginCents being defined. Customer-default copy
   // (showMargin=false in resolver) leaves it undefined, so this branch is
   // structurally unreachable. Second of the two layers in the margin-gate.
   if (pricing.marginCents !== undefined) {
     ensureRoom(c, LINE)
+    c.page.drawRectangle({
+      x: MARGIN - 4,
+      y: c.y - 3,
+      width: c.width - MARGIN * 2 + 8,
+      height: LINE + 4,
+      color: rgb(1.0, 0.97, 0.93),
+    })
     drawText(c, 'Margin (admin)', labelX, { size: 9, color: gray })
     drawText(c, formatCents(pricing.marginCents), amountX, { size: 9, color: gray })
     c.y -= LINE
