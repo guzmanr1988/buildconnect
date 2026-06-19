@@ -32,15 +32,20 @@ export async function generateSubmissionPdf(input: SubmissionPdfInput): Promise<
   const page = pdfDoc.addPage(PageSizes.Letter)
   const { width, height } = page.getSize()
 
-  const margin = 50
-  const colWidth = width - margin * 2
-  let y = height - margin
-
+  const MARGIN = 50
   const LINE = 16
-  const SECTION_GAP = 22
-  const gray = rgb(0.4, 0.4, 0.4)
+  const SECTION_GAP = 26
+  // Uniform label→value offset — matches project-report spec to keep both PDFs consistent.
+  const FIELD_OFFSET = 150
+
   const dark = rgb(0.1, 0.1, 0.1)
+  const gray = rgb(0.4, 0.4, 0.4)
   const accent = rgb(0.13, 0.47, 0.94)
+  const dividerColor = rgb(0.8, 0.8, 0.8)
+  const bandBlue = rgb(0.93, 0.96, 1.0)
+  const chipAmber = rgb(1.0, 0.96, 0.88)
+
+  let y = height - MARGIN
 
   const text = (str: string, x: number, yPos: number, opts: {
     size?: number; color?: ReturnType<typeof rgb>; f?: typeof font
@@ -53,21 +58,55 @@ export async function generateSubmissionPdf(input: SubmissionPdfInput): Promise<
     })
   }
 
-  // ── Header ──
-  text('BuildConnect', margin, y, { size: 20, f: bold, color: accent })
-  y -= 22
-  text('Project Submission Record', margin, y, { size: 12, f: bold, color: dark })
-  y -= LINE
-  text(`Generated: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, margin, y, { size: 9, color: gray })
-  y -= LINE * 0.5
+  const drawDivider = (yPos: number) => {
+    page.drawLine({
+      start: { x: MARGIN, y: yPos },
+      end: { x: width - MARGIN, y: yPos },
+      thickness: 0.5,
+      color: dividerColor,
+    })
+  }
 
-  // divider
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) })
+  // Chip: rounded rect behind section label — blue for standard sections, amber for waiver.
+  const sectionChip = (
+    label: string, yPos: number,
+    chipFill: ReturnType<typeof rgb>,
+    labelColor: ReturnType<typeof rgb>,
+  ) => {
+    const chipPadX = 8
+    const chipH = 14
+    const textW = bold.widthOfTextAtSize(label, 8)
+    page.drawRectangle({
+      x: MARGIN,
+      y: yPos - 2,
+      width: textW + chipPadX * 2,
+      height: chipH,
+      color: chipFill,
+    })
+    text(label, MARGIN + chipPadX, yPos + 3, { size: 8, f: bold, color: labelColor })
+  }
+
+  const fieldRow = (label: string, val: string, yPos: number) => {
+    text(`${label}:`, MARGIN, yPos, { size: 9, f: bold })
+    text(val, MARGIN + FIELD_OFFSET, yPos, { size: 9 })
+  }
+
+  // ── Header band (light blue tint) ──
+  const bandH = 70
+  page.drawRectangle({ x: 0, y: height - bandH, width, height: bandH, color: bandBlue })
+  text('BuildConnect', MARGIN, y, { size: 20, f: bold, color: accent })
+  y -= 24
+  text('Project Submission Record', MARGIN, y, { size: 12, f: bold, color: dark })
+  y -= LINE
+  text(`Generated: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, MARGIN, y, { size: 9, color: gray })
+  y -= LINE * 0.5
+  drawDivider(y)
   y -= SECTION_GAP
 
   // ── Section A: Project Summary ──
-  text('PROJECT SUMMARY', margin, y, { size: 8, f: bold, color: gray })
-  y -= LINE
+  sectionChip('PROJECT SUMMARY', y, bandBlue, accent)
+  y -= LINE + 6
+
   const fields: [string, string][] = [
     ['Service', serviceName],
     ['Contractor', `${vendorCompany} (${vendorName})`],
@@ -75,17 +114,16 @@ export async function generateSubmissionPdf(input: SubmissionPdfInput): Promise<
   ]
   if (homeownerAddress) fields.push(['Property', homeownerAddress])
   for (const [label, val] of fields) {
-    text(`${label}:`, margin, y, { size: 9, f: bold })
-    text(val, margin + 80, y, { size: 9 })
+    fieldRow(label, val, y)
     y -= LINE
   }
   y -= SECTION_GAP * 0.5
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) })
+  drawDivider(y)
   y -= SECTION_GAP
 
   // ── Section B: Homeowner ID ──
-  text('HOMEOWNER IDENTIFICATION', margin, y, { size: 8, f: bold, color: gray })
-  y -= LINE + 4
+  sectionChip('HOMEOWNER IDENTIFICATION', y, bandBlue, accent)
+  y -= LINE + 8
 
   if (idDocDataUrl) {
     const mime = idDocDataUrl.split(';')[0].replace('data:', '')
@@ -100,34 +138,51 @@ export async function generateSubmissionPdf(input: SubmissionPdfInput): Promise<
         img = await pdfDoc.embedPng(bytes)
       }
       if (img) {
-        const maxW = colWidth
+        const cardPad = 12
+        const maxW = width - MARGIN * 2 - cardPad * 2
         const maxH = 160
         const scale = Math.min(maxW / img.width, maxH / img.height, 1)
-        const w = img.width * scale
-        const h = img.height * scale
-        page.drawImage(img, { x: margin, y: y - h, width: w, height: h })
-        y -= h + 8
-        text('Homeowner-provided government-issued ID.', margin, y, { size: 8, color: gray })
+        const imgW = img.width * scale
+        const imgH = img.height * scale
+        // Card: caption row (LINE) + image + padding on all sides
+        const cardW = imgW + cardPad * 2
+        const cardH = imgH + cardPad * 2 + LINE
+        const cardX = MARGIN
+        const cardY = y - cardH
+
+        page.drawRectangle({
+          x: cardX, y: cardY,
+          width: cardW, height: cardH,
+          color: rgb(0.98, 0.99, 1.0),
+          borderColor: rgb(0.82, 0.88, 0.96),
+          borderWidth: 1,
+        })
+        // Caption inside card top-left
+        text('Government-issued ID', cardX + cardPad, y - cardPad - 1, { size: 7.5, f: bold, color: gray })
+        // Image below caption
+        page.drawImage(img, { x: cardX + cardPad, y: cardY + cardPad, width: imgW, height: imgH })
+        y = cardY - 8
+        text('Homeowner-provided government-issued ID.', MARGIN, y, { size: 8, color: gray })
         y -= LINE
         embedded = true
       }
-    } catch { /* fall through to fallback */ }
+    } catch { /* fall through */ }
     if (!embedded) {
-      text('ID document attached — format not embeddable; original on file.', margin, y, { size: 9, color: gray })
+      text('ID document attached — format not embeddable; original on file.', MARGIN, y, { size: 9, color: gray })
       y -= LINE
     }
   } else {
-    text('No ID document provided at time of submission.', margin, y, { size: 9, color: gray })
+    text('No ID document provided at time of submission.', MARGIN, y, { size: 9, color: gray })
     y -= LINE
   }
 
-  // ── Section C: No-Permit Waiver (if present) ──
+  // ── Section C: No-Permit Waiver ──
   if (permitWaiver?.acknowledged) {
     y -= SECTION_GAP * 0.5
-    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) })
+    drawDivider(y)
     y -= SECTION_GAP
-    text('NO-PERMIT LIABILITY WAIVER', margin, y, { size: 8, f: bold, color: rgb(0.7, 0.4, 0) })
-    y -= LINE + 4
+    sectionChip('NO-PERMIT LIABILITY WAIVER', y, chipAmber, rgb(0.65, 0.38, 0.0))
+    y -= LINE + 8
 
     const waiverLines = [
       'The homeowner acknowledged that proceeding without a building permit means they are personally',
@@ -136,26 +191,24 @@ export async function generateSubmissionPdf(input: SubmissionPdfInput): Promise<
       'penalties resulting from this decision.',
     ]
     for (const line of waiverLines) {
-      text(line, margin, y, { size: 9, color: dark })
+      text(line, MARGIN, y, { size: 9, color: dark })
       y -= LINE
     }
     y -= 6
 
-    text('Acknowledged by:', margin, y, { size: 9, f: bold })
-    text(permitWaiver.signedName, margin + 100, y, { size: 9 })
+    fieldRow('Acknowledged by', permitWaiver.signedName, y)
     y -= LINE
-    text('Signed at:', margin, y, { size: 9, f: bold })
-    text(new Date(permitWaiver.signedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }), margin + 100, y, { size: 9 })
+    fieldRow('Signed at', new Date(permitWaiver.signedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }), y)
     y -= LINE
-    text('Acknowledged: Yes', margin, y, { size: 9, f: bold })
+    text('Acknowledged: Yes', MARGIN, y, { size: 9, f: bold })
     y -= LINE
   }
 
   // ── Footer ──
   const footerY = 30
-  page.drawLine({ start: { x: margin, y: footerY + 14 }, end: { x: width - margin, y: footerY + 14 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) })
-  text('This document was auto-generated by BuildConnect and serves as a record of project submission.', margin, footerY + 4, { size: 7, color: gray })
-  text(`Record ID: BC-${Date.now()}`, width - margin - 120, footerY + 4, { size: 7, color: gray })
+  drawDivider(footerY + 14)
+  text('This document was auto-generated by BuildConnect and serves as a record of project submission.', MARGIN, footerY + 4, { size: 7, color: gray })
+  text(`Record ID: BC-${Date.now()}`, width - MARGIN - 120, footerY + 4, { size: 7, color: gray })
 
   return pdfDoc.saveAsBase64({ dataUri: true })
 }
