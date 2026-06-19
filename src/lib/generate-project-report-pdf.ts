@@ -268,20 +268,14 @@ function drawPricing(c: Cursor, pricing: ProjectReportInput['pricing']): void {
     }
     c.y -= LINE
   }
-  // Total — a divider above, then bold. ALWAYS shown (both audiences).
+  // Total — bold, enlarged, no divider above (Rod: "remove the line between the numbers").
   // Customer total = saleAmount = exactly what the customer signed for,
   // and the only dollar figure in PRICING on the customer copy.
-  ensureRoom(c, LINE + 10)
-  c.y -= 10
-  c.page.drawLine({
-    start: { x: MARGIN, y: c.y + 14 },
-    end: { x: c.width - MARGIN, y: c.y + 14 },
-    thickness: 0.5,
-    color: dividerColor,
-  })
-  drawText(c, 'Project Total', labelX, { size: 11, f: c.bold })
-  drawText(c, formatCents(pricing.totalCents), amountX, { size: 11, f: c.bold, color: accent })
-  c.y -= LINE
+  ensureRoom(c, 26)
+  c.y -= 6
+  drawText(c, 'Project Total', labelX, { size: 17, f: c.bold })
+  drawText(c, formatCents(pricing.totalCents), amountX, { size: 17, f: c.bold, color: accent })
+  c.y -= 20
   // MARGIN ROW — gated on marginCents being defined. Customer-default copy
   // (showMargin=false in resolver) leaves it undefined, so this branch is
   // structurally unreachable. Second of the two layers in the margin-gate.
