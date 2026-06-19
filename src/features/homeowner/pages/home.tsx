@@ -271,25 +271,25 @@ export function HomeownerHome() {
         transition={{ duration: 0.4 }}
         className="flex items-center justify-between"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 lg:gap-6">
           <AvatarInitials
             initials={profile.initials}
             color={profile.avatar_color}
             size="lg"
-            className="shadow-sm"
+            className="shadow-sm lg:h-20 lg:w-20 lg:text-2xl"
           />
           <div>
-            <p className="text-sm text-muted-foreground">Welcome back</p>
-            <h1 className="text-xl font-semibold font-heading text-foreground">
+            <p className="text-sm text-muted-foreground lg:text-base">Welcome back</p>
+            <h1 className="text-xl font-semibold font-heading text-foreground lg:text-3xl">
               {profile.name}
             </h1>
-            <div className="flex items-center gap-3 mt-0.5">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
+            <div className="flex items-center gap-3 mt-0.5 lg:gap-4 lg:mt-1">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground lg:text-sm lg:gap-1.5">
+                <MapPin className="h-3 w-3 lg:h-4 lg:w-4" />
                 {profile.address?.split(',')[0]?.trim() || 'Address not set'}
               </span>
-              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-                <Phone className="h-3 w-3" />
+              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground lg:text-sm lg:gap-1.5">
+                <Phone className="h-3 w-3 lg:h-4 lg:w-4" />
                 {profile.phone}
               </span>
             </div>
