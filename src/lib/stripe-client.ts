@@ -15,7 +15,10 @@
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 
 const env = ((import.meta as { env?: Record<string, string | undefined> }).env) ?? {}
-const PUBLISHABLE_KEY = env.VITE_STRIPE_PUBLIC_KEY || ''
+// Prefer VITE_STRIPE_PUBLISHABLE_KEY (matches Stripe's own naming + present in
+// orgs/buildconnect/secrets.env). VITE_STRIPE_PUBLIC_KEY accepted as a fallback
+// for older .env files. Either is fine; one of them must resolve at build time.
+const PUBLISHABLE_KEY = env.VITE_STRIPE_PUBLISHABLE_KEY || env.VITE_STRIPE_PUBLIC_KEY || ''
 
 let cachedPromise: Promise<Stripe | null> | null = null
 

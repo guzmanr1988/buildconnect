@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { getStripe } from '@/lib/stripe-client'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   PAYMENT_PURPOSE_LABELS,
   type VendorPaymentMethod,
@@ -82,6 +83,13 @@ export function VendorPaymentDialog({
   const [intentLoading, setIntentLoading] = useState(false)
   const [intentError, setIntentError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  // Gate setup-intent fetch on session presence — the dialog may open from
+  // /auth/register BEFORE supabase.auth.getSession() resolves (register.tsx
+  // sets paymentDialogOpen synchronously, race-proofing the redirect-useEffect).
+  // Without this gate, supabase.functions.invoke falls back to the anon key
+  // and the edge fn returns 401. Including access_token in deps lets the
+  // useEffect re-fire when the session lands.
+  const sessionToken = useAuthStore((s) => s.session?.access_token ?? null)
 
   useEffect(() => {
     if (!open) {
@@ -96,6 +104,15 @@ export function VendorPaymentDialog({
 
   useEffect(() => {
     if (!open || success) return
+    // Wait for session hydrate — POST without a Bearer JWT returns 401 from
+    // stripe-setup-intent-create, and the useEffect won't re-fire unless
+    // sessionToken is in deps. Clear stale error so the loader shows until
+    // the session lands.
+    if (!sessionToken) {
+      setIntentError(null)
+      setIntentLoading(true)
+      return
+    }
     let cancelled = false
     setClientSecret(null)
     setSetupIntentId(null)
@@ -132,7 +149,7 @@ export function VendorPaymentDialog({
     return () => {
       cancelled = true
     }
-  }, [open, kind, purpose, success])
+  }, [open, kind, purpose, success, sessionToken])
 
   const elementsOptions: StripeElementsOptions | null = useMemo(
     () =>
