@@ -60,10 +60,21 @@ function collectVars() {
   return found
 }
 
+// Detects shell-indirection placeholders that leaked through a dotenv loader
+// (e.g. `VITE_SUPABASE_URL="$SUPABASE_URL"` where the literal `$VAR` survives
+// because dotenv does no expansion). Bundle then bakes the placeholder string
+// and the deployed site crashes with "Invalid supabaseUrl".
+// Scoped to VITE_ keys — other agents may legitimately store $-prefixed
+// secrets elsewhere in their env files.
+// Anchor: banked discipline `feedback_vite_env_dotenv_indirection_trap` (N=2,
+// 2026-05-30 + 2026-06-22 M2 banking-real-stripe preview).
+const SHELL_PLACEHOLDER = /^"?\$[A-Z_][A-Z0-9_]*"?$/
+
 function check() {
   const referenced = collectVars()
   const missing = []
   const empty = []
+  const placeholder = []
   const present = []
 
   for (const [name, files] of referenced) {
@@ -71,11 +82,13 @@ function check() {
     const val = process.env[name]
     if (val === undefined) missing.push({ name, files: [...files] })
     else if (val === '') empty.push({ name, files: [...files] })
+    else if (SHELL_PLACEHOLDER.test(val.trim()))
+      placeholder.push({ name, value: val, files: [...files] })
     else present.push(name)
   }
 
   const total = referenced.size
-  const failed = missing.length + empty.length
+  const failed = missing.length + empty.length + placeholder.length
 
   if (failed === 0) {
     console.log(`[check-vite-env] ✓ ${present.length}/${total} VITE_ vars present in build env`)
@@ -100,6 +113,18 @@ function check() {
     console.error(`[check-vite-env] EMPTY (${empty.length}):`)
     for (const { name, files } of empty) {
       console.error(`  - ${name}`)
+      for (const f of files.slice(0, 3)) console.error(`      ${f}`)
+      if (files.length > 3) console.error(`      ...and ${files.length - 3} more`)
+    }
+    console.error('[check-vite-env]')
+  }
+  if (placeholder.length) {
+    console.error(`[check-vite-env] SHELL-PLACEHOLDER (${placeholder.length}):`)
+    console.error('[check-vite-env]   A VITE_ var resolves to a literal "$VAR" string —')
+    console.error('[check-vite-env]   dotenv does not expand shell indirection. The placeholder')
+    console.error('[check-vite-env]   will be baked into the bundle and crash the deployed site.')
+    for (const { name, value, files } of placeholder) {
+      console.error(`  - ${name} = ${value}`)
       for (const f of files.slice(0, 3)) console.error(`      ${f}`)
       if (files.length > 3) console.error(`      ...and ${files.length - 3} more`)
     }
