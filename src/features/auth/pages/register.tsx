@@ -17,10 +17,13 @@ import { cn } from '@/lib/utils'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset } from '@/components/shared/address-fieldset'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
-import { useVendorBillingStore, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
-/* handlePaymentSuccess branches on add-vs-update via the store's new
- * addPaymentMethod action; signup always adds (fresh account, no prior
- * method). Ship #189 per Rodolfo pivot #11 data-model refactor. */
+import type { VendorPaymentMethod } from '@/stores/vendor-billing-store'
+/* M3 — the dialog now writes the payment_methods row directly via
+ * stripe-payment-method-finalize. Register's onSuccess no longer needs to
+ * call addPaymentMethod; the only post-success work here is activating
+ * the membership + closing the dialog + redirecting. The legacy Zustand
+ * persisted store is gone (cleared from localStorage by usePaymentMethods
+ * on first hydrate of any vendor surface). */
 import { useVendorMembershipStore } from '@/stores/vendor-membership-store'
 
 const registerSchema = z.object({
@@ -93,7 +96,9 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const addVendorPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
+  // M3 — payment method is written DB-side by the dialog's edge-fn call.
+  // Register no longer adds to a client store; activateMembership remains
+  // because it tracks per-vendor membership status (not the PM itself).
   const activateMembership = useVendorMembershipStore((s) => s.activateMembership)
 
   const {
@@ -323,25 +328,19 @@ export function RegisterPage() {
     try {
     const vendorId = profile?.id
     if (vendorId) {
-      // Ship #189 — addPaymentMethod appends to the per-vendor array +
-      // generates the id server-side (store). Fresh signup always adds
-      // (no prior method). Purpose comes through from the dialog's
-      // segmented toggle; defaults to 'both' in add-mode so first-time
-      // setup covers membership + commissions without the user having
-      // to think about routing.
-      addVendorPaymentMethod(vendorId, method)
-      // Ship #180 — activate the monthly membership atomically with the
-      // payment-method commit. Billing day seeded from today so the
-      // next charge lands one month from signup.
+      // M3 — the dialog already wrote the payment_methods row via the
+      // stripe-payment-method-finalize edge fn (RLS-gated, own-user only).
+      // Register just activates the monthly membership atomically with
+      // signup completion. Billing day seeded from today.
       activateMembership(vendorId).catch((err) => {
         console.warn('[register] activateMembership failed:', err)
       })
     } else {
-      // Edge case: profile not yet hydrated when success fires. Store
-      // against the form email as a fallback key so the portal can
-      // reconcile on first load. (Real integration moves this to a
-      // signup-time side-effect on the server.)
-      console.warn('[register] payment success fired before profile hydrate; skipping store')
+      // Edge case: profile not yet hydrated when success fires. The
+      // payment_methods row is already keyed to auth.user.id via the edge
+      // fn (independent of profile.id), so the vendor portal will pick it
+      // up on first load via usePaymentMethods. Nothing to reconcile here.
+      console.warn('[register] payment success fired before profile hydrate; PM row already persisted by edge fn')
     }
     } catch (err) {
       diagLog('handlePaymentSuccess:caught-error', { error: String(err) })

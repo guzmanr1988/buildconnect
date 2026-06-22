@@ -27,15 +27,14 @@ import { PageHeader } from '@/components/shared/page-header'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import type { ClosedSale } from '@/types'
-import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import {
-  useVendorBillingStore,
   PAYMENT_METHOD_LABELS,
   PAYMENT_PURPOSE_LABELS,
   type VendorPaymentMethod,
 } from '@/stores/vendor-billing-store'
+import { usePaymentMethods } from '@/lib/hooks/use-payment-methods'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
 import { useUsersStore } from '@/stores/users-store'
 import { useVendorPaymentsStore } from '@/stores/vendor-payments-store'
@@ -254,20 +253,18 @@ export default function VendorBanking() {
   // wraps any pre-#189 single-method entry into the new array shape).
   // Falls back to the hardcoded mock VENDOR_ID key when no profile is
   // hydrated so demo surfaces render; real vendors key off profile.id.
-  const profile = useAuthStore((s) => s.profile)
-  const billingVendorId = profile?.id ?? VENDOR_ID
-  // Ship #190 — CRITICAL fix on top of #189: the `?? []` fallback
-  // INSIDE the zustand selector returns a new empty-array reference
-  // on every render when the map entry is undefined → React #185
-  // infinite-loop crash. Same defect class as #111 and the banked
-  // ZUSTAND-SELECTOR-STABLE-REFERENCE memory. Fix: select the
-  // possibly-undefined value (stable either way) and fall back to a
-  // fresh [] in render body where identity-instability is harmless.
-  const paymentMethodsRaw = useVendorBillingStore((s) => s.paymentMethodsByVendor[billingVendorId])
-  const paymentMethods = paymentMethodsRaw ?? []
-  const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
-  const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
-  const removePaymentMethod = useVendorBillingStore((s) => s.removePaymentMethod)
+  // M3 — payment methods hydrate from the DB-backed payment_methods table
+  // via usePaymentMethods (own-read RLS scopes to the current auth.user.id).
+  // The legacy Zustand-persisted store is dropped; the hook clears
+  // localStorage `buildconnect-vendor-billing` idempotently on first mount.
+  // The payment-methods list is per-user not per-vendor under M3, so
+  // billingVendorId / profile.id no longer keys it.
+  const {
+    paymentMethods,
+    refetch: refetchPaymentMethods,
+    removeMethod,
+    updateMethodPurpose,
+  } = usePaymentMethods()
   const commissionPaymentsBySale = useCommissionPaymentsStore((s) => s.paymentsBySale)
   const addCommissionPayment = useCommissionPaymentsStore((s) => s.addPayment)
 
@@ -586,22 +583,18 @@ export default function VendorBanking() {
                           if (orphans) {
                             setDeleteTarget(method)
                           } else {
-                            removePaymentMethod(billingVendorId, method.id)
-                            toast.success('Payment method removed', {
-                              action: {
-                                label: 'Undo',
-                                onClick: () => addPaymentMethod(billingVendorId, {
-                                  purpose: method.purpose,
-                                  kind: method.kind,
-                                  last4: method.last4,
-                                  holder: method.holder,
-                                  brand: method.brand,
-                                  expiry: method.expiry,
-                                  bankName: method.bankName,
-                                  routingLast4: method.routingLast4,
-                                  addedAt: method.addedAt,
-                                }),
-                              },
+                            // M3 — removeMethod hits DELETE FROM payment_methods
+                            // RLS-gated to own user_id. Stripe pm_xxx stays
+                            // attached on the Customer (no detach call); the
+                            // client lacks the pm id to recreate the row, so
+                            // the legacy toast-undo action is dropped here.
+                            void removeMethod(method.id).then(() => {
+                              toast.success('Payment method removed')
+                            }).catch((e) => {
+                              toast.error(
+                                'Could not remove payment method',
+                                { description: e instanceof Error ? e.message : String(e) },
+                              )
                             })
                           }
                         }}
@@ -947,11 +940,20 @@ export default function VendorBanking() {
             : 'both'
         }
         onSuccess={(method) => {
+          // M3 — the dialog already wrote a fresh payment_methods row via
+          // the stripe-payment-method-finalize edge fn. On add: refetch so
+          // the new row appears in the list. On edit: the dialog adds a
+          // distinct new row (Stripe doesn't allow mutating a PM in place);
+          // forward the new method's purpose onto the row the user was
+          // editing and refetch. The old row stays unless the user deletes
+          // it — same shape as adding a second method, which matches
+          // M3 semantics (Stripe PMs are immutable post-tokenization).
           if (editingMethodId) {
-            updatePaymentMethod(billingVendorId, editingMethodId, method)
-          } else {
-            addPaymentMethod(billingVendorId, method)
+            void updateMethodPurpose(editingMethodId, method.purpose).catch(() => {
+              // non-fatal; refetch still reflects the new row
+            })
           }
+          void refetchPaymentMethods()
         }}
       />
 
@@ -986,8 +988,15 @@ export default function VendorBanking() {
               className="w-full sm:w-auto"
               onClick={() => {
                 if (deleteTarget) {
-                  removePaymentMethod(billingVendorId, deleteTarget.id)
-                  toast.success('Payment method removed')
+                  const target = deleteTarget
+                  void removeMethod(target.id).then(() => {
+                    toast.success('Payment method removed')
+                  }).catch((e) => {
+                    toast.error(
+                      'Could not remove payment method',
+                      { description: e instanceof Error ? e.message : String(e) },
+                    )
+                  })
                 }
                 setDeleteTarget(null)
               }}
