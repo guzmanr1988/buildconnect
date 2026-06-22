@@ -4,13 +4,13 @@
 //   HEADER (BuildConnect wordmark left / PROJECT REPORT + contractor right) → thick rule
 //   INFO BAND (generated date | record #, two centered columns)
 //   TWO CARDS side-by-side (customer info | property address)
-//   SCOPE OF WORK → PRODUCTS & SERVICES table (gray header row)
+//   SCOPE OF WORK → PRODUCTS & SERVICES table (very light gray header, dark label)
 //   MATERIALS → MEASUREMENTS → PERMITS & ASSOCIATION
 //   INVESTMENT SUMMARY (right-aligned: lines + Total Investment large bold blue)
 //   NOTICE disclaimer → FOOTER
 //
 // Token spec:
-//   MARGIN=50, LINE=16, SECTION_GAP=22
+//   MARGIN=50, LINE=15, SECTION_GAP=12 (tight for single-page roofing)
 //   Helvetica / HelveticaBold, Letter 612×792
 //   accent=rgb(0.13,0.47,0.94) dark=rgb(0.1,0.1,0.1) gray=rgb(0.4,0.4,0.4)
 //
@@ -24,15 +24,16 @@ import type {
 } from './project-report-data'
 
 const MARGIN = 50
-const LINE = 16
-const SECTION_GAP = 22
+const LINE = 15
+const SECTION_GAP = 12
 const FOOTER_RESERVE = 50
 
 const dark = rgb(0.1, 0.1, 0.1)
 const gray = rgb(0.4, 0.4, 0.4)
 const lightGray = rgb(0.6, 0.6, 0.6)
 const accent = rgb(0.13, 0.47, 0.94)
-const tableHeaderBg = rgb(0.93, 0.93, 0.93)
+// Very light gray for table header — soft, fades toward white (#f5f5f5)
+const tableHeaderBg = rgb(0.96, 0.96, 0.96)
 const infoBandBg = rgb(0.95, 0.96, 0.97)
 const cardBorderColor = rgb(0.82, 0.84, 0.88)
 const ruleColor = rgb(0.15, 0.15, 0.15)
@@ -122,9 +123,9 @@ function thinRule(c: Cursor): void {
 
 // Bold uppercase label + thick underline rule (contract section header style).
 function sectionHeader(c: Cursor, label: string): void {
-  ensureRoom(c, LINE + 8 + SECTION_GAP)
-  drawText(c, label, MARGIN, { size: 11, f: c.bold, color: dark })
-  c.y -= 5
+  ensureRoom(c, LINE + 6 + SECTION_GAP)
+  drawText(c, label, MARGIN, { size: 10, f: c.bold, color: dark })
+  c.y -= 4
   thickRule(c, 1.2)
   c.y -= SECTION_GAP
 }
@@ -144,23 +145,23 @@ function drawHeader(c: Cursor, input: ProjectReportInput): void {
   const topY = c.y
 
   // Left: "BuildConnect" wordmark
-  drawText(c, 'BuildConnect', MARGIN, { size: 22, f: c.bold, color: accent })
+  drawText(c, 'BuildConnect', MARGIN, { size: 20, f: c.bold, color: accent })
 
   // Right: "PROJECT REPORT" large bold
   const titleStr = 'PROJECT REPORT'
-  const titleSize = 22
+  const titleSize = 20
   const titleW = c.bold.widthOfTextAtSize(titleStr, titleSize)
   drawTextAt(c, titleStr, rightEdge - titleW, topY, { size: titleSize, f: c.bold, color: dark })
 
-  c.y -= LINE + 4
+  c.y -= LINE + 3
 
-  // Right: service as division subtitle (small caps style — uppercase, light gray)
+  // Right: service as division subtitle
   const sub = input.summary.serviceName.toUpperCase()
-  const subSize = 8
+  const subSize = 7.5
   const subW = c.font.widthOfTextAtSize(sub, subSize)
   drawTextAt(c, sub, rightEdge - subW, c.y, { size: subSize, color: lightGray })
 
-  c.y -= LINE
+  c.y -= LINE - 1
 
   // Right: contractor company bold
   const company = input.summary.contractorCompany
@@ -171,29 +172,27 @@ function drawHeader(c: Cursor, input: ProjectReportInput): void {
   }
   c.y -= LINE - 2
 
-  // Right: contractor name (lighter, if different from company)
+  // Right: contractor name if different from company
   const person = input.summary.contractorName
   if (person && person !== company) {
-    const pSize = 8
+    const pSize = 7.5
     const pW = c.font.widthOfTextAtSize(person, pSize)
     drawTextAt(c, person, rightEdge - pW, c.y, { size: pSize, color: gray })
     c.y -= LINE - 2
   }
 
-  // Guarantee minimum header height of ~66pt from top
-  const minY = topY - 68
+  const minY = topY - 62
   if (c.y > minY) c.y = minY
 
-  c.y -= 10
+  c.y -= 8
   thickRule(c, 1.5)
   c.y -= SECTION_GAP
 }
 
 // ── INFO BAND ─────────────────────────────────────────────────────────────────
-// Light-gray band, two centered columns: GENERATED | RECORD #
 
 function drawInfoBand(c: Cursor, input: ProjectReportInput): void {
-  const bandH = 52
+  const bandH = 42
   ensureRoom(c, bandH + SECTION_GAP)
 
   const bandY = c.y - bandH
@@ -208,30 +207,23 @@ function drawInfoBand(c: Cursor, input: ProjectReportInput): void {
   })
 
   const mid = c.width / 2
-  const labelSize = 7
-  const valSize = 10
-  const labelY = c.y - 13
-  const valY = labelY - labelSize - 5
+  const labelSize = 6.5
+  const valSize = 9
+  const labelY = c.y - 11
+  const valY = labelY - labelSize - 4
 
   const lCX = MARGIN + (mid - MARGIN) / 2
   const rCX = mid + (c.width - MARGIN - mid) / 2
 
-  // Left: GENERATED
-  const lLabel = 'GENERATED'
-  const lVal = input.generatedAt
-  drawTextAt(c, lLabel, lCX - c.font.widthOfTextAtSize(lLabel, labelSize) / 2, labelY, { size: labelSize, color: lightGray })
-  drawTextAt(c, lVal, lCX - c.bold.widthOfTextAtSize(lVal, valSize) / 2, valY, { size: valSize, f: c.bold, color: dark })
+  drawTextAt(c, 'GENERATED', lCX - c.font.widthOfTextAtSize('GENERATED', labelSize) / 2, labelY, { size: labelSize, color: lightGray })
+  drawTextAt(c, input.generatedAt, lCX - c.bold.widthOfTextAtSize(input.generatedAt, valSize) / 2, valY, { size: valSize, f: c.bold, color: dark })
 
-  // Right: RECORD #
-  const rLabel = 'RECORD #'
-  const rVal = input.recordId
-  drawTextAt(c, rLabel, rCX - c.font.widthOfTextAtSize(rLabel, labelSize) / 2, labelY, { size: labelSize, color: lightGray })
-  drawTextAt(c, rVal, rCX - c.bold.widthOfTextAtSize(rVal, valSize) / 2, valY, { size: valSize, f: c.bold, color: dark })
+  drawTextAt(c, 'RECORD #', rCX - c.font.widthOfTextAtSize('RECORD #', labelSize) / 2, labelY, { size: labelSize, color: lightGray })
+  drawTextAt(c, input.recordId, rCX - c.bold.widthOfTextAtSize(input.recordId, valSize) / 2, valY, { size: valSize, f: c.bold, color: dark })
 
-  // Vertical separator
   c.page.drawLine({
-    start: { x: mid, y: bandY + 8 },
-    end: { x: mid, y: bandY + bandH - 8 },
+    start: { x: mid, y: bandY + 7 },
+    end: { x: mid, y: bandY + bandH - 7 },
     thickness: 0.5,
     color: cardBorderColor,
   })
@@ -240,18 +232,17 @@ function drawInfoBand(c: Cursor, input: ProjectReportInput): void {
 }
 
 // ── TWO CARDS ─────────────────────────────────────────────────────────────────
-// CUSTOMER INFORMATION (left) | PROPERTY ADDRESS (right)
 
 function drawCards(c: Cursor, input: ProjectReportInput): void {
-  const gap = 14
+  const gap = 12
   const cardW = (c.width - MARGIN * 2 - gap) / 2
-  const cardH = 76
+  const cardH = 55
   ensureRoom(c, cardH + SECTION_GAP)
 
   const leftX = MARGIN
   const rightX = MARGIN + cardW + gap
   const cardY = c.y - cardH
-  const pad = 12
+  const pad = 10
 
   for (const cx of [leftX, rightX]) {
     c.page.drawRectangle({
@@ -265,23 +256,19 @@ function drawCards(c: Cursor, input: ProjectReportInput): void {
     })
   }
 
-  const catSize = 7
-  const nameSize = 11
-  const detailSize = 8
+  const catSize = 6.5
+  const nameSize = 10
+  const detailSize = 7.5
 
   // Left card: CUSTOMER INFORMATION
+  const ll = 'CUSTOMER INFORMATION'
   let ly = c.y - pad - catSize
-  drawTextAt(c, 'CUSTOMER INFORMATION', leftX + pad, ly, { size: catSize, color: lightGray })
+  drawTextAt(c, ll, leftX + pad, ly, { size: catSize, color: lightGray })
   ly -= nameSize + 5
   drawTextAt(c, input.summary.homeownerName || '—', leftX + pad, ly, { size: nameSize, f: c.bold, color: dark })
-  // Show scheduled date below name since we have no email/phone in data
   const sched = `Scheduled: ${input.summary.bookingDate} at ${input.summary.bookingTime}`
-  ly -= detailSize + 5
+  ly -= detailSize + 4
   drawTextAt(c, sched, leftX + pad, ly, { size: detailSize, color: gray })
-  if (input.summary.soldAt) {
-    ly -= detailSize + 3
-    drawTextAt(c, `Sold: ${input.summary.soldAt}`, leftX + pad, ly, { size: detailSize, color: gray })
-  }
 
   // Right card: PROPERTY ADDRESS
   const addr = input.summary.homeownerAddress || ''
@@ -294,7 +281,7 @@ function drawCards(c: Cursor, input: ProjectReportInput): void {
   ry -= nameSize + 5
   drawTextAt(c, street || '—', rightX + pad, ry, { size: nameSize, f: c.bold, color: dark })
   if (cityLine) {
-    ry -= detailSize + 5
+    ry -= detailSize + 4
     drawTextAt(c, cityLine, rightX + pad, ry, { size: detailSize, color: gray })
   }
 
@@ -308,34 +295,34 @@ function drawScope(c: Cursor, items: ProjectReportScopeItem[]): void {
   sectionHeader(c, 'SCOPE OF WORK')
 
   const detailX = c.width - MARGIN - 110
-  const tableHeaderH = LINE + 4
+  const tableHeaderH = LINE + 2
 
-  ensureRoom(c, tableHeaderH + Math.min(items.length, 5) * LINE + SECTION_GAP)
+  ensureRoom(c, tableHeaderH + Math.min(items.length, 6) * LINE + SECTION_GAP)
 
-  // PRODUCTS & SERVICES gray header row
+  // PRODUCTS & SERVICES — very light gray band, dark near-black bold label
   c.page.drawRectangle({
     x: MARGIN,
-    y: c.y - tableHeaderH + 4,
+    y: c.y - tableHeaderH + 3,
     width: c.width - MARGIN * 2,
     height: tableHeaderH,
     color: tableHeaderBg,
   })
-  drawText(c, 'PRODUCTS & SERVICES', MARGIN + 4, { size: 8, f: c.bold, color: gray })
-  c.y -= LINE + 2
+  drawText(c, 'PRODUCTS & SERVICES', MARGIN + 4, { size: 7.5, f: c.bold, color: dark })
+  c.y -= LINE + 1
 
-  // Column labels
-  drawText(c, 'Description', MARGIN, { size: 8, color: lightGray })
-  drawText(c, 'Detail', detailX, { size: 8, color: lightGray })
+  // Column labels — gray (subdued, matching reference)
+  drawText(c, 'Description', MARGIN, { size: 7.5, color: lightGray })
+  drawText(c, 'Detail', detailX, { size: 7.5, color: lightGray })
   c.y -= LINE
 
   for (const it of items) {
     ensureRoom(c, LINE)
-    drawText(c, `• ${it.label}`, MARGIN + 4, { size: 9, f: c.bold })
-    if (it.detail) drawText(c, it.detail, detailX, { size: 8, color: gray })
+    drawText(c, `• ${it.label}`, MARGIN + 4, { size: 8.5, f: c.bold })
+    if (it.detail) drawText(c, it.detail, detailX, { size: 7.5, color: gray })
     c.y -= LINE
   }
 
-  c.y -= SECTION_GAP * 0.4
+  c.y -= 4
   thinRule(c)
   c.y -= SECTION_GAP
 }
@@ -346,16 +333,16 @@ function drawMaterials(c: Cursor, materials: string[]): void {
   sectionHeader(c, 'MATERIALS')
   if (materials.length === 0) {
     ensureRoom(c, LINE)
-    drawText(c, 'Standard package — see contractor for material details.', MARGIN, { size: 9, color: gray })
+    drawText(c, 'Standard package — see contractor for material details.', MARGIN, { size: 8.5, color: gray })
     c.y -= LINE
   } else {
     for (const m of materials) {
       ensureRoom(c, LINE)
-      drawText(c, `• ${m}`, MARGIN + 4, { size: 9 })
+      drawText(c, `• ${m}`, MARGIN + 4, { size: 8.5 })
       c.y -= LINE
     }
   }
-  c.y -= SECTION_GAP * 0.4
+  c.y -= 4
   thinRule(c)
   c.y -= SECTION_GAP
 }
@@ -365,14 +352,14 @@ function drawMaterials(c: Cursor, materials: string[]): void {
 function drawMeasurements(c: Cursor, rows: ProjectReportMeasurement[]): void {
   if (rows.length === 0) return
   sectionHeader(c, 'MEASUREMENTS')
-  const VALUE_X = MARGIN + 180
+  const VALUE_X = MARGIN + 165
   for (const row of rows) {
     ensureRoom(c, LINE)
-    drawText(c, `${row.label}:`, MARGIN, { size: 9, f: c.bold })
-    drawText(c, row.value, VALUE_X, { size: 9 })
+    drawText(c, `${row.label}:`, MARGIN, { size: 8.5, f: c.bold })
+    drawText(c, row.value, VALUE_X, { size: 8.5 })
     c.y -= LINE
   }
-  c.y -= SECTION_GAP * 0.4
+  c.y -= 4
   thinRule(c)
   c.y -= SECTION_GAP
 }
@@ -381,92 +368,88 @@ function drawMeasurements(c: Cursor, rows: ProjectReportMeasurement[]): void {
 
 function drawPermits(c: Cursor, p: ProjectReportInput['permits']): void {
   sectionHeader(c, 'PERMITS & ASSOCIATION')
-  const VALUE_X = MARGIN + 180
+  const VALUE_X = MARGIN + 165
   const yn = (v: 'yes' | 'no' | null | undefined): string =>
     v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '—'
 
   ensureRoom(c, LINE)
-  drawText(c, 'Permit pulled:', MARGIN, { size: 9, f: c.bold })
-  drawText(c, yn(p.projectPermit), VALUE_X, { size: 9 })
+  drawText(c, 'Permit pulled:', MARGIN, { size: 8.5, f: c.bold })
+  drawText(c, yn(p.projectPermit), VALUE_X, { size: 8.5 })
   c.y -= LINE
 
   ensureRoom(c, LINE)
-  drawText(c, 'HOA / Association required:', MARGIN, { size: 9, f: c.bold })
-  drawText(c, yn(p.associationRequired), VALUE_X, { size: 9 })
+  drawText(c, 'HOA / Association required:', MARGIN, { size: 8.5, f: c.bold })
+  drawText(c, yn(p.associationRequired), VALUE_X, { size: 8.5 })
   c.y -= LINE
 
   if (p.poolSurveyRequired !== undefined) {
     ensureRoom(c, LINE)
-    drawText(c, 'Pool survey required:', MARGIN, { size: 9, f: c.bold })
-    drawText(c, yn(p.poolSurveyRequired), VALUE_X, { size: 9 })
+    drawText(c, 'Pool survey required:', MARGIN, { size: 8.5, f: c.bold })
+    drawText(c, yn(p.poolSurveyRequired), VALUE_X, { size: 8.5 })
     c.y -= LINE
   }
 
   if (p.permitWaiver?.acknowledged) {
-    ensureRoom(c, LINE * 3 + 8)
-    c.y -= 4
-    drawText(c, 'No-permit liability waiver signed by:', MARGIN, { size: 9, f: c.bold, color: rgb(0.7, 0.4, 0) })
+    ensureRoom(c, LINE * 3 + 6)
+    c.y -= 3
+    drawText(c, 'No-permit liability waiver signed by:', MARGIN, { size: 8.5, f: c.bold, color: rgb(0.7, 0.4, 0) })
     c.y -= LINE
-    drawText(c, p.permitWaiver.signedName, MARGIN, { size: 9 })
+    drawText(c, p.permitWaiver.signedName, MARGIN, { size: 8.5 })
     c.y -= LINE
     drawText(
       c,
       `Acknowledged ${new Date(p.permitWaiver.signedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`,
       MARGIN,
-      { size: 8, color: gray },
+      { size: 7.5, color: gray },
     )
     c.y -= LINE
   }
 
-  c.y -= SECTION_GAP * 0.4
+  c.y -= 4
   thinRule(c)
   c.y -= SECTION_GAP
 }
 
 // ── INVESTMENT SUMMARY ────────────────────────────────────────────────────────
-// Right-aligned block. Customer copy: only Total Investment.
-// Admin copy: itemized lines + thin divider + Total Investment + Margin row.
 
 function drawInvestmentSummary(c: Cursor, pricing: ProjectReportInput['pricing']): void {
   sectionHeader(c, 'INVESTMENT SUMMARY')
 
   const rightEdge = c.width - MARGIN
-  const labelX = c.width - MARGIN - 220
+  const labelX = c.width - MARGIN - 210
 
-  // Admin-only itemized lines
   for (const line of pricing.lines) {
     ensureRoom(c, LINE)
-    drawText(c, line.label, labelX, { size: 9, color: dark })
+    drawText(c, line.label, labelX, { size: 8.5 })
     if (line.amountCents !== undefined) {
-      drawTextRight(c, formatCents(line.amountCents), rightEdge, { size: 9 })
+      drawTextRight(c, formatCents(line.amountCents), rightEdge, { size: 8.5 })
     }
     c.y -= LINE
   }
 
-  // Thin separator above total when itemized lines exist
   if (pricing.lines.length > 0) {
-    ensureRoom(c, 12)
-    c.y -= 4
+    ensureRoom(c, 10)
+    c.y -= 3
     c.page.drawLine({
       start: { x: labelX, y: c.y },
       end: { x: rightEdge, y: c.y },
       thickness: 0.5,
       color: cardBorderColor,
     })
-    c.y -= 8
+    c.y -= 7
   }
 
-  // Total Investment — large bold accent blue, right-aligned
-  ensureRoom(c, 28)
-  c.y -= 4
-  drawText(c, 'Total Investment', labelX, { size: 14, f: c.bold, color: dark })
-  drawTextRight(c, formatCents(pricing.totalCents), rightEdge, { size: 14, f: c.bold, color: accent })
-  c.y -= 22
+  // Total Investment — large bold accent blue
+  ensureRoom(c, 24)
+  c.y -= 3
+  drawText(c, 'Total Investment', labelX, { size: 13, f: c.bold, color: dark })
+  drawTextRight(c, formatCents(pricing.totalCents), rightEdge, { size: 13, f: c.bold, color: accent })
+  c.y -= 18
 
-  // Margin row — admin only, structurally gated on marginCents defined
+  // Margin row — admin only, gated on marginCents defined
   if (pricing.marginCents !== undefined) {
-    ensureRoom(c, LINE + 6)
-    c.y -= 6
+    ensureRoom(c, LINE + 5)
+    c.y -= 5
     c.page.drawRectangle({
       x: MARGIN - 4,
       y: c.y - 3,
@@ -474,8 +457,8 @@ function drawInvestmentSummary(c: Cursor, pricing: ProjectReportInput['pricing']
       height: LINE + 4,
       color: rgb(1.0, 0.97, 0.93),
     })
-    drawText(c, 'Margin (admin)', labelX, { size: 9, color: gray })
-    drawTextRight(c, formatCents(pricing.marginCents), rightEdge, { size: 9, color: gray })
+    drawText(c, 'Margin (admin)', labelX, { size: 8.5, color: gray })
+    drawTextRight(c, formatCents(pricing.marginCents), rightEdge, { size: 8.5, color: gray })
     c.y -= LINE
   }
 }
@@ -502,13 +485,13 @@ function wrapText(font: PDFFont, text: string, size: number, maxWidth: number): 
 function drawDisclaimer(c: Cursor): void {
   const text =
     'This Project Report is provided for informational and planning purposes only and does not constitute a contract, offer, or binding agreement. The official contract will be prepared by the licensed contractor awarded this project, and all figures and scope shown here are an estimate summary subject to the final contract terms.'
-  const labelSize = 8
-  const bodySize = 8
-  const bodyLine = 11
-  const padX = 10
-  const padTop = 10
-  const padBot = 9
-  const labelGap = 5
+  const labelSize = 7
+  const bodySize = 7
+  const bodyLine = 9
+  const padX = 8
+  const padTop = 7
+  const padBot = 6
+  const labelGap = 4
   const innerWidth = c.width - MARGIN * 2 - padX * 2
   const lines = wrapText(c.font, text, bodySize, innerWidth)
   const blockHeight = padTop + labelSize + labelGap + bodySize + (lines.length - 1) * bodyLine + padBot
