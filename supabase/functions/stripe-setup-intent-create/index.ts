@@ -28,10 +28,15 @@
 // Request body:
 //   {
 //     kind: 'card' | 'us_bank_account',
-//     purpose: 'membership' | 'commissions' | 'both',
-//     verification_method?: 'financial_connections' | 'microdeposits'
-//       // required when kind = us_bank_account, ignored otherwise
+//     purpose: 'membership' | 'commissions' | 'both'
 //   }
+//
+// ACH verification path is server-controlled: when kind = us_bank_account we
+// always pass financial_connections permissions + verification_method =
+// 'automatic' so PaymentElement renders FC-primary with microdeposit
+// fallback in a single iframe. The actual verification path used is
+// determined post-confirm by finalize fn reading the PaymentMethod shape
+// (financial_connections_account populated → FC, otherwise → microdeposits).
 //
 // Response (200):
 //   {
@@ -55,12 +60,10 @@ import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno'
 
 type Kind = 'card' | 'us_bank_account'
 type Purpose = 'membership' | 'commissions' | 'both'
-type VerificationMethod = 'financial_connections' | 'microdeposits'
 
 interface RequestBody {
   kind: Kind
   purpose: Purpose
-  verification_method?: VerificationMethod
 }
 
 const CORS_HEADERS = {
@@ -83,10 +86,6 @@ function isValidKind(v: unknown): v is Kind {
 
 function isValidPurpose(v: unknown): v is Purpose {
   return v === 'membership' || v === 'commissions' || v === 'both'
-}
-
-function isValidVerificationMethod(v: unknown): v is VerificationMethod {
-  return v === 'financial_connections' || v === 'microdeposits'
 }
 
 serve(async (req: Request) => {
@@ -142,11 +141,6 @@ serve(async (req: Request) => {
   }
   if (!isValidPurpose(body.purpose)) {
     return jsonResponse(400, { error: 'invalid_purpose' })
-  }
-  if (body.kind === 'us_bank_account') {
-    if (!isValidVerificationMethod(body.verification_method)) {
-      return jsonResponse(400, { error: 'invalid_or_missing_verification_method' })
-    }
   }
 
   const stripe = new Stripe(stripeKey, {
@@ -227,9 +221,7 @@ serve(async (req: Request) => {
   // double-clicks dedupe but deliberate retries (e.g. after closing the
   // dialog and reopening 2 min later) get a fresh SetupIntent.
   const minuteBucket = Math.floor(Date.now() / 60_000)
-  const idempotencyKey = body.kind === 'us_bank_account'
-    ? `si:${caller.id}:${body.purpose}:${body.kind}:${body.verification_method}:${minuteBucket}`
-    : `si:${caller.id}:${body.purpose}:${body.kind}:${minuteBucket}`
+  const idempotencyKey = `si:${caller.id}:${body.purpose}:${body.kind}:${minuteBucket}`
 
   try {
     // deno-lint-ignore no-explicit-any
@@ -246,16 +238,17 @@ serve(async (req: Request) => {
     }
 
     if (body.kind === 'us_bank_account') {
+      // Server-controlled ACH verification path: always pass FC permissions +
+      // verification_method='automatic'. PaymentElement then renders FC-primary
+      // with microdeposit fallback in one iframe — Stripe picks the path based
+      // on whether the user's bank supports FC. Finalize fn discriminates via
+      // payment_method.us_bank_account.financial_connections_account presence.
       setupIntentParams.payment_method_options = {
         us_bank_account: {
-          verification_method: body.verification_method,
-          ...(body.verification_method === 'financial_connections'
-            ? {
-                financial_connections: {
-                  permissions: ['payment_method'],
-                },
-              }
-            : {}),
+          verification_method: 'automatic',
+          financial_connections: {
+            permissions: ['payment_method'],
+          },
         },
       }
     }
