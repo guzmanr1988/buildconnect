@@ -208,21 +208,26 @@ serve(async (req: Request) => {
     })
   }
 
-  // Resolve our row status:
+  // Resolve our row status + actual verification path Stripe ended up using.
   //   - card → always 'active' (confirmSetup succeeded means card is usable)
-  //   - us_bank_account + FC → 'active' (succeeded means FC linked + verified)
-  //   - us_bank_account + microdeposits → 'pending_verification' until
-  //     verifyMicrodeposits runs
+  //   - us_bank_account with financial_connections_account populated → FC
+  //     succeeded → 'active'
+  //   - us_bank_account without FC account → microdeposits path → either
+  //     'requires_action' (waiting for verifyMicrodeposits) or 'processing'
+  //     (deposits sent) → 'pending_verification'
+  //
+  // We discriminate from the PaymentMethod shape, not the SetupIntent options,
+  // because SetupIntent was created with verification_method='automatic' — the
+  // actual path Stripe picked is observable only on the resulting PaymentMethod.
   let rowStatus: 'active' | 'pending_verification' = 'active'
   let verificationMethod: 'financial_connections' | 'microdeposits' | null = null
-  if (kind === 'us_bank_account') {
-    const vm =
-      setupIntent.payment_method_options?.us_bank_account?.verification_method
-    verificationMethod = (vm === 'financial_connections' || vm === 'microdeposits') ? vm : null
-    if (setupIntent.status === 'requires_action' && verificationMethod === 'microdeposits') {
-      rowStatus = 'pending_verification'
-    } else if (setupIntent.status === 'succeeded') {
+  if (kind === 'us_bank_account' && paymentMethod.us_bank_account) {
+    const fcAccount = paymentMethod.us_bank_account.financial_connections_account
+    verificationMethod = fcAccount ? 'financial_connections' : 'microdeposits'
+    if (verificationMethod === 'financial_connections' && setupIntent.status === 'succeeded') {
       rowStatus = 'active'
+    } else {
+      rowStatus = 'pending_verification'
     }
   }
 
