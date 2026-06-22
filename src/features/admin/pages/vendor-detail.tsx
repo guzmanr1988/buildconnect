@@ -16,7 +16,7 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS, type VendorEmployee } from '@/stores/vendor-employees-store'
-import { useVendorBillingStore, PAYMENT_METHOD_LABELS } from '@/stores/vendor-billing-store'
+import { PAYMENT_METHOD_LABELS, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
 import { useVendorHomeownerDocsStore, VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS } from '@/stores/vendor-homeowner-documents-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { MOCK_VENDORS, MOCK_CATALOG } from '@/lib/mock-data'
@@ -87,8 +87,12 @@ export default function AdminVendorDetail() {
   useEffect(() => {
     if (vendorId) hydrateAdminEmployees(vendorId)
   }, [vendorId, hydrateAdminEmployees])
-  const paymentMethodsByVendor = useVendorBillingStore((s) => s.paymentMethodsByVendor)
-  const paymentMethods = useMemo(() => paymentMethodsByVendor[vendorId] ?? [], [paymentMethodsByVendor, vendorId])
+  // M3 — payment_methods is RLS-scoped to the row's own user_id; an admin
+  // cannot read another user's PMs from the client. Admin-side billing
+  // visibility needs a separate service-role-mediated edge fn, which is
+  // out of scope for M3. Section renders as empty for now (no DB call).
+  // Reinstated alongside the admin-billing-read edge fn in a later milestone.
+  const paymentMethods = useMemo<VendorPaymentMethod[]>(() => [], [])
   const docsByVendorByHomeowner = useVendorHomeownerDocsStore((s) => s.docsByVendorByHomeowner)
   const vendorCatalogServices = useVendorCatalogStore((s) => s.services)
 

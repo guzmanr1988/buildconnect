@@ -20,10 +20,10 @@ import {
   type MembershipStatus,
 } from '@/stores/vendor-membership-store'
 import {
-  useVendorBillingStore,
   PAYMENT_METHOD_LABELS,
   type VendorPaymentMethodKind,
 } from '@/stores/vendor-billing-store'
+import { usePaymentMethods } from '@/lib/hooks/use-payment-methods'
 import { useNavigate } from 'react-router-dom'
 import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog'
 import { cn } from '@/lib/utils'
@@ -83,16 +83,17 @@ export default function VendorMembershipPage() {
   // or 'both'. Update button edits that method in place. Full multi-
   // method management lives on /vendor/banking; link below the Update
   // button for users with >1 method on file.
-  const paymentMethod = useVendorBillingStore((s) =>
-    s.paymentMethodsByVendor[vendorId]?.find(
-      (m) => m.purpose === 'membership' || m.purpose === 'both',
-    ),
+  // M3 — DB-backed via usePaymentMethods. Membership surface displays the
+  // first method tagged 'membership' or 'both'. Update button opens the
+  // dialog which writes a fresh row via the edge fn; on success we
+  // refetch + (if there was a prior membership method) carry its purpose
+  // onto the new row. totalMethodsOnFile is the list length under the
+  // new schema (per-user, not per-vendor).
+  const { paymentMethods, refetch: refetchPaymentMethods, updateMethodPurpose } = usePaymentMethods()
+  const paymentMethod = paymentMethods.find(
+    (m) => m.purpose === 'membership' || m.purpose === 'both',
   )
-  const totalMethodsOnFile = useVendorBillingStore(
-    (s) => s.paymentMethodsByVendor[vendorId]?.length ?? 0,
-  )
-  const addPaymentMethod = useVendorBillingStore((s) => s.addPaymentMethod)
-  const updatePaymentMethod = useVendorBillingStore((s) => s.updatePaymentMethod)
+  const totalMethodsOnFile = paymentMethods.length
   const navigate = useNavigate()
 
   // Seed an Active membership if none exists — real-world path is that
@@ -406,13 +407,20 @@ export default function VendorMembershipPage() {
         initialHolder={paymentMethod?.holder}
         initialPurpose={paymentMethod?.purpose ?? 'both'}
         onSuccess={(method) => {
+          // M3 — dialog already wrote the new payment_methods row via the
+          // finalize edge fn. We don't add/update from the client. If the
+          // user already had a membership-covering method, propagate that
+          // purpose onto the freshly-created row; either way refetch so
+          // the new row appears.
           if (paymentMethod) {
-            updatePaymentMethod(vendorId, paymentMethod.id, method)
+            void updateMethodPurpose(paymentMethod.id, method.purpose).catch(() => {
+              // non-fatal; refetch below still reflects the new row
+            })
             toast.success('Payment method updated')
           } else {
-            addPaymentMethod(vendorId, method)
             toast.success('Payment method added')
           }
+          void refetchPaymentMethods()
         }}
       />
     </div>
