@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import {
   STRIPE_CONNECT_ONBOARDING_FN,
   STRIPE_CONNECT_REFRESH_FN,
+  STRIPE_CONNECT_ACCOUNT_SESSION_FN,
   type PartyType,
   type ConnectUiState,
 } from '@/lib/financing/escrow/constants';
@@ -178,4 +179,35 @@ export function useRefreshConnectOnboarding(partyType: PartyType) {
       qc.invalidateQueries({ queryKey: queryKey(partyType) });
     },
   });
+}
+
+// ============================================================================
+// Flow-B (banking-flowb) — embedded Connect components.
+// ============================================================================
+// fetchAccountSecret hits the new stripe-connect-account-session-create edge fn
+// to mint a fresh AccountSession client_secret. Returns the raw string because
+// that's what loadConnectAndInitialize's fetchClientSecret callback expects.
+//
+// The function caches nothing: AccountSession secrets are ~1min TTL and the
+// embedded SDK refreshes by re-calling this fn when the secret expires.
+
+export interface AccountSessionResult {
+  ok: boolean;
+  client_secret: string;
+  expires_at: number;
+  account_id: string;
+  status: ConnectUiState;
+  created: boolean;
+}
+
+export async function fetchConnectAccountSession(
+  partyType: PartyType,
+): Promise<AccountSessionResult> {
+  const { data, error } = await supabase.functions.invoke<AccountSessionResult>(
+    STRIPE_CONNECT_ACCOUNT_SESSION_FN,
+    { body: { partyType } },
+  );
+  if (error) throw new Error(error.message || 'connect_account_session_invoke_failed');
+  if (!data?.client_secret) throw new Error('connect_account_session_empty_response');
+  return data;
 }

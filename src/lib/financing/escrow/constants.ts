@@ -58,6 +58,14 @@ export const DEFAULT_REFERRAL_BONUS_CENTS = 50_000; // $500 per kratos directive
 export const STRIPE_CONNECT_ONBOARDING_FN = 'stripe-connect-onboarding' as const;
 export const STRIPE_CONNECT_REFRESH_FN = 'stripe-connect-refresh' as const;
 
+// Flow-B (banking-flowb): embedded Connect components edge fn. Mints a
+// short-TTL AccountSession client_secret consumed by loadConnectAndInitialize
+// so KYC + account management render in-iframe instead of hosted redirect.
+// The two AccountLink fns above stay defined-but-uninvoked during the Flow-B
+// transition for emergency rollback; M4 cleanup removes them once Flow B
+// is proven on live keys.
+export const STRIPE_CONNECT_ACCOUNT_SESSION_FN = 'stripe-connect-account-session-create' as const;
+
 // Connected-account status state machine surfaced in the Banking/Payouts UI.
 // Mirrors escrow_accounts.status enum from migration 069, with one synthetic
 // state — 'not_connected' — for the "no row yet" case the DB doesn't have to
