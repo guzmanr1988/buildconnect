@@ -17,7 +17,11 @@ export interface ConfigEntryLike {
   quantity: number
 }
 
-const WINDOW_TYPE_IDS: Record<string, string> = {
+// Arc-42: exported for pricing.ts computeVendorTotal sub-option iteration.
+// Same maps power both the legacy flat-key getPrice path (windowCatalogUnitPrice
+// etc.) and the new prefixed VendorPriceMap path (computeVendorTotal subopt
+// lookups). Single source of truth.
+export const WINDOW_TYPE_IDS: Record<string, string> = {
   'Single Hung': 'single_hung',
   'Casement': 'casement',
   'Awning': 'awning',
@@ -25,7 +29,7 @@ const WINDOW_TYPE_IDS: Record<string, string> = {
   'Picture': 'picture',
 }
 
-const DOOR_TYPE_IDS: Record<string, string> = {
+export const DOOR_TYPE_IDS: Record<string, string> = {
   'Entry Door': 'entry',
   'French Door': 'french',
   'Sliding Glass': 'sliding_glass',
@@ -34,13 +38,13 @@ const DOOR_TYPE_IDS: Record<string, string> = {
   'Pivot Door': 'pivot',
 }
 
-const FRAME_COLOR_IDS: Record<string, string> = {
+export const FRAME_COLOR_IDS: Record<string, string> = {
   'White': 'white',
   'Bronze': 'bronze',
   'Black': 'black',
 }
 
-const GLASS_COLOR_IDS: Record<string, string> = {
+export const GLASS_COLOR_IDS: Record<string, string> = {
   'Grey-White': 'grey_white',
   'Clear-White': 'clear_white',
   'Clear': 'clear',
@@ -48,7 +52,7 @@ const GLASS_COLOR_IDS: Record<string, string> = {
   'Green': 'green',
 }
 
-const GLASS_TYPE_IDS: Record<string, string> = {
+export const GLASS_TYPE_IDS: Record<string, string> = {
   'Impact Glass': 'impact_glass',
   'Low-E Glass': 'low_e',
 }
@@ -65,6 +69,19 @@ function sumOptionPrices(
     .reduce((sum, id) => sum + (getPrice(serviceId, id) || 0), 0)
 }
 
+// PR-#412 — parent-prefixed slug emitter. Hermes substrate rename moves
+// colliding sub_option_ids (white / black / clear / low_e / etc.) to
+// parent-prefixed literals (windows_white, doors_black, storm_front_low_e,
+// ...). FRAME_COLOR_IDS / GLASS_COLOR_IDS / GLASS_TYPE_IDS map LABEL → bare
+// slug for legacy compatibility; this helper concats the parent prefix at
+// each price-lookup call site so getPrice(serviceId, namespacedId) hits the
+// renamed substrate rows. Bare maps retained — calls from any legacy
+// consumer that hasn't been migrated still resolve bare IDs (which remain
+// in OPTION_METADATA for hot-swap safety).
+function prefixed(bare: string | undefined, prefix: string): string | undefined {
+  return bare ? `${prefix}${bare}` : undefined
+}
+
 /** Unit price for one window (before multiplying by quantity). */
 export function windowCatalogUnitPrice(
   entry: ConfigEntryLike,
@@ -75,9 +92,9 @@ export function windowCatalogUnitPrice(
     [
       entry.size,
       WINDOW_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'windows_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'windows_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'windows_'),
     ],
     getPrice,
     serviceId,
@@ -94,20 +111,20 @@ export function doorCatalogUnitPrice(
     [
       entry.size,
       DOOR_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'doors_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'doors_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'doors_'),
     ],
     getPrice,
     serviceId,
   )
 }
 
-const STORM_FRONT_TYPE_IDS: Record<string, string> = {
+export const STORM_FRONT_TYPE_IDS: Record<string, string> = {
   'Storm Front': 'storm_front_only',
 }
 
-const STORM_FRONT_SIZE_IDS: Record<string, string> = {
+export const STORM_FRONT_SIZE_IDS: Record<string, string> = {
   '24x80': 'sf_24x80',
   '24x96': 'sf_24x96',
   '36x80': 'sf_36x80',
@@ -128,9 +145,9 @@ export function stormFrontCatalogUnitPrice(
     [
       STORM_FRONT_SIZE_IDS[entry.size],
       STORM_FRONT_TYPE_IDS[entry.type],
-      FRAME_COLOR_IDS[entry.frameColor],
-      GLASS_COLOR_IDS[entry.glassColor],
-      GLASS_TYPE_IDS[entry.glassType],
+      prefixed(FRAME_COLOR_IDS[entry.frameColor], 'storm_front_'),
+      prefixed(GLASS_COLOR_IDS[entry.glassColor], 'storm_front_'),
+      prefixed(GLASS_TYPE_IDS[entry.glassType], 'storm_front_'),
     ],
     getPrice,
     serviceId,
@@ -164,89 +181,60 @@ export interface WindowsDoorsCatalogItem {
 
 /**
  * Computes the full catalog-first total for a windows_doors project.
- * Per-row: catalog price × quantity, falling back to averaged install-line when no catalog price.
- * Single-line items (Install Windows/Doors, Permit): catalog price × qty, falling back to preset line.
- * Used for pre-sale headline computation and Pricing Breakdown totals.
+ * Pure catalog: per-row catalog price × quantity. Items without a catalog
+ * price contribute $0 (surfaced as em-dash in card-grid). No preset-line or
+ * wd-product distribution fallback — vendors must set prices in catalog.
  */
 export function computeWindowsDoorsCatalogTotal(
   item: WindowsDoorsCatalogItem,
-  resolvedLineItems: Array<{ id: string; label?: string; amount: number }>,
+  _resolvedLineItems: Array<{ id: string; label?: string; amount: number }>,
   getPrice: GetPriceFn,
 ): number {
   let total = 0
 
-  const wInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-windows')
-  const dInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-doors')
-  const sfInstallLine = resolvedLineItems.find((l) => l.id === 'wd-install-storm-front')
-  const wdProductLine = resolvedLineItems.find((l) => l.id === 'wd-product')
+  for (const w of item.windowSelections ?? []) {
+    const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
+    if (unit > 0) total += unit * w.quantity
+  }
+
+  for (const d of item.doorSelections ?? []) {
+    const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
+    if (unit > 0) total += unit * d.quantity
+  }
+
+  for (const sf of item.stormFrontSelections ?? []) {
+    const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
+    if (unit > 0) total += unit * sf.quantity
+  }
+
+  const gd = item.garageDoorSelection
+  if (gd?.type) {
+    total += garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
+  }
+
   const totalWQty = item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
   const totalDQty = item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
   const totalSFQty = item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-  const totalUnits = totalWQty + totalDQty + totalSFQty
 
-  // Windows — product cost. Catalog-first; fallback to wd-product distributed
-  // across all window+door units (not install line — that's a separate cost).
-  for (const w of item.windowSelections ?? []) {
-    const unit = windowCatalogUnitPrice(w, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * w.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * w.quantity)
-    }
-  }
-
-  // Doors — product cost. Same distribution from wd-product.
-  for (const d of item.doorSelections ?? []) {
-    const unit = doorCatalogUnitPrice(d, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * d.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * d.quantity)
-    }
-  }
-
-  // Storm fronts — product cost. Same distribution from wd-product.
-  for (const sf of item.stormFrontSelections ?? []) {
-    const unit = stormFrontCatalogUnitPrice(sf, getPrice, item.serviceId)
-    if (unit > 0) {
-      total += unit * sf.quantity
-    } else if (wdProductLine && totalUnits > 0) {
-      total += Math.round(wdProductLine.amount / totalUnits * sf.quantity)
-    }
-  }
-
-  // Garage door — product cost
-  const gd = item.garageDoorSelection
-  if (gd?.type) {
-    const gdUnit = garageDoorCatalogUnitPrice(gd, getPrice, item.serviceId)
-    const gdLine = resolvedLineItems.find((l) => l.id === 'wd-garage-door')
-    total += gdUnit > 0 ? gdUnit : (gdLine?.amount ?? 0)
-  }
-
-  // Install Windows (labor, separate from product)
   if (totalWQty > 0) {
     const catalogInstallW = getPrice(item.serviceId, 'install_windows')
-    total += catalogInstallW > 0 ? catalogInstallW * totalWQty : (wInstallLine?.amount ?? 0)
+    if (catalogInstallW > 0) total += catalogInstallW * totalWQty
   }
 
-  // Install Doors (labor, separate from product)
   if (totalDQty > 0) {
     const catalogInstallD = getPrice(item.serviceId, 'install_doors')
-    total += catalogInstallD > 0 ? catalogInstallD * totalDQty : (dInstallLine?.amount ?? 0)
+    if (catalogInstallD > 0) total += catalogInstallD * totalDQty
   }
 
-  // Install Storm Front (labor, separate from product)
   if (totalSFQty > 0) {
     const catalogInstallSF = getPrice(item.serviceId, 'install_storm_front')
-    total += catalogInstallSF > 0 ? catalogInstallSF * totalSFQty : (sfInstallLine?.amount ?? 0)
+    if (catalogInstallSF > 0) total += catalogInstallSF * totalSFQty
   }
 
-  // Permit
   const hasPermit = item.selections && Object.values(item.selections).flat().includes('permit')
   if (hasPermit) {
     const catalogPermit = getPrice(item.serviceId, 'permit')
-    const permitLine = resolvedLineItems.find((l) => l.label?.toLowerCase().includes('permit'))
-    total += catalogPermit > 0 ? catalogPermit : (permitLine?.amount ?? 0)
+    if (catalogPermit > 0) total += catalogPermit
   }
 
   return total

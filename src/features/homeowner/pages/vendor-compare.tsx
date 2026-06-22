@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Star, Clock, ShieldCheck, Banknote, Award, TrendingUp, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -19,9 +19,16 @@ import {
   computeVendorTotal,
   formatPriceCents,
   getVendorPriceMap,
+  getVendorPermitMap,
   type VendorPriceMap,
+  type VendorPermitMap,
   type VendorTotalResult,
 } from '@/lib/api/pricing'
+import {
+  getVendorServiceRateMap,
+  type VendorServiceRateMap,
+} from '@/lib/api/vendor-service-rates'
+import { useVendorPriceRealtime } from '@/lib/hooks/use-vendor-price-realtime'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
@@ -29,12 +36,24 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 // while we test the chain end-to-end before opening to other vendors.
 // Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
 // other code changes (the guards below collapse to no-ops).
-const APEX_ONLY_MODE = true
-const APEX_REAL_UUID = 'fc0d8ff3-cc1c-4101-a4b3-068594753bbf'
+const APEX_ONLY_MODE = false
+// PR-#437 — swap from fc0d8ff3 (suspended "(legacy)" apex profile) to
+// 3e0821aa (active canonical apex). useRealVendors filters status='active'
+// so the legacy UUID never returned a row; APEX_ONLY guard at L101 then
+// excluded the live 3e0821aa too → zero-vendors. Same consolidation as
+// Arc-32 W4 close 2026-05-25 (vendor-visibility compound gate). Rod
+// surface: "Put apex within the 60 miles radius. Because nothing is
+// showing as demo" — distance was a red herring; root was wrong UUID.
+const APEX_REAL_UUID = '3e0821aa-89e7-4140-bff8-c4f7f985f561'
 
 export function VendorComparePage() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
+  // pin-31 — homeowner permit choice drives the permit-line gate in
+  // computeVendorTotal so vendor-compare totals match the eventual
+  // booking-time breakdown (resolves the pre-pin-31 overcharge where
+  // projectPermit='no' quotes still included the vendor permit fee).
+  const projectPermit = useCartStore((s) => s.projectPermit)
   const profile = useAuthStore((s) => s.profile)
   const matchRadiusMiles = useAdminModerationStore((s) => s.matchRadiusMiles)
   const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
@@ -112,43 +131,85 @@ export function VendorComparePage() {
   }, [cartCategories, projectCoords, matchRadiusMiles, realVendors])
 
   const [priceMaps, setPriceMaps] = useState<Record<string, VendorPriceMap>>({})
+  // Arc-32 PR-B — parallel to priceMaps. Rod-rule "permit is default in every
+  // service unless vendor puts it at 0" requires summing vendor_service_permits
+  // into the Compare-Vendors total. getVendorPermitMap filters zero/missing
+  // rows, so absence in the map = vendor opt-out for that service.
+  const [permitMaps, setPermitMaps] = useState<Record<string, VendorPermitMap>>({})
+  // Mig 068 — per-vendor remodel + bathroom rate maps (measurement-driven
+  // services). Same fetch-and-pass pattern as priceMaps; computeVendorTotal
+  // uses vendor's vendor_service_rates rows to drive the configurator engine,
+  // so different vendors show DIFFERENT believable totals across remodel /
+  // bathroom carts. Coverage rule mirrors priceMaps: zero rows → drop out.
+  const [serviceRateMapsByVendor, setServiceRateMapsByVendor] = useState<
+    Record<string, Record<string, VendorServiceRateMap>>
+  >({})
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let mounted = true
-    async function load() {
-      setLoading(true)
-      setFetchError(null)
-      try {
-        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        const entries = await Promise.all(
-          featuredVendors.map(async (v) => {
-            // Demo vendors: look up UUID from mock-id map.
-            // Real vendors: their id IS already the UUID.
-            const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
-            // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
-            if (!UUID_RE.test(uuid)) return [v.id, new Map() as VendorPriceMap] as const
-            const map = await getVendorPriceMap(uuid)
-            return [v.id, map] as const
-          })
-        )
-        if (!mounted) return
-        setPriceMaps(Object.fromEntries(entries))
-      } catch (err) {
-        if (!mounted) return
-        setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
-      } finally {
-        if (mounted) setLoading(false)
-      }
+  // Stable vendor-id key — featuredVendors changes async when useRealVendors()
+  // resolves; without this stable dep, priceMaps would freeze to the mount-time
+  // mocks-only set and real vendors silently fall out of totalsByVendor[id].
+  // Also used by the realtime hook below so the refetch callback only rebinds
+  // when the vendor set actually changes (not every render).
+  const featuredVendorIdsKey = featuredVendors.map((v) => v.id).join('|')
+
+  const loadPriceMaps = useCallback(async () => {
+    setLoading(true)
+    setFetchError(null)
+    try {
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const entries = await Promise.all(
+        featuredVendors.map(async (v) => {
+          // Demo vendors: look up UUID from mock-id map.
+          // Real vendors: their id IS already the UUID.
+          const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[v.id] ?? v.id
+          // Skip non-UUID mock fixture ids — Supabase rejects them with a syntax error.
+          if (!UUID_RE.test(uuid)) {
+            return [
+              v.id,
+              new Map() as VendorPriceMap,
+              new Map() as VendorPermitMap,
+              { remodel: new Map(), bathroom: new Map() } as Record<string, VendorServiceRateMap>,
+            ] as const
+          }
+          // Parallel-fetch price + permit + measurement-rate maps so a slow
+          // query doesn't serialize the others. computeVendorTotal sums all.
+          const [map, permits, remodelRates, bathroomRates] = await Promise.all([
+            getVendorPriceMap(uuid),
+            getVendorPermitMap(uuid),
+            getVendorServiceRateMap(uuid, 'remodel').catch(() => new Map<string, number>()),
+            getVendorServiceRateMap(uuid, 'bathroom').catch(() => new Map<string, number>()),
+          ])
+          const rateMaps: Record<string, VendorServiceRateMap> = {
+            remodel: remodelRates,
+            bathroom: bathroomRates,
+          }
+          return [v.id, map, permits, rateMaps] as const
+        })
+      )
+      setPriceMaps(Object.fromEntries(entries.map(([id, map]) => [id, map])))
+      setPermitMaps(Object.fromEntries(entries.map(([id, , permits]) => [id, permits])))
+      setServiceRateMapsByVendor(Object.fromEntries(entries.map(([id, , , rateMaps]) => [id, rateMaps])))
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load vendor pricing')
+    } finally {
+      setLoading(false)
     }
-    load()
-    return () => { mounted = false }
-    // Bug 3 fix: depend on stable vendor-id key. featuredVendors changes async
-    // when useRealVendors() returns; without this, priceMaps freezes to the
-    // mount-time mocks-only set and real vendors silently fall out of
-    // Compare Vendors via undefined totalsByVendor[id].
-  }, [featuredVendors.map((v) => v.id).join('|')])
+    // featuredVendors intentionally excluded — featuredVendorIdsKey is the
+    // stable identity used for the refetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredVendorIdsKey])
+
+  useEffect(() => {
+    loadPriceMaps().catch(() => {})
+  }, [loadPriceMaps])
+
+  // Arc-41: realtime listener on vendor_option_prices + vendor_sub_option_prices.
+  // Vendor edits a price → WAL event → refetch all priceMaps for the current
+  // vendor set. Low-frequency channel; per-vendor filtering happens implicitly
+  // because we refetch per-id in loadPriceMaps.
+  useVendorPriceRealtime(loadPriceMaps)
 
   const services = useCatalogStore((s) => s.services)
   const totalsByVendor = useMemo(() => {
@@ -156,10 +217,17 @@ export function VendorComparePage() {
     for (const v of featuredVendors) {
       const map = priceMaps[v.id]
       if (!map) continue
-      out[v.id] = computeVendorTotal(map, cartItems, services)
+      out[v.id] = computeVendorTotal(
+        map,
+        cartItems,
+        services,
+        permitMaps[v.id],
+        serviceRateMapsByVendor[v.id],
+        projectPermit ?? undefined,
+      )
     }
     return out
-  }, [priceMaps, cartItems, services])
+  }, [priceMaps, permitMaps, serviceRateMapsByVendor, cartItems, services, projectPermit])
 
   // PRODUCT-IS-GOD for real-auth vendors: applied post-load since their pricing
   // comes from Supabase (not MOCK_CATALOG). Mock vendors already passed at featuredVendors time.
@@ -171,14 +239,18 @@ export function VendorComparePage() {
       // Mock vendors (non-UUID id or in DEMO map) already passed PRODUCT-IS-GOD.
       const isMock = !UUID_RE_DISPLAY.test(v.id) || v.id in DEMO_VENDOR_UUID_BY_MOCK_ID
       if (isMock) return true
-      // Apex floor: real Apex always renders even with partial pricing — the
-      // availability-gap UX (badge + deducted total + small-letters note)
-      // informs the homeowner instead of hiding the only contractor.
-      if (v.id === APEX_REAL_UUID) {
-        const r = totalsByVendor[v.id]
-        return !!(r && r.hasSelections)
-      }
-      // Other real vendors: PRODUCT-IS-GOD strict floor.
+      // All real vendors (incl. Apex) gated by PRODUCT-IS-GOD strict floor.
+      // Rod-chosen behavior: when vendor toggles a service OFF in their
+      // catalog, the cascaded vop.active=false drops it from the priceMap;
+      // computeVendorTotal reports !coversAllServices and Apex disappears
+      // from Compare-Vendors for any cart needing that service. APEX FLOOR
+      // (previously rendered Apex with partial pricing via .hasSelections)
+      // removed in vendor-active-toggle-law bundle.
+      // Rod-confirmed 2026-06-09 — this IS the appear-with-price-or-not
+      // rule on the matching side. No "Contact for quote" fallback; if
+      // vendor cannot price the cart, vendor is hidden entirely. Paired
+      // with vendor-side display filter in lead-inbox.tsx + vendor-lead-
+      // stages.ts (real-price-required to render in vendor inbox).
       const result = totalsByVendor[v.id]
       return !!(result && result.coversAllServices && result.totalCents > 0)
     })
@@ -188,7 +260,7 @@ export function VendorComparePage() {
     // Best price: lowest non-zero total among vendors that cover all services and have no missing options.
     const eligible = displayVendors.filter((v) => {
       const r = totalsByVendor[v.id]
-      return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.totalCents > 0
+      return r && r.hasSelections && r.coversAllServices && r.missingOptionKeys.length === 0 && r.missingSubOptionKeys.length === 0 && r.totalCents > 0
     })
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
@@ -242,23 +314,53 @@ export function VendorComparePage() {
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
           const isApex = vendor.id === APEX_REAL_UUID
-          // Availability-gap: Apex priced some-but-not-all cart services.
-          // computeVendorTotal already excludes missingOptionKeys from totalCents,
-          // so result.totalCents IS the deducted total. Surface the gap to the
-          // homeowner with a badge + small-letters note instead of hiding Apex
-          // or showing "Contact for quote".
+          // Arc-32 close — vendor offers a cart-service when its profile toggles
+          // Active for the category (vendor.service_categories) OR at least one
+          // priced VOP/VSOP row exists for that vendor+service. Vendor-offers
+          // gates the availability-gap UX: when the vendor offers EVERY
+          // cart-service, partial pricing is informational (show the total, no
+          // gap-badge, no IWD line-through). True-gap = at least one
+          // cart-service has neither Active toggle nor any priced row.
+          const offeredServices = new Set<string>(vendor.service_categories ?? [])
+          const vendorPriceMap = priceMaps[vendor.id]
+          if (vendorPriceMap) {
+            for (const key of vendorPriceMap.keys()) {
+              const m = key.match(/^(?:opt|subopt):([^|]+)\|/)
+              if (m) offeredServices.add(m[1])
+            }
+          }
+          const vendorOffersAllCartServices =
+            cartCategories.size === 0
+            || [...cartCategories].every((sid) => offeredServices.has(sid))
+          // Availability-gap: Apex priced some-but-not-all cart services AND
+          // does NOT offer at least one of the unpriced services. Vendor-offers
+          // suppresses the badge so Active-toggle-on + partial-row-pricing
+          // shows a clean total. computeVendorTotal already excludes
+          // missingOptionKeys from totalCents (per-row total preserved).
           const apexHasGap =
             isApex &&
             !!result &&
             result.hasSelections &&
-            (!result.coversAllServices || result.missingOptionKeys.length > 0) &&
+            !vendorOffersAllCartServices &&
+            (!result.coversAllServices
+              || result.missingOptionKeys.length > 0
+              || result.missingSubOptionKeys.length > 0) &&
             result.totalCents > 0
+          // Arc-42 — priceKey/subOptionPriceKey carry an 'opt:'/'subopt:' prefix
+          // post-Arc-41; strip before splitting so services.find() resolves the
+          // raw service id (not 'opt:windows_doors'). Arc-32 close — filter to
+          // services Apex does NOT offer (true gap-services only).
           const gapServiceNames = apexHasGap
             ? Array.from(
-                new Set(result.missingOptionKeys.map((k) => k.split('|')[0])),
-              ).map(
-                (sid) => services.find((s) => s.id === sid)?.name ?? sid,
+                new Set(
+                  [...result.missingOptionKeys, ...result.missingSubOptionKeys]
+                    .map((k) => k.replace(/^(opt|subopt):/, '').split('|')[0]),
+                ),
               )
+                .filter((sid) => !offeredServices.has(sid))
+                .map(
+                  (sid) => services.find((s) => s.id === sid)?.name ?? sid,
+                )
             : []
 
           // Decide what to render in the Price slot.
@@ -273,7 +375,18 @@ export function VendorComparePage() {
           } else if (apexHasGap) {
             priceText = formatPriceCents(result.totalCents)
             priceTone = 'strong'
-          } else if (!result.coversAllServices || result.missingOptionKeys.length > 0 || result.totalCents === 0) {
+          } else if (isApex && vendorOffersAllCartServices && result.totalCents > 0) {
+            // Apex offers every cart-service (Active toggle OR any priced row)
+            // but some sub-options unpriced → show partial total clean (no
+            // gap-badge, no "Contact for quote").
+            priceText = formatPriceCents(result.totalCents)
+            priceTone = 'strong'
+          } else if (
+            !result.coversAllServices
+            || result.missingOptionKeys.length > 0
+            || result.missingSubOptionKeys.length > 0
+            || result.totalCents === 0
+          ) {
             priceText = 'Contact for quote'
             priceTone = 'muted'
           } else {
@@ -357,7 +470,7 @@ export function VendorComparePage() {
                   <div
                     className="rounded-lg bg-muted/50 p-3"
                     data-vendor-price={result?.totalCents ?? 0}
-                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
+                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : isApex && vendorOffersAllCartServices && (result?.totalCents ?? 0) > 0 ? 'quoted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">Price</p>
@@ -415,7 +528,12 @@ export function VendorComparePage() {
                     // Apex availability-gap exception: when Apex prices a subset,
                     // homeowner can still book against the deducted total; the
                     // unpriced services are surfaced via the gap badge + note.
-                    const unconfigured = result != null && result.hasSelections && !result.coversAllServices && !apexHasGap
+                    const unconfigured =
+                      result != null
+                      && result.hasSelections
+                      && !result.coversAllServices
+                      && !apexHasGap
+                      && !(isApex && vendorOffersAllCartServices && result.totalCents > 0)
                     const btn = (
                       <Button
                         size="lg"

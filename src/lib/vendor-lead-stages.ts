@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { Inbox, CalendarCheck, Handshake, Archive, X } from 'lucide-react'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
+import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
+import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import type { Lead } from '@/types'
 
 export type LeadStageKey = 'new' | 'confirmed' | 'sold' | 'completed' | 'cancelled'
@@ -54,10 +55,10 @@ export interface LeadStageMeta {
 // shared across admin/workflow + vendor/dashboard + vendor/lead-
 // workflow; canonical values lifted from admin/workflow.tsx inline.
 export const LEAD_STAGES: LeadStageMeta[] = [
-  { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-500', bgColor: 'bg-amber-50 dark:bg-amber-950/20', borderColor: 'border-amber-300', pulse: true },
+  { key: 'new', title: 'New Leads', icon: Inbox, color: 'bg-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-950/20', borderColor: 'border-amber-300', pulse: true },
   { key: 'confirmed', title: 'Scheduled Leads', icon: CalendarCheck, color: 'bg-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/20', borderColor: 'border-emerald-300' },
-  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-primary', bgColor: 'bg-primary/5 dark:bg-primary/10', borderColor: 'border-primary/30', pulse: true },
-  { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-500', bgColor: 'bg-slate-50 dark:bg-slate-950/20', borderColor: 'border-slate-300' },
+  { key: 'sold', title: 'Sold, Active', icon: Handshake, color: 'bg-success', bgColor: 'bg-success/5 dark:bg-success/10', borderColor: 'border-success/40', pulse: true },
+  { key: 'completed', title: 'Projects Completed', icon: Archive, color: 'bg-slate-700', bgColor: 'bg-slate-50 dark:bg-slate-950/20', borderColor: 'border-slate-300' },
   { key: 'cancelled', title: 'Cancelled Projects', icon: X, color: 'bg-destructive', bgColor: 'bg-destructive/5 dark:bg-destructive/10', borderColor: 'border-destructive/30' },
 ]
 
@@ -105,30 +106,15 @@ export function useVendorLeadStages(): {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
-  // Ship #311 — manual-completion override map. MOCK_LEADS without
-  // sentProject backing get marked completed via this map; bucketing
-  // + label-derivation read lead.completedAt downstream so the
-  // override-aware value propagates to all consumers transparently.
   const leadCompletedAtByLead = useProjectsStore((s) => s.leadCompletedAtByLead)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
-  const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
+  const { vendorId: VENDOR_ID } = useVendorScope()
   const vendor = useResolvedVendor()
   const profile = useAuthStore((s) => s.profile)
-  const effectiveMockLeads = useEffectiveMockLeads()
-  // account_rep gate: checks both hardcoded account_rep_id (mock-data stamps)
-  // AND accountRepIdByLead (UI-driven vendor assignment). Two legitimate sources,
-  // not a seed-fallback OR-leak (banked feedback_redundant_or_fallback_leak doesn't
-  // apply here — both sides are profile.id-specific).
-  const mockLeads = useMemo(() => {
-    if (!mockVendorId) return []
-    const vendorScoped = effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
-    if (profile?.role === 'account_rep') {
-      return vendorScoped.filter(
-        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
-      )
-    }
-    return vendorScoped
-  }, [VENDOR_ID, mockVendorId, effectiveMockLeads, profile?.role, profile?.id, accountRepIdByLead])
+  const getVendorPrice = useVendorCatalogStore((s) => s.getPrice)
+  // Rod-go 2026-06-09 — mock/demo seed REMOVED. Vendor inbox renders
+  // ONLY real homeowner-sent leads. mockLeads merge gone — `combined`
+  // is just `homeownerLeads`.
 
   const homeownerLeads = useMemo<LeadExt[]>(
     // Ship #319 — defensive filter on malformed entries (Rodolfo
@@ -157,6 +143,21 @@ export function useVendorLeadStages(): {
           return accountRepIdByLead[leadId] === profile.id
         }
         return true
+      })
+      .filter((p) => {
+        // Rod-go 2026-06-09 — APPEAR-WITH-PRICE-OR-ABSENT. Same predicate
+        // as lead-inbox.tsx homeownerLeads filter.
+        // 2026-06-10 launch-night fix — quotedPriceCents is a real price
+        // frozen at booking time (Ship #355). Treat as valid price source
+        // alongside saleAmount + priceLineItems-sum so Apex leads with a
+        // booking-time quote but no per-line breakdown render correctly.
+        if (p.saleAmount && p.saleAmount > 0) return true
+        if (p.quotedPriceCents && p.quotedPriceCents > 0) return true
+        if (!p.priceLineItems || p.priceLineItems.length === 0) return false
+        const value = p.item?.serviceId === 'windows_doors'
+          ? computeWindowsDoorsCatalogTotal(p.item as any, p.priceLineItems, getVendorPrice)
+          : p.priceLineItems.reduce((s, l) => s + (l.amount || 0), 0)
+        return value > 0
       })
       .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
@@ -192,11 +193,11 @@ export function useVendorLeadStages(): {
       reviewStatus: p.reviewStatus,
       reviewNote: p.reviewNote,
     })),
-    [sentProjects, VENDOR_ID, vendor, profile?.role, profile?.id, accountRepIdByLead],
+    [sentProjects, VENDOR_ID, vendor, profile?.role, profile?.id, accountRepIdByLead, getVendorPrice],
   )
 
   return useMemo(() => {
-    const combined: LeadExt[] = [...homeownerLeads, ...mockLeads]
+    const combined: LeadExt[] = homeownerLeads
     const leads: LeadExt[] = combined.map((l) => {
       const statusOverride = leadStatusOverrides[l.id]
       const completedOverride = leadCompletedAtByLead[l.id]
@@ -278,5 +279,5 @@ export function useVendorLeadStages(): {
       cancelled: cancelledProjects.length,
     }
     return { leads, stages, counts, isCancelledLead }
-  }, [homeownerLeads, mockLeads, leadStatusOverrides, cancellationRequestsByLead, leadCompletedAtByLead])
+  }, [homeownerLeads, leadStatusOverrides, cancellationRequestsByLead, leadCompletedAtByLead])
 }

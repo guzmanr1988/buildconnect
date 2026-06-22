@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import { Send, FileText, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,21 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { EmptyState } from '@/components/shared/empty-state'
-import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
-import { useEffectiveMockLeads, useEffectiveMockMessages } from '@/lib/mock-data-effective'
-import { useAdminMessagesStore } from '@/stores/admin-messages-store'
+import { useEffectiveLeads } from '@/lib/hooks/use-effective-leads'
+import { useLeadConversation } from '@/lib/hooks/use-lead-conversation'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { deriveInitials } from '@/lib/initials'
-import type { Message } from '@/types'
 
+// Wave-18 #3 — Mock-scope vendor key (legacy identity-shim) retained as the
+// real-mode fallback when no auth profile is resolved. The admin-thread tab
+// (useAdminMessagesStore + hardcoded SEED) was retired in wave-18 #3; vendor
+// ↔ admin chat now lives on the lead-scoped messages table (admin sees it
+// via the Live Conversations feed on /admin/messages).
 const VENDOR_ID = 'v-1'
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function fmt(n: number) {
@@ -38,79 +38,44 @@ const QUICK_REPLIES = [
 ]
 
 export default function VendorMessages() {
-  const vendor = MOCK_VENDOR_BY_ID[VENDOR_ID]
-  // Ship #250 — effective-fixture hooks honor the demoDataHidden flag.
-  const mockLeads = useEffectiveMockLeads()
-  const mockMessages = useEffectiveMockMessages()
+  const profile = useAuthStore((s) => s.profile)
+  const vendorIdentity = profile?.id ?? VENDOR_ID
 
-  // Admin messages from shared store — single hook call to avoid hook count issues
-  const adminStore = useAdminMessagesStore()
-  const adminMessages = useMemo(() => adminStore.messages.filter((m) => m.vendorId === VENDOR_ID), [adminStore.messages])
-  const addAdminMessage = adminStore.addMessage
+  const threadLeads = useEffectiveLeads('vendor', vendorIdentity)
 
-  // Get all leads for this vendor that have messages
-  const vendorLeads = useMemo(() => mockLeads.filter((l) => l.vendor_id === VENDOR_ID), [mockLeads])
-  const leadIds = useMemo(() => new Set(vendorLeads.map((l) => l.id)), [vendorLeads])
-  const relevantMessages = useMemo(() => mockMessages.filter((m) => leadIds.has(m.lead_id)), [leadIds, mockMessages])
-
-  // Group messages by lead
-  const threadLeads = useMemo(() => {
-    const leadIdsWithMessages = [...new Set(relevantMessages.map((m) => m.lead_id))]
-    return leadIdsWithMessages
-      .map((id) => vendorLeads.find((l) => l.id === id)!)
-      .filter(Boolean)
-  }, [relevantMessages, vendorLeads])
-
-  // "admin" is a special thread ID for admin conversations
-  const [activeThread, setActiveThread] = useState<string>('admin')
-  const activeLead = activeThread !== 'admin' ? (threadLeads.find((l) => l.id === activeThread) || null) : null
-  const [messages, setMessages] = useState<Message[]>(relevantMessages)
+  const [activeThread, setActiveThread] = useState<string>('')
+  const activeLead = threadLeads.find((l) => l.id === activeThread) || null
   const [input, setInput] = useState('')
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quoteItems, setQuoteItems] = useState([{ name: '', price: '' }])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const activeMessages = useMemo(
-    () => {
-      if (activeThread === 'admin') return [] // Admin messages handled separately
-      return activeLead ? messages.filter((m) => m.lead_id === activeLead.id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : []
-    },
-    [messages, activeLead, activeThread]
+  // Auto-select first lead once threads arrive.
+  useEffect(() => {
+    if (!activeThread && threadLeads.length > 0) {
+      setActiveThread(threadLeads[0].id)
+    }
+  }, [activeThread, threadLeads])
+
+  const { messages: activeMessages, sendMessage: sendLeadMessage } = useLeadConversation(
+    activeLead?.id || null,
+    vendorIdentity,
   )
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [activeMessages.length, adminMessages.length, activeThread])
+  }, [activeMessages.length, activeThread])
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return
-    if (activeThread === 'admin') {
-      addAdminMessage({
-        vendorId: VENDOR_ID,
-        senderId: VENDOR_ID,
-        senderName: vendor.name,
-        content: text.trim(),
-        isAdmin: false,
-      })
-      setInput('')
-      return
-    }
     if (!activeLead) return
-    const newMsg: Message = {
-      id: `m-new-${Date.now()}`,
-      lead_id: activeLead.id,
-      sender_id: VENDOR_ID,
-      content: text.trim(),
-      message_type: 'text',
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, newMsg])
+    await sendLeadMessage(text.trim())
     setInput('')
   }
 
-  const sendQuote = () => {
+  const sendQuote = async () => {
     if (!activeLead) return
     const validItems = quoteItems.filter((i) => i.name.trim() && i.price.trim())
     if (validItems.length === 0) return
@@ -118,16 +83,7 @@ export default function VendorMessages() {
     const items = validItems.map((i) => ({ name: i.name, price: parseFloat(i.price) || 0 }))
     const total = items.reduce((s, i) => s + i.price, 0)
 
-    const newMsg: Message = {
-      id: `m-quote-${Date.now()}`,
-      lead_id: activeLead.id,
-      sender_id: VENDOR_ID,
-      content: '',
-      message_type: 'quote',
-      quote_data: { items, total },
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, newMsg])
+    await sendLeadMessage('', { message_type: 'quote', quote_data: { items, total } })
     setQuoteOpen(false)
     setQuoteItems([{ name: '', price: '' }])
   }
@@ -140,7 +96,7 @@ export default function VendorMessages() {
     setQuoteItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
   }
 
-  const isVendorMsg = (msg: Message) => msg.sender_id === VENDOR_ID
+  const isVendorMsg = (msg: { sender_id: string }) => msg.sender_id === vendorIdentity
 
   const container = {
     hidden: { opacity: 0 },
@@ -159,47 +115,12 @@ export default function VendorMessages() {
           </CardHeader>
           <CardContent className="p-2">
             <div className="space-y-1">
-              {/* Admin Section */}
-              <div className="px-3 pt-2 pb-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Platform</p>
-              </div>
-              {(() => {
-                const lastAdminMsg = adminMessages.length > 0 ? adminMessages[adminMessages.length - 1] : null
-                return (
-                  <button
-                    onClick={() => setActiveThread('admin')}
-                    className={cn(
-                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-muted/80',
-                      activeThread === 'admin' && 'bg-muted'
-                    )}
-                  >
-                    <AvatarInitials initials="BC" color="#1e40af" size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">BuildConnect Admin</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lastAdminMsg ? (lastAdminMsg.isAdmin ? `Admin: ${lastAdminMsg.content}` : lastAdminMsg.content) : 'No messages yet'}
-                      </p>
-                    </div>
-                    {lastAdminMsg && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastAdminMsg.timestamp)}</span>
-                    )}
-                  </button>
-                )
-              })()}
-
-              {/* Homeowner Section */}
               {threadLeads.length > 0 && (
-                <>
-                  <div className="border-t my-2" />
-                  <div className="px-3 pt-1 pb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Homeowners</p>
-                  </div>
-                </>
+                <div className="px-3 pt-2 pb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Homeowners</p>
+                </div>
               )}
               {threadLeads.map((lead) => {
-                const lastMsg = messages
-                  .filter((m) => m.lead_id === lead.id)
-                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
                 const isActive = activeThread === lead.id
                 return (
                   <button
@@ -217,13 +138,8 @@ export default function VendorMessages() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{lead.homeowner_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {lastMsg?.message_type === 'quote' ? 'Quote sent' : lastMsg?.content || 'No messages'}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{lead.project}</p>
                     </div>
-                    {lastMsg && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtDate(lastMsg.created_at)}</span>
-                    )}
                   </button>
                 )
               })}
@@ -233,71 +149,7 @@ export default function VendorMessages() {
 
         {/* Chat Area */}
         <Card className="rounded-xl shadow-sm flex flex-col">
-          {activeThread === 'admin' ? (
-            <>
-              {/* Admin Chat Header */}
-              <div className="flex items-center gap-3 p-4 border-b">
-                <AvatarInitials initials="BC" color="#1e40af" size="sm" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">BuildConnect Admin</p>
-                  <p className="text-xs text-muted-foreground">Platform Administration</p>
-                </div>
-              </div>
-
-              {/* Admin Messages */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: '420px' }}>
-                {adminMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground">No messages from admin yet</p>
-                  </div>
-                ) : (
-                  [...adminMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((msg) => {
-                    const fromVendor = !msg.isAdmin
-                    return (
-                      <div key={msg.id} className={cn('flex', fromVendor ? 'justify-end' : 'justify-start')}>
-                        <div
-                          className={cn(
-                            'max-w-[80%] rounded-2xl px-4 py-2.5',
-                            fromVendor
-                              ? 'bg-primary text-primary-foreground rounded-br-md'
-                              : 'bg-muted rounded-bl-md'
-                          )}
-                        >
-                          <p className="text-sm">{msg.content}</p>
-                          <p className={cn('text-[10px] mt-1', fromVendor ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                            {fmtTime(msg.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              {/* Input */}
-              <div className="p-4 border-t">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    sendMessage(input)
-                  }}
-                  className="flex gap-2"
-                >
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Reply to admin..."
-                    className="flex-1"
-                    aria-label="Reply to admin"
-                  />
-                  <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send reply to admin">
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </form>
-              </div>
-            </>
-          ) : activeLead ? (
+          {activeLead ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center gap-3 p-4 border-b">
@@ -314,17 +166,19 @@ export default function VendorMessages() {
               </div>
 
               {/* Messages */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: '420px' }}>
-                {activeMessages.map((msg) => {
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" style={{ maxHeight: '420px' }}>
+                {activeMessages.map((msg, idx) => {
                   const fromVendor = isVendorMsg(msg)
+                  const lastSentIdx = activeMessages.reduce((acc, m, i) => isVendorMsg(m) ? i : acc, -1)
+                  const isLastSent = fromVendor && idx === lastSentIdx
                   return (
-                    <div key={msg.id} className={cn('flex', fromVendor ? 'justify-end' : 'justify-start')}>
+                    <div key={msg.id} className={cn('flex flex-col', fromVendor ? 'items-end' : 'items-start')}>
                       <div
                         className={cn(
-                          'max-w-[80%] rounded-2xl px-4 py-2.5',
+                          'max-w-[75%] rounded-[20px] px-4 py-2.5',
                           fromVendor
-                            ? 'bg-primary text-primary-foreground rounded-br-md'
-                            : 'bg-muted rounded-bl-md'
+                            ? 'bg-[#007AFF] text-white rounded-br-[4px]'
+                            : 'bg-gray-100 dark:bg-[#3A3A3C] text-foreground rounded-bl-[4px]'
                         )}
                       >
                         {msg.message_type === 'quote' && msg.quote_data ? (
@@ -348,12 +202,12 @@ export default function VendorMessages() {
                             </div>
                           </div>
                         ) : (
-                          <p className="text-sm">{msg.content}</p>
+                          <p className="text-[17px] leading-snug">{msg.content}</p>
                         )}
-                        <p className={cn('text-[10px] mt-1', fromVendor ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                          {fmtTime(msg.created_at)}
-                        </p>
                       </div>
+                      <p className={cn('text-[11px] mt-0.5 text-muted-foreground px-1', fromVendor ? 'text-right' : 'text-left')}>
+                        {isLastSent ? 'Delivered' : fmtTime(msg.created_at)}
+                      </p>
                     </div>
                   )
                 })}
@@ -395,7 +249,7 @@ export default function VendorMessages() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-1"
+                    className="flex-1 text-[17px]"
                     aria-label="Type a message"
                   />
                   <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send message">

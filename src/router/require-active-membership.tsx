@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth-store'
 import { useVendorMembershipStore } from '@/stores/vendor-membership-store'
@@ -33,6 +34,13 @@ export function RequireActiveMembership({ children }: RequireActiveMembershipPro
   const membership = useVendorMembershipStore((s) =>
     profile?.id ? s.membershipByVendor[profile.id] : undefined,
   )
+  const hydrateMembership = useVendorMembershipStore((s) => s.hydrate)
+
+  useEffect(() => {
+    if (profile?.id && profile.role === 'vendor') {
+      void hydrateMembership(profile.id)
+    }
+  }, [profile?.id, profile?.role, hydrateMembership])
 
   // Only applies to vendors. Any other role (or no profile yet) passes
   // through — RequireAuth already ensures we have a profile by the time

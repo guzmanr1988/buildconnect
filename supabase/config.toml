@@ -1,5 +1,4 @@
-[project]
-id = "buildconnect-2026"
+project_id = "buildconnect-2026"
 
 [api]
 enabled = true

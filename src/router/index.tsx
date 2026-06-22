@@ -52,6 +52,7 @@ import VendorHomeowners from '@/features/vendor/pages/homeowners'
 import VendorHomeownerDetail from '@/features/vendor/pages/homeowner-detail'
 import VendorReportsPage from '@/features/vendor/pages/reports'
 import VendorPermitsPage from '@/features/vendor/pages/permits'
+import VendorFinancingPage from '@/features/vendor/pages/financing'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -72,10 +73,12 @@ import AdminProfilePage from '@/features/admin/pages/profile'
 import WorkflowPage from '@/features/admin/pages/workflow'
 import ReportsPage from '@/features/admin/pages/reports'
 import AdminMessagesPage from '@/features/admin/pages/messages'
+import AdminSupportPage from '@/features/admin/pages/support'
 import AdminTutorialsPage from '@/features/admin/pages/tutorials'
 import AdminActivityPage from '@/features/admin/pages/activity'
 import AdminFinancingPage from '@/features/admin/pages/financing'
 import AdminFinancingApplicationDetail from '@/features/admin/pages/financing-application-detail'
+import AdminReferralProgramPage from '@/features/admin/pages/referral-program'
 
 export const router = createBrowserRouter([
   {
@@ -152,6 +155,7 @@ export const router = createBrowserRouter([
           // BUG-001: /vendor/products was used in older deep-links; redirect to canonical /vendor/catalog
           { path: 'products', element: <Navigate to="/vendor/catalog" replace /> },
           { path: 'banking', element: <VendorBanking />, handle: { title: 'Vendor · Banking' } },
+          { path: 'financing', element: <VendorFinancingPage />, handle: { title: 'Vendor · Financing' } },
           { path: 'account-reps', element: <VendorAccountRepsPage />, handle: { title: 'Vendor · Account Reps' } },
           { path: 'employees', element: <VendorEmployeesPage />, handle: { title: 'Vendor · Employees' } },
           { path: 'membership', element: <VendorMembership />, handle: { title: 'Vendor · Membership' } },
@@ -185,6 +189,8 @@ export const router = createBrowserRouter([
           { path: 'vendors/:vendorId', element: <AdminVendorDetail />, handle: { title: 'Admin · Vendor' } },
           { path: 'employees', element: <EmployeesPage />, handle: { title: 'Admin · Employees' } },
           { path: 'messages', element: <AdminMessagesPage />, handle: { title: 'Admin · Messages' } },
+          // Wave-18 #3 — Platform Support v1: homeowner ↔ admin inbox.
+          { path: 'support', element: <AdminSupportPage />, handle: { title: 'Admin · Support' } },
           { path: 'transactions', element: <TransactionsPage />, handle: { title: 'Admin · Transactions' } },
           { path: 'reports', element: <ReportsPage />, handle: { title: 'Admin · Reports' } },
           { path: 'banking', element: <BankingPage />, handle: { title: 'Admin · Banking' } },
@@ -205,6 +211,7 @@ export const router = createBrowserRouter([
           // for master/category gates. Edge Fn admin-create-approval already
           // deployed; this surface drives the lenders registry + approval set.
           { path: 'financing', element: <AdminFinancingPage />, handle: { title: 'Admin · Financing' } },
+          { path: 'referral-program', element: <AdminReferralProgramPage />, handle: { title: 'Admin · Referral Program' } },
           // TEMP admin manual-stepper for financing lifecycle demo (Rod-direct
           // 2026-05-18). Pre-launch hack so admin can advance/rewind any
           // application's state for walking the customer demo. Real lender

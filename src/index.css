@@ -322,3 +322,100 @@ input[type="number"] {
 .pac-icon {
   display: none;
 }
+
+/* Google Translate — strip all default chrome.
+   We drive translation via our own English/Spanish footer buttons +
+   googtrans cookie, never via GT's UI. Hide:
+   - Top "Translated to: ... / Show original / Options" banner (iframe.skiptranslate)
+   - Default GT widget gadget + icon + image
+   - Hover tooltips + balloon popups
+   - "goog-gt-tt" inline-text popover
+   Plus reset body { top: 40px } which GT injects to make room
+   for its banner — without the reset, removing the banner leaves
+   a blank 40px gap at the top of the page. */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-te-gadget,
+.goog-te-gadget-icon,
+.goog-te-gadget-simple,
+.goog-te-gadget-simple img,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover,
+#goog-gt-tt,
+.goog-te-spinner-pos {
+  display: none !important;
+  visibility: hidden !important;
+}
+body {
+  top: 0 !important;
+  position: static !important;
+}
+html {
+  margin-top: 0 !important;
+}
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+#google_translate_element {
+  position: absolute !important;
+  left: -10000px !important;
+  top: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+/* iris-spec elevated card surface for vendor catalog options (Rod
+   2026-06-10 "every box 3D / stand out / a lot better"). Inset
+   top-highlight + multi-layer drop-shadow reads as a lifted surface
+   in BOTH modes. Dark variant uses a brighter rim-light instead of
+   just deeper shadow because elevation on dark backgrounds reads
+   from "this surface is lighter" not "deeper drop shadow". No
+   overflow:hidden on .product-card (would clip the inset highlight). */
+.product-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 10px rgba(0, 0, 0, 0.08),
+    0 12px 28px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+.dark .product-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.product-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 6px 16px rgba(0, 0, 0, 0.12),
+    0 16px 32px rgba(0, 0, 0, 0.08);
+}
+.dark .product-card-hover:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 10px rgba(0, 0, 0, 0.4),
+    0 12px 28px rgba(0, 0, 0, 0.4);
+}
+.product-card-selected {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 0 0 3px rgba(99, 102, 241, 0.1),
+    0 4px 10px rgba(0, 0, 0, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.04);
+}
+.dark .product-card-selected {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 3px rgba(255, 255, 255, 0.08),
+    0 4px 10px rgba(0, 0, 0, 0.35),
+    0 8px 22px rgba(0, 0, 0, 0.4);
+}

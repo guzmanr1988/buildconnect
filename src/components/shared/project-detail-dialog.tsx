@@ -12,12 +12,14 @@ import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-d
 import { deriveInitials } from '@/lib/initials'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { mapsUrl, telHref } from '@/lib/contact-links'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
-import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { PermitDisplayRow, AssociationDisplayRow, PoolSurveyDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { fetchAssociationDocForSentProject, getSignedUrl } from '@/lib/api/homeowner-documents'
+import type { HomeownerDoc } from '@/stores/homeowner-documents-store'
 
 // Shared project-detail dialog — extracted from /admin/workflow in ship #140
 // per kratos msg 1776744668266 so any admin surface can open the same
@@ -94,6 +96,27 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
     })
     return () => { cancelled = true }
   }, [open, projectId, sentProjects])
+
+  // Association permit doc — fetched by sent_project_id + doc_type='permit'.
+  // RLS gates the row to the owning vendor / admin.
+  const [associationDoc, setAssociationDoc] = useState<HomeownerDoc | null>(null)
+  useEffect(() => {
+    setAssociationDoc(null)
+    if (!open || !projectId) return
+    const sp = sentProjects.find((p) => p.id === projectId)
+    if (!sp) return
+    let cancelled = false
+    fetchAssociationDocForSentProject(projectId).then((doc) => {
+      if (!cancelled) setAssociationDoc(doc)
+    })
+    return () => { cancelled = true }
+  }, [open, projectId, sentProjects])
+
+  const handleAssociationDocDownload = async () => {
+    if (!associationDoc) return
+    const url = await getSignedUrl(associationDoc.storagePath)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   // Resolve effective commission_pct for a given vendor company — inline
   // because used twice below (selectedItem + commissionPct fallback).
@@ -274,7 +297,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
           Lead Detail Modal #308; #103 single-source-of-truth). Mobile
           portrait preserved exactly. Left column: identity + customer
           context. Right column: selections + audit + commission. */}
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-y-auto" data-testid="admin-project-detail-dialog">
         {selectedItem && (
           <>
             <DialogHeader>
@@ -286,9 +309,9 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
             <div className={`${DIALOG_HORIZONTAL_GRID} mt-2`}>
             <div className="space-y-4">
               <div className="rounded-xl bg-muted/50 p-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Project</span>
-                  <span className="font-medium">{selectedItem.project}</span>
+                <div className="space-y-0.5">
+                  <span className="text-muted-foreground text-xs">Project</span>
+                  <p className="font-medium leading-snug">{selectedItem.project}</p>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
@@ -374,120 +397,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 )
               })()}
 
-              {/* Audit Trail — admin-workflow mode: left col under Commission. */}
-              {(() => {
-                if (!isAdminWorkflow) return null
-                const extra = selectedItem as typeof selectedItem & {
-                  _bookingDate?: string
-                  _bookingTime?: string
-                  _confirmedAt?: string
-                  _repAssignedAt?: string
-                  _rescheduleRequest?: { requestedBy: string; proposedDate: string; proposedTime: string; originalDate: string; originalTime: string; status: string; reason?: string }
-                  _cancellationRequest?: { status: string; reason?: string; explanation?: string }
-                  _idDocument?: string
-                  _homeownerId?: string
-                }
-                const hasAny =
-                  extra._bookingDate ||
-                  extra._confirmedAt ||
-                  extra._repAssignedAt ||
-                  extra._rescheduleRequest ||
-                  extra._cancellationRequest ||
-                  extra._idDocument ||
-                  extra._homeownerId
-                if (!hasAny) return null
-                return (
-                  <div className="rounded-xl border p-4 space-y-3">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Trail</h4>
-                    <div className="space-y-2 text-sm">
-                      {extra._bookingDate && (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Booked slot</span>
-                          <span className="font-medium">
-                            {extra._bookingDate}{extra._bookingTime ? ` · ${extra._bookingTime}` : ''}
-                          </span>
-                        </div>
-                      )}
-                      {extra._confirmedAt && (
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Vendor confirmed</span>
-                          <span className="font-medium">{fmtDate(extra._confirmedAt)}</span>
-                        </div>
-                      )}
-                      {extra._repAssignedAt && (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Rep assigned</span>
-                          <span className="font-medium">{fmtDate(extra._repAssignedAt)}</span>
-                        </div>
-                      )}
-                      {extra._cancellationRequest && (
-                        <div className="flex items-start gap-2">
-                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[108px]">Cancellation</span>
-                              <Badge variant="outline" className="text-[10px] capitalize">{extra._cancellationRequest.status}</Badge>
-                            </p>
-                            {extra._cancellationRequest.reason && (
-                              <p className="text-xs text-muted-foreground italic mt-0.5">
-                                "{extra._cancellationRequest.reason}"
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {extra._rescheduleRequest && (
-                        <div className="flex items-start gap-2">
-                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <div className="flex-1 space-y-0.5">
-                            <p className="flex items-center gap-2">
-                              <span className="text-muted-foreground min-w-[108px]">Reschedule</span>
-                              <Badge variant="outline" className="text-[10px] capitalize">{extra._rescheduleRequest.status}</Badge>
-                              <span className="text-[10px] text-muted-foreground">
-                                {extra._rescheduleRequest.requestedBy}-initiated
-                              </span>
-                            </p>
-                            <p className="text-xs text-foreground/80">
-                              {extra._rescheduleRequest.proposedDate} · {extra._rescheduleRequest.proposedTime}
-                              <span className="text-muted-foreground ml-1.5">
-                                (was {extra._rescheduleRequest.originalDate} · {extra._rescheduleRequest.originalTime})
-                              </span>
-                            </p>
-                            {extra._rescheduleRequest.reason && (
-                              <p className="text-xs text-muted-foreground italic">
-                                "{extra._rescheduleRequest.reason}"
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {extra._idDocument && (
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">ID on file</span>
-                          <img
-                            src={extra._idDocument}
-                            alt="Customer ID"
-                            className="h-12 w-20 rounded border object-cover"
-                          />
-                        </div>
-                      )}
-                      {extra._homeownerId && (
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground min-w-[108px]">Homeowner ID</span>
-                          <span className="font-mono text-[11px] text-foreground/80 break-all">
-                            {extra._homeownerId}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* Pin-24: left-col Audit Trail IIFE removed; right-col version
+                  now renders for all viewModes (was admin-workflow-only). */}
             </div>
             {/* RIGHT COLUMN — selections + audit + commission */}
             <div className="space-y-4">
@@ -495,7 +406,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 <>
                   <div className="rounded-xl border p-4 space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Selections</h4>
-                    {Object.entries(selectedItem.project_data.item.selections).map(([key, values]: [string, any]) => (
+                    {Object.entries(selectedItem.project_data.item.selections ?? {}).map(([key, values]: [string, any]) => (
                       <div key={key} className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-medium text-muted-foreground capitalize min-w-[60px]">{key.replace(/_/g, ' ')}:</span>
                         {(values as string[]).map((v: string) => (
@@ -504,20 +415,6 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       </div>
                     ))}
                   </div>
-
-                  {/* Roof Spec — shown for roofing items only */}
-                  {selectedItem.project_data.item.serviceId === 'roofing' && (() => {
-                    const item = selectedItem.project_data.item as any
-                    return (
-                      <RoofSpecCard
-                        roofMeasurement={item.roofMeasurement}
-                        metalRoofSelection={item.metalRoofSelection}
-                        roofAddonLinearFt={item.roofAddonLinearFt}
-                        gutterDropsConfig={item.gutterDropsConfig}
-                        flowPath={item.flowPath}
-                      />
-                    )
-                  })()}
 
                   {/* Permit — project-level, shown for any service when set.
                       Reads sentProject snapshot first; falls back to legacy
@@ -528,6 +425,20 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                         ?? (selectedItem.project_data.item as any).roofPermit
                     }
                   />
+
+                  {/* Association — project-level, shown for any service.
+                      task_1780776240716_817. When yes + doc uploaded, the
+                      vendor gets a click-to-download signed-URL link. */}
+                  <AssociationDisplayRow
+                    association={selectedItem.project_data.projectAssociation ?? null}
+                    docFilename={associationDoc?.filename}
+                    onDownload={handleAssociationDocDownload}
+                  />
+
+                  {/* Pool survey — Pool-only. Other services leave value NULL
+                      so the row hides cleanly via the null-gate in the
+                      component. */}
+                  <PoolSurveyDisplayRow survey={selectedItem.project_data.poolSurvey ?? null} />
 
                   {selectedItem.project_data.item.windowSelections && selectedItem.project_data.item.windowSelections.length > 0 && (() => {
                     const pd = selectedItem.project_data
@@ -865,6 +776,19 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                           )
                         })()}
                         {(() => {
+                          // Gate Phase-C standalone Permit card behind absence of project-level
+                          // permit snapshot. When pd.projectPermit (or legacy roofPermit) is set
+                          // the PermitDisplayRow above already surfaces permit context as a card,
+                          // so this Fee-only card was rendering as a second permit card on screen
+                          // (Rodolfo file_401 ref: admin/workflow Donald roofing lead-detail had
+                          // both "Yes — permit will be pulled" + "Permit Fee $X" stacked).
+                          // Keep this card for windows_doors and any service without a
+                          // project-level permit snapshot, so the catalog Permit Fee still
+                          // surfaces in those flows.
+                          const hasProjectPermit =
+                            !!selectedItem.project_data?.projectPermit ||
+                            !!(selectedItem.project_data?.item as any)?.roofPermit
+                          if (hasProjectPermit) return null
                           const permitLine = lineItems.find((l) => l.label?.toLowerCase().includes('permit'))
                           const catalogPrice = getVendorPrice(pd.item.serviceId, 'permit')
                           const hasCatalog = catalogPrice > 0
@@ -880,21 +804,12 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                             </div>
                           )
                         })()}
-                        {(() => {
-                          if (!pd.saleAmount || pd.status !== 'sold') return null
-                          const catalogTotal = computeWindowsDoorsCatalogTotal(pd.item as any, lineItems, getVendorPrice)
-                          const upsaleAmount = pd.saleAmount - catalogTotal
-                          if (upsaleAmount <= 0) return null
-                          return (
-                            <div className="rounded-xl border p-4 space-y-2">
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upsale</h4>
-                              <div className="flex items-center justify-between text-sm px-2 py-1.5 rounded-lg bg-primary/5">
-                                <span className="text-muted-foreground">Upsale</span>
-                                <span className="font-bold text-primary">{fmtD(upsaleAmount)}</span>
-                              </div>
-                            </div>
-                          )
-                        })()}
+                        {/* pin-29 — standalone Upsale block removed. The
+                            Upsale (or symmetric Discount) line now lives
+                            inline in the Pricing Breakdown via the
+                            auto_sold_adjustment row appended by markSold,
+                            so the breakdown total == saleAmount by
+                            construction and the duplicate render is dead. */}
                       </>
                     )
                   })()}
@@ -915,10 +830,13 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                     const pd = selectedItem.project_data
                     const snapshot = pd.priceLineItems
                     const serviceId = pd.item?.serviceId
-                    const fallback = serviceId
-                      ? PRICE_LINE_ITEM_PRESETS[serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS]
-                      : undefined
-                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : fallback
+                    // pin-22-v2 A1 — drop PRICE_LINE_ITEM_PRESETS[serviceId] fallback so
+                    // the Pricing Breakdown only renders when a real per-project snapshot
+                    // exists. Pre-fix the fallback let stale preset numbers display on
+                    // lead-detail views with empty priceLineItems, producing misleading
+                    // "Sale Total == Pricing Breakdown" rows Rod flagged on Donald. Empty
+                    // snapshot → null → existing length-0 gate hides the section.
+                    const priceLineItems = snapshot && snapshot.length > 0 ? snapshot : null
                     if (!priceLineItems || priceLineItems.length === 0) return null
 
                     const isSold = pd.status === 'sold'
@@ -999,10 +917,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                       const catalogSum = catalogLines.reduce((s, l) => s + l.amount, 0)
                       if (catalogSum > 0) {
                         const saleAmt = selectedItem.saleAmount ?? 0
-                        const upsale = isSold && saleAmt > catalogSum ? saleAmt - catalogSum : 0
-                        const finalLines: LineItem[] = upsale > 0
-                          ? [...catalogLines, { id: 'upsale-adj', label: 'Upsale', amount: upsale }]
-                          : catalogLines
+                        // pin-29 — symmetric reconcile: append Upsale when
+                        // saleAmt > catalogSum, Discount when saleAmt <
+                        // catalogSum, nothing when equal. Keeps the
+                        // windows_doors catalog-rehydration path consistent
+                        // with the markSold reconcile invariant: breakdown
+                        // total == saleAmount in every case.
+                        const delta = isSold ? saleAmt - catalogSum : 0
+                        const finalLines: LineItem[] = delta === 0
+                          ? catalogLines
+                          : [
+                              ...catalogLines,
+                              {
+                                id: 'upsale-adj',
+                                label: delta > 0 ? 'Upsale' : 'Discount',
+                                amount: delta,
+                              },
+                            ]
                         displayLineItems = finalLines
                         displayTotal = finalLines.reduce((s, l) => s + l.amount, 0)
                       }
@@ -1048,9 +979,8 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                 </>
               )}
 
-              {/* Audit Trail — default mode only; admin-workflow moves this to left col. */}
+              {/* Audit Trail — pin-24: renders in right col for all viewModes. */}
               {(() => {
-                if (isAdminWorkflow) return null
                 const extra = selectedItem as typeof selectedItem & {
                   _bookingDate?: string
                   _bookingTime?: string
@@ -1071,7 +1001,7 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
                   extra._homeownerId
                 if (!hasAny) return null
                 return (
-                  <div className="rounded-xl border p-4 space-y-3">
+                  <div className="rounded-xl border p-4 space-y-3" data-testid="admin-project-detail-audit-trail">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audit Trail</h4>
                     <div className="space-y-2 text-sm">
                       {extra._bookingDate && (
@@ -1199,6 +1129,23 @@ export function ProjectDetailDialog({ open, onClose, projectId, transactionFallb
               })()}
             </div>
             </div>
+            {/* pin-23 — Roof Spec full-width BELOW the 2-col grid, roofing only.
+                Was inline in the right column; moved out + widened so the spec
+                table breathes on the wide-modal layout. */}
+            {selectedItem.project_data?.item?.serviceId === 'roofing' && (() => {
+              const item = selectedItem.project_data!.item as any
+              return (
+                <div className="mt-4" data-testid="admin-project-detail-roof-spec">
+                  <RoofSpecCard
+                    roofMeasurement={item.roofMeasurement}
+                    metalRoofSelection={item.metalRoofSelection}
+                    roofAddonLinearFt={item.roofAddonLinearFt}
+                    gutterDropsConfig={item.gutterDropsConfig}
+                    flowPath={item.flowPath}
+                  />
+                </div>
+              )
+            })()}
             <Button variant="outline" className="w-full mt-2" onClick={onClose}>
               Close
             </Button>

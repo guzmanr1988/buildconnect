@@ -248,7 +248,7 @@ export default function HomeownersPage() {
       </div>
 
       {/* Homeowner Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {filtered.map((homeowner, i) => {
           const fixtureProjects: (CustomerProject & { address_label?: string })[] = effectiveCustomerProjects
             .filter((p) => p.homeowner_id === homeowner.id)

@@ -8,15 +8,7 @@ import {
   Plus,
   MapPin,
   User2,
-  Ruler,
-  ScrollText,
-  ClipboardCheck,
-  Image as ImageIcon,
-  ShieldCheck,
-  PenLine,
-  FileSignature,
-  Calculator,
-  FileQuestion,
+  Loader2,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -25,7 +17,16 @@ import {
   type HomeownerDoc,
   type HomeownerDocType,
 } from '@/stores/homeowner-documents-store'
+import {
+  DOC_TYPE_ORDER,
+  DOC_TYPE_LABEL,
+  DOC_TYPE_ICON,
+  formatDocDate,
+  friendlyDocTitle,
+  uploaderChip,
+} from '@/lib/homeowner-doc-display'
 import { useProjectsStore } from '@/stores/projects-store'
+import { AssociationDocActionCard } from '@/features/homeowner/components/association-doc-action-card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
@@ -50,42 +51,6 @@ import { toast } from 'sonner'
 //   3. "Customer documents" cross-project box for vendor-uploaded
 //      homeowner-level docs that carry NULL sent_project_id.
 
-const DOC_TYPE_ORDER: HomeownerDocType[] = [
-  'license',
-  'permit',
-  'sketch',
-  'measurement',
-  'agreement',
-  'contract',
-  'quote',
-  'photo',
-  'other',
-]
-
-const DOC_TYPE_LABEL: Record<HomeownerDocType, string> = {
-  license: 'License',
-  permit: 'Permit',
-  sketch: 'Sketch',
-  measurement: 'Measurement',
-  agreement: 'Agreement',
-  contract: 'Contract',
-  quote: 'Quote',
-  photo: 'Photo',
-  other: 'Other',
-}
-
-const DOC_TYPE_ICON: Record<HomeownerDocType, typeof FileText> = {
-  license: ShieldCheck,
-  permit: ClipboardCheck,
-  sketch: PenLine,
-  measurement: Ruler,
-  agreement: ScrollText,
-  contract: FileSignature,
-  quote: Calculator,
-  photo: ImageIcon,
-  other: FileQuestion,
-}
-
 interface SentProjectGroup {
   sentProjectId: string | null
   serviceName: string
@@ -94,30 +59,11 @@ interface SentProjectGroup {
   sentAt: string | null
   status: string | null
   docs: HomeownerDoc[]
-}
-
-function formatDocDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-function friendlyDocTitle(doc: HomeownerDoc): string {
-  const stamp = formatDocDate(doc.createdAt)
-  if (doc.docType) {
-    return `${DOC_TYPE_LABEL[doc.docType]} — ${stamp}`
-  }
-  return doc.filename
-}
-
-function uploaderChip(doc: HomeownerDoc): string | null {
-  if (doc.uploadedBy === 'vendor') return 'Uploaded by contractor'
-  if (doc.uploadedBy === 'homeowner') return 'Uploaded by you'
-  return null
+  // Migration 066 / task_066 — drive the engagement-time association-doc
+  // action card. Action card renders when projectAssociation='yes' AND
+  // engaged (soldAt set) AND no association_permit doc on this project.
+  projectAssociation: 'yes' | 'no' | undefined
+  soldAt: string | null
 }
 
 export function HomeownerDocumentsPage() {
@@ -131,6 +77,9 @@ export function HomeownerDocumentsPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const [idPreviewOpen, setIdPreviewOpen] = useState(false)
   const [idBusy, setIdBusy] = useState(false)
+  const [previewDoc, setPreviewDoc] = useState<HomeownerDoc | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => {
     if (profile?.id && initializedFor !== profile.id) {
@@ -206,6 +155,8 @@ export function HomeownerDocumentsPage() {
             sentAt: project.sentAt ?? null,
             status: project.status ?? null,
             docs: [],
+            projectAssociation: project.projectAssociation,
+            soldAt: project.soldAt ?? null,
           }
           buckets.set(key, bucket)
         }
@@ -232,10 +183,33 @@ export function HomeownerDocumentsPage() {
           sentAt: null,
           status: null,
           docs: [],
+          projectAssociation: undefined,
+          soldAt: null,
         }
         buckets.set(key, bucket)
       }
       bucket.docs.push(doc)
+    }
+
+    // task_066 — seed an empty bucket for engaged + association=YES
+    // projects so the Action-needed card appears even when the homeowner
+    // has no other docs uploaded yet (otherwise the doc-walk above
+    // wouldn't create the box).
+    for (const sp of sentProjects) {
+      if (sp.projectAssociation !== 'yes') continue
+      if (!sp.soldAt) continue
+      if (buckets.has(sp.id)) continue
+      buckets.set(sp.id, {
+        sentProjectId: sp.id,
+        serviceName: sp.item.serviceName,
+        vendorCompany: sp.contractor.company ?? null,
+        address: sp.homeowner?.address ?? null,
+        sentAt: sp.sentAt ?? null,
+        status: sp.status ?? null,
+        docs: [],
+        projectAssociation: sp.projectAssociation,
+        soldAt: sp.soldAt ?? null,
+      })
     }
 
     for (const bucket of buckets.values()) {
@@ -251,20 +225,26 @@ export function HomeownerDocumentsPage() {
     })
   }, [myDocs, sentProjects])
 
-  const handleDownload = async (doc: HomeownerDoc) => {
+  const handleDocPreview = async (doc: HomeownerDoc) => {
+    setPreviewDoc(doc)
+    setPreviewUrl(null)
+    setPreviewLoading(true)
     const url = await getSignedUrl(doc.storagePath)
+    setPreviewLoading(false)
     if (!url) {
-      toast.error('Could not generate download link. Please try again.')
+      setPreviewDoc(null)
+      toast.error('Could not load document. Please try again.')
       return
     }
-    const a = document.createElement('a')
-    a.href = url
-    a.download = doc.filename
-    a.target = '_blank'
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    setPreviewUrl(url)
+  }
+
+  const handlePreviewOpenChange = (open: boolean) => {
+    if (!open) {
+      setPreviewDoc(null)
+      setPreviewUrl(null)
+      setPreviewLoading(false)
+    }
   }
 
   const handleRemove = (id: string) => {
@@ -335,14 +315,103 @@ export function HomeownerDocumentsPage() {
             <ProjectBox
               key={group.sentProjectId ?? '__customer__'}
               group={group}
-              onDownload={handleDownload}
+              onPreview={handleDocPreview}
               onRemove={handleRemove}
               onUpload={handleUploadToBox}
             />
           ))}
         </div>
       )}
+
+      <DocPreviewDialog
+        doc={previewDoc}
+        url={previewUrl}
+        loading={previewLoading}
+        onOpenChange={handlePreviewOpenChange}
+      />
     </div>
+  )
+}
+
+function DocPreviewDialog({
+  doc,
+  url,
+  loading,
+  onOpenChange,
+}: {
+  doc: HomeownerDoc | null
+  url: string | null
+  loading: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  if (!doc) return null
+  const filename = doc.filename || friendlyDocTitle(doc)
+  const isPdf =
+    doc.mimeType === 'application/pdf' || /\.pdf(\?|$)/i.test(filename)
+  const isImage =
+    doc.mimeType?.startsWith('image/') ||
+    /\.(png|jpe?g|gif|webp|heic|avif|svg)(\?|$)/i.test(filename)
+  return (
+    <Dialog open={!!doc} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-3xl p-3 gap-3"
+        data-testid="doc-preview-modal"
+      >
+        <div className="pr-8">
+          <p
+            className="text-sm font-semibold text-foreground truncate"
+            data-testid="doc-preview-title"
+          >
+            {friendlyDocTitle(doc)}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-muted/20 overflow-hidden flex items-center justify-center min-h-[40vh]">
+          {loading || !url ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-xs">Loading preview…</span>
+            </div>
+          ) : isPdf ? (
+            <iframe
+              src={url}
+              title={filename}
+              className="w-full h-[70vh] bg-white"
+              data-testid="doc-preview-iframe"
+            />
+          ) : isImage ? (
+            <img
+              src={url}
+              alt={filename}
+              className="max-h-[70vh] w-auto object-contain"
+              data-testid="doc-preview-image"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground text-center px-6">
+              <FileText className="h-8 w-8 text-muted-foreground/60" />
+              <p className="text-xs">
+                Preview not available for this file type. Use Download below to
+                open it.
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          {url && (
+            <a
+              href={url}
+              download={filename}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition"
+              data-testid="doc-preview-download"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -372,7 +441,7 @@ function PhotoIdSection({
             <button
               type="button"
               onClick={onPreviewOpen}
-              className="w-16 h-16 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer"
+              className="w-16 h-16 md:w-40 md:h-40 lg:w-48 lg:h-48 rounded-lg overflow-hidden border shrink-0 hover:ring-2 hover:ring-primary transition cursor-pointer"
             >
               <img src={idDocumentUrl} alt="ID Document" className="w-full h-full object-cover" />
             </button>
@@ -443,12 +512,12 @@ function PhotoIdSection({
 
 function ProjectBox({
   group,
-  onDownload,
+  onPreview,
   onRemove,
   onUpload,
 }: {
   group: SentProjectGroup
-  onDownload: (doc: HomeownerDoc) => void
+  onPreview: (doc: HomeownerDoc) => void
   onRemove: (id: string) => void
   onUpload: (group: SentProjectGroup, docType: HomeownerDocType, file: File) => Promise<void>
 }) {
@@ -498,8 +567,28 @@ function ProjectBox({
     void onUpload(group, pickerDocType, file)
   }
 
+  // task_066 — engagement-time association-doc action card. Renders only
+  // when projectAssociation='yes' AND project is engaged (soldAt set) AND
+  // no association_permit doc is on file for this sent_project. Self-
+  // hides when any condition stops holding (upload lands -> last gate
+  // clears via the docs selector below).
+  const hasAssociationDoc = group.docs.some(
+    (d) => d.docType === 'association_permit',
+  )
+  const showAssociationActionCard =
+    !!group.sentProjectId
+    && group.projectAssociation === 'yes'
+    && !!group.soldAt
+    && !hasAssociationDoc
+
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3" data-sent-project-id={group.sentProjectId ?? 'customer'}>
+      {showAssociationActionCard && group.sentProjectId && (
+        <AssociationDocActionCard
+          sentProjectId={group.sentProjectId}
+          address={group.address}
+        />
+      )}
       <div className="flex items-start gap-2">
         <Folder className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
@@ -543,7 +632,7 @@ function ProjectBox({
                   <DocRow
                     key={doc.id}
                     doc={doc}
-                    onDownload={onDownload}
+                    onPreview={onPreview}
                     onRemove={onRemove}
                   />
                 ))}
@@ -607,11 +696,11 @@ function ProjectBox({
 
 function DocRow({
   doc,
-  onDownload,
+  onPreview,
   onRemove,
 }: {
   doc: HomeownerDoc
-  onDownload: (doc: HomeownerDoc) => void
+  onPreview: (doc: HomeownerDoc) => void
   onRemove: (id: string) => void
 }) {
   const chip = uploaderChip(doc)
@@ -619,7 +708,17 @@ function DocRow({
     <div
       data-doc-id={doc.id}
       data-doc-type={doc.docType ?? 'unknown'}
-      className="flex items-start gap-2 rounded-lg border bg-background px-3 py-2"
+      role="button"
+      tabIndex={0}
+      onClick={() => onPreview(doc)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPreview(doc)
+        }
+      }}
+      className="flex items-start gap-2 rounded-lg border bg-background px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-doc-open-trigger
     >
       <FileText className="h-4 w-4 text-primary mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
@@ -638,17 +737,11 @@ function DocRow({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
-          onClick={() => onDownload(doc)}
-          title="Download"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(doc.id)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove(doc.id)
+          }}
           title="Remove"
         >
           <Trash2 className="h-3.5 w-3.5" />

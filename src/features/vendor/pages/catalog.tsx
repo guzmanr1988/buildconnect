@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Package, Check, DollarSign, ChevronDown } from 'lucide-react'
+import { Package, DollarSign, ChevronDown, Save, Loader2, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -9,11 +10,47 @@ import { PageHeader } from '@/components/shared/page-header'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
-import { getOptionMetadata } from '@/lib/option-metadata'
+import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { cn } from '@/lib/utils'
+import type { OptionGroup } from '@/types'
+import { VendorCatalogOptionsCardGrid } from './components/vendor-catalog-options-card-grid'
+
+// Per-service bulk-select primitive. Flattens nested optionGroups → options
+// → subGroups recursively into a flat (groupId, optionId) list, so the
+// header-toolbar "Select all" / "Deselect all" button can iterate once and
+// flip every option at every depth. Sub-options are toggled regardless of
+// parent enabled-state — vendor pre-arms the full tree, parent-collapse
+// rendering still gates visibility.
+//
+// PR-#438 — must mirror CatalogGroupRenderer L533 ancestor-path scoping
+// (PR-#410 primitive). The renderer composes nested subGroup ids as
+// `${parentOption.id}__${subGroup.id}` so sibling subgroups w/ identical
+// bare ids don't collide in vendor-catalog-store enabledOptions[groupId].
+// Bare-id collectAllOptions silently no-ops Select All on any service that
+// has sub_groups (windows/doors/garage/storm_front etc) because writes land
+// at enabledOptions[bare] while renderer reads enabledOptions[scoped].
+// Roofing-PASS / windows_doors-FAIL fingerprint = top-level-only vs nested.
+function collectAllOptions(
+  groups: OptionGroup[]
+): Array<{ groupId: string; optionId: string }> {
+  const out: Array<{ groupId: string; optionId: string }> = []
+  for (const g of groups) {
+    for (const o of g.options) {
+      out.push({ groupId: g.id, optionId: o.id })
+      if (o.subGroups && o.subGroups.length > 0) {
+        for (const sg of o.subGroups) {
+          out.push(...collectAllOptions([{ ...sg, id: `${o.id}__${sg.id}` }]))
+        }
+      }
+    }
+  }
+  return out
+}
 
 export default function VendorCatalog() {
   const adminServices = useCatalogStore((s) => s.services)
+  const refetchAdminCatalog = useCatalogStore((s) => s.hydrateFromServer)
+  useCatalogRealtime(refetchAdminCatalog)
   const {
     services: vendorServices,
     initFromAdmin,
@@ -28,6 +65,13 @@ export default function VendorCatalog() {
     getPricePercent,
     getServicePermit,
   } = useVendorCatalogStore()
+  // EDIT 1.H — gate the Switch on hydration completion. Pre-1.G the toggle
+  // was always interactive; post-1.G the localStorage-rehydrated baseline
+  // is enabled=false everywhere until hydrateFromSupabase resolves DB truth.
+  // Disabling avoids a misleading "all-Inactive" baseline misrepresenting
+  // DB state during the hydrate window.
+  const hydrationStatus = useVendorCatalogStore((s) => s._hydrationStatus)
+  const hydrationComplete = hydrationStatus === 'complete'
 
   // Expand state is per-service, session-scoped (no persist — if vendor
   // refreshes, everything starts collapsed again). Tracking EXPANDED (flipped
@@ -42,6 +86,70 @@ export default function VendorCatalog() {
       else next.add(id)
       return next
     })
+  }
+
+  // Arc-37 per-service Save: store auto-saves on each input (setPrice +
+  // setServicePermit fire-and-forget upsert), so the Save button's job is
+  // (a) give Rod an explicit commit-acknowledged signal, and (b) re-flush
+  // the same upserts as a safety re-snapshot. dirtyServices tracks any
+  // mutation since the last Save click for this service so the button
+  // gates correctly when there's nothing pending.
+  const [dirtyServices, setDirtyServices] = useState<Set<string>>(new Set())
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const markDirty = (svcId: string) => {
+    setDirtyServices((prev) => {
+      if (prev.has(svcId)) return prev
+      const next = new Set(prev)
+      next.add(svcId)
+      return next
+    })
+  }
+  const wrappedToggleOption = (svcId: string, groupId: string, optId: string) => {
+    toggleOption(svcId, groupId, optId)
+    markDirty(svcId)
+  }
+  const wrappedSetPrice = (svcId: string, optId: string, price: number) => {
+    setPrice(svcId, optId, price)
+    markDirty(svcId)
+  }
+  const wrappedSetPricePercent = (svcId: string, optId: string, pct: number) => {
+    setPricePercent(svcId, optId, pct)
+    markDirty(svcId)
+  }
+  const wrappedSetServicePermit = (svcId: string, cents: number) => {
+    setServicePermit(svcId, cents)
+    markDirty(svcId)
+  }
+  async function handleSaveService(serviceId: string) {
+    setSavingId(serviceId)
+    const svc = useVendorCatalogStore.getState().services.find((s) => s.serviceId === serviceId)
+    if (svc) {
+      for (const [optId, price] of Object.entries(svc.pricing)) {
+        if (typeof price === 'number' && price > 0) {
+          setPrice(serviceId, optId, price)
+        }
+      }
+      // Rod-rule: 0 is canonical opt-out for service permits ("permit is
+      // default in every service unless vendor puts it at 0"), so the Save
+      // button must re-affirm the value regardless of magnitude. The old
+      // `> 0` guard silently skipped opt-out re-saves.
+      if (typeof svc.permitCents === 'number') {
+        setServicePermit(serviceId, svc.permitCents)
+      }
+    }
+    await new Promise((r) => setTimeout(r, 350))
+    setSavingId(null)
+    setDirtyServices((prev) => {
+      if (!prev.has(serviceId)) return prev
+      const next = new Set(prev)
+      next.delete(serviceId)
+      return next
+    })
+    setSavedId(serviceId)
+    setTimeout(() => {
+      setSavedId((prev) => (prev === serviceId ? null : prev))
+    }, 1800)
   }
 
   // Sync with admin catalog on mount
@@ -173,24 +281,108 @@ export default function VendorCatalog() {
                         />
                       )}
                       <CardTitle className="text-base font-heading">{service.name}</CardTitle>
-                      {enabled && (
+                      {enabled ? (
                         <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
                           Active
                         </Badge>
+                      ) : (
+                        <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">
+                          Inactive
+                        </Badge>
                       )}
                     </div>
-                    {/* Switch must not bubble its click up to the inner title-row collapse handler. */}
-                    <div onClick={(e) => e.stopPropagation()}>
+                    {/* Save button + Switch — both halt propagation so header-row
+                        clicks don't trigger the collapse handler. Save sits LEFT
+                        of the toggle per Rod directive (Arc-37 photo file_355). */}
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {enabled && (() => {
+                        const isSaving = savingId === service.id
+                        const isSaved = savedId === service.id
+                        const isDirty = dirtyServices.has(service.id)
+                        const disabled = isSaving || (!isDirty && !isSaved)
+                        return (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isSaved ? 'default' : 'outline'}
+                            disabled={disabled}
+                            onClick={() => handleSaveService(service.id)}
+                            aria-label={`Save ${service.name} changes`}
+                            className={cn(
+                              'h-8 gap-1.5 text-xs',
+                              isSaved && 'bg-emerald-600 hover:bg-emerald-600 text-white'
+                            )}
+                          >
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Saving
+                              </>
+                            ) : isSaved ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                Saved
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                Save
+                              </>
+                            )}
+                          </Button>
+                        )
+                      })()}
                       <Switch
                         checked={enabled}
+                        disabled={!hydrationComplete}
                         onCheckedChange={() => toggleService(service.id)}
                         aria-label={`${enabled ? 'Deactivate' : 'Activate'} ${service.name}`}
                       />
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{service.tagline}</p>
-                  {enabled && optionCount > 0 && (
-                    <p className="text-[10px] text-primary font-medium mt-1">{optionCount} items selected</p>
+                  {enabled && (
+                    <div className="flex items-center justify-between mt-1 gap-2">
+                      {optionCount > 0 ? (
+                        <p className="text-[10px] text-primary font-medium">{optionCount} items selected</p>
+                      ) : (
+                        <span />
+                      )}
+                      {(() => {
+                        const allOpts = collectAllOptions(service.optionGroups)
+                        if (allOpts.length === 0) return null
+                        const allSelected = allOpts.every(({ groupId, optionId }) =>
+                          isOptionEnabled(service.id, groupId, optionId)
+                        )
+                        return (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              for (const { groupId, optionId } of allOpts) {
+                                const isOn = isOptionEnabled(service.id, groupId, optionId)
+                                if (allSelected ? isOn : !isOn) {
+                                  wrappedToggleOption(service.id, groupId, optionId)
+                                }
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            aria-label={`${allSelected ? 'Deselect all' : 'Select all'} options for ${service.name}`}
+                            className="h-7 px-2 text-[10px]"
+                          >
+                            {allSelected ? 'Deselect all' : 'Select all'}
+                          </Button>
+                        )
+                      })()}
+                    </div>
                   )}
                 </CardHeader>
 
@@ -232,9 +424,23 @@ export default function VendorCatalog() {
                         <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
                         <Input
                           aria-label={`Permit price for ${service.name}`}
-                          type="number"
-                          value={getServicePermit(service.id) || ''}
-                          onChange={(e) => setServicePermit(service.id, Number(e.target.value))}
+                          type="text"
+                          inputMode="numeric"
+                          // Arc-32 PR-D — input is dollars-encoded, DB column
+                          // permit_price_cents is cents-encoded. Convert at
+                          // the input boundary: divide by 100 for display,
+                          // multiply by 100 on save. Mirrors membership.tsx
+                          // /100 display pattern.
+                          value={(() => {
+                            const cents = getServicePermit(service.id)
+                            if (cents <= 0) return ''
+                            return Math.round(cents / 100).toLocaleString('en-US')
+                          })()}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/[^\d]/g, '')
+                            const dollars = digits === '' ? 0 : Number(digits)
+                            wrappedSetServicePermit(service.id, dollars * 100)
+                          }}
                           placeholder="0"
                           className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
                         />
@@ -242,187 +448,18 @@ export default function VendorCatalog() {
                     </div>
 
                     {service.optionGroups.map((group) => (
-                      <div key={group.id} className="space-y-2">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          {group.label}
-                        </p>
-                        <div className="flex flex-col gap-1.5">
-                          {group.options.map((option) => {
-                            const optEnabled = isOptionEnabled(service.id, group.id, option.id)
-                            const price = getPrice(service.id, option.id)
-
-                            return (
-                              <div
-                                key={option.id}
-                                data-option-id={option.id}
-                                data-group-id={group.id}
-                                className={cn(
-                                  'flex items-center justify-between gap-3 rounded-lg border p-2.5 transition',
-                                  optEnabled ? 'border-primary/30 bg-primary/5' : 'border-border'
-                                )}
-                              >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); toggleOption(service.id, group.id, option.id) }}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    className={cn(
-                                      'flex h-5 w-5 items-center justify-center rounded border shrink-0 transition',
-                                      optEnabled
-                                        ? 'bg-primary border-primary text-white'
-                                        : 'border-muted-foreground/30'
-                                    )}
-                                  >
-                                    {optEnabled && <Check className="h-3 w-3" />}
-                                  </button>
-                                  <span className={cn(
-                                    'text-lg truncate',
-                                    optEnabled ? 'font-medium text-foreground' : 'text-muted-foreground'
-                                  )}>
-                                    {option.label}
-                                  </span>
-                                </div>
-                                {optEnabled && (
-                                  <div
-                                    className="flex flex-col items-end gap-1 shrink-0"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="flex items-center gap-1.5">
-                                      <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-                                      <Input
-                                        aria-label={`Price for ${option.label}`}
-                                        type="number"
-                                        value={price || ''}
-                                        onChange={(e) => setPrice(service.id, option.id, Number(e.target.value))}
-                                        placeholder="0"
-                                        className="h-10 w-24 text-base text-right md:h-12 md:w-32 md:text-lg md:px-4"
-                                      />
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'square' && (
-                                        <div className="flex flex-col">
-                                          <span className="text-xs text-muted-foreground whitespace-nowrap">/ square</span>
-                                          <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">1 sq = 100 sqft</span>
-                                        </div>
-                                      )}
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'sqft' && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ sqft</span>
-                                      )}
-                                      {getOptionMetadata(option.id, service.id, option).priceUnit === 'linear_ft' && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">/ lin ft</span>
-                                      )}
-                                      {/* Top-level options can also opt into dual-pricing via
-                                          OPTION_METADATA.supportsPercentMarkup. Currently only
-                                          sub-options carry the flag (low_e + casement), but if a
-                                          future top-level option is flagged, the UX is ready. */}
-                                      {getOptionMetadata(option.id, service.id, option).supportsPercentMarkup && (
-                                        <>
-                                          <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
-                                          <Input
-                                            aria-label={`Percent markup for ${option.label}`}
-                                            type="number"
-                                            value={getPricePercent(service.id, option.id) || ''}
-                                            onChange={(e) => setPricePercent(service.id, option.id, Number(e.target.value))}
-                                            placeholder="0"
-                                            className="h-10 w-20 text-base text-right md:h-12 md:w-28 md:text-lg md:px-4"
-                                          />
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Sub-groups for options that have them */}
-                        {group.options.filter(o => o.subGroups && o.subGroups.length > 0 && isOptionEnabled(service.id, group.id, o.id)).map((option) => (
-                          option.subGroups?.map((subGroup) => (
-                            <div key={subGroup.id} className="ml-4 mt-2 space-y-1.5">
-                              <p className="text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider">
-                                {subGroup.label}
-                              </p>
-                              {subGroup.options.map((subOpt) => {
-                                const subEnabled = isOptionEnabled(service.id, subGroup.id, subOpt.id)
-                                const subPrice = getPrice(service.id, subOpt.id)
-
-                                return (
-                                  <div
-                                    key={subOpt.id}
-                                    className={cn(
-                                      'flex items-center justify-between gap-3 rounded-lg border p-2 transition',
-                                      subEnabled ? 'border-primary/20 bg-primary/5' : 'border-border/50'
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); toggleOption(service.id, subGroup.id, subOpt.id) }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                        className={cn(
-                                          'flex h-4 w-4 items-center justify-center rounded border shrink-0 transition',
-                                          subEnabled
-                                            ? 'bg-primary border-primary text-white'
-                                            : 'border-muted-foreground/30'
-                                        )}
-                                      >
-                                        {subEnabled && <Check className="h-2.5 w-2.5" />}
-                                      </button>
-                                      <span className={cn(
-                                        'text-base md:text-xl truncate',
-                                        subEnabled ? 'font-medium' : 'text-muted-foreground'
-                                      )}>
-                                        {subOpt.label}
-                                      </span>
-                                    </div>
-                                    {subEnabled && (
-                                      <div
-                                        className="flex flex-col items-end gap-1 shrink-0"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-sm md:text-lg text-muted-foreground">$</span>
-                                          <Input
-                                            aria-label={`Price for ${subOpt.label}`}
-                                            type="number"
-                                            value={subPrice || ''}
-                                            onChange={(e) => setPrice(service.id, subOpt.id, Number(e.target.value))}
-                                            placeholder="0"
-                                            className="h-9 w-20 text-sm text-right md:h-12 md:w-28 md:text-lg md:px-4"
-                                          />
-                                          {/* Dual $ / % pricing on sub-options flagged
-                                              supportsPercentMarkup in OPTION_METADATA.
-                                              Currently low_e + casement; add more by flag-flip,
-                                              not code branch. Rod directives kratos msgs
-                                              1776659189645 + 1776659949844. */}
-                                          {getOptionMetadata(subOpt.id, service.id, subOpt).supportsPercentMarkup && (
-                                            <>
-                                              <span className="text-sm md:text-lg text-muted-foreground ml-1">%</span>
-                                              <Input
-                                                aria-label={`Percent markup for ${subOpt.label}`}
-                                                type="number"
-                                                value={getPricePercent(service.id, subOpt.id) || ''}
-                                                onChange={(e) => setPricePercent(service.id, subOpt.id, Number(e.target.value))}
-                                                placeholder="0"
-                                                className="h-9 w-16 text-sm text-right md:h-12 md:w-24 md:text-lg md:px-4"
-                                              />
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          ))
-                        ))}
-                      </div>
+                      <CatalogGroupRenderer
+                        key={group.id}
+                        serviceId={service.id}
+                        optionGroup={group}
+                        depth={0}
+                        isOptionEnabled={isOptionEnabled}
+                        getPrice={getPrice}
+                        getPricePercent={getPricePercent}
+                        onToggle={wrappedToggleOption}
+                        onPriceChange={wrappedSetPrice}
+                        onPricePercentChange={wrappedSetPricePercent}
+                      />
                     ))}
                   </CardContent>
                   </motion.div>
@@ -434,5 +471,123 @@ export default function VendorCatalog() {
         })}
       </div>
     </motion.div>
+  )
+}
+
+// Recursive sub-group renderer. Arc-38 fix: prior render only descended one
+// sub-group level, so Cabinet (Material > Plywood/MDF > prices) silently
+// dropped at depth=3+. This descends arbitrary nesting; depth controls
+// indent + label size so deeper sections read as nested visually.
+type CatalogGroupRendererProps = {
+  serviceId: string
+  optionGroup: OptionGroup
+  depth: number
+  isOptionEnabled: (serviceId: string, groupId: string, optionId: string) => boolean
+  getPrice: (serviceId: string, optionId: string) => number
+  getPricePercent: (serviceId: string, optionId: string) => number
+  onToggle: (serviceId: string, groupId: string, optionId: string) => void
+  onPriceChange: (serviceId: string, optionId: string, cents: number) => void
+  onPricePercentChange: (serviceId: string, optionId: string, pct: number) => void
+}
+
+function CatalogGroupRenderer({
+  serviceId,
+  optionGroup,
+  depth,
+  isOptionEnabled,
+  getPrice,
+  getPricePercent,
+  onToggle,
+  onPriceChange,
+  onPricePercentChange,
+}: CatalogGroupRendererProps) {
+  const indentClass = depth === 0 ? '' : depth === 1 ? 'ml-4' : depth === 2 ? 'ml-8' : 'ml-12'
+  const spacingClass = depth === 0 ? 'space-y-2' : 'mt-2 space-y-1.5'
+  // PR-#440 — outer box for each leaf-bearing section (any group whose
+  // immediate options include at least one leaf chip). Pure-container groups
+  // (Products in windows/doors — children are all sub_group-bearing Window
+  // and Door options) skip the box so the actual leaf-bearing nested sections
+  // (Window Sizes / Window Types / Frame Colors / Glass Colors / Glass Types /
+  // Door Sizes) get individual boxes without a heavy outer wrapper.
+  // PR-#439 shipped depth=0-only — apollo MIXED: Roofing/Pool PASS (top-level
+  // already leaf-bearing) / Windows+Doors FAIL (Products top-level wrapped
+  // every nested section in one box). Leaf-bearing detection generalises
+  // cleanly without depth-coupling.
+  // Thin-row chip layout inside VendorCatalogOptionsCardGrid unchanged —
+  // banked Rod density primitive (PR-#412 thin-row, PR-#411 revert PR-#407).
+  const hasLeafOptions = optionGroup.options.some(
+    (o) => !(o.subGroups && o.subGroups.length > 0)
+  )
+  const containerClass = hasLeafOptions
+    ? 'rounded-xl border border-border/50 bg-muted/40 p-4'
+    : ''
+  const labelClass =
+    depth === 0
+      ? 'text-xs font-semibold text-muted-foreground uppercase tracking-wider'
+      : depth === 1
+        ? 'text-[10px] md:text-sm font-semibold text-muted-foreground/70 uppercase tracking-wider'
+        : 'text-[10px] md:text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider'
+
+  // PR-#409 — hide parent option cards that have subGroups; the subGroup
+  // section header + child variant cards carry the parent context. Rod
+  // live-feedback on PR-#407 squares: Soffit + Fascia parent rows render
+  // as $0 dead-weight cards because pricing lives in WOOD / FACIA
+  // subGroups below. Cleanest fix (no catalog-store rewire): parent w/
+  // subGroups is treated as always-enabled at the recursion gate below,
+  // and its card is filtered out of this level's grid. Children's own
+  // enabled-state still gates child card visibility individually.
+  const visibleOptions = optionGroup.options.filter(
+    (o) => !(o.subGroups && o.subGroups.length > 0)
+  )
+
+  return (
+    <div className={cn(indentClass, spacingClass, containerClass)}>
+      <p className={labelClass}>{optionGroup.label}</p>
+      <VendorCatalogOptionsCardGrid
+        serviceId={serviceId}
+        groupId={optionGroup.id}
+        options={visibleOptions}
+        isOptionEnabled={isOptionEnabled}
+        getPrice={getPrice}
+        getPricePercent={getPricePercent}
+        onToggle={onToggle}
+        onPriceChange={onPriceChange}
+        onPricePercentChange={onPricePercentChange}
+      />
+      {optionGroup.options
+        .filter((o) => o.subGroups && o.subGroups.length > 0)
+        .map((option) =>
+          option.subGroups?.map((subGroup) => {
+            // PR-#410 — FE-defensive compound groupId for ancestor-path
+            // uniqueness. Substrate may carry collision-prone literal
+            // sub_option_ids across sibling subgroups (Soffit's Wood
+            // subgroup AND Facia's Wood subgroup both naming their leaf
+            // 'metal'). Bare subGroup.id as groupId would collide in
+            // vendor-catalog-store enabledOptions[groupId] → toggling
+            // Soffit-Metal also lights Facia-Metal. Compose the parent
+            // option.id into a scoped groupId so every subgroup carries a
+            // unique namespace inherited from its ancestor chain (recursive
+            // adds compose further: `${ancestor.id}__${parent.id}__leaf`).
+            // Belt-and-suspenders complement to PR-#411 hermes substrate
+            // rename — survives even if a future substrate add reintroduces
+            // a bare sibling-id collision. Store contract unchanged.
+            const scopedId = `${option.id}__${subGroup.id}`
+            return (
+              <CatalogGroupRenderer
+                key={scopedId}
+                serviceId={serviceId}
+                optionGroup={{ ...subGroup, id: scopedId }}
+                depth={depth + 1}
+                isOptionEnabled={isOptionEnabled}
+                getPrice={getPrice}
+                getPricePercent={getPricePercent}
+                onToggle={onToggle}
+                onPriceChange={onPriceChange}
+                onPricePercentChange={onPricePercentChange}
+              />
+            )
+          })
+        )}
+    </div>
   )
 }

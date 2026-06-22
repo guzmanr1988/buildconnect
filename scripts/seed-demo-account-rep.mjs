@@ -22,7 +22,10 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
 // v-1 Apex Roofing UUID (from src/lib/demo-vendor-ids.ts)
 const APEX_UUID = 'fc0d8ff3-cc1c-4101-a4b3-068594753bbf'
 const REP_EMAIL = 'account_rep@buildc.net'
-const REP_PASSWORD = process.env.SUPABASE_DEMO_ACCOUNT_REP_PW || 'demoAccountRep!2026'
+const REP_PASSWORD = process.env.SUPABASE_DEMO_ACCOUNT_REP_PW
+if (!REP_PASSWORD) {
+  throw new Error('SUPABASE_DEMO_ACCOUNT_REP_PW required — refusing to seed a hardcoded password to auth.users. Source /Users/rodolfoguzman/Sage/orgs/buildconnect/secrets.env first.')
+}
 
 async function findUser(email) {
   let page = 1

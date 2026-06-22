@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
-import { getProfile } from '@/lib/auth'
+import { getProfile, getProfileLite, getProfileBloat } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import type { Profile } from '@/types'
 
 // PR-254 (Rod-direct 2026-05-17) — getProfile timeout ceiling. Apollo
 // PoP-walker measured ~17s on the getProfile fetch alone during the CF
@@ -14,6 +15,29 @@ import { useProjectsStore } from '@/stores/projects-store'
 // nav unblocks); this just bounds the wait so the diag log + toast
 // fire instead of the listener silently sitting on a pending promise.
 const GET_PROFILE_TIMEOUT_MS = 10_000
+
+// Draft #475 latency profile — feature flag. When true, AuthBootstrap
+// hydrate uses getProfileLite() (excludes id_document_url, NCA snapshot,
+// contractor_licenses) on the critical login → navigate path, then
+// background-fires getProfileBloat() to merge the heavy columns in. When
+// false, falls back to legacy getProfile('*'). Default ON; can be flipped
+// to false via VITE_LOGIN_LITE_PROFILE=false for emergency rollback
+// without redeploy if a downstream consumer reads bloat-cols on first
+// paint (Rod-go review surface).
+const LITE_PROFILE_ENABLED = (import.meta.env.VITE_LOGIN_LITE_PROFILE ?? 'true') !== 'false'
+
+// Cheap perf telemetry — performance.mark/measure on the login critical
+// path so future profiling has falsifiable in-browser timings (vs Apollo
+// PoP-walker which measures from outside the page). Marks namespaced
+// 'bc-login-*' so devtools Performance panel + RUM can filter cleanly.
+function perfMark(name: string) {
+  if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return
+  try { performance.mark(`bc-login-${name}`) } catch { /* noop */ }
+}
+function perfMeasure(name: string, from: string, to: string) {
+  if (typeof performance === 'undefined' || typeof performance.measure !== 'function') return
+  try { performance.measure(`bc-login-${name}`, `bc-login-${from}`, `bc-login-${to}`) } catch { /* noop */ }
+}
 
 export function AuthBootstrap() {
   useEffect(() => {
@@ -29,6 +53,7 @@ export function AuthBootstrap() {
         // eslint-disable-next-line no-console
         console.log('[#274 payment-stuck-diag]', phase, { t: Date.now(), ...extra })
       }
+      perfMark('hydrate-start')
       diagLog('AuthBootstrap.hydrate:start', { userId, email })
       // Ship #275 — defensive: setSession FIRST so isAuthenticated
       // flips true regardless of whether getProfile succeeds. Pre-#275
@@ -47,16 +72,29 @@ export function AuthBootstrap() {
       store.setSession({ access_token, user: { id: userId, email } })
       diagLog('AuthBootstrap.hydrate:setSession-called (defensive, pre-getProfile)')
       try {
-        const profile = await Promise.race([
-          getProfile(userId),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error('getProfile timed out after 10s')),
-              GET_PROFILE_TIMEOUT_MS,
-            ),
-          ),
-        ])
-        diagLog('AuthBootstrap.hydrate:getProfile-success', { profile_role: profile.role })
+        perfMark('getProfile-start')
+        const profile = LITE_PROFILE_ENABLED
+          ? (await Promise.race([
+              getProfileLite(userId),
+              new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error('getProfile timed out after 10s')),
+                  GET_PROFILE_TIMEOUT_MS,
+                ),
+              ),
+            ])) as Profile
+          : await Promise.race([
+              getProfile(userId),
+              new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error('getProfile timed out after 10s')),
+                  GET_PROFILE_TIMEOUT_MS,
+                ),
+              ),
+            ])
+        perfMark('getProfile-end')
+        perfMeasure('getProfile', 'getProfile-start', 'getProfile-end')
+        diagLog('AuthBootstrap.hydrate:getProfile-success', { profile_role: profile.role, lite: LITE_PROFILE_ENABLED })
         if (!mounted) {
           diagLog('AuthBootstrap.hydrate:returning-early (unmounted)')
           return
@@ -89,7 +127,37 @@ export function AuthBootstrap() {
           merged.noncircumvention_agreement_signature_metadata = prior.noncircumvention_agreement_signature_metadata
         }
         store.setProfile(merged)
-        diagLog('AuthBootstrap.hydrate:setProfile-called', { merged_role: merged.role })
+        perfMark('setProfile-done')
+        perfMeasure('getProfile-to-setProfile', 'getProfile-end', 'setProfile-done')
+        diagLog('AuthBootstrap.hydrate:setProfile-called', { merged_role: merged.role, lite: LITE_PROFILE_ENABLED })
+
+        // Draft #475 — background bloat-column merge. The slim path above
+        // returns role + identity fast for navigate; this fills the heavy
+        // columns (id_document_url, NCA snapshot, contractor_licenses) after
+        // the user has already landed on their destination. Fire-and-forget;
+        // failure leaves the bloat fields undefined (consumers already
+        // tolerate this — partialize in auth-store has stripped them for
+        // months per PR #197).
+        if (LITE_PROFILE_ENABLED) {
+          void (async () => {
+            try {
+              perfMark('bloat-start')
+              const bloat = await getProfileBloat(userId)
+              perfMark('bloat-end')
+              perfMeasure('bloat-fetch', 'bloat-start', 'bloat-end')
+              if (!mounted) return
+              const current = useAuthStore.getState().profile
+              if (!current || current.id !== userId) return
+              useAuthStore.getState().setProfile({ ...current, ...bloat })
+              diagLog('AuthBootstrap.hydrate:bloat-merged')
+            } catch (err) {
+              // Silent — bloat is non-critical-path. Surfaces that need a
+              // bloat column re-fetch it on-demand.
+              diagLog('AuthBootstrap.hydrate:bloat-FAILED', { error: String(err) })
+            }
+          })()
+        }
+
         // Catalog is authed-read-only — pull fresh data now that the session is live.
         // Fire-and-forget: fetch failure is handled inside the store (keeps bundled
         // fallback and sets lastFetchError for surfaces that care).
@@ -98,6 +166,15 @@ export function AuthBootstrap() {
         // are canonical from DB, not localStorage-only. Fire-and-forget;
         // errors logged inside the store.
         if (merged.role === 'vendor') {
+          // pin-20 — defense-in-depth: nuke the legacy demo-alias LS flag
+          // on every vendor hydrate so any residual key from a pre-pin-20
+          // session can't survive into the real-identity path. vendor-
+          // scope.ts no longer reads this key (the override branch was
+          // removed) — this is belt-and-suspenders cleanup so the flag
+          // doesn't sit in storage forever as a forensic foot-gun.
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('buildconnect-demo-mock-vendor-id')
+          }
           useVendorCatalogStore.getState().hydrateFromSupabase(userId)
         }
         // Surface-2: wire projects to Supabase for all authed roles.
@@ -111,7 +188,12 @@ export function AuthBootstrap() {
         const message = err instanceof Error && err.message.includes('timed out')
           ? 'Loading profile is slow. Try refreshing if this persists.'
           : null
-        if (message) toast.error(message)
+        // Stable id dedupes concurrent fires: both the getSession().then()
+        // bootstrap path and the onAuthStateChange SIGNED_IN listener call
+        // hydrate() on page load, so a slow getProfile times out on BOTH and
+        // each catch fires this toast → two stacked identical toasts. Sonner
+        // collapses same-id toasts into one.
+        if (message) toast.error(message, { id: 'profile-slow' })
       }
     }
 
@@ -228,6 +310,11 @@ export function AuthBootstrap() {
         // Reset catalog to bundled fallback so a subsequent unauthed load
         // doesn't show stale server data from the previous session.
         useCatalogStore.getState().resetToBundled()
+        // Arc-32 W3 follow-up — clear vendor-scoped state so a different
+        // vendor signing in on the same browser session doesn't inherit
+        // the prior vendor's _pendingWrites (which would otherwise drain
+        // under the new vendor_id on hydrate, leaking prices cross-vendor).
+        useVendorCatalogStore.getState().resetVendorScopedState()
         return
       }
       // INITIAL_SESSION with null session arrives on every page load for

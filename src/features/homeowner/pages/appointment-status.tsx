@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, ChevronRight, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,15 +11,16 @@ import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { SERVICE_CATALOG } from '@/lib/constants'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
+import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { useProjectsStore } from '@/stores/projects-store'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
+import { AssociationDocActionCard } from '@/features/homeowner/components/association-doc-action-card'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { ApplyFinancingDialog } from '@/features/financing/components/apply-financing-dialog'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
-import type { CartItem } from '@/stores/cart-store'
 import type { Lead, LeadStatus } from '@/types'
 
 const statusPulse: Record<string, string> = {
@@ -230,6 +231,26 @@ export function AppointmentStatusPage() {
     (p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id,
   )
 
+  // task_066 — engagement-time association-doc gate. Banner renders only
+  // when the matched sentProject has projectAssociation='yes' AND has been
+  // engaged (soldAt set) AND no association_permit doc on file yet. Reads
+  // the homeowner docs store directly so it auto-hides as soon as the
+  // upload lands.
+  const associationDocPresent = useHomeownerDocsStore((s) =>
+    matchedSentProject
+      ? s.docs.some(
+          (d) =>
+            d.sentProjectId === matchedSentProject.id
+            && d.docType === 'association_permit',
+        )
+      : false,
+  )
+  const showAssociationActionBanner =
+    !!matchedSentProject
+    && matchedSentProject.projectAssociation === 'yes'
+    && !!matchedSentProject.soldAt
+    && !associationDocPresent
+
   // Arc-17 — 1-project-at-a-time allocation rule. Find any sent_project the
   // homeowner has already allocated financing to (across the entire scope,
   // not just this page's matched project). If that other project holds the
@@ -288,6 +309,13 @@ export function AppointmentStatusPage() {
           Lead {lead.id} — {lead.project}
         </p>
       </div>
+
+      {showAssociationActionBanner && matchedSentProject && (
+        <AssociationDocActionCard
+          sentProjectId={matchedSentProject.id}
+          address={matchedSentProject.homeowner?.address ?? null}
+        />
+      )}
 
       {/* Arc-17 — top-of-page Financing applied banner. Renders only when
           this project is the one holding the homeowner's active allocation
@@ -631,31 +659,6 @@ export function AppointmentStatusPage() {
                   value={vendor.company}
                 />
               )}
-
-              {/* Project Items — itemized breakdown of every wizard pick
-                  with quantity. Section-grouped per delta F. Falls back to
-                  legacy pack_items badge list for MOCK_LEADS fixtures. */}
-              <div className="mt-2 border-t border-border pt-3">
-                <p className="mb-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Project Items
-                </p>
-                {sentProject?.item ? (
-                  <ProjectItemsList
-                    item={sentProject.item}
-                    projectPermit={sentProject.projectPermit}
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(lead.pack_items).map(([, items]) =>
-                      items.map((item) => (
-                        <Badge key={item} variant="secondary" className="text-[10px]">
-                          {humanizeId(item)}
-                        </Badge>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -732,6 +735,49 @@ export function AppointmentStatusPage() {
           )}
         </div>
       </div>
+
+      {/* Project Items — detached from Project Details so it spans full
+          width below the 2-col grid. When sentProject.item carries
+          windowSelections / doorSelections / garageDoorSelection, mirror
+          the cart.tsx Project Summary modal sections (windows / doors /
+          garage-doors) verbatim so apollo Arc-33b walker anchors stay
+          green. Falls back to ProjectItemsList for legacy single-service
+          items, and to pack_items badges for MOCK_LEADS fixtures. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.24 }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Project Items
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sentProject?.item ? (
+              <ProjectItemsCardGrid
+                item={sentProject.item}
+                projectPermit={sentProject?.projectPermit}
+                projectAssociation={sentProject?.projectAssociation}
+                poolSurvey={sentProject?.poolSurvey}
+                resolvedLineItems={sentProject?.priceLineItems}
+              />
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(lead.pack_items).map(([, items]) =>
+                  items.map((it) => (
+                    <Badge key={it} variant="secondary" className="text-[10px]">
+                      {humanizeId(it)}
+                    </Badge>
+                  ))
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Ship #191 — reschedule picker + counter picker mounted
           unconditionally per dialog-mount-in-every-return-branch
@@ -853,10 +899,18 @@ function deriveStatusSteps(args: {
   // so isSold must be checked first to land on active_project (3) rather
   // than the terminal completed (4). A lead.status='completed' without
   // isSold (mock fixture path) reaches step 4.
+  // PR-#443 — split pending vs confirmed. Pre-fix collapsed both to
+  // index 2 (Representative assigned = current), which checked off
+  // "Vendor confirmed" while the pill above still read "Scheduled —
+  // Pending Approval" (yellow). Rod surfaced 2026-05-29: stepper
+  // claimed vendor confirmed before vendor had even seen the lead.
+  // pending → 1 (Vendor confirmed = current Hourglass);
+  // confirmed → 2 (Rep assigned = current, Vendor confirmed checked).
   const completedIndex = (() => {
     if (isSold) return 3
     if (status === 'completed') return 4
-    if (status === 'pending' || status === 'confirmed') return 2
+    if (status === 'confirmed') return 2
+    if (status === 'pending') return 1
     return 0
   })()
   return stepKeys.map((key, i) => ({
@@ -982,361 +1036,6 @@ function DetailRow({
   )
 }
 
-// Photo 314 polish — section-grouped Project Items. Each row is tagged with
-// a category derived from the SERVICE_CATALOG group identity (selections
-// loop) or from a static map (universal/service-specific entries). Render
-// pass groups rows by `section` and emits uppercase-muted headers matching
-// the existing PRICE / PROJECT ITEMS treatment.
-type ProjectItemSection =
-  | 'Service Type'
-  | 'Materials'
-  | 'Repair Materials'
-  | 'Add-Ons'
-  | 'Roof Details'
-  | 'Site Dimensions'
-  | 'Permits'
-  | 'Attachments'
-
-type ProjectItemRow = {
-  section: ProjectItemSection
-  label: string
-  detail?: string
-  // PR-333 — structured chip-attrs for hoist-common-spec detection.
-  // When every row in a section shares the same chip-tuple, the
-  // renderer lifts them to a single section-header row ("All
-  // Windows: Single Hung • White Frame • ...") and omits per-row
-  // chips. If chips diverge, per-row chips render unhoisted.
-  chips?: string[]
-}
-
-const PROJECT_ITEM_SECTION_ORDER: ProjectItemSection[] = [
-  'Service Type',
-  'Materials',
-  'Repair Materials',
-  'Add-Ons',
-  'Roof Details',
-  'Site Dimensions',
-  'Permits',
-  'Attachments',
-]
-
 function humanizeId(id: string): string {
   return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-// Group-id → section anchor. SERVICE_CATALOG group identity supplies the
-// natural category boundary; unknown groups fall back to Materials so new
-// catalog additions render somewhere reasonable until categorized.
-function sectionForGroup(groupId: string): ProjectItemSection {
-  switch (groupId) {
-    case 'service_type':
-      return 'Service Type'
-    case 'material':
-    case 'products':
-      return 'Materials'
-    case 'repair_materials':
-      return 'Repair Materials'
-    case 'addons':
-      return 'Add-Ons'
-    default:
-      return 'Materials'
-  }
-}
-
-function buildProjectItemRows(
-  item: CartItem,
-  projectPermit?: 'yes' | 'no',
-): ProjectItemRow[] {
-  const rows: ProjectItemRow[] = []
-  const service = SERVICE_CATALOG.find((s) => s.id === item.serviceId)
-
-  // Universal: humanize selections via SERVICE_CATALOG, attach quantity from
-  // selectionQuantities / addonLinearFt / customSizeSqft. Pure-flag selections
-  // (no quantity) render as label-only. Section assigned by group identity.
-  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
-    const group = service?.optionGroups.find((g) => g.id === groupId)
-    const section = sectionForGroup(groupId)
-    for (const optId of optionIds) {
-      const option = group?.options.find((o) => o.id === optId)
-      const label = option?.label ?? humanizeId(optId)
-
-      const linearFt =
-        item.roofAddonLinearFt?.[optId] ?? item.addonLinearFt?.[optId]
-      const customSqft = item.customSizeSqft?.[optId]
-      const qty = item.selectionQuantities?.[optId]
-
-      let detail: string | undefined
-      if (linearFt !== undefined && linearFt > 0) {
-        detail = `${linearFt.toLocaleString()} ft`
-        if (optId === 'gutters' && item.gutterDropsConfig) {
-          const dc = item.gutterDropsConfig
-          detail += ` (+ ${dc.drops} drop${dc.drops === 1 ? '' : 's'} over ${dc.floors}fl)`
-        }
-      } else if (customSqft !== undefined && customSqft > 0) {
-        detail = `${customSqft.toLocaleString()} sqft`
-      } else if (qty !== undefined && qty > 0) {
-        detail = `Qty: ${qty}`
-      }
-      rows.push({ section, label, detail })
-    }
-  }
-
-  // Universal: satellite-measured area + perimeter (driveway/pergola/pool/fence).
-  if (item.areaSqft !== undefined && item.areaSqft > 0) {
-    rows.push({ section: 'Site Dimensions', label: 'Area', detail: `${item.areaSqft.toLocaleString()} sqft` })
-  }
-  if (item.perimeterFt !== undefined && item.perimeterFt > 0) {
-    rows.push({ section: 'Site Dimensions', label: 'Perimeter', detail: `${item.perimeterFt.toLocaleString()} ft` })
-  }
-
-  // Service-specific: roofing.
-  if (item.roofMeasurement && item.roofMeasurement.areaSqft > 0) {
-    const m = item.roofMeasurement
-    rows.push({
-      section: 'Roof Details',
-      label: 'Roof Area',
-      detail: `${m.areaSqft.toLocaleString()} sqft`,
-    })
-    rows.push({
-      section: 'Roof Details',
-      label: 'Pitch',
-      detail: m.pitch,
-    })
-  }
-  // Project-level permit: prefer sentProject.projectPermit snapshot; fall
-  // back to legacy per-item roofPermit for entries persisted pre-PR-140.
-  // Permit is project-level not roofing-specific — render the row for any
-  // service when the choice is set. Q1-rename: "Permit pulled (vendor)" to
-  // disambiguate from homeowner-self-attest "Permit required" on lead row.
-  const permitChoice = projectPermit ?? item.roofPermit
-  if (permitChoice) {
-    rows.push({
-      section: 'Permits',
-      label: 'Permit pulled (vendor)',
-      detail: permitChoice === 'yes' ? 'Yes' : 'No',
-    })
-  }
-
-  // Service-specific: pool addon counts (named keys, not option-id keyed).
-  const addonQty = item.addonQuantities ?? {}
-  const namedAddons: Array<[keyof typeof addonQty, string]> = [
-    ['ledCount', 'LED Lights'],
-    ['bubblerCount', 'Bubblers'],
-    ['laminarJets', 'Laminar Jets'],
-    ['waterfalls', 'Waterfalls'],
-  ]
-  for (const [key, label] of namedAddons) {
-    const n = addonQty[key]
-    if (typeof n === 'number' && n > 0) {
-      rows.push({ section: 'Add-Ons', label, detail: `Qty: ${n}` })
-    }
-  }
-
-  // Service-specific: windows / doors configurator entries — count each line.
-  // PR-333 — split chip-attrs onto row.chips for hoist-common-spec polish.
-  // Identity-key for hoist detection is the SPEC SUBSET (type + frame +
-  // glass + glassType). Size is the per-card discriminator (every
-  // window/door is a different size/location, that's what makes the row
-  // unique) and is rendered into the row label instead — it never
-  // participates in identity-detect, so two windows with the same spec
-  // but different sizes still hoist correctly. Per Rod photo 320 ruling
-  // 2026-05-23 (axis-owner directive via apollo + kratos).
-  const buildConfiguratorChips = (e: { type: string; frameColor: string; glassColor: string; glassType: string }): string[] => {
-    const chips: string[] = []
-    if (e.type) chips.push(humanizeId(e.type))
-    if (e.frameColor) chips.push(`${humanizeId(e.frameColor)} Frame`)
-    if (e.glassColor) chips.push(`${humanizeId(e.glassColor)} Glass`)
-    if (e.glassType) chips.push(humanizeId(e.glassType))
-    return chips
-  }
-  const winSel = item.windowSelections ?? []
-  for (let i = 0; i < winSel.length; i++) {
-    const w = winSel[i]
-    if (w.quantity > 0) {
-      rows.push({
-        section: 'Materials',
-        label: w.size ? `Window ${i + 1} (${w.size})` : `Window ${i + 1}`,
-        detail: `Qty: ${w.quantity}`,
-        chips: buildConfiguratorChips(w),
-      })
-    }
-  }
-  const doorSel = item.doorSelections ?? []
-  for (let i = 0; i < doorSel.length; i++) {
-    const d = doorSel[i]
-    if (d.quantity > 0) {
-      rows.push({
-        section: 'Materials',
-        label: d.size ? `Door ${i + 1} (${d.size})` : `Door ${i + 1}`,
-        detail: `Qty: ${d.quantity}`,
-        chips: buildConfiguratorChips(d),
-      })
-    }
-  }
-
-  // Service-specific: garage door config (single).
-  if (item.garageDoorSelection) {
-    const g = item.garageDoorSelection
-    if (g.type) rows.push({ section: 'Materials', label: 'Garage Door Type', detail: humanizeId(g.type) })
-    if (g.size) rows.push({ section: 'Materials', label: 'Garage Door Size', detail: g.size })
-    if (g.color) rows.push({ section: 'Materials', label: 'Garage Door Color', detail: humanizeId(g.color) })
-    if (g.glass) rows.push({ section: 'Materials', label: 'Garage Door Glass', detail: humanizeId(g.glass) })
-  }
-
-  // Service-specific: metal roof config. Q2 resolved via configurator
-  // source-read — roofSize is in squares (1 square = 100 sqft). Render
-  // singular "1 square" when count === 1.
-  if (item.metalRoofSelection) {
-    const mr = item.metalRoofSelection
-    if (mr.color) {
-      rows.push({ section: 'Materials', label: 'Metal Roof Color', detail: humanizeId(mr.color) })
-    }
-    if (mr.roofSize) {
-      const n = Number(mr.roofSize)
-      const detail = Number.isFinite(n) && n > 0
-        ? `${n.toLocaleString()} square${n === 1 ? '' : 's'}`
-        : mr.roofSize
-      rows.push({ section: 'Materials', label: 'Metal Roof Size', detail })
-    }
-  }
-
-  // Universal: photos count + notes (truncate ~120 chars).
-  const photoCount = item.itemPhotos?.length ?? 0
-  if (photoCount > 0) {
-    rows.push({
-      section: 'Attachments',
-      label: 'Photos',
-      detail: `${photoCount} photo${photoCount === 1 ? '' : 's'} attached`,
-    })
-  }
-  if (item.itemNotes && item.itemNotes.trim().length > 0) {
-    const trimmed = item.itemNotes.trim()
-    const trunc =
-      trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed
-    rows.push({ section: 'Attachments', label: 'Notes', detail: trunc })
-  }
-
-  return rows
-}
-
-// PR-333 — section identity for the chip-tuple hoist. When every row in a
-// section has the same `chips` array, return that array so the renderer
-// can lift it into a single hoisted header row. Returns null when chips
-// diverge (or when no row carries chips) so the renderer falls back to
-// per-row chip display.
-function hoistedChipsForSection(rows: ProjectItemRow[]): string[] | null {
-  if (rows.length === 0) return null
-  const withChips = rows.filter((r) => r.chips && r.chips.length > 0)
-  if (withChips.length === 0 || withChips.length !== rows.length) return null
-  const sig = JSON.stringify(withChips[0].chips)
-  const allSame = withChips.every((r) => JSON.stringify(r.chips) === sig)
-  return allSame ? (withChips[0].chips ?? null) : null
-}
-
-function ProjectItemsList({
-  item,
-  projectPermit,
-}: {
-  item: CartItem
-  projectPermit?: 'yes' | 'no'
-}) {
-  const rows = buildProjectItemRows(item, projectPermit)
-  // PR-333 — folder-pattern collapse per section. Default-expanded so
-  // scannability matches pre-photo-320 behavior; tap section header to
-  // toggle. Keyed by ProjectItemSection so state survives between rows
-  // without touching parent state shape.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  if (rows.length === 0) return null
-
-  const grouped = new Map<ProjectItemSection, ProjectItemRow[]>()
-  for (const row of rows) {
-    const bucket = grouped.get(row.section) ?? []
-    bucket.push(row)
-    grouped.set(row.section, bucket)
-  }
-
-  return (
-    <div className="flex flex-col gap-4" data-project-items-grid>
-      {PROJECT_ITEM_SECTION_ORDER.map((section) => {
-        const sectionRows = grouped.get(section)
-        if (!sectionRows || sectionRows.length === 0) return null
-        const hoisted = hoistedChipsForSection(sectionRows)
-        const isCollapsed = collapsed[section] === true
-        return (
-          <div
-            key={section}
-            className="flex flex-col gap-1.5"
-            data-project-items-section={section}
-          >
-            <button
-              type="button"
-              className="flex items-center gap-1.5 self-start text-left"
-              onClick={() => setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }))}
-              aria-expanded={!isCollapsed}
-              data-project-items-section-toggle
-            >
-              <ChevronRight
-                className={cn(
-                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
-                  !isCollapsed && 'rotate-90',
-                )}
-              />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {section}
-                {sectionRows.length > 1 && (
-                  <span className="ml-1 text-muted-foreground/70">({sectionRows.length})</span>
-                )}
-              </p>
-            </button>
-            {!isCollapsed && (
-              <>
-                {hoisted && hoisted.length > 0 && (
-                  <div
-                    className="flex flex-wrap items-center gap-1"
-                    data-project-items-hoisted-chips
-                  >
-                    <span className="text-[11px] text-muted-foreground">All {section.toLowerCase()}:</span>
-                    {hoisted.map((c) => (
-                      <Badge key={c} variant="secondary" className="text-[10px] font-normal">
-                        {c}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <ul className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1">
-                  {sectionRows.map((r, i) => (
-                    <li
-                      key={`${r.label}-${i}`}
-                      className="contents text-sm"
-                      data-project-items-label-value-pair
-                    >
-                      <div className="flex min-w-0 flex-wrap items-center gap-1">
-                        <span className="text-muted-foreground">{r.label}</span>
-                        {!hoisted && r.chips && r.chips.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {r.chips.map((c) => (
-                              <Badge
-                                key={c}
-                                variant="secondary"
-                                className="text-[10px] font-normal"
-                              >
-                                {c}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <span className="break-words text-right font-medium text-foreground tabular-nums">
-                        {r.detail ?? ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
 }

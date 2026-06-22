@@ -6,7 +6,7 @@ import { CardSlideWizard } from './card-slide-wizard'
 import { useCartStore, type CartItemAddress } from '@/stores/cart-store'
 import { cn } from '@/lib/utils'
 import type { ServiceConfig } from '@/types'
-import { PermitStepSection, isProjectPermitValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
+import { PermitStepSection, isProjectPermitValid, isProjectAssociationValid, PERMIT_HEADING, PERMIT_SUBTITLE } from './permit-step-section'
 
 // Synthetic groupId used to render the project-permit step inside the
 // chip-based generic wizard. Resolves to <PermitStepSection /> instead of
@@ -93,6 +93,7 @@ export function GenericServiceWizard({
   const removeItem = useCartStore((s) => s.removeItem)
   const projectPermit = useCartStore((s) => s.projectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
 
   const CONTENT_STEPS = steps.length
   const ADDR_STEP = CONTENT_STEPS + 1
@@ -151,6 +152,7 @@ export function GenericServiceWizard({
     if (!cfg) return true
     if (cfg.groupId === PERMIT_STEP_GROUP_ID) {
       return isProjectPermitValid(projectPermit, projectPermitWaiver)
+        && isProjectAssociationValid(projectAssociation ?? null)
     }
     return (selections[cfg.groupId]?.length ?? 0) > 0
   }
@@ -158,6 +160,21 @@ export function GenericServiceWizard({
   // Next disabled: required step with no selection
   const nextDisabled =
     step <= CONTENT_STEPS && isStepRequired(step) && !isStepDone(step)
+
+  // Per-step disabled reason — name the topmost missing item plainly.
+  let nextDisabledReason: string | undefined
+  if (nextDisabled) {
+    const cfg = steps[step - 1]
+    if (cfg?.groupId === PERMIT_STEP_GROUP_ID) {
+      nextDisabledReason = !isProjectAssociationValid(projectAssociation ?? null)
+        ? 'Answer the association question to continue.'
+        : 'Choose a permit option to continue.'
+    } else if (cfg) {
+      const group = service.optionGroups.find((g) => g.id === cfg.groupId)
+      const label = (group?.label ?? cfg.title ?? 'option').toLowerCase()
+      nextDisabledReason = `Pick a ${label} to continue.`
+    }
+  }
 
   async function handleSubmit() {
     const itemAddress: CartItemAddress | undefined = selectedAddress?.full
@@ -218,16 +235,22 @@ export function GenericServiceWizard({
     return (
       <div className="flex flex-col gap-3">
         <Select value={addressKey} onValueChange={(v) => setAddressKey(v ?? '')}>
-          <SelectTrigger className="h-11 text-sm">
+          <SelectTrigger className="h-auto min-h-[3.25rem] py-2 text-sm">
             <SelectValue placeholder="Select a property" />
           </SelectTrigger>
           <SelectContent>
             {addressOptions.map((opt) => (
-              <SelectItem key={opt.key} value={opt.key}>
-                <span className="font-medium">{opt.label}</span>
-                {opt.full && (
-                  <span className="ml-2 text-xs text-muted-foreground">{opt.full}</span>
-                )}
+              <SelectItem key={opt.key} value={opt.key} className="py-2 pr-10">
+                <span className="flex flex-1 flex-col items-start gap-1 min-w-0">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap">
+                    {opt.label}
+                  </span>
+                  {opt.full && (
+                    <span className="text-xs text-muted-foreground whitespace-normal break-words leading-tight">
+                      {opt.full}
+                    </span>
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -356,6 +379,7 @@ export function GenericServiceWizard({
         onSkip={stepSkipLabel() ? handleSkip : undefined}
         skipLabel={stepSkipLabel()}
         nextDisabled={nextDisabled || added}
+        nextDisabledReason={nextDisabledReason}
         nextLabel={added ? (editingItemId ? 'Updated' : 'Added') : stepNextLabel()}
       >
         {step <= CONTENT_STEPS && renderContentStep(step)}

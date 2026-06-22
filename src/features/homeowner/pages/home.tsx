@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -10,6 +10,8 @@ import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { formatProjectTitle } from '@/lib/format-project-title'
+import { supabase } from '@/lib/supabase'
+import { useReferralStore } from '@/stores/referral-store'
 import { ServiceCard } from '../components/service-card'
 import { OnboardingTour, hasSeenOnboarding, markOnboardingSeen } from '../components/onboarding-tour'
 import { FinancingCard } from '@/features/financing/components/financing-card'
@@ -186,6 +188,50 @@ export function HomeownerHome() {
   // Skip/Next-through/backdrop/ESC. Nav '?' button also reopens it via
   // custom 'buildconnect:open-onboarding' window event emitted by the
   // homeowner-layout help button.
+  const [referOpen, setReferOpen] = useState(false)
+  const [referSent, setReferSent] = useState(false)
+  const [referFields, setReferFields] = useState({ firstName: '', lastName: '', email: '', phone: '' })
+  const [referErrors, setReferErrors] = useState<Record<string, string>>({})
+
+  function handleReferOpen() { setReferOpen(true); setReferSent(false); setReferErrors({}) }
+  function handleReferClose() { setReferOpen(false); setReferSent(false); setReferFields({ firstName: '', lastName: '', email: '', phone: '' }); setReferErrors({}) }
+  async function handleReferSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const errs: Record<string, string> = {}
+    if (!referFields.firstName.trim()) errs.firstName = 'First name required'
+    if (!referFields.lastName.trim()) errs.lastName = 'Last name required'
+    if (!referFields.email.trim() && !referFields.phone.trim()) errs.contact = 'Email or phone required'
+    if (Object.keys(errs).length) { setReferErrors(errs); return }
+
+    if (!profile?.id) return
+
+    const store = useReferralStore.getState()
+    const referralId = store.addReferral(profile.id, {
+      firstName: referFields.firstName,
+      lastName: referFields.lastName,
+      email: referFields.email,
+      phone: referFields.phone,
+      referrerId: profile.id,
+    })
+
+    const { data, error } = await supabase.functions.invoke('referral-invite', {
+      body: {
+        friendEmail: referFields.email,
+        friendName: `${referFields.firstName} ${referFields.lastName}`.trim(),
+        referrerName: profile.name || profile.email,
+        referralId,
+      },
+    })
+
+    if (error || !data?.ok) {
+      store.removeReferral(profile.id, referralId)
+      setReferErrors({ contact: data?.error ?? 'Could not send invite — please try again.' })
+      return
+    }
+
+    setReferSent(true)
+  }
+
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   useEffect(() => {
     if (!hasSeenOnboarding()) {
@@ -225,25 +271,25 @@ export function HomeownerHome() {
         transition={{ duration: 0.4 }}
         className="flex items-center justify-between"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 md:gap-6">
           <AvatarInitials
             initials={profile.initials}
             color={profile.avatar_color}
             size="lg"
-            className="shadow-sm"
+            className="shadow-sm md:h-20 md:w-20 md:text-2xl"
           />
           <div>
-            <p className="text-sm text-muted-foreground">Welcome back</p>
-            <h1 className="text-xl font-semibold font-heading text-foreground">
+            <p className="text-sm text-muted-foreground md:text-base">Welcome back</p>
+            <h1 className="text-xl font-semibold font-heading text-foreground md:text-3xl">
               {profile.name}
             </h1>
-            <div className="flex items-center gap-3 mt-0.5">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
+            <div className="flex items-center gap-3 mt-0.5 md:gap-4 md:mt-1">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground md:text-sm md:gap-1.5">
+                <MapPin className="h-3 w-3 md:h-4 md:w-4" />
                 {profile.address?.split(',')[0]?.trim() || 'Address not set'}
               </span>
-              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-                <Phone className="h-3 w-3" />
+              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground md:text-sm md:gap-1.5">
+                <Phone className="h-3 w-3 md:h-4 md:w-4" />
                 {profile.phone}
               </span>
             </div>
@@ -280,10 +326,10 @@ export function HomeownerHome() {
         className="grid grid-cols-2 gap-3"
       >
         {([
-          { id: 'upcoming' as const, label: 'Upcoming', count: upcomingAll.length, icon: Clock, iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', projects: upcomingAll, emptyText: 'No upcoming yet', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · ${p.status === 'approved' ? 'Scheduled' : 'Pending vendor'} · ${p.booking.date} ${p.booking.time}` },
-          { id: 'active' as const, label: 'Active', count: activeProjects.length, icon: Hammer, iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', projects: activeProjects, emptyText: 'No active projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · In progress${p.soldAt ? ' · Sold ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
-          { id: 'completed' as const, label: 'Completed', count: completedProjects.length, icon: CheckCircle2, iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300', projects: completedProjects, emptyText: 'No completed projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Completed${p.soldAt ? ' ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
-          { id: 'cancelled' as const, label: 'Cancelled', count: cancelledProjects.length, icon: XCircle, iconBg: 'bg-destructive/10 text-destructive', projects: cancelledProjects, emptyText: 'No cancelled projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor.company} · Cancelled` },
+          { id: 'upcoming' as const, label: 'Upcoming', count: upcomingAll.length, icon: Clock, iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', projects: upcomingAll, emptyText: 'No upcoming yet', subtitleFor: (p: LifecycleEntry) => `${p.contractor?.company ?? 'Pending vendor'} · ${p.status === 'approved' ? 'Scheduled' : 'Pending vendor'} · ${p.booking.date} ${p.booking.time}` },
+          { id: 'active' as const, label: 'Active', count: activeProjects.length, icon: Hammer, iconBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', projects: activeProjects, emptyText: 'No active projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor?.company ?? 'Pending vendor'} · In progress${p.soldAt ? ' · Sold ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
+          { id: 'completed' as const, label: 'Completed', count: completedProjects.length, icon: CheckCircle2, iconBg: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300', projects: completedProjects, emptyText: 'No completed projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor?.company ?? 'Pending vendor'} · Completed${p.soldAt ? ' ' + new Date(p.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` },
+          { id: 'cancelled' as const, label: 'Cancelled', count: cancelledProjects.length, icon: XCircle, iconBg: 'bg-destructive/10 text-destructive', projects: cancelledProjects, emptyText: 'No cancelled projects', subtitleFor: (p: LifecycleEntry) => `${p.contractor?.company ?? 'Pending vendor'} · Cancelled` },
         ] as const).map((tile) => {
           const open = openHomeTile === tile.id
           const Icon = tile.icon
@@ -434,60 +480,240 @@ export function HomeownerHome() {
         </motion.div>
       )}
 
-      {/* How it works — 4-step walkthrough, single-open accordion, default collapsed */}
+      {/* How it works — outer section-toggle, default collapsed; inner 4-step accordion preserved */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.55 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-          How it works
-        </p>
-        <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible className="w-full">
-            {howItWorks.map((step) => (
-              <AccordionItem key={step.n} value={`step-${step.n}`} className="px-5">
-                <AccordionTrigger className="py-4 text-[14px]">
-                  <span className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {step.n}
-                    </span>
-                    <span className="font-semibold font-heading text-foreground">{step.t}</span>
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed pl-10">
-                  {step.d}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+        <Accordion type="single" collapsible defaultValue={[]} className="w-full">
+          <AccordionItem value="section-howitworks" className="rounded-2xl border bg-card overflow-hidden">
+            <AccordionTrigger className="px-5 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest hover:no-underline">
+              How it works
+            </AccordionTrigger>
+            <AccordionContent className="px-0 pb-0">
+              <Accordion type="single" collapsible defaultValue={[]} className="w-full border-t">
+                {howItWorks.map((step) => (
+                  <AccordionItem key={step.n} value={`step-${step.n}`} className="px-5">
+                    <AccordionTrigger className="py-4 text-[14px]">
+                      <span className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {step.n}
+                        </span>
+                        <span className="font-semibold font-heading text-foreground">{step.t}</span>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed pl-10">
+                      {step.d}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </motion.div>
 
-      {/* Frequently asked — single-open accordion, default collapsed */}
+      {/* Frequently asked — outer section-toggle, default collapsed; inner per-Q accordion preserved */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-          Frequently asked
-        </p>
-        <div className="rounded-2xl border bg-card overflow-hidden">
-          <Accordion type="single" collapsible className="w-full">
-            {faq.map((qa, i) => (
-              <AccordionItem key={qa.q} value={`faq-${i}`} className="px-5">
-                <AccordionTrigger className="py-4 text-[14px] font-medium text-foreground">
-                  {qa.q}
-                </AccordionTrigger>
-                <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed">
-                  {qa.a}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+        <Accordion type="single" collapsible defaultValue={[]} className="w-full">
+          <AccordionItem value="section-faq" className="rounded-2xl border bg-card overflow-hidden">
+            <AccordionTrigger className="px-5 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-widest hover:no-underline">
+              Frequently asked
+            </AccordionTrigger>
+            <AccordionContent className="px-0 pb-0">
+              <Accordion type="single" collapsible defaultValue={[]} className="w-full border-t">
+                {faq.map((qa, i) => (
+                  <AccordionItem key={qa.q} value={`faq-${i}`} className="px-5">
+                    <AccordionTrigger className="py-4 text-[14px] font-medium text-foreground">
+                      {qa.q}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-[13px] text-muted-foreground leading-relaxed">
+                      {qa.a}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </motion.div>
+
+      {/* Refer-a-Friend CTA — sits in empty space between FAQ and footer */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.65 }}
+        className="rounded-3xl border bg-card p-6 flex flex-col items-center text-center gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.04),_0_8px_32px_rgba(0,0,0,0.07)]"
+        data-testid="refer-a-friend-section"
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Gift className="h-7 w-7" strokeWidth={1.5} />
+        </div>
+        <div>
+          <h2 className="text-[18px] font-bold font-heading text-foreground tracking-tight">
+            Refer a Friend, Earn for Life
+          </h2>
+          <p className="mt-1.5 text-[13px] text-muted-foreground leading-relaxed max-w-sm mx-auto">
+            Invite friends to BuildConnect. Every time someone you referred completes a project and buys from a contractor, you earn $500 — every project, for life.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleReferOpen}
+          disabled={onboardingOpen}
+          data-testid="refer-a-friend-button"
+          className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-[14px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
+        >
+          <Gift className="h-4 w-4" strokeWidth={2} />
+          Refer a Friend
+        </button>
+      </motion.div>
+
+      {/* Refer-a-Friend modal */}
+      <AnimatePresence>
+        {referOpen && (
+          <motion.div
+            key="refer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) handleReferClose() }}
+            data-testid="refer-modal-backdrop"
+          >
+            <motion.div
+              key="refer-sheet"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-card shadow-[0_8px_40px_rgba(0,0,0,0.18)]"
+              data-testid="refer-modal"
+            >
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border/50">
+                <h3 className="text-[16px] font-bold font-heading text-foreground">Refer a Friend</h3>
+                <button
+                  type="button"
+                  onClick={handleReferClose}
+                  data-testid="refer-modal-close"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="p-5">
+                {referSent ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center text-center gap-3 py-4"
+                    data-testid="refer-sent-confirmation"
+                  >
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      <CheckCircle className="h-7 w-7" strokeWidth={1.5} />
+                    </div>
+                    <p className="text-[16px] font-bold font-heading text-foreground">Invitation sent!</p>
+                    <p className="text-[13px] text-muted-foreground">Your friend will receive an invitation to join BuildConnect.</p>
+                    <button
+                      type="button"
+                      onClick={handleReferClose}
+                      className="mt-1 rounded-full bg-primary px-6 py-2 text-[14px] font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </motion.div>
+                ) : (
+                  <form onSubmit={handleReferSubmit} noValidate className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[12px] font-medium text-foreground mb-1" htmlFor="refer-first-name">
+                          First name
+                        </label>
+                        <input
+                          id="refer-first-name"
+                          type="text"
+                          autoComplete="given-name"
+                          value={referFields.firstName}
+                          onChange={(e) => setReferFields((p) => ({ ...p, firstName: e.target.value }))}
+                          className={cn('w-full rounded-xl border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/40 transition-shadow', referErrors.firstName && 'border-destructive')}
+                          placeholder="Jane"
+                          data-testid="refer-first-name"
+                        />
+                        {referErrors.firstName && <p className="mt-1 text-[11px] text-destructive">{referErrors.firstName}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium text-foreground mb-1" htmlFor="refer-last-name">
+                          Last name
+                        </label>
+                        <input
+                          id="refer-last-name"
+                          type="text"
+                          autoComplete="family-name"
+                          value={referFields.lastName}
+                          onChange={(e) => setReferFields((p) => ({ ...p, lastName: e.target.value }))}
+                          className={cn('w-full rounded-xl border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/40 transition-shadow', referErrors.lastName && 'border-destructive')}
+                          placeholder="Smith"
+                          data-testid="refer-last-name"
+                        />
+                        {referErrors.lastName && <p className="mt-1 text-[11px] text-destructive">{referErrors.lastName}</p>}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-medium text-foreground mb-1" htmlFor="refer-email">
+                        Email <span className="text-muted-foreground font-normal">(or phone below)</span>
+                      </label>
+                      <input
+                        id="refer-email"
+                        type="email"
+                        autoComplete="email"
+                        value={referFields.email}
+                        onChange={(e) => setReferFields((p) => ({ ...p, email: e.target.value }))}
+                        className={cn('w-full rounded-xl border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/40 transition-shadow', referErrors.contact && 'border-destructive')}
+                        placeholder="friend@example.com"
+                        data-testid="refer-email"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-medium text-foreground mb-1" htmlFor="refer-phone">
+                        Phone <span className="text-muted-foreground font-normal">(or email above)</span>
+                      </label>
+                      <input
+                        id="refer-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={referFields.phone}
+                        onChange={(e) => setReferFields((p) => ({ ...p, phone: e.target.value }))}
+                        className={cn('w-full rounded-xl border bg-background px-3 py-2 text-[14px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/40 transition-shadow', referErrors.contact && 'border-destructive')}
+                        placeholder="(305) 555-0100"
+                        data-testid="refer-phone"
+                      />
+                      {referErrors.contact && <p className="mt-1 text-[11px] text-destructive">{referErrors.contact}</p>}
+                    </div>
+
+                    <button
+                      type="submit"
+                      data-testid="refer-submit"
+                      className="w-full rounded-full bg-primary py-2.5 text-[14px] font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all"
+                    >
+                      Send Invitation
+                    </button>
+                  </form>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <OnboardingTour open={onboardingOpen} onClose={() => setOnboardingOpen(false)} />
     </div>

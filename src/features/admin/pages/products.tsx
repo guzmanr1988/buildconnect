@@ -3,12 +3,15 @@ import {
   Plus,
   Pencil,
   Trash2,
+  RotateCcw,
   ChevronRight,
   ChevronUp,
   ChevronDown,
   GripVertical,
   Package,
   Layers,
+  LayoutGrid,
+  List as ListIcon,
   ListChecks,
   Search,
   X,
@@ -22,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Dialog,
   DialogContent,
@@ -47,6 +51,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ReorderableList } from '@/features/admin/components/reorderable-list'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
+import { useCatalogRealtime } from '@/lib/hooks/use-catalog-realtime'
 import { CatalogMutationError } from '@/lib/api/service-catalog'
 import type { ServiceConfig, OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
@@ -64,6 +69,39 @@ function formatCatalogError(err: unknown, fallback: string): string {
   }
   if (err instanceof Error) return err.message
   return fallback
+}
+
+/* ------------------------------------------------------------------ */
+/*  View-mode (cards / list) — LS-backed, Rod-iteration-v1            */
+/* ------------------------------------------------------------------ */
+
+type AdminProductsViewMode = 'list' | 'cards'
+
+const VIEW_MODE_LS_KEY = 'admin-products-view-mode'
+
+function readViewModeFromLS(): AdminProductsViewMode {
+  // Default to 'cards' for the Rod-iteration-v1 UX. Per kratos
+  // 2026-05-25: Rod is the only active admin user right now, so
+  // defaulting cross-admins to cards is the accepted surprise-tradeoff
+  // (vs reading 'list' on LS-null and gating cards behind explicit
+  // first-click).
+  if (typeof window === 'undefined') return 'cards'
+  try {
+    const raw = window.localStorage.getItem(VIEW_MODE_LS_KEY)
+    if (raw === 'list' || raw === 'cards') return raw
+  } catch {
+    // localStorage blocked (private mode / SSR shim) → fall through
+  }
+  return 'cards'
+}
+
+function writeViewModeToLS(mode: AdminProductsViewMode): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(VIEW_MODE_LS_KEY, mode)
+  } catch {
+    // localStorage blocked — silently skip; LS-default falls back next mount
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,14 +160,32 @@ type GroupFormData = {
 const emptyGroupForm: GroupFormData = { id: '', label: '', description: '', required: true, type: 'single' }
 
 type PriceUnit = 'flat' | 'square' | 'sqft' | 'linear_ft'
-type OptionFormData = { id: string; label: string; description: string; priceUnit: PriceUnit }
-const emptyOptionForm: OptionFormData = { id: '', label: '', description: '', priceUnit: 'flat' }
+type InputType = 'tile-select' | 'number-input'
+type OptionFormData = {
+  id: string
+  label: string
+  description: string
+  priceUnit: PriceUnit
+  inputType: InputType
+}
+const emptyOptionForm: OptionFormData = {
+  id: '',
+  label: '',
+  description: '',
+  priceUnit: 'flat',
+  inputType: 'tile-select',
+}
 
 const PRICE_UNIT_OPTIONS: Array<{ value: PriceUnit; label: string; helper: string }> = [
   { value: 'flat', label: 'Flat ($)', helper: 'Single dollar amount' },
   { value: 'square', label: 'Per Square ($/sq)', helper: '1 square = 100 sqft (roofing)' },
   { value: 'sqft', label: 'Per Sq Ft ($/sqft)', helper: 'Multiplied by measured area' },
   { value: 'linear_ft', label: 'Per Linear Ft ($/lin ft)', helper: 'Multiplied by linear feet' },
+]
+
+const INPUT_TYPE_OPTIONS: Array<{ value: InputType; label: string; helper: string }> = [
+  { value: 'tile-select', label: 'Tile / Chip Select', helper: 'Default — chip or image tile the homeowner picks' },
+  { value: 'number-input', label: 'Number Input', helper: 'Empty number field — price = quantity × base price' },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -141,28 +197,85 @@ export default function ProductsAdminPage() {
     services,
     addService,
     updateService,
-    removeService,
     addOptionGroup,
-    updateOptionGroup,
-    removeOptionGroup,
     addOption,
-    updateOption,
-    removeOption,
     addSubGroup,
-    updateSubGroup,
-    removeSubGroup,
     addSubOption,
-    updateSubOption,
-    removeSubOption,
     hydrateFromServer,
     reorderOptionGroups,
     reorderOptions,
     reorderSubGroups,
     reorderSubOptions,
     saveService,
+    _pendingDeletes,
+    _pendingEdits,
+    stageDeleteService,
+    stageDeleteGroup,
+    stageDeleteOption,
+    stageDeleteSubGroup,
+    stageDeleteSubOption,
+    unstageDeleteService,
+    unstageDeleteGroup,
+    unstageDeleteOption,
+    unstageDeleteSubGroup,
+    unstageDeleteSubOption,
+    stageEditService,
+    stageEditGroup,
+    stageEditOption,
+    stageEditSubGroup,
+    stageEditSubOption,
+    discardAllPendingForService,
   } = useCatalogStore()
 
   const [savingServiceId, setSavingServiceId] = useState<string | null>(null)
+  const [aggregateConfirmService, setAggregateConfirmService] = useState<string | null>(null)
+
+  // Cards / List view-mode toggle (Rod-iteration-v1). Persists choice to
+  // localStorage so the next visit lands on the same shape.
+  const [viewMode, setViewMode] = useState<AdminProductsViewMode>(() => readViewModeFromLS())
+  useEffect(() => {
+    writeViewModeToLS(viewMode)
+  }, [viewMode])
+
+  // Per-tile inline-expand state for cards-mode (key = `${serviceId}-${groupId}-${optionId}`).
+  // Stored as a Set so multiple tiles can be open at once — kratos
+  // 2026-05-25 constraint: "make sure inline-expand state is per-tile
+  // (not single-tile-globally) so Rod can open multiple at once".
+  const [expandedOptionTiles, setExpandedOptionTiles] = useState<Set<string>>(new Set())
+  const toggleOptionTile = (key: string) =>
+    setExpandedOptionTiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  // v2: ESC + outside-click collapse for all expanded option tiles
+  // (apollo finding off PR-#400 walk — green-light spec missed in v1).
+  // Listeners attach only while at least one tile is expanded so the page
+  // pays nothing for the feature when it's not active. Clicks inside any
+  // expanded tile (data-admin-option-tile-expanded="true") OR inside a
+  // Radix dialog (role="dialog" portal — Edit / Delete) keep the
+  // expansion open; anything else collapses ALL expanded tiles.
+  useEffect(() => {
+    if (expandedOptionTiles.size === 0) return
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Element | null
+      if (!target) return
+      if (target.closest('[data-admin-option-tile-expanded="true"]')) return
+      if (target.closest('[role="dialog"]')) return
+      setExpandedOptionTiles(new Set())
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpandedOptionTiles(new Set())
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [expandedOptionTiles])
 
   async function handleReorderOptionGroups(serviceId: string, from: number, to: number) {
     try {
@@ -200,7 +313,7 @@ export default function ProductsAdminPage() {
     }
   }
 
-  async function handleSaveServiceClick(serviceId: string) {
+  async function flushSaveService(serviceId: string) {
     setSavingServiceId(serviceId)
     try {
       await saveService(serviceId)
@@ -210,6 +323,20 @@ export default function ProductsAdminPage() {
     } finally {
       setSavingServiceId(null)
     }
+  }
+
+  // PR-#425 — Save Changes click gate. If any deletes are pending for this
+  // service, show aggregate confirm dialog first (one prompt covers the whole
+  // batch). Otherwise commit immediately.
+  function handleSaveServiceClick(serviceId: string) {
+    const pendingDeleteCount = _pendingDeletes.filter(
+      (d) => d.serviceId === serviceId,
+    ).length
+    if (pendingDeleteCount > 0) {
+      setAggregateConfirmService(serviceId)
+      return
+    }
+    void flushSaveService(serviceId)
   }
 
   // Trigger server hydration on mount so admin sees fresh data from Supabase,
@@ -222,6 +349,12 @@ export default function ProductsAdminPage() {
   // Refresh when the admin switches back to this tab — picks up vendor edits
   // made in another client without requiring a manual reload.
   useRefetchOnFocus(hydrateFromServer)
+
+  // Arc-38c: live-sync this admin's view when another admin (or a back-end
+  // process) mutates any of the 5 catalog tables. Hephaestus added all 5 to
+  // the supabase_realtime publication; we refetch on any change rather than
+  // applying deltas because REPLICA IDENTITY = default(pk).
+  useCatalogRealtime(hydrateFromServer)
 
   // --- Search/filter + Collapse-all (PR #145 admin UX 5-pack) ---
   const [query, setQuery] = useState('')
@@ -302,6 +435,15 @@ export default function ProductsAdminPage() {
   })
   const [editingSubGroupId, setEditingSubGroupId] = useState<string | null>(null)
   const [subGroupForm, setSubGroupForm] = useState<GroupFormData>(emptyGroupForm)
+  // Arc-38b: the "Add" dialog under an option now has two intents — adding a
+  // priceable item (default; produces a new ServiceOption sibling in the
+  // parent's options[]) or a Group container (current sub-menu OptionGroup,
+  // empty on create + items added inside afterward). Rod hit the trap of
+  // tapping "+ Sub-Menu" 4x to add plywood/MDF/etc as 4 empty containers
+  // instead of one Material sub-group with 4 priceable items inside; defaulting
+  // the radio to 'option' nudges priceable-first.
+  const [subGroupKind, setSubGroupKind] = useState<'option' | 'group'>('option')
+  const [subGroupOptionPriceUnit, setSubGroupOptionPriceUnit] = useState<PriceUnit>('flat')
 
   // --- Sub-option dialog ---
   const [subOptionDialogOpen, setSubOptionDialogOpen] = useState(false)
@@ -313,14 +455,6 @@ export default function ProductsAdminPage() {
   }>({ serviceId: '', groupId: '', optionId: '', subGroupId: '' })
   const [editingSubOptionId, setEditingSubOptionId] = useState<string | null>(null)
   const [subOptionForm, setSubOptionForm] = useState<OptionFormData>(emptyOptionForm)
-
-  // --- Delete confirm ---
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'service' | 'group' | 'option'
-    label: string
-    onConfirm: () => void
-  } | null>(null)
 
   /* ---------- Service handlers ---------- */
 
@@ -351,7 +485,9 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingService) {
-        await updateService(editingService.id, {
+        // PR-#425 — dialog Save STAGES the edit; commit fires from
+        // service-card "Save Changes" via saveService 3-phase flush.
+        stageEditService(editingService.id, {
           name: serviceForm.name,
           tagline: serviceForm.tagline,
           description: serviceForm.description,
@@ -382,20 +518,105 @@ export default function ProductsAdminPage() {
     }
   }
 
+  // PR-#425 — trash toggles staged-delete. Click once to stage (visual:
+  // opacity + strike-through). Click again to undo. Aggregate "About to
+  // delete N items" prompt fires at Save Changes time.
+  function isPendingDeleteService(serviceId: string) {
+    return _pendingDeletes.some((d) => d.type === 'service' && d.serviceId === serviceId)
+  }
+  function isPendingDeleteGroup(serviceId: string, groupId: string) {
+    return _pendingDeletes.some(
+      (d) => d.type === 'group' && d.serviceId === serviceId && d.groupId === groupId,
+    )
+  }
+  function isPendingDeleteOption(serviceId: string, groupId: string, optionId: string) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'option' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId,
+    )
+  }
+  function isPendingDeleteSubGroup(
+    serviceId: string, groupId: string, optionId: string, subGroupId: string,
+  ) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'subGroup' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId &&
+        d.subGroupId === subGroupId,
+    )
+  }
+  function isPendingDeleteSubOption(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+  ) {
+    return _pendingDeletes.some(
+      (d) =>
+        d.type === 'subOption' &&
+        d.serviceId === serviceId &&
+        d.groupId === groupId &&
+        d.optionId === optionId &&
+        d.subGroupId === subGroupId &&
+        d.subOptionId === subOptionId,
+    )
+  }
+  function isPendingEditService(serviceId: string) {
+    return _pendingEdits.some((e) => e.type === 'service' && e.serviceId === serviceId)
+  }
+  function isPendingEditGroup(serviceId: string, groupId: string) {
+    return _pendingEdits.some(
+      (e) => e.type === 'group' && e.serviceId === serviceId && e.groupId === groupId,
+    )
+  }
+  function isPendingEditOption(serviceId: string, groupId: string, optionId: string) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'option' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId,
+    )
+  }
+  function isPendingEditSubGroup(
+    serviceId: string, groupId: string, optionId: string, subGroupId: string,
+  ) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'subGroup' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId &&
+        e.subGroupId === subGroupId,
+    )
+  }
+  function isPendingEditSubOption(
+    serviceId: string,
+    groupId: string,
+    optionId: string,
+    subGroupId: string,
+    subOptionId: string,
+  ) {
+    return _pendingEdits.some(
+      (e) =>
+        e.type === 'subOption' &&
+        e.serviceId === serviceId &&
+        e.groupId === groupId &&
+        e.optionId === optionId &&
+        e.subGroupId === subGroupId &&
+        e.subOptionId === subOptionId,
+    )
+  }
+
   function confirmDeleteService(s: ServiceConfig) {
-    setDeleteTarget({
-      type: 'service',
-      label: s.name,
-      onConfirm: async () => {
-        try {
-          await removeService(s.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteService(s.id)) unstageDeleteService(s.id)
+    else stageDeleteService(s.id)
   }
 
   async function toggleServiceStatus(s: ServiceConfig) {
@@ -439,7 +660,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingGroup) {
-        await updateOptionGroup(groupContext, editingGroup.id, {
+        stageEditGroup(groupContext, editingGroup.id, {
           label: groupForm.label,
           required: groupForm.required,
           type: groupForm.type,
@@ -461,19 +682,8 @@ export default function ProductsAdminPage() {
   }
 
   function confirmDeleteGroup(serviceId: string, group: OptionGroup) {
-    setDeleteTarget({
-      type: 'group',
-      label: group.label,
-      onConfirm: async () => {
-        try {
-          await removeOptionGroup(serviceId, group.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteGroup(serviceId, group.id)) unstageDeleteGroup(serviceId, group.id)
+    else stageDeleteGroup(serviceId, group.id)
   }
 
   /* ---------- Option handlers ---------- */
@@ -488,7 +698,7 @@ export default function ProductsAdminPage() {
   function openEditOption(
     serviceId: string,
     groupId: string,
-    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    opt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setOptionContext({ serviceId, groupId })
     setEditingOptionId(opt.id)
@@ -497,24 +707,15 @@ export default function ProductsAdminPage() {
       label: opt.label,
       description: opt.description ?? '',
       priceUnit: opt.priceUnit ?? 'flat',
+      inputType: opt.inputType ?? 'tile-select',
     })
     setOptionDialogOpen(true)
   }
 
   function confirmDeleteOption(serviceId: string, groupId: string, opt: { id: string; label: string }) {
-    setDeleteTarget({
-      type: 'option',
-      label: opt.label,
-      onConfirm: async () => {
-        try {
-          await removeOption(serviceId, groupId, opt.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteOption(serviceId, groupId, opt.id))
+      unstageDeleteOption(serviceId, groupId, opt.id)
+    else stageDeleteOption(serviceId, groupId, opt.id)
   }
 
   async function handleSaveOption() {
@@ -529,10 +730,11 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingOptionId) {
-        await updateOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
+        stageEditOption(optionContext.serviceId, optionContext.groupId, editingOptionId, {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       } else {
         await addOption(optionContext.serviceId, optionContext.groupId, {
@@ -540,6 +742,7 @@ export default function ProductsAdminPage() {
           label: optionForm.label,
           description: optionForm.description || undefined,
           priceUnit: optionForm.priceUnit,
+          inputType: optionForm.inputType,
         })
       }
       setOptionDialogOpen(false)
@@ -554,6 +757,8 @@ export default function ProductsAdminPage() {
     setSubGroupContext({ serviceId, groupId, optionId })
     setEditingSubGroupId(null)
     setSubGroupForm(emptyGroupForm)
+    setSubGroupKind('option')
+    setSubGroupOptionPriceUnit('flat')
     setSubGroupDialogOpen(true)
   }
 
@@ -572,10 +777,36 @@ export default function ProductsAdminPage() {
       required: subGroup.required,
       type: subGroup.type,
     })
+    setSubGroupKind('group')
     setSubGroupDialogOpen(true)
   }
 
   async function handleSaveSubGroup() {
+    // Arc-38b: priceable-item path branches before the sub-menu validation.
+    // The user picked "Priceable item" radio → save as a new ServiceOption
+    // added to the parent group's options[] (sibling of the option whose
+    // "+ Add" button was tapped). Editing always uses the sub-menu path.
+    if (!editingSubGroupId && subGroupKind === 'option') {
+      const parentSvc = services.find((s) => s.id === subGroupContext.serviceId)
+      const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subGroupContext.groupId)
+      if (parentGroup?.options.some((o) => o.id === subGroupForm.id)) {
+        toast.error(`Option ID "${subGroupForm.id}" already exists in this group. Choose a different ID.`)
+        return
+      }
+      try {
+        await addOption(subGroupContext.serviceId, subGroupContext.groupId, {
+          id: subGroupForm.id,
+          label: subGroupForm.label,
+          description: subGroupForm.description.trim() || undefined,
+          priceUnit: subGroupOptionPriceUnit,
+        })
+        setSubGroupDialogOpen(false)
+      } catch (err) {
+        toast.error(formatCatalogError(err, 'Save failed'))
+      }
+      return
+    }
+
     if (!editingSubGroupId) {
       const parentSvc = services.find((s) => s.id === subGroupContext.serviceId)
       const parentGroup = parentSvc?.optionGroups.find((g) => g.id === subGroupContext.groupId)
@@ -588,7 +819,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingSubGroupId) {
-        await updateSubGroup(
+        stageEditSubGroup(
           subGroupContext.serviceId,
           subGroupContext.groupId,
           subGroupContext.optionId,
@@ -629,19 +860,9 @@ export default function ProductsAdminPage() {
     optionId: string,
     subGroup: OptionGroup
   ) {
-    setDeleteTarget({
-      type: 'group',
-      label: subGroup.label,
-      onConfirm: async () => {
-        try {
-          await removeSubGroup(serviceId, groupId, optionId, subGroup.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteSubGroup(serviceId, groupId, optionId, subGroup.id))
+      unstageDeleteSubGroup(serviceId, groupId, optionId, subGroup.id)
+    else stageDeleteSubGroup(serviceId, groupId, optionId, subGroup.id)
   }
 
   /* ---------- Sub-option handlers ---------- */
@@ -658,7 +879,7 @@ export default function ProductsAdminPage() {
     groupId: string,
     optionId: string,
     subGroupId: string,
-    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit }
+    subOpt: { id: string; label: string; description?: string; priceUnit?: PriceUnit; inputType?: InputType }
   ) {
     setSubOptionContext({ serviceId, groupId, optionId, subGroupId })
     setEditingSubOptionId(subOpt.id)
@@ -667,6 +888,7 @@ export default function ProductsAdminPage() {
       label: subOpt.label,
       description: subOpt.description ?? '',
       priceUnit: subOpt.priceUnit ?? 'flat',
+      inputType: subOpt.inputType ?? 'tile-select',
     })
     setSubOptionDialogOpen(true)
   }
@@ -685,7 +907,7 @@ export default function ProductsAdminPage() {
 
     try {
       if (editingSubOptionId) {
-        await updateSubOption(
+        stageEditSubOption(
           subOptionContext.serviceId,
           subOptionContext.groupId,
           subOptionContext.optionId,
@@ -695,6 +917,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       } else {
@@ -708,6 +931,7 @@ export default function ProductsAdminPage() {
             label: subOptionForm.label,
             description: subOptionForm.description || undefined,
             priceUnit: subOptionForm.priceUnit,
+            inputType: subOptionForm.inputType,
           }
         )
       }
@@ -724,19 +948,9 @@ export default function ProductsAdminPage() {
     subGroupId: string,
     subOpt: { id: string; label: string }
   ) {
-    setDeleteTarget({
-      type: 'option',
-      label: subOpt.label,
-      onConfirm: async () => {
-        try {
-          await removeSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
-          setDeleteDialogOpen(false)
-        } catch (err) {
-          toast.error(formatCatalogError(err, 'Delete failed'))
-        }
-      },
-    })
-    setDeleteDialogOpen(true)
+    if (isPendingDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id))
+      unstageDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
+    else stageDeleteSubOption(serviceId, groupId, optionId, subGroupId, subOpt.id)
   }
 
   /* ------------------------------------------------------------------ */
@@ -746,10 +960,45 @@ export default function ProductsAdminPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Product Catalog" description="Manage services, option groups, and options">
-        <Button onClick={openAddService} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Cards / List view-mode toggle (Rod-iteration-v1). Anchor
+              `data-admin-view-mode-toggle` for apollo walker. */}
+          <div
+            data-admin-view-mode-toggle="true"
+            className="inline-flex items-center rounded-md border bg-background p-0.5"
+            role="group"
+            aria-label="View mode"
+          >
+            <Button
+              type="button"
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              data-admin-view-mode-option="cards"
+              aria-pressed={viewMode === 'cards'}
+              onClick={() => setViewMode('cards')}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Cards
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              data-admin-view-mode-option="list"
+              aria-pressed={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+            >
+              <ListIcon className="h-3.5 w-3.5" />
+              List
+            </Button>
+          </div>
+          <Button onClick={openAddService} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Service
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Search + Collapse-all toolbar */}
@@ -818,7 +1067,7 @@ export default function ProductsAdminPage() {
             transition={{ delay: idx * 0.04, duration: 0.3 }}
           >
             <AccordionItem value={service.id} className="border-0">
-              <Card className="rounded-xl shadow-sm hover:shadow-md transition">
+              <Card className="rounded-xl border border-border bg-card [box-shadow:inset_0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.05)] dark:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.28),0_1px_3px_rgba(0,0,0,0.18)] transition">
                 <CardHeader
                   data-admin-service-sticky-header="true"
                   className="pb-2 sticky top-0 z-20 bg-card rounded-t-xl border-b border-transparent data-[expanded=true]:border-border"
@@ -875,37 +1124,88 @@ export default function ProductsAdminPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className={cn(
+                            'h-8 w-8 relative',
+                            isPendingEditService(service.id) && 'text-amber-600',
+                          )}
                           onClick={() => openEditService(service)}
                           aria-label={`Edit ${service.name}`}
+                          data-pending-edit={isPendingEditService(service.id) ? 'true' : undefined}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                          {isPendingEditService(service.id) && (
+                            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className={cn(
+                            'h-8 w-8',
+                            isPendingDeleteService(service.id)
+                              ? 'text-amber-600 hover:text-amber-600'
+                              : 'text-destructive hover:text-destructive',
+                          )}
                           onClick={() => confirmDeleteService(service)}
-                          aria-label={`Delete ${service.name}`}
+                          aria-label={
+                            isPendingDeleteService(service.id)
+                              ? `Undo delete ${service.name}`
+                              : `Delete ${service.name}`
+                          }
+                          data-pending-delete={isPendingDeleteService(service.id) ? 'true' : undefined}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          {isPendingDeleteService(service.id) ? (
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
                         </Button>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="h-8 px-3 text-[10px] sm:text-xs whitespace-nowrap"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleSaveServiceClick(service.id)
-                        }}
-                        disabled={savingServiceId === service.id}
-                        data-testid="admin-service-save-button"
-                        data-service-id={service.id}
-                        aria-label={`Save changes for ${service.name}`}
-                      >
-                        {savingServiceId === service.id ? 'Saving…' : 'Save Changes'}
-                      </Button>
+                      {(() => {
+                        const pendCount =
+                          _pendingDeletes.filter((d) => d.serviceId === service.id).length +
+                          _pendingEdits.filter((e) => e.serviceId === service.id).length
+                        return (
+                          <div className="flex items-center gap-1">
+                            {pendCount > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-[10px] sm:text-xs whitespace-nowrap text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  discardAllPendingForService(service.id)
+                                }}
+                                data-testid="admin-service-discard-button"
+                                data-service-id={service.id}
+                                aria-label={`Discard pending changes for ${service.name}`}
+                              >
+                                Discard
+                              </Button>
+                            )}
+                            <Button
+                              variant={pendCount > 0 ? 'default' : 'secondary'}
+                              size="sm"
+                              className="h-8 px-3 text-[10px] sm:text-xs whitespace-nowrap"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSaveServiceClick(service.id)
+                              }}
+                              disabled={savingServiceId === service.id}
+                              data-testid="admin-service-save-button"
+                              data-service-id={service.id}
+                              data-pending-count={pendCount}
+                              aria-label={`Save changes for ${service.name}`}
+                            >
+                              {savingServiceId === service.id
+                                ? 'Saving…'
+                                : pendCount > 0
+                                  ? `Save Changes (${pendCount})`
+                                  : 'Save Changes'}
+                            </Button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </CardHeader>
@@ -916,7 +1216,7 @@ export default function ProductsAdminPage() {
                     <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
                       <div className="flex flex-wrap gap-2">
                         {service.features.map((f) => (
-                          <Badge key={f} variant="secondary" className="text-xs">
+                          <Badge key={f} variant="outline" className="text-xs bg-primary/5 border-primary/20 text-primary">
                             {f}
                           </Badge>
                         ))}
@@ -943,10 +1243,394 @@ export default function ProductsAdminPage() {
                         <p className="text-sm text-muted-foreground italic pl-6">No option groups yet.</p>
                       )}
 
+                      {/* Rod-iteration-v1 — Cards-mode renderer. Option
+                          groups laid out as a 2/3-col grid; each opens to
+                          an inner grid of option tiles. Clicking a tile
+                          body expands its sub-groups inline (rendered via
+                          the same list-form JSX used at deeper levels).
+                          The existing list-mode block (Ship #175 long-
+                          press list) renders below when viewMode==='list'. */}
+                      {viewMode === 'cards' && (
+                        <div
+                          className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3"
+                          data-admin-products-cards-grid="true"
+                        >
+                          <ReorderableList
+                            items={service.optionGroups}
+                            keyFor={(g) => g.id}
+                            orientation="grid"
+                            onReorder={(from, to) => handleReorderOptionGroups(service.id, from, to)}
+                            renderItem={(group, _gi, dragProps, dragState) => {
+                              const groupKey = `${service.id}-${group.id}`
+                              const groupOpen = openGroups.has(groupKey)
+                              return (
+                                <Card
+                                  {...dragProps.row}
+                                  data-admin-option-group-card={group.id}
+                                  className={cn(
+                                    'rounded-lg border border-border bg-card [box-shadow:inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] dark:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.08),0_2px_8px_rgba(0,0,0,0.35),0_1px_2px_rgba(0,0,0,0.25)] hover:-translate-y-0.5 hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.9),0_4px_16px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.08)] dark:hover:[box-shadow:inset_0_1px_0_rgba(255,255,255,0.08),0_4px_16px_rgba(0,0,0,0.40),0_2px_4px_rgba(0,0,0,0.30)] transition-all h-full',
+                                    dragState.isDragging && 'opacity-60 scale-[0.98] shadow-lg cursor-grabbing',
+                                    dragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                    dragState.anyDragging && 'select-none',
+                                  )}
+                                >
+                                  <CardContent className="p-3 space-y-2">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        {...dragProps.handle}
+                                        aria-label={`Drag to reorder ${group.label}`}
+                                        className="h-7 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing rounded shrink-0"
+                                      >
+                                        <GripVertical className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleGroup(groupKey)}
+                                        aria-expanded={groupOpen}
+                                        className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                                      >
+                                        <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', groupOpen && 'rotate-90')} aria-hidden="true" />
+                                        <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
+                                        <span className="text-sm font-medium truncate">{group.label}</span>
+                                        <Badge variant="outline" className="text-xs shrink-0">
+                                          {group.options.length}
+                                        </Badge>
+                                      </button>
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={cn(
+                                            'h-7 w-7 relative',
+                                            isPendingEditGroup(service.id, group.id) && 'text-amber-600',
+                                          )}
+                                          onClick={() => openEditGroup(service.id, group)}
+                                          aria-label={`Edit ${group.label}`}
+                                          data-pending-edit={isPendingEditGroup(service.id, group.id) ? 'true' : undefined}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                          {isPendingEditGroup(service.id, group.id) && (
+                                            <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={cn(
+                                            'h-7 w-7',
+                                            isPendingDeleteGroup(service.id, group.id)
+                                              ? 'text-amber-600 hover:text-amber-600'
+                                              : 'text-destructive hover:text-destructive',
+                                          )}
+                                          onClick={() => confirmDeleteGroup(service.id, group)}
+                                          aria-label={
+                                            isPendingDeleteGroup(service.id, group.id)
+                                              ? `Undo delete ${group.label}`
+                                              : `Delete ${group.label}`
+                                          }
+                                          data-pending-delete={isPendingDeleteGroup(service.id, group.id) ? 'true' : undefined}
+                                        >
+                                          {isPendingDeleteGroup(service.id, group.id) ? (
+                                            <RotateCcw className="h-3 w-3" />
+                                          ) : (
+                                            <Trash2 className="h-3 w-3" />
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1 pl-6">
+                                      <Badge variant="outline" className="text-[11px]">
+                                        {group.type}
+                                      </Badge>
+                                      {group.required && (
+                                        <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                          Required
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {groupOpen && (
+                                      <div className="pt-2 space-y-2">
+                                        <div
+                                          className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2"
+                                          data-admin-options-cards-grid="true"
+                                        >
+                                          <ReorderableList
+                                            items={group.options}
+                                            keyFor={(o) => o.id}
+                                            orientation="grid"
+                                            onReorder={(from, to) => handleReorderOptions(service.id, group.id, from, to)}
+                                            renderItem={(opt, _oi, optDragProps, optDragState) => {
+                                              const tileKey = `${service.id}-${group.id}-${opt.id}`
+                                              const tileExpanded = expandedOptionTiles.has(tileKey)
+                                              return (
+                                                <Card
+                                                  {...optDragProps.row}
+                                                  data-admin-option-tile={opt.id}
+                                                  data-admin-option-tile-expanded={tileExpanded ? 'true' : 'false'}
+                                                  className={cn(
+                                                    'rounded-md border border-border/60 bg-primary/[0.06] dark:bg-primary/[0.08] shadow-sm transition-all group/tile',
+                                                    tileExpanded && 'sm:col-span-2 ring-1 ring-primary/40',
+                                                    optDragState.isDragging && 'opacity-60 scale-[0.98] shadow-sm cursor-grabbing',
+                                                    optDragState.dragOver && 'ring-2 ring-primary ring-offset-1',
+                                                    optDragState.anyDragging && 'select-none',
+                                                  )}
+                                                >
+                                                  <CardContent className="p-2.5 space-y-2">
+                                                    <div className="flex items-start gap-1">
+                                                      <button
+                                                        type="button"
+                                                        {...optDragProps.handle}
+                                                        aria-label={`Drag to reorder ${opt.label}`}
+                                                        className="h-6 w-5 flex items-center justify-center text-muted-foreground/30 opacity-0 group-hover/tile:opacity-100 active:cursor-grabbing rounded shrink-0"
+                                                      >
+                                                        <GripVertical className="h-3.5 w-3.5" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => toggleOptionTile(tileKey)}
+                                                        aria-expanded={tileExpanded}
+                                                        className="flex-1 min-w-0 text-left"
+                                                      >
+                                                        <div className="text-sm font-medium truncate">{opt.label}</div>
+                                                        {opt.description && (
+                                                          <div className="text-xs text-muted-foreground line-clamp-2 pr-1">
+                                                            {opt.description}
+                                                          </div>
+                                                        )}
+                                                        {opt.subGroups && opt.subGroups.length > 0 && (
+                                                          <Badge variant="outline" className="text-[11px] mt-1">
+                                                            {opt.subGroups.length} sub-menu{opt.subGroups.length !== 1 && 's'}
+                                                          </Badge>
+                                                        )}
+                                                      </button>
+                                                      <div className="flex flex-col items-end gap-0.5 shrink-0 opacity-60 group-hover/tile:opacity-100 transition-opacity">
+                                                        {/* v2 apollo-#4: dropped e.stopPropagation — Edit/Trash
+                                                            are SIBLINGS of the toggle <button>, not children,
+                                                            so propagation can't reach the toggle anyway, and
+                                                            the wrapper was suspect for the intermittent
+                                                            body-reclick lost-focus issue after edit-open. */}
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className={cn(
+                                                            'h-6 w-6 relative',
+                                                            isPendingEditOption(service.id, group.id, opt.id) && 'text-amber-600',
+                                                          )}
+                                                          onClick={() => openEditOption(service.id, group.id, opt)}
+                                                          aria-label={`Edit ${opt.label}`}
+                                                          data-pending-edit={isPendingEditOption(service.id, group.id, opt.id) ? 'true' : undefined}
+                                                        >
+                                                          <Pencil className="h-3 w-3" />
+                                                          {isPendingEditOption(service.id, group.id, opt.id) && (
+                                                            <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                          )}
+                                                        </Button>
+                                                        <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className={cn(
+                                                            'h-6 w-6',
+                                                            isPendingDeleteOption(service.id, group.id, opt.id)
+                                                              ? 'text-amber-600 hover:text-amber-600'
+                                                              : 'text-destructive hover:text-destructive',
+                                                          )}
+                                                          onClick={() => confirmDeleteOption(service.id, group.id, opt)}
+                                                          aria-label={
+                                                            isPendingDeleteOption(service.id, group.id, opt.id)
+                                                              ? `Undo delete ${opt.label}`
+                                                              : `Delete ${opt.label}`
+                                                          }
+                                                          data-pending-delete={isPendingDeleteOption(service.id, group.id, opt.id) ? 'true' : undefined}
+                                                        >
+                                                          {isPendingDeleteOption(service.id, group.id, opt.id) ? (
+                                                            <RotateCcw className="h-3 w-3" />
+                                                          ) : (
+                                                            <Trash2 className="h-3 w-3" />
+                                                          )}
+                                                        </Button>
+                                                      </div>
+                                                    </div>
+
+                                                    {tileExpanded && (
+                                                      <div className="border-t pt-2 space-y-2" data-admin-option-tile-body="true">
+                                                        {/* Sub-groups inside expanded tile — re-uses the
+                                                            list-form deeper-level renderer for first cut.
+                                                            Rod iterates after seeing v1 per kratos plan. */}
+                                                        {(!opt.subGroups || opt.subGroups.length === 0) && (
+                                                          <p className="text-xs text-muted-foreground italic">No sub-menus yet.</p>
+                                                        )}
+                                                        {opt.subGroups && opt.subGroups.length > 0 && (
+                                                          <div className="space-y-1.5">
+                                                            {opt.subGroups.map((subGroup) => (
+                                                              <div key={subGroup.id} className="rounded border bg-muted/30 p-2 space-y-2">
+                                                                <div className="flex items-start justify-between gap-1">
+                                                                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                                                                    <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                                                    {/* v2: drop truncate, allow wrap. The expanded-tile col-span-2 slot still squeezes label width
+                                                                        on narrow viewports and 'Windows'/'Window Sizes' was being clipped to 'Windo…'. */}
+                                                                    <span className="text-xs font-medium break-words whitespace-normal">{subGroup.label}</span>
+                                                                    <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                                                                      {subGroup.options.length}
+                                                                    </Badge>
+                                                                  </div>
+                                                                  <div className="flex items-center gap-0.5 shrink-0">
+                                                                    <Button
+                                                                      variant="ghost"
+                                                                      size="icon"
+                                                                      className={cn(
+                                                                        'h-6 w-6 relative',
+                                                                        isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && 'text-amber-600',
+                                                                      )}
+                                                                      onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                                      aria-label={`Edit ${subGroup.label}`}
+                                                                      data-pending-edit={isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
+                                                                    >
+                                                                      <Pencil className="h-2.5 w-2.5" />
+                                                                      {isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && (
+                                                                        <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                                      )}
+                                                                    </Button>
+                                                                    <Button
+                                                                      variant="ghost"
+                                                                      size="icon"
+                                                                      className={cn(
+                                                                        'h-6 w-6',
+                                                                        isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                                          ? 'text-amber-600 hover:text-amber-600'
+                                                                          : 'text-destructive hover:text-destructive',
+                                                                      )}
+                                                                      onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
+                                                                      aria-label={
+                                                                        isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                                          ? `Undo delete ${subGroup.label}`
+                                                                          : `Delete ${subGroup.label}`
+                                                                      }
+                                                                      data-pending-delete={isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
+                                                                    >
+                                                                      {isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? (
+                                                                        <RotateCcw className="h-2.5 w-2.5" />
+                                                                      ) : (
+                                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                                      )}
+                                                                    </Button>
+                                                                  </div>
+                                                                </div>
+                                                                {/* v2: sub_options as compact tight grid (cols-2/3/4 by viewport).
+                                                                    Was a vertical column — 26-size Windows sub_group rendered as a
+                                                                    tall single-column tower. */}
+                                                                {subGroup.options.length > 0 && (
+                                                                  <div
+                                                                    className="flex flex-wrap gap-2"
+                                                                    data-admin-sub-options-grid={subGroup.id}
+                                                                  >
+                                                                    {subGroup.options.map((subOpt) => (
+                                                                      <div
+                                                                        key={subOpt.id}
+                                                                        data-admin-sub-option-tile={subOpt.id}
+                                                                        data-pending-delete={isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
+                                                                        className={cn(
+                                                                          'flex items-center gap-2.5 rounded border bg-card px-3 py-2 text-base hover:bg-muted/40 transition-colors',
+                                                                          isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'opacity-50 line-through',
+                                                                        )}
+                                                                      >
+                                                                        <span title={subOpt.label}>{subOpt.label}</span>
+                                                                        <button
+                                                                          type="button"
+                                                                          onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                                          className={cn(
+                                                                            'opacity-60 hover:opacity-100 shrink-0 relative',
+                                                                            isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'text-amber-600 opacity-100',
+                                                                          )}
+                                                                          aria-label={`Edit ${subOpt.label}`}
+                                                                          data-pending-edit={isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
+                                                                        >
+                                                                          <Pencil className="h-4 w-4" />
+                                                                          {isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && (
+                                                                            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                                          )}
+                                                                        </button>
+                                                                        <button
+                                                                          type="button"
+                                                                          onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
+                                                                          className={cn(
+                                                                            'opacity-60 hover:opacity-100 shrink-0',
+                                                                            isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                                              ? 'text-amber-600 opacity-100'
+                                                                              : 'text-destructive',
+                                                                          )}
+                                                                          aria-label={
+                                                                            isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                                              ? `Undo delete ${subOpt.label}`
+                                                                              : `Delete ${subOpt.label}`
+                                                                          }
+                                                                        >
+                                                                          {isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? (
+                                                                            <RotateCcw className="h-4 w-4" />
+                                                                          ) : (
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                          )}
+                                                                        </button>
+                                                                      </div>
+                                                                    ))}
+                                                                  </div>
+                                                                )}
+                                                                <Button
+                                                                  variant="ghost"
+                                                                  size="sm"
+                                                                  className="h-6 text-[11px] gap-0.5 text-muted-foreground"
+                                                                  onClick={() => openAddSubOption(service.id, group.id, opt.id, subGroup.id)}
+                                                                >
+                                                                  <Plus className="h-2.5 w-2.5" />
+                                                                  Add Item
+                                                                </Button>
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                        )}
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-7 text-xs gap-1 w-full"
+                                                          onClick={() => openAddSubGroup(service.id, group.id, opt.id)}
+                                                        >
+                                                          <Plus className="h-3 w-3" />
+                                                          Add Sub-Menu
+                                                        </Button>
+                                                      </div>
+                                                    )}
+                                                  </CardContent>
+                                                </Card>
+                                              )
+                                            }}
+                                          />
+                                          {/* Add-Option tile (Rod-spec: "'Add Option' tile as last card") */}
+                                          <button
+                                            type="button"
+                                            onClick={() => openAddOption(service.id, group.id)}
+                                            data-admin-add-option-tile="true"
+                                            className="rounded-md border-2 border-dashed border-muted-foreground/30 hover:border-primary/60 hover:bg-muted/40 transition-colors h-full min-h-[64px] flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                          >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Add Option
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              )
+                            }}
+                          />
+                        </div>
+                      )}
+
                       {/* Ship #175 — long-press + drag to reorder the option
                           groups under this service. Top-level services are
                           NOT wrapped per Rodolfos scope ("only menus under
                           the services"). */}
+                      {viewMode === 'list' && (
                       <ReorderableList
                         items={service.optionGroups}
                         keyFor={(g) => g.id}
@@ -1033,20 +1717,41 @@ export default function ProductsAdminPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7"
+                                  className={cn(
+                                    'h-7 w-7 relative',
+                                    isPendingEditGroup(service.id, group.id) && 'text-amber-600',
+                                  )}
                                   onClick={() => openEditGroup(service.id, group)}
                                   aria-label={`Edit ${group.label}`}
+                                  data-pending-edit={isPendingEditGroup(service.id, group.id) ? 'true' : undefined}
                                 >
                                   <Pencil className="h-3 w-3" />
+                                  {isPendingEditGroup(service.id, group.id) && (
+                                    <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                  )}
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  className={cn(
+                                    'h-7 w-7',
+                                    isPendingDeleteGroup(service.id, group.id)
+                                      ? 'text-amber-600 hover:text-amber-600'
+                                      : 'text-destructive hover:text-destructive',
+                                  )}
                                   onClick={() => confirmDeleteGroup(service.id, group)}
-                                  aria-label={`Delete ${group.label}`}
+                                  aria-label={
+                                    isPendingDeleteGroup(service.id, group.id)
+                                      ? `Undo delete ${group.label}`
+                                      : `Delete ${group.label}`
+                                  }
+                                  data-pending-delete={isPendingDeleteGroup(service.id, group.id) ? 'true' : undefined}
                                 >
-                                  <Trash2 className="h-3 w-3" />
+                                  {isPendingDeleteGroup(service.id, group.id) ? (
+                                    <RotateCcw className="h-3 w-3" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3" />
+                                  )}
                                 </Button>
                               </div>
                             </div>
@@ -1129,25 +1834,46 @@ export default function ProductsAdminPage() {
                                         onClick={() => openAddSubGroup(service.id, group.id, opt.id)}
                                       >
                                         <Plus className="h-2.5 w-2.5" />
-                                        Sub-Menu
+                                        Add
                                       </Button>
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7"
+                                        className={cn(
+                                          'h-7 w-7 relative',
+                                          isPendingEditOption(service.id, group.id, opt.id) && 'text-amber-600',
+                                        )}
                                         onClick={() => openEditOption(service.id, group.id, opt)}
                                         aria-label={`Edit ${opt.label}`}
+                                        data-pending-edit={isPendingEditOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                       >
                                         <Pencil className="h-3 w-3" />
+                                        {isPendingEditOption(service.id, group.id, opt.id) && (
+                                          <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                        )}
                                       </Button>
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        className={cn(
+                                          'h-7 w-7',
+                                          isPendingDeleteOption(service.id, group.id, opt.id)
+                                            ? 'text-amber-600 hover:text-amber-600'
+                                            : 'text-destructive hover:text-destructive',
+                                        )}
                                         onClick={() => confirmDeleteOption(service.id, group.id, opt)}
-                                        aria-label={`Delete ${opt.label}`}
+                                        aria-label={
+                                          isPendingDeleteOption(service.id, group.id, opt.id)
+                                            ? `Undo delete ${opt.label}`
+                                            : `Delete ${opt.label}`
+                                        }
+                                        data-pending-delete={isPendingDeleteOption(service.id, group.id, opt.id) ? 'true' : undefined}
                                       >
-                                        <Trash2 className="h-3 w-3" />
+                                        {isPendingDeleteOption(service.id, group.id, opt.id) ? (
+                                          <RotateCcw className="h-3 w-3" />
+                                        ) : (
+                                          <Trash2 className="h-3 w-3" />
+                                        )}
                                       </Button>
                                     </div>
                                   </div>
@@ -1225,20 +1951,41 @@ export default function ProductsAdminPage() {
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-6 w-6"
+                                                className={cn(
+                                                  'h-6 w-6 relative',
+                                                  isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && 'text-amber-600',
+                                                )}
                                                 onClick={() => openEditSubGroup(service.id, group.id, opt.id, subGroup)}
                                                 aria-label={`Edit ${subGroup.label}`}
+                                                data-pending-edit={isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                               >
                                                 <Pencil className="h-2.5 w-2.5" />
+                                                {isPendingEditSubGroup(service.id, group.id, opt.id, subGroup.id) && (
+                                                  <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                )}
                                               </Button>
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                                className={cn(
+                                                  'h-6 w-6',
+                                                  isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                    ? 'text-amber-600 hover:text-amber-600'
+                                                    : 'text-destructive hover:text-destructive',
+                                                )}
                                                 onClick={() => confirmDeleteSubGroup(service.id, group.id, opt.id, subGroup)}
-                                                aria-label={`Delete ${subGroup.label}`}
+                                                aria-label={
+                                                  isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id)
+                                                    ? `Undo delete ${subGroup.label}`
+                                                    : `Delete ${subGroup.label}`
+                                                }
+                                                data-pending-delete={isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? 'true' : undefined}
                                               >
-                                                <Trash2 className="h-2.5 w-2.5" />
+                                                {isPendingDeleteSubGroup(service.id, group.id, opt.id, subGroup.id) ? (
+                                                  <RotateCcw className="h-2.5 w-2.5" />
+                                                ) : (
+                                                  <Trash2 className="h-2.5 w-2.5" />
+                                                )}
                                               </Button>
                                             </div>
                                           </div>
@@ -1310,20 +2057,41 @@ export default function ProductsAdminPage() {
                                                   <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6"
+                                                    className={cn(
+                                                      'h-6 w-6 relative',
+                                                      isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && 'text-amber-600',
+                                                    )}
                                                     onClick={() => openEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
                                                     aria-label={`Edit ${subOpt.label}`}
+                                                    data-pending-edit={isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
                                                   >
                                                     <Pencil className="h-3 w-3" />
+                                                    {isPendingEditSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) && (
+                                                      <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                    )}
                                                   </Button>
                                                   <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                                    className={cn(
+                                                      'h-6 w-6',
+                                                      isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                        ? 'text-amber-600 hover:text-amber-600'
+                                                        : 'text-destructive hover:text-destructive',
+                                                    )}
                                                     onClick={() => confirmDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt)}
-                                                    aria-label={`Delete ${subOpt.label}`}
+                                                    aria-label={
+                                                      isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id)
+                                                        ? `Undo delete ${subOpt.label}`
+                                                        : `Delete ${subOpt.label}`
+                                                    }
+                                                    data-pending-delete={isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? 'true' : undefined}
                                                   >
-                                                    <Trash2 className="h-3 w-3" />
+                                                    {isPendingDeleteSubOption(service.id, group.id, opt.id, subGroup.id, subOpt.id) ? (
+                                                      <RotateCcw className="h-3 w-3" />
+                                                    ) : (
+                                                      <Trash2 className="h-3 w-3" />
+                                                    )}
                                                   </Button>
                                                 </div>
                                               </div>
@@ -1364,6 +2132,7 @@ export default function ProductsAdminPage() {
                         )
                       }}
                       />
+                      )}
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -1626,6 +2395,29 @@ export default function ProductsAdminPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>Input Type</Label>
+              <Select
+                value={optionForm.inputType}
+                onValueChange={(v) => setOptionForm((f) => ({ ...f, inputType: v as InputType }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    <span>{INPUT_TYPE_OPTIONS.find((p) => p.value === optionForm.inputType)?.label ?? 'Tile / Chip Select'}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {INPUT_TYPE_OPTIONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex flex-col">
+                        <span className="text-sm">{p.label}</span>
+                        <span className="text-xs text-muted-foreground">{p.helper}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOptionDialogOpen(false)}>
@@ -1641,32 +2433,69 @@ export default function ProductsAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ---- Sub-Group Dialog ---- */}
+      {/* ---- Sub-Group / Priceable Item Dialog ---- */}
       <Dialog open={subGroupDialogOpen} onOpenChange={setSubGroupDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingSubGroupId ? 'Edit Sub-Menu' : 'Add Sub-Menu'}</DialogTitle>
+            <DialogTitle>
+              {editingSubGroupId
+                ? 'Edit Sub-Menu'
+                : subGroupKind === 'option'
+                  ? 'Add Priceable Item'
+                  : 'Add Sub-Menu'}
+            </DialogTitle>
             <DialogDescription>
-              {editingSubGroupId ? 'Update the sub-menu label, required, and selection type.' : 'Create a new sub-menu group under this option.'}
+              {editingSubGroupId
+                ? 'Update the sub-menu label, required, and selection type.'
+                : subGroupKind === 'option'
+                  ? 'Adds a priceable item under this option.'
+                  : 'Creates an empty container; add items inside afterward.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {!editingSubGroupId && (
-            <div className="space-y-1.5">
-              <Label htmlFor="subgrp-id">Sub-Menu ID (snake_case)</Label>
-              <Input
-                id="subgrp-id"
-                placeholder="e.g. color_options"
-                value={subGroupForm.id}
-                onChange={(e) => setSubGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label>What are you adding?</Label>
+                <RadioGroup
+                  value={subGroupKind}
+                  onValueChange={(v) => setSubGroupKind((v as 'option' | 'group') ?? 'option')}
+                  className="gap-2"
+                >
+                  <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/50 data-[checked=true]:border-primary" data-checked={subGroupKind === 'option'}>
+                    <RadioGroupItem value="option" className="mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Priceable item</span>
+                      <span className="text-xs text-muted-foreground">A single item with its own price (most common).</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/50 data-[checked=true]:border-primary" data-checked={subGroupKind === 'group'}>
+                    <RadioGroupItem value="group" className="mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Sub-menu (group container)</span>
+                      <span className="text-xs text-muted-foreground">A category that holds multiple priceable items.</span>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+            )}
+            {!editingSubGroupId && (
+              <div className="space-y-1.5">
+                <Label htmlFor="subgrp-id">
+                  {subGroupKind === 'option' ? 'Item ID (snake_case)' : 'Sub-Menu ID (snake_case)'}
+                </Label>
+                <Input
+                  id="subgrp-id"
+                  placeholder={subGroupKind === 'option' ? 'e.g. plywood' : 'e.g. color_options'}
+                  value={subGroupForm.id}
+                  onChange={(e) => setSubGroupForm((f) => ({ ...f, id: toSnakeCase(e.target.value) }))}
+                />
+              </div>
             )}
             <div className="space-y-1.5">
               <Label htmlFor="subgrp-label">Label</Label>
               <Input
                 id="subgrp-label"
-                placeholder="Color Options"
+                placeholder={subGroupKind === 'option' && !editingSubGroupId ? 'Plywood' : 'Color Options'}
                 value={subGroupForm.label}
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, label: e.target.value }))}
               />
@@ -1676,35 +2505,68 @@ export default function ProductsAdminPage() {
               <Textarea
                 id="subgrp-description"
                 data-testid="admin-sub-menu-description-input"
-                placeholder="What the homeowner sees under this sub-menu — e.g. 'Choose a cabinet material.'"
+                placeholder={
+                  subGroupKind === 'option' && !editingSubGroupId
+                    ? "Optional details vendors and homeowners see — e.g. 'Standard cabinet material.'"
+                    : "What the homeowner sees under this sub-menu — e.g. 'Choose a cabinet material.'"
+                }
                 value={subGroupForm.description}
                 onChange={(e) => setSubGroupForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Selection Type</Label>
-              <Select
-                value={subGroupForm.type}
-                onValueChange={(v) => setSubGroupForm((f) => ({ ...f, type: v as 'single' | 'multi' }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">Single Select</SelectItem>
-                  <SelectItem value="multi">Multi Select</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="subgrp-required"
-                checked={subGroupForm.required}
-                onCheckedChange={(v) => setSubGroupForm((f) => ({ ...f, required: !!v }))}
-              />
-              <Label htmlFor="subgrp-required" className="text-sm font-normal">Required</Label>
-            </div>
+            {(editingSubGroupId || subGroupKind === 'group') && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Selection Type</Label>
+                  <Select
+                    value={subGroupForm.type}
+                    onValueChange={(v) => setSubGroupForm((f) => ({ ...f, type: v as 'single' | 'multi' }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Single Select</SelectItem>
+                      <SelectItem value="multi">Multi Select</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="subgrp-required"
+                    checked={subGroupForm.required}
+                    onCheckedChange={(v) => setSubGroupForm((f) => ({ ...f, required: !!v }))}
+                  />
+                  <Label htmlFor="subgrp-required" className="text-sm font-normal">Required</Label>
+                </div>
+              </>
+            )}
+            {!editingSubGroupId && subGroupKind === 'option' && (
+              <div className="space-y-1.5">
+                <Label>Pricing Unit</Label>
+                <Select
+                  value={subGroupOptionPriceUnit}
+                  onValueChange={(v) => setSubGroupOptionPriceUnit(v as PriceUnit)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      <span>{PRICE_UNIT_OPTIONS.find((p) => p.value === subGroupOptionPriceUnit)?.label ?? 'Flat ($)'}</span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRICE_UNIT_OPTIONS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        <div className="flex flex-col">
+                          <span className="text-sm">{p.label}</span>
+                          <span className="text-xs text-muted-foreground">{p.helper}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubGroupDialogOpen(false)}>
@@ -1714,7 +2576,11 @@ export default function ProductsAdminPage() {
               onClick={handleSaveSubGroup}
               disabled={!subGroupForm.label || (!editingSubGroupId && !subGroupForm.id)}
             >
-              {editingSubGroupId ? 'Save Changes' : 'Create Sub-Menu'}
+              {editingSubGroupId
+                ? 'Save Changes'
+                : subGroupKind === 'option'
+                  ? 'Add Item'
+                  : 'Create Sub-Menu'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1797,23 +2663,61 @@ export default function ProductsAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ---- Delete Confirmation Dialog ---- */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="max-w-sm">
+      {/* ---- Aggregate Delete Confirmation Dialog ---- */}
+      {/* PR-#425 — fires from "Save Changes" click when pending deletes
+          exist for that service. One prompt covers the whole batch. */}
+      <Dialog
+        open={aggregateConfirmService !== null}
+        onOpenChange={(open) => !open && setAggregateConfirmService(null)}
+      >
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogTitle>Confirm Save Changes</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <span className="font-semibold text-foreground">{deleteTarget?.label}</span>? This action
-              cannot be undone.
+              {aggregateConfirmService !== null
+                ? (() => {
+                    const sid = aggregateConfirmService
+                    const dels = _pendingDeletes.filter((d) => d.serviceId === sid).length
+                    const edits = _pendingEdits.filter((e) => e.serviceId === sid).length
+                    return (
+                      <>
+                        You are about to permanently delete{' '}
+                        <span className="font-semibold text-foreground">
+                          {dels} item{dels === 1 ? '' : 's'}
+                        </span>
+                        {edits > 0 ? (
+                          <>
+                            {' '}and apply{' '}
+                            <span className="font-semibold text-foreground">
+                              {edits} edit{edits === 1 ? '' : 's'}
+                            </span>
+                          </>
+                        ) : null}
+                        . Deletes cannot be undone.
+                      </>
+                    )
+                  })()
+                : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setAggregateConfirmService(null)}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => deleteTarget?.onConfirm()}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (aggregateConfirmService) {
+                  const sid = aggregateConfirmService
+                  setAggregateConfirmService(null)
+                  void flushSaveService(sid)
+                }
+              }}
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

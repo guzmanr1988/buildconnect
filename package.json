@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-vite-env.mjs",
     "build": "tsc -b && vite build",
+    "check:vite-env": "node scripts/check-vite-env.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts"
+    "quote-protection": "tsx tests/snapshots/quote-protection/runner.mts",
+    "active-toggle-protection": "tsx tests/active-toggle-protection/runner.mts",
+    "face1-data-truth-trifecta": "tsx tests/face1-data-truth-trifecta/runner.mts",
+    "upsale-reconcile": "tsx tests/upsale-reconcile/runner.mts",
+    "per-unit-math": "tsx tests/per-unit-math/runner.mts",
+    "sectiontotal-qty-resolver": "tsx tests/sectiontotal-qty-resolver/runner.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -33,6 +40,7 @@
     "shadcn": "^4.2.0",
     "signature_pad": "^5.1.3",
     "sonner": "^2.0.7",
+    "stripe": "^17.7.0",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0",
     "vaul": "^1.1.2",

@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
 export type TileType = 'flat' | 'spanish' | 'mission'
 
@@ -11,13 +13,16 @@ export interface TileRoofSelection {
   roofSize: string
 }
 
-export const TILE_TYPES: Array<{ id: TileType; label: string; description: string }> = [
+// PR-#430 — bundled fallbacks. Same substrate-derive pattern as PR-#428
+// door-configurator; fallbacks stay byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_TILE_TYPES: Array<{ id: TileType; label: string; description: string }> = [
   { id: 'flat', label: 'Flat', description: 'Low-profile flat tile' },
   { id: 'spanish', label: 'Spanish', description: 'S-shape, classic curve' },
   { id: 'mission', label: 'Mission', description: 'Half-barrel, hand-laid look' },
 ]
 
-export const TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string }> = [
+const FALLBACK_TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string }> = [
   { id: 'charcoal', label: 'Charcoal', color: '#3d4147' },
   { id: 'onyx', label: 'Onyx', color: '#1a1a1c' },
   { id: 'slate_grey', label: 'Slate Grey', color: '#7a7d80' },
@@ -32,6 +37,13 @@ export const TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string 
   { id: 'burnt_sienna', label: 'Burnt Sienna', color: '#9c4a2a' },
 ]
 
+const TILE_TYPE_DESCRIPTION: Record<string, string> = Object.fromEntries(
+  FALLBACK_TILE_TYPES.map((t) => [t.id, t.description])
+)
+const TILE_COLOR_HEX: Record<string, string> = Object.fromEntries(
+  FALLBACK_TILE_ROOF_COLORS.map((c) => [c.id, c.color])
+)
+
 interface TileRoofConfiguratorProps {
   selection: TileRoofSelection
   onChange: (selection: TileRoofSelection) => void
@@ -39,7 +51,36 @@ interface TileRoofConfiguratorProps {
 }
 
 export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofConfiguratorProps) {
-  const selectedColor = TILE_ROOF_COLORS.find((c) => c.id === selection.tileColor)
+  const services = useCatalogStore((s) => s.services)
+
+  const { tileTypes, tileRoofColors } = useMemo(() => {
+    const svc = services.find((s) => s.id === 'roofing')
+    const material = svc?.optionGroups?.find((g) => g.id === 'material')
+    const barrelTile = material?.options?.find((o) => o.id === 'barrel_tile')
+    const typesSub = barrelTile?.subGroups?.find((sg) => sg.id === 'tile_types')?.options
+    const colorsSub = barrelTile?.subGroups?.find((sg) => sg.id === 'tile_colors')?.options
+
+    return {
+      tileTypes:
+        typesSub && typesSub.length > 0
+          ? typesSub.map((o) => ({
+              id: o.id as TileType,
+              label: o.label,
+              description: o.description ?? TILE_TYPE_DESCRIPTION[o.id] ?? '',
+            }))
+          : FALLBACK_TILE_TYPES,
+      tileRoofColors:
+        colorsSub && colorsSub.length > 0
+          ? colorsSub.map((o) => ({
+              id: o.id,
+              label: o.label,
+              color: TILE_COLOR_HEX[o.id] ?? '#cccccc',
+            }))
+          : FALLBACK_TILE_ROOF_COLORS,
+    }
+  }, [services])
+
+  const selectedColor = tileRoofColors.find((c) => c.id === selection.tileColor)
   const isComplete = !!selection.tileType && !!selection.tileColor && selection.roofSize.trim().length > 0
 
   return (
@@ -57,7 +98,7 @@ export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofCo
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Tile Type</span>
           <div className="grid grid-cols-3 gap-2">
-            {TILE_TYPES.map((t) => {
+            {tileTypes.map((t) => {
               const isSelected = selection.tileType === t.id
               return (
                 <button
@@ -94,7 +135,7 @@ export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofCo
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
           <div className="flex flex-wrap gap-2">
-            {TILE_ROOF_COLORS.map((c) => (
+            {tileRoofColors.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -148,7 +189,7 @@ export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofCo
           <div className="flex flex-wrap gap-1.5 mb-3">
             {selection.tileType && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-                {TILE_TYPES.find((t) => t.id === selection.tileType)?.label}
+                {tileTypes.find((t) => t.id === selection.tileType)?.label}
               </span>
             )}
             {selectedColor && (

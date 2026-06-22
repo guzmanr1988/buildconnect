@@ -13,6 +13,7 @@ interface CardSlideWizardProps {
   onSkip?: () => void
   nextLabel?: string
   nextDisabled?: boolean
+  nextDisabledReason?: string
   skipLabel?: string
   children: React.ReactNode
 }
@@ -45,6 +46,7 @@ export function CardSlideWizard({
   onSkip,
   nextLabel = 'Continue',
   nextDisabled = false,
+  nextDisabledReason,
   skipLabel = 'Skip',
   children,
 }: CardSlideWizardProps) {
@@ -109,6 +111,11 @@ export function CardSlideWizard({
               >
                 {nextLabel}
               </Button>
+              {nextDisabled && nextDisabledReason && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {nextDisabledReason}
+                </p>
+              )}
               {onSkip && (
                 <Button
                   variant="ghost"

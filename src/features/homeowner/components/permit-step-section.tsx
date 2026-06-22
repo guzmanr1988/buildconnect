@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useCartStore, type ProjectPermitWaiver } from '@/stores/cart-store'
+import {
+  useCartStore,
+  type ProjectPermitWaiver,
+  type ProjectYesNoChoice,
+} from '@/stores/cart-store'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -7,8 +11,23 @@ import { cn } from '@/lib/utils'
 // configurator. Reads/writes cart-store projectPermit + projectPermitWaiver
 // (project-level SoT). Per kratos verdict 2026-05-07 (Q1/Q4/Q6): same copy
 // across every flow, identical waiver semantics, no per-flow forking.
-export const PERMIT_HEADING = 'Do you need a permit?'
-export const PERMIT_SUBTITLE = 'Permits are required for full replacements in most Florida counties.'
+//
+// task_1780776240716_817 widened the step to also cover the Association
+// question (every service). Step title constants updated accordingly so
+// consumers don't need to know about the second Q.
+//
+// Re-scope 2026-06-07 (kratos arc#21 Part A): Association is now PURE Y/N
+// mirroring the Permit question — no upload at submission time. Customers
+// must be able to submit + match a contractor with zero document upload.
+// The association permit document moves to engagement-time (Part B, after
+// the customer has selected/engaged a contractor); the doc-fetch + display
+// scaffolding (AssociationDisplayRow with onDownload) is kept dormant for
+// Part B reactivation.
+export const PERMIT_HEADING = 'A few last questions'
+export const PERMIT_SUBTITLE = 'These help us match you with the right paperwork up front.'
+
+export const ASSOCIATION_HEADING = 'Do you have an association?'
+export const ASSOCIATION_SUBTITLE = 'Some neighborhoods require an HOA / association permit before work can start.'
 
 export function isProjectPermitValid(
   permit: 'yes' | 'no' | null,
@@ -17,6 +36,14 @@ export function isProjectPermitValid(
   if (permit === 'yes') return true
   if (permit === 'no' && waiver?.acknowledged && waiver.signedName.trim().length >= 2) return true
   return false
+}
+
+// Pure Y/N — answer must be 'yes' or 'no'. No document requirement.
+// Part B engagement-time upload is a separate gate on a different surface.
+export function isProjectAssociationValid(
+  association: ProjectYesNoChoice | null,
+): boolean {
+  return association === 'yes' || association === 'no'
 }
 
 // Read-only display row for parent surfaces (cart project-detail dialog,
@@ -31,7 +58,7 @@ export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined 
       <div className="flex flex-col gap-1">
         <Badge
           variant="secondary"
-          className={`text-[10px] w-fit ${
+          className={`text-sm px-3 py-1 w-fit ${
             permit === 'yes'
               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
               : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
@@ -40,14 +67,149 @@ export function PermitDisplayRow({ permit }: { permit: 'yes' | 'no' | undefined 
           {permit === 'yes' ? 'Yes — permit will be pulled' : 'No permit'}
         </Badge>
         {permit === 'no' && (
-          <span className="text-[10px] text-muted-foreground italic">Cash only — financing not available</span>
+          <span className="text-xs text-muted-foreground italic">Cash only — financing not available</span>
         )}
       </div>
     </div>
   )
 }
 
-export function PermitStepSection() {
+// Read-only display row for the Association question (vendor + admin project
+// detail surfaces). Mirrors PermitDisplayRow shape. When association is 'yes'
+// AND a doc was uploaded, renders a download link alongside the badge.
+export function AssociationDisplayRow({
+  association,
+  docFilename,
+  onDownload,
+}: {
+  association: 'yes' | 'no' | undefined | null
+  docFilename?: string
+  onDownload?: () => void
+}) {
+  if (!association) return null
+  return (
+    <div className="rounded-xl border p-4 space-y-2">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Association</h4>
+      <div className="flex flex-col gap-2">
+        <Badge
+          variant="secondary"
+          className={`text-sm px-3 py-1 w-fit ${
+            association === 'yes'
+              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {association === 'yes' ? 'Yes — association permit included' : 'No association'}
+        </Badge>
+        {association === 'yes' && docFilename && (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="text-xs text-primary hover:underline text-left w-fit"
+          >
+            Download: {docFilename}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Read-only display row for the Pool survey question. Pool-only — every
+// other service leaves the value NULL so this returns null cleanly.
+export function PoolSurveyDisplayRow({ survey }: { survey: 'yes' | 'no' | undefined | null }) {
+  if (!survey) return null
+  return (
+    <div className="rounded-xl border p-4 space-y-2">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property survey</h4>
+      <Badge
+        variant="secondary"
+        className={`text-sm px-3 py-1 w-fit ${
+          survey === 'yes'
+            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+            : 'bg-muted text-muted-foreground'
+        }`}
+      >
+        {survey === 'yes' ? 'Yes — homeowner has survey' : 'No survey on file'}
+      </Badge>
+    </div>
+  )
+}
+
+function AssociationSection() {
+  const projectAssociation = useCartStore((s) => s.projectAssociation)
+  const setProjectAssociation = useCartStore((s) => s.setProjectAssociation)
+
+  // Rod-direct task_1780802082008_750: per-question divider matches the
+  // EXACT class that separates property-address from "A few last questions"
+  // heading in service-detail.tsx (mt-6 pt-6 border-t border-border/50).
+  return (
+    <div className="mt-6 pt-6 border-t border-border/50">
+    <div className="flex flex-col gap-3" data-association-step-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">{ASSOCIATION_HEADING}</h3>
+        <p className="text-sm text-muted-foreground">{ASSOCIATION_SUBTITLE}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setProjectAssociation('yes')}
+        data-association-choice="yes"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          projectAssociation === 'yes'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            projectAssociation === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {projectAssociation === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">Yes — I have an association</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Your contractor will request the association permit form once you've matched.
+          </p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setProjectAssociation('no')}
+        data-association-choice="no"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          projectAssociation === 'no'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            projectAssociation === 'no' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {projectAssociation === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">No — no association</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Skip this step and continue.
+          </p>
+        </div>
+      </button>
+    </div>
+    </div>
+  )
+}
+
+function PermitSection() {
   const projectPermit = useCartStore((s) => s.projectPermit)
   const setProjectPermit = useCartStore((s) => s.setProjectPermit)
   const projectPermitWaiver = useCartStore((s) => s.projectPermitWaiver)
@@ -87,7 +249,15 @@ export function PermitStepSection() {
   }
 
   return (
+    <div className="mt-6 pt-6 border-t border-border/50">
     <div className="flex flex-col gap-3" data-permit-step-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">Do you need a permit?</h3>
+        <p className="text-sm text-muted-foreground">
+          Permits are required for full replacements in most Florida counties.
+        </p>
+      </div>
+
       <button
         type="button"
         onClick={selectYes}
@@ -180,6 +350,100 @@ export function PermitStepSection() {
           </div>
         </div>
       )}
+    </div>
+    </div>
+  )
+}
+
+export function PermitStepSection() {
+  // gap-0 — each child section (AssociationSection / PermitSection)
+  // brings its own mt-6 pt-6 border-t divider wrapper, so the flex
+  // wrapper just stacks them; the per-question dividers handle the
+  // visual separation between blocks (Rod-direct task_1780802082008_750).
+  return (
+    <div className="flex flex-col">
+      <AssociationSection />
+      <PermitSection />
+    </div>
+  )
+}
+
+export const POOL_SURVEY_HEADING = 'Do you have the survey of the property?'
+export const POOL_SURVEY_SUBTITLE = 'A property survey helps us plan the pool layout and confirm setback distances.'
+
+export function isPoolSurveyValid(survey: ProjectYesNoChoice | null): boolean {
+  return survey === 'yes' || survey === 'no'
+}
+
+// Pool-only survey question — plain Yes / No (no upload). Mirrors
+// AssociationSection styling so the step keeps a consistent shape, but lives
+// outside the shared PermitStepSection so non-Pool flows never see it.
+export function PoolSurveySection() {
+  const poolSurvey = useCartStore((s) => s.poolSurvey)
+  const setPoolSurvey = useCartStore((s) => s.setPoolSurvey)
+
+  return (
+    <div className="mt-6 pt-6 border-t border-border/50">
+    <div className="flex flex-col gap-3" data-pool-survey-section="true">
+      <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-foreground">{POOL_SURVEY_HEADING}</h3>
+        <p className="text-sm text-muted-foreground">{POOL_SURVEY_SUBTITLE}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setPoolSurvey('yes')}
+        data-pool-survey-choice="yes"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          poolSurvey === 'yes'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            poolSurvey === 'yes' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {poolSurvey === 'yes' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">Yes — I have a survey</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            The contractor will request a copy before scheduling layout.
+          </p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setPoolSurvey('no')}
+        data-pool-survey-choice="no"
+        className={cn(
+          'flex items-start gap-3 rounded-xl border p-4 text-left transition-all duration-150',
+          poolSurvey === 'no'
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+            : 'border-border hover:border-primary/40 hover:bg-muted',
+        )}
+      >
+        <div
+          className={cn(
+            'mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center',
+            poolSurvey === 'no' ? 'border-primary bg-primary' : 'border-muted-foreground',
+          )}
+        >
+          {poolSurvey === 'no' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">No — no survey on file</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            The contractor can order or verify one as part of the project.
+          </p>
+        </div>
+      </button>
+    </div>
     </div>
   )
 }

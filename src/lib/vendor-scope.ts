@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { deriveInitials } from '@/lib/initials'
-import type { Vendor } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { Profile, Vendor } from '@/types'
 
 /**
  * Set of mock-vendor ids that MOCK_LEADS + MOCK_CLOSED_SALES fixtures are
@@ -80,7 +81,20 @@ export function contractorMatchesVendor(
     for (const [mockId, uuid] of Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID)) {
       if (uuid === cid && mockId === vendor.id) return true
     }
-    return false
+    // PR-#443 — fall through to company-name fallback when cid is
+    // present but no UUID-path matches. Handles the UUID-flip case
+    // where vendor-compare writes the post-flip APEX_REAL_UUID
+    // (3e0821aa, PR-#437) into contractor.vendor_id but an authed
+    // demo-Apex session resolves to MOCK_VENDORS v-1 whose seed-
+    // script UUID is the pre-flip fc0d8ff3 (stale in DEMO_VENDOR_
+    // UUID_BY_MOCK_ID since the seed script lags hand-edited FE
+    // constants). Pre-PR-#443 the early `return false` here caused
+    // demo-Apex sessions to see 0 leads in all 5 Lead Workflow
+    // buckets while the unscoped Active Leads counter showed 1 —
+    // the smoking-gun mismatch Rod surfaced 2026-05-29. Company-
+    // name match is safe at this layer because `vendor` is the
+    // authed session's resolved identity, so a company-name
+    // collision means same logical vendor.
   }
   return !!contractor.company && contractor.company === vendor.company
 }
@@ -104,24 +118,19 @@ export function useVendorScope(): {
   const profile = useAuthStore((s) => s.profile)
   return useMemo(() => {
     if (!profile) return { mockVendorId: null, vendorId: '', isMock: false }
-    // Ship #222 — demo-alias LS override (priority-0, before UUID map).
-    // Vendor demo login handler in login.tsx sets 'buildconnect-demo-
-    // mock-vendor-id' = 'v-1' so the generic Vendor demo account
-    // resolves to Apex scope for this session. Lets Vendor demo see
-    // leads that homeowners send to Apex on vendor-compare. Cleared on
-    // Homeowner/Admin demo login so the alias doesn't leak cross-role.
-    if (typeof window !== 'undefined') {
-      const demoAlias = localStorage.getItem('buildconnect-demo-mock-vendor-id')
-      if (demoAlias && MOCK_VENDOR_IDS.has(demoAlias)) {
-        return { mockVendorId: demoAlias, vendorId: demoAlias, isMock: true }
-      }
-    }
+    // pin-20 — vendorId is ALWAYS the real profile.id. The Ship #222 LS-
+    // override branch (`buildconnect-demo-mock-vendor-id`) is removed:
+    // it caused real Apex vendor sessions to read `vendorId='v-1'` after
+    // a plain reload, dropping live homeowner leads on the floor because
+    // every DB query keyed on the mock string instead of the real UUID.
+    // mockVendorId is still derived from the reverse-map so fixture
+    // surfaces can scope MOCK_LEADS / MOCK_CLOSED_SALES — but it's a
+    // SEPARATE field, never mixed into vendorId.
     const entry = Object.entries(DEMO_VENDOR_UUID_BY_MOCK_ID).find(
       ([, uuid]) => uuid === profile.id
     )
     const mockVendorId = entry ? entry[0] : null
-    const vendorId = mockVendorId ?? profile.id
-    return { mockVendorId, vendorId, isMock: !!mockVendorId }
+    return { mockVendorId, vendorId: profile.id, isMock: !!mockVendorId }
   }, [profile])
 }
 
@@ -145,64 +154,102 @@ export function useVendorScope(): {
  * predicates intentionally diverge (dashboard permissive, lead-inbox
  * strict) so only the vendor resolution is deep-shared.
  */
+// Synthesize a Vendor object from a vendor-role Profile. Shared by both
+// the authed-vendor self-resolve path and the account_rep parent-vendor
+// resolve path so both surfaces show identical vendor shape.
+function profileToVendor(p: Profile): Vendor {
+  return {
+    id: p.id,
+    email: p.email,
+    name: p.name,
+    role: 'vendor',
+    phone: p.phone ?? '',
+    address: p.address ?? '',
+    company: p.company ?? p.name,
+    avatar_color: p.avatar_color ?? '#3b82f6',
+    initials: p.initials ?? deriveInitials(p.name),
+    status: p.status ?? 'active',
+    created_at: p.created_at ?? new Date().toISOString(),
+    service_categories: [],
+    rating: 0,
+    response_time: '—',
+    verified: false,
+    financing_available: false,
+    total_reviews: 0,
+    // Ship #290 — Rodolfo-direct: platform-default commission for new
+    // vendor signups. pin-28: 10% -> 12% (Rod task_1781160469050_489).
+    // Read live at runtime, so 10->12 applies to ALL real vendors w/o
+    // a vendorCommissionOverrides entry. Admin per-vendor override via
+    // setVendorCommission still takes precedence.
+    commission_pct: 12,
+  }
+}
+
+// Ship #333 Phase B — fetch parent-vendor profile for an authed account_rep
+// via the account_rep_for_vendor_id FK. Returns null while loading, when no
+// FK is set, or when the parent profile can't be found (suspended/deleted/
+// RLS-denied). Dashboard renders empty-state until the fetch resolves —
+// same shape as Phase A's synchronous null-return so consumers don't need
+// to differentiate loading vs unset.
+// Phase B-RPC — calls the substrate-side SECURITY DEFINER function
+// get_my_assigned_vendor() rather than SELECTing profiles directly, because
+// the profiles RLS policy set (migration 010) has no account_rep -> assigned-
+// vendor SELECT carve-out and a permissive table-level policy would over-
+// expose vendor PII beyond the single assigned parent. The RPC scopes return
+// to ONLY the calling rep's account_rep_for_vendor_id row via subquery —
+// matches the auth_role() SECURITY DEFINER pattern already in migration 010.
+// Hook is called unconditionally; internal `role !== 'account_rep'` gate
+// skips the RPC otherwise.
+function useRepParentVendor(): Vendor | null {
+  const profile = useAuthStore((s) => s.profile)
+  const isRep = profile?.role === 'account_rep'
+  const [parent, setParent] = useState<Vendor | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setParent(null)
+    if (!isRep) return
+    void (async () => {
+      const { data, error } = await supabase
+        .rpc('get_my_assigned_vendor')
+        .maybeSingle()
+      if (cancelled) return
+      if (error) {
+        console.error('[vendor-scope] rep parent-vendor RPC failed:', error.message)
+        return
+      }
+      if (!data) return
+      setParent(profileToVendor(data as Profile))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isRep])
+  return parent
+}
+
 export function useResolvedVendor(): Vendor | null {
   const { mockVendorId } = useVendorScope()
   const profile = useAuthStore((s) => s.profile)
+  // Phase B — fetched parent vendor for account_rep role. Called
+  // unconditionally per Rules of Hooks; internal gate skips fetch when
+  // profile.role !== 'account_rep' or parent FK unset.
+  const repParentVendor = useRepParentVendor()
   return useMemo(() => {
     if (mockVendorId) {
       const m = MOCK_VENDORS.find((v) => v.id === mockVendorId)
       if (m) return m
     }
     if (!profile) return null
-    // Ship #333 Phase A — account_rep auth-resolution. Reps resolve to
-    // their PARENT vendor's profile via account_rep_for_vendor_id FK.
-    // Per banked CHAIN IS GOD: this is auth-resolution-layer (which
-    // Vendor profile to use), NOT chain modification (chain consumes
-    // Vendor type the same way regardless of resolution-path). Adds-to-
-    // chain (new resolution path) without changing how chain works.
-    // Real Supabase fetch of parent profile lands in Phase B; for Phase
-    // A the synthesized vendor-shape returns null when parent FK is
-    // unset so reps without a parent vendor see empty-state rather than
-    // crash.
+    // Ship #333 Phase B — account_rep resolves to PARENT vendor's profile
+    // via account_rep_for_vendor_id FK. Returns the fetched parent (or null
+    // while loading / FK unset / parent missing). Per banked CHAIN IS GOD:
+    // this is auth-resolution-layer (which Vendor profile to use), NOT
+    // chain modification (chain consumes Vendor type the same way
+    // regardless of resolution path).
     if (profile.role === 'account_rep') {
-      // Phase A: parent-vendor resolution requires fetching parent
-      // profile. Real fetch lands in Phase B. For now return null so
-      // dashboard renders empty-state instead of synth-from-rep-profile
-      // (which would give wrong company / commission_pct). Reps who
-      // log in pre-Phase-B see auth-success + empty-vendor-context;
-      // navigation works but lead-data unscoped until Phase B wires
-      // the parent fetch.
-      return null
+      return repParentVendor
     }
     if (profile.role !== 'vendor') return null
-    return {
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      role: 'vendor',
-      phone: profile.phone ?? '',
-      address: profile.address ?? '',
-      company: profile.company ?? profile.name,
-      avatar_color: profile.avatar_color ?? '#3b82f6',
-      initials: profile.initials ?? deriveInitials(profile.name),
-      status: profile.status ?? 'active',
-      created_at: profile.created_at ?? new Date().toISOString(),
-      service_categories: [],
-      rating: 0,
-      response_time: '—',
-      verified: false,
-      financing_available: false,
-      total_reviews: 0,
-      // Ship #290 — Rodolfo-direct: platform-default commission for
-      // new vendor signups is 10%. Admin override via setVendorCommission
-      // (#286-#289 Save Changes flow) takes precedence per existing
-      // vendorCommissionOverrides resolution. Pre-#290 default was 15;
-      // changed to match Rodolfo's "every vendor that signs up the
-      // preset % is 10% unless I go and manually adjust" directive.
-      // MOCK_VENDORS fixtures (v-1..v-5) keep their per-fixture values
-      // per kratos lean — Rodolfo's "signs up" language targets new-
-      // signups, not pre-existing fixtures.
-      commission_pct: 10,
-    }
-  }, [mockVendorId, profile])
+    return profileToVendor(profile)
+  }, [mockVendorId, profile, repParentVendor])
 }

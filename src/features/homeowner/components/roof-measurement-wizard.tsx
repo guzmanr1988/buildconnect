@@ -298,13 +298,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPitch, setAdjPitch] = useState('')
   const [adjFlatArea, setAdjFlatArea] = useState('')
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
-  const [includeMaterialOrder, setIncludeMaterialOrder] = useState(true)
-  const [includePerimeter, setIncludePerimeter] = useState(true)
-  const [includeFlatArea, setIncludeFlatArea] = useState(true)
-  // Inline pencil-edit overrides for AREA BREAKDOWN. Override input is RAW;
-  // display is POST-WASTE; cart payload is RAW (uniform with satellite path).
-  const [editingFlat, setEditingFlat] = useState(false)
-  const [editingPitched, setEditingPitched] = useState(false)
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
 
@@ -362,13 +355,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     setShowAdjust(false)
     setAdjFlatArea('')
     setAdjPerimeterFt('')
-    setEditingFlat(false)
-    setEditingPitched(false)
-    // Both section toggles default ON. Homeowner can flip Material Order off
-    // (cash-only perimeter add-ons) or Perimeter off (material-only) from the
-    // breakdown card section headers.
-    setIncludeMaterialOrder(true)
-    setIncludePerimeter(true)
     setStep(1)
   }, [open, defaultAddress])
 
@@ -425,9 +411,6 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
       perimeterFt: Number(adjPerimeterFt) || (measurement?.perimeterFt ?? 0),
       pitchedAreaSqft: measurement ? pitchedSqftOut : undefined,
       flatAreaSqft: measurement ? flatSqftOut : undefined,
-      includeMaterialOrder,
-      includePerimeter,
-      includeFlatArea,
     })
   }
 
@@ -551,31 +534,12 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                     flatAreaSqft={Math.round(finalFlatAreaSqft)}
                     pitch={showAdjust ? (adjPitch || measurement.pitch) : measurement.pitch}
                     perimeterFt={Number(adjPerimeterFt) || measurement.perimeterFt}
-                    includeMaterialOrder={includeMaterialOrder}
-                    includePerimeter={includePerimeter}
-                    includeFlatArea={includeFlatArea}
+                    includeMaterialOrder={true}
+                    includePerimeter={true}
+                    includeFlatArea={true}
                     pitchedOmittedTriggered={previewPitchedOmittedTriggered}
                     flowPath={flowPath ?? null}
                     source="wizard-step2"
-                    onToggleMaterialOrder={setIncludeMaterialOrder}
-                    onTogglePerimeter={setIncludePerimeter}
-                    onToggleFlatArea={setIncludeFlatArea}
-                    editing={{
-                      pitched: {
-                        active: editingPitched,
-                        rawValue: adjArea,
-                        onChange: setAdjArea,
-                        onStart: () => setEditingPitched(true),
-                        onDone: () => setEditingPitched(false),
-                      },
-                      flat: {
-                        active: editingFlat,
-                        rawValue: adjFlatArea,
-                        onChange: setAdjFlatArea,
-                        onStart: () => setEditingFlat(true),
-                        onDone: () => setEditingFlat(false),
-                      },
-                    }}
                   />
 
                   <button

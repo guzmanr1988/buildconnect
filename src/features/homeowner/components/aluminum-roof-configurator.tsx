@@ -1,9 +1,14 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-export const ALUMINUM_ROOF_COLORS = [
+// PR-#430 — bundled fallback. Same substrate-derive pattern as PR-#428
+// door-configurator; fallback stays byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_ALUMINUM_ROOF_COLORS = [
   { id: 'charcoal_gray', label: 'Charcoal Gray', color: '#4A4A4A' },
   { id: 'bronze', label: 'Bronze', color: '#7B5E3A' },
   { id: 'white', label: 'White', color: '#F5F5F5' },
@@ -12,7 +17,11 @@ export const ALUMINUM_ROOF_COLORS = [
   { id: 'burgundy', label: 'Burgundy', color: '#722F37' },
   { id: 'hartford_green', label: 'Hartford Green', color: '#4A6741' },
   { id: 'sandstone', label: 'Sandstone', color: '#C9B58F' },
-] as const
+]
+
+const ALUMINUM_COLOR_HEX: Record<string, string> = Object.fromEntries(
+  FALLBACK_ALUMINUM_ROOF_COLORS.map((c) => [c.id, c.color])
+)
 
 export interface AluminumRoofSelection {
   color: string
@@ -26,7 +35,25 @@ interface AluminumRoofConfiguratorProps {
 }
 
 export function AluminumRoofConfigurator({ selection, onChange, onSave }: AluminumRoofConfiguratorProps) {
-  const selected = ALUMINUM_ROOF_COLORS.find((c) => c.id === selection.color)
+  const services = useCatalogStore((s) => s.services)
+
+  const aluminumColors = useMemo(() => {
+    const svc = services.find((s) => s.id === 'roofing')
+    const material = svc?.optionGroups?.find((g) => g.id === 'material')
+    const aluminum = material?.options?.find((o) => o.id === 'aluminum')
+    const colorsSub = aluminum?.subGroups?.find((sg) => sg.id === 'aluminum_colors')?.options
+
+    if (colorsSub && colorsSub.length > 0) {
+      return colorsSub.map((o) => ({
+        id: o.id,
+        label: o.label,
+        color: ALUMINUM_COLOR_HEX[o.id] ?? '#cccccc',
+      }))
+    }
+    return FALLBACK_ALUMINUM_ROOF_COLORS
+  }, [services])
+
+  const selected = aluminumColors.find((c) => c.id === selection.color)
   const isComplete = !!selection.color && selection.roofSize.trim().length > 0
 
   return (
@@ -44,7 +71,7 @@ export function AluminumRoofConfigurator({ selection, onChange, onSave }: Alumin
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
           <div className="flex flex-wrap gap-3">
-            {ALUMINUM_ROOF_COLORS.map((c) => (
+            {aluminumColors.map((c) => (
               <button
                 key={c.id}
                 type="button"

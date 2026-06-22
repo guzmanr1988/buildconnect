@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2 } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2, CreditCard } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -15,13 +15,14 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
+import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
 import { useVendorSettingsStore } from '@/stores/vendor-settings-store'
 import { useVendorLeadStages } from '@/lib/vendor-lead-stages'
 import { NavBadge, type NavBadgeTone } from '@/components/layout/nav-badge'
 import { NonCircumventionAgreementDialog } from '@/components/shared/non-circumvention-agreement-dialog'
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { cn } from '@/lib/utils'
+import { Footer } from '@/components/layout/footer'
 
 const navItems = [
   { to: '/vendor', icon: LayoutDashboard, label: 'Dashboard' },
@@ -37,6 +38,7 @@ const navItems = [
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
+  { to: '/vendor/financing', icon: CreditCard, label: 'Financing' },
   { to: '/vendor/reports', icon: FileText, label: 'Tax Reports' },
   { to: '/vendor/permits', icon: FileCheck2, label: 'Project Permits' },
   { to: '/vendor/employees', icon: UsersRound, label: 'Account Reps' },
@@ -67,14 +69,17 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   // Rodolfo "Calendar up" framing. vendor sees full sidebar unchanged.
   const profileForGate = useAuthStore((s) => s.profile)
   const usersTabEnabled = useVendorSettingsStore((s) => s.usersTabEnabled)
+  const financingEnabled = useVendorSettingsStore((s) => s.financingEnabled)
   const visibleNavItems = useMemo(() => {
     if (profileForGate?.role === 'account_rep') {
       return navItems.filter((item) => REP_VISIBLE_ROUTES.has(item.to))
     }
-    return navItems.filter((item) =>
-      item.to !== '/vendor/account-reps' || usersTabEnabled
-    )
-  }, [profileForGate?.role, usersTabEnabled])
+    return navItems.filter((item) => {
+      if (item.to === '/vendor/account-reps' && !usersTabEnabled) return false
+      if (item.to === '/vendor/financing' && !financingEnabled) return false
+      return true
+    })
+  }, [profileForGate?.role, usersTabEnabled, financingEnabled])
 
   // Ship #328 — nav-badges per Rodolfo "in projects how the number of
   // projects next to the name and on lead workflow show only new lead
@@ -193,16 +198,19 @@ export function VendorLayout() {
   // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
   const mockLeads = useEffectiveMockLeads()
 
-  // Vendor notifications = pending leads awaiting action. Resolve the
-  // current vendor's id via useVendorScope so the demo-alias LS override
-  // (#222) and the DEMO_VENDOR_UUID_BY_MOCK_ID reverse-map both apply
-  // — pre-#264 this layout had its own inline reverse-lookup that
-  // missed the LS alias, so generic Vendor demo'd notification count
-  // could fall through. task_1776835392387_106 fix.
-  const { vendorId: vendorIdForLeads } = useVendorScope()
-  const pendingLeads = mockLeads.filter(
-    (l) => l.vendor_id === vendorIdForLeads && l.status === 'pending'
-  )
+  // Vendor notifications = pending leads awaiting action.
+  // pin-20 — fixture filter switched to mockVendorId. Pre-fix this
+  // joined on `vendorId` which post-pin-20 is always profile.id (a real
+  // UUID) — fixture vendor_id fields are 'v-1'..'v-5' strings, so
+  // pendingLeads would resolve to [] for every authed session and the
+  // sidebar badge stops counting. Switching to mockVendorId (null for
+  // unmapped vendors) preserves the fixture-aware badge for the 3
+  // featured mock vendors AND yields [] correctly for everyone else.
+  const resolvedVendorForLayout = useResolvedVendor()
+  const { mockVendorId } = useVendorScope()
+  const pendingLeads = mockVendorId
+    ? mockLeads.filter((l) => l.vendor_id === mockVendorId && l.status === 'pending')
+    : []
 
   // Ship #240 — cross-role notification event derivations. Pattern is
   // "derive from state" (option A): each event-type filters the relevant
@@ -216,11 +224,18 @@ export function VendorLayout() {
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
   const RECENT_RESOLVED_WINDOW_MS = 24 * 60 * 60 * 1000 // 24h — resolved events surface briefly then drop off
 
+  // pin-20 — fixture leads gated by mockVendorId; sentProjects gated by
+  // contractorMatchesVendor() so the bidirectional mock↔UUID resolver
+  // catches both write schemes (booking writes mock-id, FE may resolve
+  // to UUID, or vice-versa). Pre-fix this used a single shadowed
+  // `vendorIdForLeads` that conflated fixture vs real-DB identity.
   const myLeadIds = new Set<string>([
-    ...mockLeads.filter((l) => l.vendor_id === vendorIdForLeads).map((l) => l.id),
-    ...sentProjects
-      .filter((p) => p.contractor?.vendor_id === vendorIdForLeads)
-      .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`),
+    ...(mockVendorId ? mockLeads.filter((l) => l.vendor_id === mockVendorId).map((l) => l.id) : []),
+    ...(resolvedVendorForLayout
+      ? sentProjects
+          .filter((p) => contractorMatchesVendor(p.contractor, resolvedVendorForLayout))
+          .map((p) => `L-${p.id.slice(0, 4).toUpperCase()}`)
+      : []),
   ])
 
   const rescheduleNotifications: NotificationItem[] = Object.entries(rescheduleRequestsMap)
@@ -390,39 +405,71 @@ export function VendorLayout() {
 
       {/* Main area */}
       <div className={cn(!isMobile && (sidebarCollapsed ? 'ml-[4.5rem]' : 'ml-64'), 'transition-all duration-200')}>
-        {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-12 sm:h-16 items-center justify-between border-b bg-background/80 backdrop-blur-lg px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            {isMobile && (
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Open navigation menu"><Menu className="h-5 w-5" /></Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="sheet-floating w-52 p-0 pt-4">
-                  <div className="px-3 mb-3"><Logo /></div>
-                  <SidebarNav collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
-                </SheetContent>
-              </Sheet>
-            )}
-            {isMobile && <Logo />}
+        {/* Mobile floating-pill top header — Rev13 (Rod-direct 2026-06-09 via
+            kratos 1781053014662): port the homeowner rev8.2 mobile pill chrome
+            to vendor role for cross-role parity. Mobile-only; desktop keeps
+            the sidebar-offset sticky bar which pairs with the aside. Same
+            glass recipe + dark-contrast bump as homeowner pill (rev12). */}
+        {isMobile && (
+          <div className="fixed top-0 left-0 right-0 z-50 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <header
+              data-vendor-top-header-pill="true"
+              data-vendor-header-glass="true"
+              className="flex h-16 items-center justify-between bg-background/65 dark:bg-background/85 backdrop-blur-xl backdrop-saturate-150 rounded-full shadow-[0_8px_24px_-4px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_28px_-4px_rgba(0,0,0,0.7)] ring-1 ring-black/[0.06] dark:ring-white/15 px-3"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Open navigation menu" className="h-10 w-10 shrink-0"><Menu className="h-5 w-5" /></Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="sheet-floating flex data-[side=left]:w-64 flex-col p-0 pt-4">
+                    <div className="px-3 mb-3 shrink-0"><Logo /></div>
+                    <div className="flex-1 overflow-y-auto">
+                      <SidebarNav collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+                <Logo />
+              </div>
+              <div className="flex items-center">
+                <NotificationBell notifications={notifications} />
+                <ThemeToggle />
+                {profile && (
+                  <button
+                    onClick={() => navigate('/vendor/profile')}
+                    className="cursor-pointer"
+                    aria-label="Profile"
+                  >
+                    <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="md" />
+                  </button>
+                )}
+              </div>
+            </header>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell notifications={notifications} />
-            <ThemeToggle />
-            {profile && (
-              <button
-                onClick={() => navigate('/vendor/profile')}
-                className="cursor-pointer"
-                aria-label="Profile"
-              >
-                <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
-              </button>
-            )}
-          </div>
-        </header>
+        )}
+
+        {/* Desktop sticky top bar — unchanged; pairs with sidebar aside */}
+        {!isMobile && (
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b dark:border-white/15 bg-background/80 dark:bg-background/90 backdrop-blur-lg dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.5)] px-4 sm:px-6">
+            <div className="flex items-center gap-3" />
+            <div className="flex items-center gap-2">
+              <NotificationBell notifications={notifications} />
+              <ThemeToggle />
+              {profile && (
+                <button
+                  onClick={() => navigate('/vendor/profile')}
+                  className="cursor-pointer"
+                  aria-label="Profile"
+                >
+                  <AvatarInitials initials={profile.initials} color={profile.avatar_color} avatarUrl={profile.avatar_url} size="sm" />
+                </button>
+              )}
+            </div>
+          </header>
+        )}
 
         {/* Content */}
-        <main className="p-3 sm:p-6 w-full overflow-x-hidden">
+        <main className={cn('w-full overflow-x-hidden', isMobile ? 'px-3 pt-24 pb-3' : 'p-6')}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -435,6 +482,14 @@ export function VendorLayout() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Footer — per-role shell mount inside sidebar-offset wrapper so
+            the footer respects the sidebar width on desktop and spans
+            full width on mobile. Off App.tsx root so /login + /signup +
+            admin do not leak.
+            Wave-8 (Rod 2026-06-10) — render ONLY on the vendor index page;
+            all inner /vendor/* routes hide the marketing footer. */}
+        {location.pathname === '/vendor' && <Footer />}
       </div>
 
       {/* Ship #270 — Non-circumvention agreement gate. Single insertion

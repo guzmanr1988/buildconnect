@@ -57,6 +57,73 @@ export async function getProfile(userId: string): Promise<Profile> {
   return data as Profile
 }
 
+// Draft (#475 latency profile) — bloat-column list excluded from the
+// critical-path slim fetch. Each can carry KB–MB per row (base64 data
+// URLs or large JSONB snapshots). On CF→Supabase edge-pinning windows
+// the row-payload transfer dominates the 17s getProfile measurement.
+// Trimming these from the login critical path drops the wire payload
+// from MB to <1KB for typical rows.
+const PROFILE_BLOAT_COLUMNS = [
+  'id_document_url',
+  'noncircumvention_agreement_text_snapshot',
+  'noncircumvention_agreement_signature_metadata',
+  'contractor_licenses',
+] as const
+
+// All Profile columns minus the bloat list above. Enumerated explicitly
+// so a future schema add lands on this side intentionally (vs accidental
+// inclusion via select('*')).
+const PROFILE_LITE_COLUMNS = [
+  'id',
+  'email',
+  'name',
+  'role',
+  'account_rep_for_vendor_id',
+  'phone',
+  'address',
+  'latitude',
+  'longitude',
+  'additional_addresses',
+  'company',
+  'avatar_color',
+  'avatar_url',
+  'initials',
+  'status',
+  'created_at',
+  'noncircumvention_agreement_signed_at',
+  'noncircumvention_agreement_signed_name',
+  'noncircumvention_agreement_version',
+].join(', ')
+
+export type ProfileLite = Omit<Profile, typeof PROFILE_BLOAT_COLUMNS[number]>
+
+// Critical-path slim fetch. Returns everything navigation + first-paint
+// UI needs (role, name, avatar, address, NCA-signed-at gate). The bloat
+// columns (id document, NCA snapshot, license images) are filled in by
+// a follow-up getProfileBloat() fire-and-forget after navigate.
+export async function getProfileLite(userId: string): Promise<ProfileLite> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_LITE_COLUMNS)
+    .eq('id', userId)
+    .single()
+  if (error) throw error
+  return data as unknown as ProfileLite
+}
+
+// Follow-up bloat-column fetch. Only surfaces that actually need these
+// (admin ID-review, NCA review, vendor license panel) consume them, and
+// none are on the login → first-paint critical path.
+export async function getProfileBloat(userId: string): Promise<Partial<Profile>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_BLOAT_COLUMNS.join(', '))
+    .eq('id', userId)
+    .single()
+  if (error) throw error
+  return data as unknown as Partial<Profile>
+}
+
 /*
  * Ship #182 (Rodolfo-direct 2026-04-21) — map Supabase auth errors to
  * plain-English copy. Raw Supabase strings like "email rate limit

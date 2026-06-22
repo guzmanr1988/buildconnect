@@ -1,4 +1,3 @@
-import { PITCHED_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
@@ -14,14 +13,12 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { windowCatalogUnitPrice, doorCatalogUnitPrice, stormFrontCatalogUnitPrice, garageDoorCatalogUnitPrice, computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
+import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
-import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
-import { sqftToSquares } from '@/lib/option-metadata'
 import { useProjectsStore, fetchProjectIdDocument } from '@/stores/projects-store'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useVendorScope, useResolvedVendor, contractorMatchesVendor } from '@/lib/vendor-scope'
@@ -30,7 +27,7 @@ import { mapsUrl, telHref } from '@/lib/contact-links'
 import { deriveInitials } from '@/lib/initials'
 import { cn } from '@/lib/utils'
 import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
-import { ProjectFinancingBadge } from '@/lib/financing/components/financing-status-badge'
+import { VendorProjectDocumentsPanel } from '@/features/vendor/components/vendor-project-documents-panel'
 import type { Lead } from '@/types'
 
 function fmt(n: number) {
@@ -136,19 +133,10 @@ export default function LeadInbox() {
       })),
     })
   }, [sentProjects, VENDOR_ID, isMock, vendor?.id, vendor?.company])
-  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
-  const effectiveMockLeads = useEffectiveMockLeads()
-  const mockLeads = useMemo(() => {
-    if (!isMock) return []
-    const vendorScoped = effectiveMockLeads.filter((l) => l.vendor_id === VENDOR_ID)
-    if (profile?.role === 'account_rep') {
-      return vendorScoped.filter(
-        (l) => l.account_rep_id === profile.id || accountRepIdByLead[l.id] === profile.id
-      )
-    }
-    return vendorScoped
-  }, [VENDOR_ID, isMock, effectiveMockLeads, profile?.role, profile?.id, accountRepIdByLead])
-
+  // Rod-go 2026-06-09 — mock/demo seed REMOVED entirely. Vendor inbox
+  // renders ONLY real homeowner-sent leads that have a real configured
+  // price. Apex's view starts empty until a real homeowner configures
+  // + sends a real-priced project.
   const statusMap: Record<string, Lead['status']> = { pending: 'pending', approved: 'confirmed', declined: 'rejected', sold: 'completed' }
   const homeownerLeads: Lead[] = useMemo(() => sentProjects
     .filter((p) => {
@@ -161,6 +149,21 @@ export default function LeadInbox() {
       }
       return true
     })
+    .filter((p) => {
+      // Rod-go 2026-06-09 — APPEAR-WITH-PRICE-OR-ABSENT. Lead renders
+      // only if a real price exists: vendor's saleAmount, OR computed
+      // sum of real priceLineItems. No PRESET, no $0, no "Price pending".
+      // 2026-06-10 launch-night fix — quotedPriceCents is a real price
+      // frozen at booking time (Ship #355); accept alongside saleAmount +
+      // priceLineItems so a booked-with-quote-but-no-breakdown lead renders.
+      if (p.saleAmount && p.saleAmount > 0) return true
+      if (p.quotedPriceCents && p.quotedPriceCents > 0) return true
+      if (!p.priceLineItems || p.priceLineItems.length === 0) return false
+      const value = p.item?.serviceId === 'windows_doors'
+        ? computeWindowsDoorsCatalogTotal(p.item as any, p.priceLineItems, getVendorPrice)
+        : p.priceLineItems.reduce((s, l) => s + (l.amount || 0), 0)
+      return value > 0
+    })
     .map((p) => ({
       id: `L-${p.id.slice(0, 4).toUpperCase()}`,
       homeowner_id: 'ho-current',
@@ -172,14 +175,24 @@ export default function LeadInbox() {
       // Ship #349 — pre-sale projects compute headline from catalog-first
       // item totals (sum of all card prices). Sold projects keep saleAmount
       // (locked at sale time, includes Upsale line).
+      // Rod-go 2026-06-09 — no PRESET fallback. Empty priceLineItems => 0
+      // (renders as "Price pending" downstream). Matches lead-workflow.tsx rev2.
+      // 2026-06-10 launch-night fix — fall back to quotedPriceCents (cents→
+      // dollars) when both saleAmount and priceLineItems are absent. The
+      // contractor's booking-time quote IS a real price (Ship #355 freeze).
       value: p.saleAmount ?? (() => {
-        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
-          ? p.priceLineItems
-          : (PRICE_LINE_ITEM_PRESETS[p.item.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
-        if (p.item.serviceId === 'windows_doors') {
-          return computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+        if (p.priceLineItems && p.priceLineItems.length > 0) {
+          const lineItems = p.priceLineItems
+          if (p.item.serviceId === 'windows_doors') {
+            return computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
+          }
+          const sum = lineItems.reduce((s, l) => s + l.amount, 0)
+          if (sum > 0) return sum
         }
-        return lineItems.reduce((s, l) => s + l.amount, 0)
+        if (p.quotedPriceCents && p.quotedPriceCents > 0) {
+          return Math.round(p.quotedPriceCents / 100)
+        }
+        return 0
       })(),
       address: p.item.roofMeasurement?.address ?? p.homeowner?.address ?? 'Pending site visit',
       phone: p.homeowner?.phone || '—',
@@ -193,7 +206,7 @@ export default function LeadInbox() {
       received_at: p.sentAt,
     })), [sentProjects, VENDOR_ID, vendor, getVendorPrice, profile?.role, profile?.id, accountRepIdByLead])
 
-  const leads = useMemo(() => [...homeownerLeads, ...mockLeads], [mockLeads, homeownerLeads])
+  const leads = homeownerLeads
   const assigneeMap = useAssigneeMap(VENDOR_ID)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
@@ -219,8 +232,8 @@ export default function LeadInbox() {
   // noise); multi-category vendors see all relevant category sections.
   // All sections open by default so the vendor sees everything at
   // once on arrival; click header to collapse. Within-category order
-  // preserves the existing leads-array sequence (homeownerLeads-first,
-  // then mockLeads, which matches the prior flat-list ordering).
+  // preserves the existing leads-array sequence (homeownerLeads only
+  // post-2026-06-09 mock-seed removal).
   const services = useCatalogStore((s) => s.services)
   const categoryLabelFor = useMemo(() => {
     const map: Record<string, string> = {}
@@ -334,22 +347,14 @@ export default function LeadInbox() {
                     id={`lead-category-panel-${categoryId}`}
                     className="overflow-hidden"
                   >
-                    <div className="grid gap-3">
+                    <div className="grid gap-5">
                       {categoryLeads.map((lead) => {
             const isExpanded = expandedId === lead.id
-            const packEntries = Object.entries(lead.pack_items)
-            const statusBorderClass =
-              lead.status === 'pending' ? 'border-l-4 border-l-amber-500'
-              : lead.status === 'confirmed' ? 'border-l-4 border-l-emerald-500'
-              : lead.status === 'rescheduled' ? 'border-l-4 border-l-sky-500'
-              : lead.status === 'completed' ? 'border-l-4 border-l-slate-400'
-              : lead.status === 'cancelled' ? 'border-l-4 border-l-red-500'
-              : lead.status === 'rejected' ? 'border-l-4 border-l-slate-400'
-              : 'border-l-4 border-l-slate-300'
+            const packEntries = Object.entries(lead.pack_items ?? {})
 
             return (
               <motion.div key={lead.id} variants={item} data-lead-id={lead.id} data-lead-status={lead.status}>
-                <Card className={cn('rounded-xl shadow-xl pointer-fine:hover:shadow-2xl pointer-fine:hover:-translate-y-1', statusBorderClass)}>
+                <Card className={cn('rounded-3xl bg-card border-0 ring-0 transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.04),_0_8px_32px_rgba(0,0,0,0.08),_inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.35),_0_8px_32px_rgba(0,0,0,0.55),_inset_0_1px_0_rgba(255,255,255,0.05)] pointer-fine:hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),_0_16px_48px_rgba(0,0,0,0.12),_inset_0_1px_0_rgba(255,255,255,0.9)] pointer-fine:dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.45),_0_16px_48px_rgba(0,0,0,0.65),_inset_0_1px_0_rgba(255,255,255,0.05)] pointer-fine:hover:-translate-y-2')}>
                   {/* Header - always visible */}
                   <button
                     type="button"
@@ -368,7 +373,7 @@ export default function LeadInbox() {
                             size="md"
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate">{lead.homeowner_name}</p>
+                            <p className="text-base font-semibold truncate">{lead.homeowner_name}</p>
                             <p className="text-sm text-muted-foreground line-clamp-1 break-words">{lead.project}</p>
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <StatusBadge status={lead.status} label={resolveLeadStatusLabel(lead)} />
@@ -392,7 +397,7 @@ export default function LeadInbox() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-lg font-bold tabular-nums text-foreground" data-lead-value={lead.value}>{fmt(lead.value)}</span>
+                          <span className="text-xl font-bold tabular-nums text-foreground" data-lead-value={lead.value}>{fmt(lead.value)}</span>
                           {isExpanded ? (
                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
                           ) : (
@@ -419,21 +424,24 @@ export default function LeadInbox() {
                       className="overflow-hidden"
                     >
                     <div className="px-4 sm:px-5 pb-5 space-y-4 border-t overflow-hidden">
-                      {/* Customer details */}
-                      <div className="flex flex-wrap gap-4 pt-4 text-sm text-muted-foreground">
+                      {/* Customer details — Rod-direct task_1780804150936_308:
+                          row bumped to text-[15px] + h-4 icons so address/phone/
+                          sqft read clearly in the expanded card; was text-sm
+                          (14px) + h-3.5 icons. */}
+                      <div className="flex flex-wrap gap-4 pt-4 text-[15px] text-muted-foreground">
                         <div className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5" />
+                          <MapPin className="h-4 w-4" />
                           <a href={mapsUrl(lead.address)} target="_blank" rel="noopener noreferrer" className="hover:text-foreground hover:underline transition-colors">{lead.address}</a>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5" />
+                          <User className="h-4 w-4" />
                           <span>{lead.phone}</span>
                           <a href={telHref(lead.phone)} className="inline-flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label={`Call ${lead.homeowner_name}`}>
                             <Phone className="h-3 w-3" />
                           </a>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" />
+                          <Calendar className="h-4 w-4" />
                           <span>{lead.sq_ft.toLocaleString()} sq ft</span>
                         </div>
                       </div>
@@ -457,7 +465,11 @@ export default function LeadInbox() {
                         </CardContent>
                       </Card>
 
-                      {/* Window & Door Configurator with Pricing */}
+                      {/* Arc-35: Project Items card-grid (shared component)
+                          renders configurator selections + per-unit catalog
+                          pricing + section $Total badges. KEPT inline below:
+                          No-Permit Waiver (vendor-specific amber card) and
+                          Pricing Breakdown table (non-WD vendor invoice). */}
                       {(() => {
                         const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
                         if (!sp) return null
@@ -466,419 +478,15 @@ export default function LeadInbox() {
                           : null
                         return (
                           <>
-                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
-                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
-                              const totalWQty = sp.item.windowSelections!.reduce((s, w) => s + w.quantity, 0)
-                              const totalDQty = sp.item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
-                              const totalSFQty = sp.item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-                              const totalUnits = totalWQty + totalDQty + totalSFQty
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Windows Selected</h4>
-                                  <div className="flex flex-col gap-1">
-                                    {sp.item.windowSelections!.map((w) => {
-                                      const unitPrice = windowCatalogUnitPrice(w, getVendorPrice, sp.item.serviceId)
-                                      const hasCatalogPrice = unitPrice > 0
-                                      const lineTotal = hasCatalogPrice
-                                        ? unitPrice * w.quantity
-                                        : (wdProductLine && totalUnits > 0 ? Math.round(wdProductLine.amount / totalUnits * w.quantity) : null)
-                                      return (
-                                        <div key={w.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-base font-semibold text-foreground">
-                                              {w.size.replace('x', '" × ')}"
-                                            </span>
-                                            {hasCatalogPrice ? (
-                                              <div className="flex items-center gap-1 text-sm">
-                                                <span className="text-muted-foreground">{w.quantity}</span>
-                                                <span className="text-muted-foreground">×</span>
-                                                <span className="font-medium">{fmt(unitPrice)}</span>
-                                                <span className="text-muted-foreground">=</span>
-                                                <span className="font-bold text-primary">{fmt(unitPrice * w.quantity)}</span>
-                                              </div>
-                                            ) : (
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm text-muted-foreground">×{w.quantity}</span>
-                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            <Badge variant="secondary" className="text-[10px]">{w.type}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{w.frameColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{w.glassColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{w.glassType}</Badge>
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                  <div className="pt-2 border-t flex items-center justify-between">
-                                    <span className="text-sm font-medium text-muted-foreground">Total Windows</span>
-                                    <span className="text-lg font-bold text-primary">{totalWQty}</span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
-                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
-                              const totalWQty2 = sp.item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
-                              const totalDQty = sp.item.doorSelections!.reduce((s, d) => s + d.quantity, 0)
-                              const totalSFQty2 = sp.item.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
-                              const totalUnits2 = totalWQty2 + totalDQty + totalSFQty2
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Doors Selected</h4>
-                                  <div className="flex flex-col gap-1">
-                                    {sp.item.doorSelections!.map((d) => {
-                                      const unitPrice = doorCatalogUnitPrice(d, getVendorPrice, sp.item.serviceId)
-                                      const hasCatalogPrice = unitPrice > 0
-                                      const lineTotal = hasCatalogPrice
-                                        ? unitPrice * d.quantity
-                                        : (wdProductLine && totalUnits2 > 0 ? Math.round(wdProductLine.amount / totalUnits2 * d.quantity) : null)
-                                      return (
-                                        <div key={d.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-base font-semibold text-foreground">
-                                              {d.size.replace('x', '" × ')}"
-                                            </span>
-                                            {hasCatalogPrice ? (
-                                              <div className="flex items-center gap-1 text-sm">
-                                                <span className="text-muted-foreground">{d.quantity}</span>
-                                                <span className="text-muted-foreground">×</span>
-                                                <span className="font-medium">{fmt(unitPrice)}</span>
-                                                <span className="text-muted-foreground">=</span>
-                                                <span className="font-bold text-primary">{fmt(unitPrice * d.quantity)}</span>
-                                              </div>
-                                            ) : (
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm text-muted-foreground">×{d.quantity}</span>
-                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            <Badge variant="secondary" className="text-[10px]">{d.type}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{d.frameColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{d.glassColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{d.glassType}</Badge>
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                  <div className="pt-2 border-t flex items-center justify-between">
-                                    <span className="text-sm font-medium text-muted-foreground">Total Doors</span>
-                                    <span className="text-lg font-bold text-primary">{totalDQty}</span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {sp.item.stormFrontSelections && sp.item.stormFrontSelections.length > 0 && (() => {
-                              const wdProductLine = resolvedLineItems?.find((l: any) => l.id === 'wd-product')
-                              const totalWQty3 = sp.item.windowSelections?.reduce((s, w) => s + w.quantity, 0) ?? 0
-                              const totalDQty3 = sp.item.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
-                              const totalSFQty = sp.item.stormFrontSelections!.reduce((s, sf) => s + sf.quantity, 0)
-                              const totalUnits3 = totalWQty3 + totalDQty3 + totalSFQty
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Storm Fronts Selected</h4>
-                                  <div className="flex flex-col gap-1">
-                                    {sp.item.stormFrontSelections!.map((sf) => {
-                                      const unitPrice = stormFrontCatalogUnitPrice(sf, getVendorPrice, sp.item.serviceId)
-                                      const hasCatalogPrice = unitPrice > 0
-                                      const lineTotal = hasCatalogPrice
-                                        ? unitPrice * sf.quantity
-                                        : (wdProductLine && totalUnits3 > 0 ? Math.round(wdProductLine.amount / totalUnits3 * sf.quantity) : null)
-                                      return (
-                                        <div key={sf.id} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-base font-semibold text-foreground">
-                                              {sf.size.replace('x', '" × ')}"
-                                            </span>
-                                            {hasCatalogPrice ? (
-                                              <div className="flex items-center gap-1 text-sm">
-                                                <span className="text-muted-foreground">{sf.quantity}</span>
-                                                <span className="text-muted-foreground">×</span>
-                                                <span className="font-medium">{fmt(unitPrice)}</span>
-                                                <span className="text-muted-foreground">=</span>
-                                                <span className="font-bold text-primary">{fmt(unitPrice * sf.quantity)}</span>
-                                              </div>
-                                            ) : (
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-sm text-muted-foreground">×{sf.quantity}</span>
-                                                {lineTotal !== null && <span className="text-sm font-bold text-primary">{fmt(lineTotal)}</span>}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <div className="flex flex-wrap gap-1.5">
-                                            <Badge variant="secondary" className="text-[10px]">{sf.type}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{sf.frameColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{sf.glassColor}</Badge>
-                                            <Badge variant="outline" className="text-[10px]">{sf.glassType}</Badge>
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                  <div className="pt-2 border-t flex items-center justify-between">
-                                    <span className="text-sm font-medium text-muted-foreground">Total Storm Fronts</span>
-                                    <span className="text-lg font-bold text-primary">{totalSFQty}</span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Garage Door */}
-                            {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Garage Door</h4>
-                                <div className="rounded-lg bg-primary/5 px-3 py-2.5">
-                                  <div className="flex flex-wrap gap-1.5">
-                                    <Badge variant="secondary" className="text-[10px]">
-                                      {sp.item.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
-                                    </Badge>
-                                    {sp.item.garageDoorSelection.type === 'double_garage' && sp.item.garageDoorSelection.size && (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {sp.item.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
-                                      </Badge>
-                                    )}
-                                    {sp.item.garageDoorSelection.color && (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {sp.item.garageDoorSelection.color.charAt(0).toUpperCase() + sp.item.garageDoorSelection.color.slice(1)}
-                                      </Badge>
-                                    )}
-                                    {sp.item.garageDoorSelection.glass && (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        Glass: {sp.item.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            {/* Garage Doors — price card */}
-                            {sp.item.garageDoorSelection && sp.item.garageDoorSelection.type && (() => {
-                              const gd = sp.item.garageDoorSelection
-                              const garageLine = resolvedLineItems?.find((l: any) => l.id === 'wd-garage-door')
-                              const catalogUnit = garageDoorCatalogUnitPrice(gd as any, getVendorPrice, sp.item.serviceId)
-                              const hasCatalog = catalogUnit > 0
-                              const displayPrice = hasCatalog ? catalogUnit : (garageLine?.amount ?? null)
-                              if (!displayPrice) return null
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Garage Doors</h4>
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-base font-semibold text-foreground">
-                                          {gd.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
-                                        </span>
-                                        {hasCatalog ? (
-                                          <div className="flex items-center gap-1 text-sm">
-                                            <span className="text-muted-foreground">1 ×</span>
-                                            <span className="font-medium">{fmt(catalogUnit)}</span>
-                                            <span className="text-muted-foreground">=</span>
-                                            <span className="font-bold text-primary">{fmt(catalogUnit)}</span>
-                                          </div>
-                                        ) : (
-                                          <span className="text-sm font-bold text-primary">{fmt(displayPrice)}</span>
-                                        )}
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {gd.type === 'double_garage' && gd.size && (
-                                          <Badge variant="outline" className="text-[10px]">
-                                            {gd.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}
-                                          </Badge>
-                                        )}
-                                        {gd.color && (
-                                          <Badge variant="outline" className="text-[10px]">
-                                            {gd.color.charAt(0).toUpperCase() + gd.color.slice(1)}
-                                          </Badge>
-                                        )}
-                                        {gd.glass && (
-                                          <Badge variant="outline" className="text-[10px]">
-                                            Glass: {gd.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Install Windows — price card */}
-                            {sp.item.windowSelections && sp.item.windowSelections.length > 0 && (() => {
-                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-windows')
-                              const totalQty = sp.item.windowSelections!.reduce((sum, w) => sum + w.quantity, 0)
-                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_windows')
-                              const hasCatalog = catalogUnit > 0
-                              const fallbackTotal = installLine?.amount ?? null
-                              if (!hasCatalog && fallbackTotal === null) return null
-                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Install Windows</h4>
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Installation labor</span>
-                                      {hasCatalog ? (
-                                        <div className="flex items-center gap-1 text-sm">
-                                          <span className="text-muted-foreground">{totalQty} ×</span>
-                                          <span className="font-medium">{fmt(catalogUnit)}</span>
-                                          <span className="text-muted-foreground">=</span>
-                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-3">
-                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
-                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Install Doors — price card */}
-                            {sp.item.doorSelections && sp.item.doorSelections.length > 0 && (() => {
-                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-doors')
-                              const totalQty = sp.item.doorSelections!.reduce((sum, d) => sum + d.quantity, 0)
-                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_doors')
-                              const hasCatalog = catalogUnit > 0
-                              const fallbackTotal = installLine?.amount ?? null
-                              if (!hasCatalog && fallbackTotal === null) return null
-                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Install Doors</h4>
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Installation labor</span>
-                                      {hasCatalog ? (
-                                        <div className="flex items-center gap-1 text-sm">
-                                          <span className="text-muted-foreground">{totalQty} ×</span>
-                                          <span className="font-medium">{fmt(catalogUnit)}</span>
-                                          <span className="text-muted-foreground">=</span>
-                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-3">
-                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
-                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Install Storm Front — price card */}
-                            {sp.item.stormFrontSelections && sp.item.stormFrontSelections.length > 0 && (() => {
-                              const installLine = resolvedLineItems?.find((l: any) => l.id === 'wd-install-storm-front')
-                              const totalQty = sp.item.stormFrontSelections!.reduce((sum, sf) => sum + sf.quantity, 0)
-                              const catalogUnit = getVendorPrice(sp.item.serviceId, 'install_storm_front')
-                              const hasCatalog = catalogUnit > 0
-                              const fallbackTotal = installLine?.amount ?? null
-                              if (!hasCatalog && fallbackTotal === null) return null
-                              const displayTotal = hasCatalog ? catalogUnit * totalQty : fallbackTotal!
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Install Storm Front</h4>
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Installation labor</span>
-                                      {hasCatalog ? (
-                                        <div className="flex items-center gap-1 text-sm">
-                                          <span className="text-muted-foreground">{totalQty} ×</span>
-                                          <span className="font-medium">{fmt(catalogUnit)}</span>
-                                          <span className="text-muted-foreground">=</span>
-                                          <span className="font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-3">
-                                          <span className="text-sm text-muted-foreground">×{totalQty}</span>
-                                          <span className="text-sm font-bold text-primary">{fmt(displayTotal)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Permit — single line price card */}
-                            {(() => {
-                              const permitLine = resolvedLineItems?.find((l: any) => l.label?.toLowerCase().includes('permit'))
-                              const catalogPrice = getVendorPrice(sp.item.serviceId, 'permit')
-                              const hasCatalog = catalogPrice > 0
-                              const displayPrice = hasCatalog ? catalogPrice : (permitLine?.amount ?? null)
-                              if (!displayPrice) return null
-                              return (
-                                <div className="rounded-xl border bg-background p-4 space-y-3">
-                                  <h4 className="text-sm font-semibold text-foreground">Permit</h4>
-                                  <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-primary/5">
-                                    <span className="text-sm text-foreground">Permit Fee</span>
-                                    <span className="text-sm font-bold text-primary">{fmt(displayPrice)}</span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
-                            {/* Metal Roof Selection */}
-                            {sp.item.metalRoofSelection && sp.item.metalRoofSelection.color && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Standing Seam Metal</h4>
-                                <div className="rounded-lg bg-primary/5 px-3 py-2.5">
-                                  <div className="flex flex-wrap gap-1.5">
-                                    <Badge variant="secondary" className="text-[10px]">
-                                      Color: {sp.item.metalRoofSelection.color.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                                    </Badge>
-                                    {sp.item.metalRoofSelection.roofSize && (
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {/* Legacy values were sqft (>200); post-ship values are squares. */}
-                                        {(() => { const n = Number(sp.item.metalRoofSelection.roofSize); return n > 200 ? sqftToSquares(Math.round(n * PITCHED_WASTE_FACTOR)) : n })()}{' '}squares
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            {/* Roof Measurements */}
-                            {sp.item.roofMeasurement && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Roof Measurements</h4>
-                                <div className="flex flex-col gap-1.5">
-                                  {(sp.item.roofMeasurement.includeMaterialOrder ?? true) && sp.item.roofMeasurement.pitchedAreaSqft != null && (sp.item.roofMeasurement.pitchedAreaSqft ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Pitched area</span>
-                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.pitchedAreaSqft.toLocaleString()} sq ft</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.roofMeasurement.includeMaterialOrder ?? true) && (sp.item.roofMeasurement.includeFlatArea ?? true) && (sp.item.roofMeasurement.flatAreaSqft ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Flat area</span>
-                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.flatAreaSqft!.toLocaleString()} sq ft</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.roofMeasurement.includeMaterialOrder ?? true) && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Total</span>
-                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.areaSqft.toLocaleString()} sq ft</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.roofMeasurement.includeMaterialOrder ?? true) && sp.item.roofMeasurement.pitch && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Pitch</span>
-                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.pitch}</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.roofMeasurement.includePerimeter ?? true) && (sp.item.roofMeasurement.perimeterFt ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Perimeter</span>
-                                      <span className="text-sm font-bold text-primary">{sp.item.roofMeasurement.perimeterFt!.toLocaleString()} ft</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                            <ProjectItemsCardGrid
+                              item={sp.item}
+                              projectPermit={sp.projectPermit}
+                              projectAssociation={sp.projectAssociation}
+                              poolSurvey={sp.poolSurvey}
+                              showPricing
+                              getPrice={getVendorPrice}
+                              resolvedLineItems={sp.priceLineItems}
+                            />
                             {/* No-Permit Waiver */}
                             {(sp.item as any).permitWaiver?.acknowledged && (
                               <div className="rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-4 space-y-3">
@@ -899,72 +507,16 @@ export default function LeadInbox() {
                                 </div>
                               </div>
                             )}
-                            {/* Roof Addons — linear ft. Gutters total = perimeter + drops × per-floor
-                                via computeGutterTotalLinFt (single source of truth in roof-pricing.ts)
-                                so vendor sees the same number priced + the same number homeowner sees. */}
-                            {sp.item.roofAddonLinearFt && Object.keys(sp.item.roofAddonLinearFt).length > 0 && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Roof Add-ons</h4>
-                                <div className="flex flex-col gap-1.5">
-                                  {Object.entries(sp.item.roofAddonLinearFt).map(([key, ft]) => {
-                                    const isGutters = key === 'gutters'
-                                    const cfg = sp.item.gutterDropsConfig
-                                    const totalFt = isGutters ? computeGutterTotalLinFt(ft, cfg) : ft
-                                    const showBreakdown = isGutters && !!cfg
-                                    const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[cfg!.floors] : 0
-                                    const drops = cfg?.drops ?? 0
-                                    const floorsLabel = cfg?.floors === 1 ? '1-story' : '2-story'
-                                    return (
-                                      <div key={key} className="flex flex-col px-3 py-2 rounded-lg bg-primary/5">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                          <span className="text-sm font-bold text-primary">{totalFt.toLocaleString()} ft</span>
-                                        </div>
-                                        {showBreakdown && (
-                                          <span className="text-[11px] text-muted-foreground mt-0.5">
-                                            {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            {/* Sqft / linear-ft addons — pool size custom, pool floor surfaces,
-                                pool_fence. Vendor sees the same numbers used to compute pricing
-                                (sqft from customSizeSqft, lin ft from addonLinearFt) so MATH-IS-GOD
-                                holds across surfaces. */}
-                            {sp.item.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Custom-size measurements</h4>
-                                <div className="flex flex-col gap-1.5">
-                                  {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
-                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                      <span className="text-sm font-bold text-primary">{sqft.toLocaleString()} sqft</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {sp.item.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Linear-ft add-ons</h4>
-                                <div className="flex flex-col gap-1.5">
-                                  {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
-                                    <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                      <span className="text-sm font-bold text-primary">{ft.toLocaleString()} ft</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {/* Pricing Breakdown — generic card for all non-windows_doors services.
-                                Windows/Doors already has per-unit price cards above; skip for that service.
-                                Strict: only renders when sp.priceLineItems is populated (no PRESETS fallback). */}
-                            {sp.item.serviceId !== 'windows_doors' && resolvedLineItems && resolvedLineItems.length > 0 && (() => {
+                            {/* Pricing Breakdown — generic card for ALL services
+                                including windows_doors. pin-29: removed serviceId filter
+                                so the contractor sees the itemized breakdown + auto
+                                Upsale/Discount adjustment row on every project.
+                                Reconcile invariant holds by construction: markSold
+                                stamps a final auto_sold_adjustment row so
+                                sum(priceLineItems) == saleAmount; the header total
+                                above (lead.value) equals saleAmount for sold projects,
+                                so the breakdown total here matches the header by data. */}
+                            {resolvedLineItems && resolvedLineItems.length > 0 && (() => {
                               const total = resolvedLineItems.reduce((s: number, l: any) => s + (l.amount ?? 0), 0)
                               if (total === 0) return null
                               return (
@@ -985,66 +537,25 @@ export default function LeadInbox() {
                                 </div>
                               )
                             })()}
-                            {/* Pool Add-on Quantities */}
-                            {sp.item.addonQuantities && (
-                              <div className="rounded-xl border bg-background p-4 space-y-3">
-                                <h4 className="text-sm font-semibold text-foreground">Add-on Details</h4>
-                                <div className="flex flex-col gap-2">
-                                  {(sp.item.addonQuantities.ledCount ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">LED Lighting</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.ledCount ?? 0}</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.addonQuantities.bubblerCount ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Bubbler</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.bubblerCount ?? 0}</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.addonQuantities.laminarJets ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Laminar Jets</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.laminarJets ?? 0}</span>
-                                    </div>
-                                  )}
-                                  {(sp.item.addonQuantities.waterfalls ?? 0) > 0 && (
-                                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/5">
-                                      <span className="text-sm text-foreground">Waterfalls</span>
-                                      <span className="text-sm font-bold text-primary">× {sp.item.addonQuantities.waterfalls ?? 0}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
                           </>
                         )
                       })()}
 
-                      {/* Permit & Financing info — financing badge shows
-                          live application status when
-                          feature_flags.financing_enabled is true AND vendor
-                          RLS permits read (approved/terms_accepted per
-                          migration 047); falls back to legacy
-                          Requested/Not-needed otherwise. */}
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant={lead.permit_choice ? 'default' : 'secondary'} className="text-xs">
-                          Permit: {lead.permit_choice ? 'Yes' : 'No'}
-                        </Badge>
-                        {(() => {
-                          const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
-                          return (
-                            <ProjectFinancingBadge
-                              projectId={sp?.id ?? null}
-                              fallback={
-                                <Badge variant={lead.financing ? 'default' : 'secondary'} className="text-xs">
-                                  Financing: {lead.financing ? 'Requested' : 'Not needed'}
-                                </Badge>
-                              }
-                            />
-                          )
-                        })()}
-                      </div>
+                      {/* PR-449 — Vendor project documents panel replaces
+                          Rod-"useless" Permit/Financing chips row. Bidirectional
+                          mirror of homeowner /home/documents widget scoped to
+                          this lead's sent_project. RLS-gated read+write lands
+                          parallel-late from hephaestus; until then the panel
+                          shows empty-state silently (no toast/error noise). */}
+                      {(() => {
+                        const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === lead.id)
+                        return (
+                          <VendorProjectDocumentsPanel
+                            sentProjectId={sp?.id ?? null}
+                            homeownerId={sp?.homeowner_id ?? null}
+                          />
+                        )
+                      })()}
 
                       {/* Customer photos, notes, ID */}
                       {(() => {

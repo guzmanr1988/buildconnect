@@ -36,7 +36,10 @@ export type OptionMetadata = {
 // Dev-mode invariant: result × 100 is within ±50 sqft of the input.
 export function sqftToSquares(sqft: number): number {
   const squares = Math.round(sqft / 100)
-  if (import.meta.env.DEV) {
+  // Dev-mode invariant — safe-guarded for non-Vite contexts (test runners
+  // load this module without an import.meta.env stub).
+  const env = (import.meta as { env?: { DEV?: boolean } }).env
+  if (env?.DEV) {
     console.assert(
       Math.abs(squares * 100 - sqft) <= 50,
       `[roof-squares] rounding gap > 50: ${squares * 100} vs ${sqft}`,
@@ -83,6 +86,65 @@ export const OPTION_METADATA: Record<string, OptionMetadata> = {
   repair_metal: { priceUnit: 'sqft' },
   repair_aluminum: { priceUnit: 'sqft' },
   repair_flat_roof: { priceUnit: 'sqft' },
+
+  // PR-#412 — namespaced sub_option slugs added as FE prereq to the
+  // hermes substrate rename (renames 32 colliding bare sub_option_ids to
+  // parent-prefixed literals so vendor-catalog-store enabledOptions[groupId]
+  // bucket can no longer cross-contaminate sibling subgroups, complementing
+  // PR-#410 renderer-side ancestor-path scoping). Hermes UPDATEs DB rows
+  // pinned by uuid id (FK plumbing safe); FE consumers that route through
+  // OPTION_METADATA need the new keys present or they fall back to {}
+  // (no priceUnit / no supportsPercentMarkup), regressing the
+  // supportsPercentMarkup vendor UI for low_e on each parent. Bare-slug
+  // entries above remain for hot-swap safety + offline-bundled
+  // SERVICE_CATALOG fallback (constants.ts still emits bare ids).
+  //
+  // Roofing addons: substrate parent fascia_wood / soffit_wood holds a
+  // sub_group whose leaf sub_option_id is bare 'metal'. New keys carry
+  // priceUnit:'linear_ft' (trim per linear foot) instead of the bare
+  // 'metal' entry's priceUnit:'square' (roofing material) — that wrong-
+  // bucket inheritance was the silent companion to the toggle cross-
+  // contamination Rod surfaced before PR-#410.
+  fascia_wood_metal: { priceUnit: 'linear_ft' },
+  soffit_wood_metal: { priceUnit: 'linear_ft' },
+
+  // Windows / Doors / Storm Front frame colors — display-only, no priceUnit
+  windows_white: {},
+  windows_bronze: {},
+  windows_black: {},
+  doors_white: {},
+  doors_bronze: {},
+  doors_black: {},
+  storm_front_white: {},
+  storm_front_bronze: {},
+  storm_front_black: {},
+
+  // Windows / Doors / Storm Front glass colors — display-only
+  windows_clear: {},
+  windows_clear_white: {},
+  windows_gray: {},
+  windows_green: {},
+  windows_grey_white: {},
+  doors_clear: {},
+  doors_clear_white: {},
+  doors_gray: {},
+  doors_green: {},
+  doors_grey_white: {},
+  storm_front_clear: {},
+  storm_front_clear_white: {},
+  storm_front_gray: {},
+  storm_front_green: {},
+  storm_front_grey_white: {},
+
+  // Windows / Doors / Storm Front glass types — low_e carries the
+  // supportsPercentMarkup flag preserved from the bare 'low_e' entry
+  // (vendor sees % markup input alongside $ price for each parent's low_e).
+  windows_impact_glass: {},
+  windows_low_e: { supportsPercentMarkup: true },
+  doors_impact_glass: {},
+  doors_low_e: { supportsPercentMarkup: true },
+  storm_front_impact_glass: {},
+  storm_front_low_e: { supportsPercentMarkup: true },
 }
 
 // Per-service overrides — for option_ids that collide across services with
@@ -114,19 +176,36 @@ export const OPTION_METADATA_BY_SERVICE: Record<string, Record<string, OptionMet
 export function getOptionMetadata(
   optionId: string,
   serviceId?: string,
-  option?: { priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft' },
+  option?: {
+    priceUnit?: 'flat' | 'square' | 'sqft' | 'linear_ft'
+    inputType?: 'tile-select' | 'number-input'
+  },
 ): OptionMetadata {
   // Catalog-overlay wins (admin-edited per option); falls back to the static
-  // map below for older rows that don't carry priceUnit yet. Only priceUnit
-  // is admin-editable today — other flags (requiresQuantity / supportsPercentMarkup)
-  // remain static FE config.
+  // map below for older rows that don't carry priceUnit / inputType yet. The
+  // static map remains the source of truth for install_windows / install_doors /
+  // install_storm_front (where requiresQuantity has been wired since 2026-04-19);
+  // catalog-overlay extends that mechanism to net-new options that carry
+  // inputType='number-input' as catalog data (migration 063+).
   const fallback: OptionMetadata = serviceId
     ? OPTION_METADATA_BY_SERVICE[serviceId]?.[optionId] ?? OPTION_METADATA[optionId] ?? {}
     : OPTION_METADATA[optionId] ?? {}
+  let overlay: OptionMetadata = fallback
   if (option?.priceUnit) {
-    return { ...fallback, priceUnit: option.priceUnit }
+    overlay = { ...overlay, priceUnit: option.priceUnit }
   }
-  return fallback
+  if (option?.inputType === 'number-input') {
+    // Per-option inputType opts INTO the requiresQuantity rendering+pricing path.
+    // Quantity range defaults to a generous 1..9999 when no static entry exists;
+    // static entries (install_windows/doors/storm_front) keep their tighter 1..50
+    // bounds via the fallback merge order.
+    overlay = {
+      ...overlay,
+      requiresQuantity: true,
+      ...(overlay.quantityRange ? {} : { quantityRange: { min: 1, max: 9999 } }),
+    }
+  }
+  return overlay
 }
 
 // Walk a service's option-groups + sub-groups for an option by id. Used by

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BuildConnect — Email Template Previews</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1d2e; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 32px 16px; }
+  .page-header { text-align: center; margin-bottom: 40px; }
+  .page-header h1 { color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .page-header p { color: #8891b0; font-size: 14px; margin-top: 6px; }
+  .email-section { margin-bottom: 56px; }
+  .email-label { color: #8891b0; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 12px; padding-left: 8px; border-left: 3px solid #2d4ea8; }
+  .email-subject { color: #c8d0e8; font-size: 13px; margin-bottom: 16px; padding-left: 12px; }
+  .email-subject span { color: #ffffff; font-weight: 500; }
+  .email-frame { max-width: 620px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .nav { display: flex; justify-content: center; gap: 12px; margin-bottom: 48px; flex-wrap: wrap; }
+  .nav a { color: #8891b0; text-decoration: none; font-size: 13px; padding: 6px 14px;
+    border: 1px solid #2d3250; border-radius: 6px; transition: color 0.15s; }
+  .nav a:hover { color: #ffffff; border-color: #2d4ea8; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>BuildConnect — Email Template Previews</h1>
+  <p>4 transactional email types &nbsp;·&nbsp; English-only &nbsp;·&nbsp; Brand: Deep Navy + Amber</p>
+</div>
+
+<div class="nav">
+  <a href="#welcome">1. Welcome</a>
+  <a href="#welcome-auth">1b. Welcome (auth)</a>
+  <a href="#password-reset">2. Password Reset</a>
+  <a href="#quote-received">3. Quote Received</a>
+  <a href="#booking-confirmation">4. Booking Confirmation</a>
+</div>
+
+<!-- ── 1. WELCOME ─────────────────────────────────────────────────────────── -->
+<div class="email-section" id="welcome">
+  <div class="email-label">1 &nbsp;/&nbsp; Welcome / Signup Confirmation</div>
+  <div class="email-subject">Subject: <span>Welcome to BuildConnect, Maria!</span></div>
+  <div class="email-frame">
+
+    <!-- HEADER -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background-color:#ffffff;border-radius:12px 12px 0 0;padding:28px 40px 20px;border-bottom:1px solid #dde0ea;">
+          <img src="https://buildc.net/logo-v2.png" alt="BuildConnect" width="40" height="40"
+            style="border-radius:8px;display:inline-block;vertical-align:middle;" />
+          <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:700;color:#191e36;">
+            Build<span style="color:#2d4ea8;">Connect</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#ffffff;padding:36px 40px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#e8edf8;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <tr><td><p style="margin:0;font-size:13px;font-weight:600;color:#2d4ea8;">Account Confirmed</p></td></tr>
+          </table>
+          <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#191e36;letter-spacing:-0.4px;">
+            Welcome, Maria!
+          </h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#5c6480;line-height:1.6;">
+            Your BuildConnect account is ready. You can now request quotes, compare contractors,
+            and manage your home improvement projects — all in one place.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#e8edf8;border-radius:10px;padding:20px 24px;margin-bottom:4px;">
+            <tr>
+              <td>
+                <p style="margin:0;font-size:14px;color:#2d4ea8;font-weight:600;">What you can do next</p>
+                <ul style="margin:10px 0 0;padding-left:20px;font-size:14px;color:#191e36;line-height:1.8;">
+                  <li>Browse services and get instant quotes</li>
+                  <li>Compare licensed, insured South Florida contractors</li>
+                  <li>Track your project from booking to completion</li>
+                </ul>
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+            <tr>
+              <td>
+                <a href="#" style="display:inline-block;background-color:#2d4ea8;color:#ffffff;font-size:15px;
+                  font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">
+                  Get Started
+                </a>
+              </td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+            <tr><td style="border-top:1px solid #dde0ea;"></td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5c6480;line-height:1.6;">
+            Questions? Reply to this email or reach us at
+            <a href="mailto:support@buildc.net" style="color:#2d4ea8;">support@buildc.net</a>.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#1a2647;border-radius:0 0 12px 12px;padding:28px 40px;">
+          <p style="margin:0;font-size:13px;color:#a8b4cc;line-height:1.6;">
+            <strong style="color:#ffffff;">BuildConnect</strong><br />
+            South Florida home services, simplified.<br />
+            <a href="https://buildc.net" style="color:#a8b4cc;text-decoration:none;">buildc.net</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:support@buildc.net" style="color:#a8b4cc;text-decoration:none;">support@buildc.net</a>
+            &nbsp;·&nbsp;Serving South Florida
+          </p>
+          <p style="margin-top:16px;font-size:11px;color:#6b7a99;">
+            You received this email because you have an account at BuildConnect.
+            All contractors independently licensed &amp; insured.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ── 1b. WELCOME (AUTH-FLOW) ─────────────────────────────────────────────── -->
+<div class="email-section" id="welcome-auth">
+  <div class="email-label">1b &nbsp;/&nbsp; Welcome (auth-flow) — Supabase confirm-signup, no firstName token</div>
+  <div class="email-subject">Subject: <span>Welcome to BuildConnect!</span></div>
+  <div class="email-frame">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background-color:#ffffff;border-radius:12px 12px 0 0;padding:28px 40px 20px;border-bottom:1px solid #dde0ea;">
+          <img src="https://buildc.net/logo-v2.png" alt="BuildConnect" width="40" height="40"
+            style="border-radius:8px;display:inline-block;vertical-align:middle;" />
+          <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:700;color:#191e36;">
+            Build<span style="color:#2d4ea8;">Connect</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#ffffff;padding:36px 40px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#e8edf8;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <tr><td><p style="margin:0;font-size:13px;font-weight:600;color:#2d4ea8;">Account Confirmed</p></td></tr>
+          </table>
+          <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#191e36;letter-spacing:-0.4px;">
+            Welcome to BuildConnect!
+          </h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#5c6480;line-height:1.6;">
+            Your account is ready. You can now request quotes, compare contractors,
+            and manage your home improvement projects — all in one place.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#e8edf8;border-radius:10px;padding:20px 24px;margin-bottom:4px;">
+            <tr>
+              <td>
+                <p style="margin:0;font-size:14px;color:#2d4ea8;font-weight:600;">What you can do next</p>
+                <ul style="margin:10px 0 0;padding-left:20px;font-size:14px;color:#191e36;line-height:1.8;">
+                  <li>Browse services and get instant quotes</li>
+                  <li>Compare licensed, insured South Florida contractors</li>
+                  <li>Track your project from booking to completion</li>
+                </ul>
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+            <tr>
+              <td>
+                <a href="#" style="display:inline-block;background-color:#2d4ea8;color:#ffffff;font-size:15px;
+                  font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">
+                  Get Started
+                </a>
+              </td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+            <tr><td style="border-top:1px solid #dde0ea;"></td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5c6480;line-height:1.6;">
+            Questions? Reply to this email or reach us at
+            <a href="mailto:support@buildc.net" style="color:#2d4ea8;">support@buildc.net</a>.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#1a2647;border-radius:0 0 12px 12px;padding:28px 40px;">
+          <p style="margin:0;font-size:13px;color:#a8b4cc;line-height:1.6;">
+            <strong style="color:#ffffff;">BuildConnect</strong><br />
+            South Florida home services, simplified.<br />
+            <a href="https://buildc.net" style="color:#a8b4cc;text-decoration:none;">buildc.net</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:support@buildc.net" style="color:#a8b4cc;text-decoration:none;">support@buildc.net</a>
+            &nbsp;·&nbsp;Serving South Florida
+          </p>
+          <p style="margin-top:16px;font-size:11px;color:#6b7a99;">
+            You received this email because you have an account at BuildConnect.
+            All contractors independently licensed &amp; insured.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ── 2. PASSWORD RESET ──────────────────────────────────────────────────── -->
+<div class="email-section" id="password-reset">
+  <div class="email-label">2 &nbsp;/&nbsp; Password Reset</div>
+  <div class="email-subject">Subject: <span>Reset your BuildConnect password</span></div>
+  <div class="email-frame">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background-color:#ffffff;border-radius:12px 12px 0 0;padding:28px 40px 20px;border-bottom:1px solid #dde0ea;">
+          <img src="https://buildc.net/logo-v2.png" alt="BuildConnect" width="40" height="40"
+            style="border-radius:8px;display:inline-block;vertical-align:middle;" />
+          <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:700;color:#191e36;">
+            Build<span style="color:#2d4ea8;">Connect</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#ffffff;padding:36px 40px;">
+          <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#191e36;letter-spacing:-0.4px;">
+            Reset your password
+          </h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#5c6480;line-height:1.6;">
+            We received a request to reset the password for your BuildConnect account.
+            Click the button below to choose a new password.
+          </p>
+          <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+            <tr>
+              <td>
+                <a href="#" style="display:inline-block;background-color:#2d4ea8;color:#ffffff;font-size:15px;
+                  font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">
+                  Reset Password
+                </a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:20px 0 0;font-size:13px;color:#5c6480;line-height:1.6;">
+            This link expires in <strong style="color:#191e36;">60 minutes</strong>.
+            If you did not request a password reset, you can safely ignore this email —
+            your password will not change.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+            <tr><td style="border-top:1px solid #dde0ea;"></td></tr>
+          </table>
+          <p style="margin:0;font-size:12px;color:#5c6480;line-height:1.6;">
+            For security, never share this link with anyone. If you need help, contact
+            <a href="mailto:support@buildc.net" style="color:#2d4ea8;">support@buildc.net</a>.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#1a2647;border-radius:0 0 12px 12px;padding:28px 40px;">
+          <p style="margin:0;font-size:13px;color:#a8b4cc;line-height:1.6;">
+            <strong style="color:#ffffff;">BuildConnect</strong><br />
+            South Florida home services, simplified.<br />
+            <a href="https://buildc.net" style="color:#a8b4cc;text-decoration:none;">buildc.net</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:support@buildc.net" style="color:#a8b4cc;text-decoration:none;">support@buildc.net</a>
+            &nbsp;·&nbsp;Serving South Florida
+          </p>
+          <p style="margin-top:16px;font-size:11px;color:#6b7a99;">
+            You received this email because you have an account at BuildConnect.
+            All contractors independently licensed &amp; insured.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ── 3. QUOTE RECEIVED ──────────────────────────────────────────────────── -->
+<div class="email-section" id="quote-received">
+  <div class="email-label">3 &nbsp;/&nbsp; Quote Received</div>
+  <div class="email-subject">Subject: <span>New quote from ABC Roofing — Roof Replacement</span></div>
+  <div class="email-frame">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background-color:#ffffff;border-radius:12px 12px 0 0;padding:28px 40px 20px;border-bottom:1px solid #dde0ea;">
+          <img src="https://buildc.net/logo-v2.png" alt="BuildConnect" width="40" height="40"
+            style="border-radius:8px;display:inline-block;vertical-align:middle;" />
+          <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:700;color:#191e36;">
+            Build<span style="color:#2d4ea8;">Connect</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#ffffff;padding:36px 40px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#fdf3e0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <tr><td><p style="margin:0;font-size:13px;font-weight:600;color:#c9871e;text-transform:uppercase;letter-spacing:0.5px;">New Quote</p></td></tr>
+          </table>
+          <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#191e36;letter-spacing:-0.4px;">
+            You received a quote
+          </h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#5c6480;line-height:1.6;">
+            Hi Carlos, <strong style="color:#191e36;">ABC Roofing</strong> has submitted a quote for your project.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="border:1px solid #dde0ea;border-radius:10px;padding:20px 24px;">
+            <tr>
+              <td>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Service</td>
+                    <td style="padding:8px 0;font-size:14px;color:#191e36;font-weight:500;">Roof Replacement</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Contractor</td>
+                    <td style="padding:8px 0;font-size:14px;color:#191e36;font-weight:500;">ABC Roofing</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Quote Amount</td>
+                    <td style="padding:8px 0;"><span style="font-size:18px;font-weight:700;color:#2d4ea8;">$8,500</span></td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+            <tr>
+              <td>
+                <a href="#" style="display:inline-block;background-color:#2d4ea8;color:#ffffff;font-size:15px;
+                  font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">
+                  Review Quote
+                </a>
+              </td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+            <tr><td style="border-top:1px solid #dde0ea;"></td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5c6480;line-height:1.6;">
+            All BuildConnect contractors are independently licensed and insured.
+            Questions? <a href="mailto:support@buildc.net" style="color:#2d4ea8;">support@buildc.net</a>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#1a2647;border-radius:0 0 12px 12px;padding:28px 40px;">
+          <p style="margin:0;font-size:13px;color:#a8b4cc;line-height:1.6;">
+            <strong style="color:#ffffff;">BuildConnect</strong><br />
+            South Florida home services, simplified.<br />
+            <a href="https://buildc.net" style="color:#a8b4cc;text-decoration:none;">buildc.net</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:support@buildc.net" style="color:#a8b4cc;text-decoration:none;">support@buildc.net</a>
+            &nbsp;·&nbsp;Serving South Florida
+          </p>
+          <p style="margin-top:16px;font-size:11px;color:#6b7a99;">
+            You received this email because you have an account at BuildConnect.
+            All contractors independently licensed &amp; insured.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+<!-- ── 4. BOOKING CONFIRMATION ────────────────────────────────────────────── -->
+<div class="email-section" id="booking-confirmation">
+  <div class="email-label">4 &nbsp;/&nbsp; Booking Confirmation</div>
+  <div class="email-subject">Subject: <span>Booking confirmed — Bathroom Remodel</span></div>
+  <div class="email-frame">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="background-color:#ffffff;border-radius:12px 12px 0 0;padding:28px 40px 20px;border-bottom:1px solid #dde0ea;">
+          <img src="https://buildc.net/logo-v2.png" alt="BuildConnect" width="40" height="40"
+            style="border-radius:8px;display:inline-block;vertical-align:middle;" />
+          <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:700;color:#191e36;">
+            Build<span style="color:#2d4ea8;">Connect</span>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#ffffff;padding:36px 40px;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="background-color:#e4f5ec;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <tr><td><p style="margin:0;font-size:13px;font-weight:600;color:#1a7a45;text-transform:uppercase;letter-spacing:0.5px;">Booking Confirmed</p></td></tr>
+          </table>
+          <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#191e36;letter-spacing:-0.4px;">
+            Your booking is confirmed
+          </h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#5c6480;line-height:1.6;">
+            Hi Jennifer, your project has been booked. Here is a summary:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0"
+            style="border:1px solid #dde0ea;border-radius:10px;padding:20px 24px;">
+            <tr>
+              <td>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Service</td>
+                    <td style="padding:8px 0;font-size:14px;color:#191e36;font-weight:500;">Bathroom Remodel</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Contractor</td>
+                    <td style="padding:8px 0;font-size:14px;color:#191e36;font-weight:500;">South Florida Renovations</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;font-size:14px;color:#5c6480;width:140px;vertical-align:top;">Scheduled Date</td>
+                    <td style="padding:8px 0;font-size:14px;font-weight:600;color:#191e36;">June 10, 2026</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+            <tr>
+              <td>
+                <a href="#" style="display:inline-block;background-color:#1a7a45;color:#ffffff;font-size:15px;
+                  font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">
+                  View Booking
+                </a>
+              </td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+            <tr><td style="border-top:1px solid #dde0ea;"></td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#5c6480;line-height:1.6;">
+            Need to make changes? Visit your
+            <a href="https://buildc.net/dashboard" style="color:#2d4ea8;">dashboard</a>
+            or contact <a href="mailto:support@buildc.net" style="color:#2d4ea8;">support@buildc.net</a>.
+            All contractors are independently licensed and insured.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#1a2647;border-radius:0 0 12px 12px;padding:28px 40px;">
+          <p style="margin:0;font-size:13px;color:#a8b4cc;line-height:1.6;">
+            <strong style="color:#ffffff;">BuildConnect</strong><br />
+            South Florida home services, simplified.<br />
+            <a href="https://buildc.net" style="color:#a8b4cc;text-decoration:none;">buildc.net</a>
+            &nbsp;·&nbsp;
+            <a href="mailto:support@buildc.net" style="color:#a8b4cc;text-decoration:none;">support@buildc.net</a>
+            &nbsp;·&nbsp;Serving South Florida
+          </p>
+          <p style="margin-top:16px;font-size:11px;color:#6b7a99;">
+            You received this email because you have an account at BuildConnect.
+            All contractors independently licensed &amp; insured.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
+
+</body>
+</html>

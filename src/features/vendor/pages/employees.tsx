@@ -121,10 +121,12 @@ export default function VendorEmployeesPage() {
   const reactivateEmployee = useVendorEmployeesStore((s) => s.reactivateEmployee)
   const removeEmployee = useVendorEmployeesStore((s) => s.removeEmployee)
   const setBankEnabled = useVendorEmployeesStore((s) => s.setBankEnabled)
+  const hydrateSettings = useVendorEmployeesStore((s) => s.hydrateSettings)
 
   useEffect(() => {
     hydrateVendor(vendorId)
-  }, [vendorId, hydrateVendor])
+    void hydrateSettings(vendorId)
+  }, [vendorId, hydrateVendor, hydrateSettings])
 
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)

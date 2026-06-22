@@ -71,7 +71,7 @@ export default function VendorCalendar() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const requestReschedule = useProjectsStore((s) => s.requestReschedule)
   const updateBooking = useProjectsStore((s) => s.updateBooking)
-  const { vendorId: VENDOR_ID, isMock } = useVendorScope()
+  const { vendorId: VENDOR_ID, mockVendorId } = useVendorScope()
   // Ship #339 Phase A — vendor-events parallel data layer (PTO + custom).
   const eventsByVendor = useVendorEventsStore((s) => s.eventsByVendor)
   const addVendorEvent = useVendorEventsStore((s) => s.addEvent)
@@ -136,9 +136,11 @@ export default function VendorCalendar() {
     })), [sentProjects, profile?.role, profile?.id, accountRepIdByLead, VENDOR_ID])
 
   const mockConfirmed = useMemo(() => {
-    if (!isMock) return []
+    // pin-20 — fixture leads are seeded on mock-vendor-ids; gate on
+    // mockVendorId not the (now-always-profile.id) vendorId.
+    if (!mockVendorId) return []
     const vendorScoped = mockLeads.filter((l) => {
-      if (l.vendor_id !== VENDOR_ID) return false
+      if (l.vendor_id !== mockVendorId) return false
       const effectiveStatus = leadStatusOverrides[l.id] ?? l.status
       return ['confirmed', 'rescheduled'].includes(effectiveStatus)
     })
@@ -148,7 +150,7 @@ export default function VendorCalendar() {
       )
     }
     return vendorScoped
-  }, [VENDOR_ID, isMock, mockLeads, profile?.role, profile?.id, accountRepIdByLead, leadStatusOverrides])
+  }, [mockVendorId, mockLeads, profile?.role, profile?.id, accountRepIdByLead, leadStatusOverrides])
 
   const leads = useMemo(
     () => [...confirmedProjectLeads, ...mockConfirmed]

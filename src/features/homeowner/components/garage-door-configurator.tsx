@@ -1,29 +1,48 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-const GARAGE_DOOR_TYPES = [
+// PR-#429 — bundled fallbacks. Same substrate-derive pattern as PR-#428
+// door-configurator; fallbacks stay byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_GARAGE_DOOR_TYPES = [
   { id: 'single_garage', label: 'Single Garage Door' },
   { id: 'double_garage', label: 'Double Garage Door' },
 ]
 
-const GARAGE_DOOR_SIZES = [
+const FALLBACK_GARAGE_DOOR_SIZES = [
   { id: 'gd_4_panels', label: '4 Panels' },
   { id: 'gd_5_panels', label: '5 Panels' },
 ]
 
-const GARAGE_DOOR_COLORS = [
+const FALLBACK_GARAGE_DOOR_COLORS = [
   { id: 'white', label: 'White', color: '#ffffff' },
-  { id: 'bronze', label: 'Bronze', color: '#8B6914' },
+  { id: 'bronze', label: 'Bronze', color: '#5B3A29' },
   { id: 'black', label: 'Black', color: '#1a1a1a' },
 ]
 
-const GARAGE_DOOR_GLASS = [
+const FALLBACK_GARAGE_DOOR_GLASS = [
   { id: 'grey-white', label: 'Grey-White', color: '#6b7280' },
   { id: 'clear-white', label: 'Clear-White', color: '#d1d5db' },
   { id: 'grey', label: 'Grey', color: '#9ca3af' },
   { id: 'clear', label: 'Clear', color: '#e0f2fe' },
 ]
+
+// Substrate carries id+label; visual hex stays in code because the
+// substrate doesn't carry that field.
+const GARAGE_DOOR_COLOR_HEX: Record<string, string> = {
+  white: '#ffffff',
+  bronze: '#5B3A29',
+  black: '#1a1a1a',
+}
+const GARAGE_DOOR_GLASS_HEX: Record<string, string> = {
+  'grey-white': '#6b7280',
+  'clear-white': '#d1d5db',
+  grey: '#9ca3af',
+  clear: '#e0f2fe',
+}
 
 export interface GarageDoorSelection {
   type: string
@@ -39,7 +58,44 @@ interface GarageDoorConfiguratorProps {
 }
 
 export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDoorConfiguratorProps) {
-  const isComplete = selection.type && selection.color && selection.glass && selection.size
+  const services = useCatalogStore((s) => s.services)
+  // PR-#433 — Rod-surfaced: Save Selection must require explicit Color +
+  // Glass Color picks. Other fields (type/size) are implicit (Save only
+  // shows inside type-guarded summary) so we tighten to the two Rod called
+  // out; this also drops the single_garage size-reset trap that prevented
+  // single_garage from ever reaching Save.
+  const isComplete = !!(selection.color && selection.glass)
+
+  const { garageDoorTypes, garageDoorSizes, garageDoorColors, garageDoorGlass } = useMemo(() => {
+    const svc = services.find((s) => s.id === 'garage')
+    const products = svc?.optionGroups?.find((g) => g.id === 'products')
+    const garageDoors = products?.options?.find((o) => o.id === 'garage_doors')
+    const findSub = (id: string) => garageDoors?.subGroups?.find((sg) => sg.id === id)
+
+    const typesSub = findSub('garage_door_types')?.options
+    const sizesSub = findSub('garage_door_sizes')?.options
+    const colorsSub = findSub('garage_door_colors')?.options
+    const glassSub = findSub('garage_door_glass')?.options
+
+    return {
+      garageDoorTypes:
+        typesSub && typesSub.length > 0
+          ? typesSub.map((o) => ({ id: o.id, label: o.label }))
+          : FALLBACK_GARAGE_DOOR_TYPES,
+      garageDoorSizes:
+        sizesSub && sizesSub.length > 0
+          ? sizesSub.map((o) => ({ id: o.id, label: o.label }))
+          : FALLBACK_GARAGE_DOOR_SIZES,
+      garageDoorColors:
+        colorsSub && colorsSub.length > 0
+          ? colorsSub.map((o) => ({ id: o.id, label: o.label, color: GARAGE_DOOR_COLOR_HEX[o.id] ?? '#cccccc' }))
+          : FALLBACK_GARAGE_DOOR_COLORS,
+      garageDoorGlass:
+        glassSub && glassSub.length > 0
+          ? glassSub.map((o) => ({ id: o.id, label: o.label, color: GARAGE_DOOR_GLASS_HEX[o.id] ?? '#cccccc' }))
+          : FALLBACK_GARAGE_DOOR_GLASS,
+    }
+  }, [services])
 
   return (
     <motion.div
@@ -56,7 +112,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Type</span>
           <div className="flex gap-2">
-            {GARAGE_DOOR_TYPES.map((t) => (
+            {garageDoorTypes.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -86,7 +142,7 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           <div>
             <span className="text-sm font-medium text-muted-foreground mb-1.5 block">Size</span>
             <div className="flex gap-2">
-              {GARAGE_DOOR_SIZES.map((s) => (
+              {garageDoorSizes.map((s) => (
                 <button
                   key={s.id}
                   type="button"
@@ -104,50 +160,55 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
           </div>
         )}
 
-        {/* Color */}
-        <div>
-          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
-          <Select
-            value={selection.color}
-            onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
-          >
-            <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
-              <SelectValue placeholder="Select color" />
-            </SelectTrigger>
-            <SelectContent>
-              {GARAGE_DOOR_COLORS.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-sm py-2.5 pl-3 pr-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
-                    <span>{c.label}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* PR-#435 — Color + Glass Color TIGHT adjacent. w-fit slot hugs trigger natural-width so
+            no internal whitespace between Color trigger right-edge and Glass label/trigger left-edge.
+            PR-#434 used w-48 fixed slots which trapped ~73px of unused space inside each slot. */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Color */}
+          <div className="w-fit">
+            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
+            <Select
+              value={selection.color}
+              onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
+            >
+              <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
+                <SelectValue placeholder="Select color" />
+              </SelectTrigger>
+              <SelectContent>
+                {garageDoorColors.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="text-sm py-2.5 pl-3 pr-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
+                      <span>{c.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Glass Color */}
-        <div>
-          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
-          <Select
-            value={selection.glass}
-            onValueChange={(v) => onChange({ ...selection, glass: v ?? '' })}
-          >
-            <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
-              <SelectValue placeholder="Select glass color" />
-            </SelectTrigger>
-            <SelectContent>
-              {GARAGE_DOOR_GLASS.map((g) => (
-                <SelectItem key={g.id} value={g.id} className="text-sm py-2.5 pl-3 pr-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: g.color }} />
-                    <span>{g.label}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Glass Color */}
+          <div className="w-fit">
+            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Glass Color</span>
+            <Select
+              value={selection.glass}
+              onValueChange={(v) => onChange({ ...selection, glass: v ?? '' })}
+            >
+              <SelectTrigger className="h-9 text-sm [&>span]:text-center [&>span]:w-full">
+                <SelectValue placeholder="Select glass color" />
+              </SelectTrigger>
+              <SelectContent>
+                {garageDoorGlass.map((g) => (
+                  <SelectItem key={g.id} value={g.id} className="text-sm py-2.5 pl-3 pr-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: g.color }} />
+                      <span>{g.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -156,28 +217,30 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
         <div className="mt-4 pt-4 border-t">
           <div className="flex flex-wrap gap-1.5 mb-3">
             <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-              {GARAGE_DOOR_TYPES.find(t => t.id === selection.type)?.label}
+              {garageDoorTypes.find(t => t.id === selection.type)?.label}
             </span>
             {selection.size && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-                {GARAGE_DOOR_SIZES.find(s => s.id === selection.size)?.label}
+                {garageDoorSizes.find(s => s.id === selection.size)?.label}
               </span>
             )}
             {selection.color && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-                {GARAGE_DOOR_COLORS.find(c => c.id === selection.color)?.label}
+                {garageDoorColors.find(c => c.id === selection.color)?.label}
               </span>
             )}
             {selection.glass && (
               <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
-                {GARAGE_DOOR_GLASS.find(g => g.id === selection.glass)?.label} Glass
+                {garageDoorGlass.find(g => g.id === selection.glass)?.label} Glass
               </span>
             )}
           </div>
-          {isComplete && onSave && (
+          {/* PR-#433 — always-render Save with disabled-state until Color + Glass Color picked */}
+          {onSave && (
             <Button
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
+              disabled={!isComplete}
             >
               Save Selection
             </Button>

@@ -1,17 +1,22 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Minus, Plus, PlusCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useCatalogStore } from '@/stores/catalog-store'
 
-const STORM_FRONT_SIZES = [
+// PR-#429 — bundled fallbacks. Same substrate-derive pattern as PR-#428
+// door-configurator; fallbacks stay byte-identical to pre-rewire so the
+// rendered list does NOT churn on cold open / RLS deny / unauth.
+const FALLBACK_STORM_FRONT_SIZES = [
   '24x80', '24x96',
   '36x80', '36x96',
   '48x80', '48x96',
   '60x80', '60x96',
 ]
 
-const STORM_FRONT_TYPES = ['Storm Front']
+const FALLBACK_STORM_FRONT_TYPES = ['Storm Front']
 
 function StormFrontIcon({ size = 20 }: { size?: number }) {
   const s = size
@@ -28,13 +33,13 @@ function StormFrontIcon({ size = 20 }: { size?: number }) {
   )
 }
 
-const FRAME_COLORS = [
+const FALLBACK_FRAME_COLORS = [
   { label: 'White', color: '#ffffff' },
-  { label: 'Bronze', color: '#8B6914' },
+  { label: 'Bronze', color: '#5B3A29' },
   { label: 'Black', color: '#1a1a1a' },
 ]
 
-const GLASS_COLORS = [
+const FALLBACK_GLASS_COLORS = [
   { id: 'grey-white', label: 'Grey-White', note: 'Dark Grey Tinted Glass - Mostly selected for Bathroom windows or any windows for maximum privacy', color: '#6b7280', requiresLowE: false },
   { id: 'clear-white', label: 'Clear-White', note: 'Light grey tinted - mostly added for bathroom windows or any windows for maximum privacy', color: '#d1d5db', requiresLowE: false },
   { id: 'clear', label: 'Clear', note: '', color: '#e0f2fe', requiresLowE: false },
@@ -42,7 +47,20 @@ const GLASS_COLORS = [
   { id: 'green', label: 'Green', note: 'Only available with Low-Emissivity Glass coating', color: '#6ee7b7', requiresLowE: true },
 ]
 
-const GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+const FALLBACK_GLASS_TYPES = ['Impact Glass', 'Low-E Glass']
+
+const FRAME_COLOR_HEX: Record<string, string> = {
+  White: '#ffffff',
+  Bronze: '#5B3A29',
+  Black: '#1a1a1a',
+}
+const GLASS_COLOR_META: Record<string, { note: string; color: string; requiresLowE: boolean }> = {
+  'grey-white': { note: 'Dark Grey Tinted Glass - Mostly selected for Bathroom windows or any windows for maximum privacy', color: '#6b7280', requiresLowE: false },
+  'clear-white': { note: 'Light grey tinted - mostly added for bathroom windows or any windows for maximum privacy', color: '#d1d5db', requiresLowE: false },
+  clear: { note: '', color: '#e0f2fe', requiresLowE: false },
+  gray: { note: 'Tint color grey added to the Impact glass', color: '#9ca3af', requiresLowE: false },
+  green: { note: 'Only available with Low-Emissivity Glass coating', color: '#6ee7b7', requiresLowE: true },
+}
 
 export interface StormFrontSelection {
   id: string
@@ -61,10 +79,62 @@ interface StormFrontConfiguratorProps {
 }
 
 export function StormFrontConfigurator({ selections, onChange, onSave }: StormFrontConfiguratorProps) {
+  const services = useCatalogStore((s) => s.services)
+
+  const { stormFrontSizes, stormFrontTypes, frameColors, glassColors, glassTypes } = useMemo(() => {
+    const svc = services.find((s) => s.id === 'windows_doors')
+    const products = svc?.optionGroups?.find((g) => g.id === 'products')
+    const stormFronts = products?.options?.find((o) => o.id === 'storm_fronts')
+    const findSub = (id: string) => stormFronts?.subGroups?.find((sg) => sg.id === id)
+
+    const sizesSub = findSub('storm_front_sizes')?.options
+    const typesSub = findSub('storm_front_types')?.options
+    const frameSub = findSub('storm_front_frame_colors')?.options
+    const glassColorsSub = findSub('storm_front_glass_colors')?.options
+    const glassTypesSub = findSub('storm_front_glass_types')?.options
+
+    return {
+      stormFrontSizes:
+        sizesSub && sizesSub.length > 0
+          ? sizesSub.map((o) => o.id)
+          : FALLBACK_STORM_FRONT_SIZES,
+      stormFrontTypes:
+        typesSub && typesSub.length > 0
+          ? typesSub.map((o) => o.label)
+          : FALLBACK_STORM_FRONT_TYPES,
+      frameColors:
+        frameSub && frameSub.length > 0
+          ? frameSub.map((o) => ({ label: o.label, color: FRAME_COLOR_HEX[o.label] ?? '#cccccc' }))
+          : FALLBACK_FRAME_COLORS,
+      glassColors:
+        glassColorsSub && glassColorsSub.length > 0
+          ? glassColorsSub.map((o) => ({
+              id: o.id,
+              label: o.label,
+              note: GLASS_COLOR_META[o.id]?.note ?? '',
+              color: GLASS_COLOR_META[o.id]?.color ?? '#cccccc',
+              requiresLowE: GLASS_COLOR_META[o.id]?.requiresLowE ?? false,
+            }))
+          : FALLBACK_GLASS_COLORS,
+      glassTypes:
+        glassTypesSub && glassTypesSub.length > 0
+          ? glassTypesSub.map((o) => o.label)
+          : FALLBACK_GLASS_TYPES,
+    }
+  }, [services])
+
   function addEntry(size: string) {
     onChange([
       ...selections,
-      { id: crypto.randomUUID(), size, type: 'Storm Front', frameColor: 'White', glassColor: 'Clear-White', glassType: 'Impact Glass', quantity: 1 },
+      {
+        id: crypto.randomUUID(),
+        size,
+        type: stormFrontTypes[0] ?? 'Storm Front',
+        frameColor: frameColors[0]?.label ?? 'White',
+        glassColor: glassColors.find((g) => g.label === 'Clear-White')?.label ?? glassColors[0]?.label ?? 'Clear-White',
+        glassType: glassTypes[0] ?? 'Impact Glass',
+        quantity: 1,
+      },
     ])
   }
 
@@ -98,7 +168,7 @@ export function StormFrontConfigurator({ selections, onChange, onSave }: StormFr
   const totalStormFronts = selections.reduce((sum, s) => sum + s.quantity, 0)
 
   const sizeGroups: Record<string, string[]> = {}
-  STORM_FRONT_SIZES.forEach((size) => {
+  stormFrontSizes.forEach((size) => {
     const width = size.split('x')[0]
     if (!sizeGroups[width]) sizeGroups[width] = []
     sizeGroups[width].push(size)
@@ -174,7 +244,7 @@ export function StormFrontConfigurator({ selections, onChange, onSave }: StormFr
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="min-w-[180px]">
-                            {STORM_FRONT_TYPES.map((type) => (
+                            {stormFrontTypes.map((type) => (
                               <SelectItem key={type} value={type} className="text-xs py-2.5 pl-3 pr-4">
                                 <div className="flex items-center gap-2">
                                   <StormFrontIcon size={28} />
@@ -209,7 +279,7 @@ export function StormFrontConfigurator({ selections, onChange, onSave }: StormFr
                             <SelectValue placeholder="Frame" />
                           </SelectTrigger>
                           <SelectContent>
-                            {FRAME_COLORS.map((c) => (
+                            {frameColors.map((c) => (
                               <SelectItem key={c.label} value={c.label} className="text-xs py-2 pl-3 pr-4">
                                 <div className="flex items-center gap-2">
                                   <div className="w-4 h-4 rounded-full shrink-0 border border-gray-300 shadow-inner" style={{ backgroundColor: c.color }} />
@@ -230,7 +300,7 @@ export function StormFrontConfigurator({ selections, onChange, onSave }: StormFr
                             <SelectValue placeholder="Glass" />
                           </SelectTrigger>
                           <SelectContent className="w-[320px] max-w-[90vw]">
-                            {GLASS_COLORS.filter((c) => {
+                            {glassColors.filter((c) => {
                               if (c.requiresLowE && entry.glassType !== 'Low-E Glass') return false
                               return true
                             }).map((c) => (
@@ -260,7 +330,7 @@ export function StormFrontConfigurator({ selections, onChange, onSave }: StormFr
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                           <SelectContent>
-                            {GLASS_TYPES.map((t) => (
+                            {glassTypes.map((t) => (
                               <SelectItem key={t} value={t} className="text-xs py-2 text-center justify-center pl-4 pr-4">{t}</SelectItem>
                             ))}
                           </SelectContent>

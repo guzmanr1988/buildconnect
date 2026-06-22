@@ -6,14 +6,20 @@ import type { VendorRep, PriceLineItem } from '@/types'
 import { useActivityLogStore } from './activity-log-store'
 import { useAdminModerationStore } from './admin-moderation-store'
 import { supabase } from '@/lib/supabase'
+import { reconcileLines, reconcileLinesEquivalent } from '@/lib/reconcile-lines'
+import { buildRoofingBaseLines, sumRoofingBaseLines } from '@/lib/roofing-base-lines'
+import { getVendorPriceMap, getVendorPermitMap, type VendorPriceMap, type VendorPermitMap } from '@/lib/api/pricing'
 
 const logEvent = (entry: Parameters<ReturnType<typeof useActivityLogStore['getState']>['logEvent']>[0]) =>
   useActivityLogStore.getState().logEvent(entry)
 
 function upsertProject(fields: Record<string, unknown> & { id: string }) {
-  supabase.from('sent_projects')
+  return supabase.from('sent_projects')
     .upsert(fields, { onConflict: 'id' })
-    .then(({ error }) => { if (error) console.error('[projects] upsert failed:', error.message) })
+    .then(({ error }) => {
+      if (error) console.error('[projects] upsert failed:', error.message)
+      return { error }
+    })
 }
 
 function updateProject(id: string, fields: Record<string, unknown>) {
@@ -168,6 +174,12 @@ export interface SentProject {
     signedName: string
     signedAt: string
   } | null
+  // Migration 064 — project-level association question (every service) and
+  // Pool-only survey question, both snapshotted from cart-store at sendProject
+  // time alongside projectPermit. poolSurvey stays undefined for non-Pool
+  // services so the vendor surface can hide the row cleanly.
+  projectAssociation?: 'yes' | 'no'
+  poolSurvey?: 'yes' | 'no'
   // PR-330 — homeowner-allocated financing for this sent_project. Both
   // NULL pre-allocation; both set together via the Edge Fn apply_allocation
   // path (writes are gated server-side by envelope-cap re-check). Slot-
@@ -175,6 +187,13 @@ export interface SentProject {
   // allocate to pending + approved + sold projects after approval.
   applied_financing_amount_cents?: number | null
   applied_financing_application_id?: string | null
+  // Migration 066 — vendor-marked transition from sold/won to actively
+  // working. Written by markWorkStarted on the gated Start Work button
+  // (lead-workflow sold-branch). Gated client-side by association-doc
+  // presence when projectAssociation='yes'; column itself has no DB
+  // constraint so the gate stays UI-only (matches the Y/N flow's
+  // pattern). NULL pre-start; timestamptz post-start.
+  workStartedAt?: string
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -275,6 +294,12 @@ interface ProjectsState {
   // immediately. Acceleration of the existing 90d age-based auto-
   // transition; not a status change (still 'sold').
   markCompleted: (id: string) => void
+  // Migration 066 — stamps workStartedAt + persists to sent_projects.
+  // Triggered by the vendor "Start Work" button in the Sold/Active
+  // branch. Client-side gate (association_permit doc presence when
+  // projectAssociation='yes') lives in lead-workflow.tsx; this action
+  // doesn't re-check the gate (writes assume caller already gated).
+  markWorkStarted: (id: string) => void
   // Ship #311 — lead-id-keyed manual-completion override map. Mirrors
   // existing leadStatusOverrides / leadConfirmedAtByLead patterns so
   // MOCK_LEADS without sentProject backing still get the manual-
@@ -373,7 +398,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // across reload + role switch. Demo-mode-only gate; production-
         // launch swaps this for service-role hard-delete or soft-delete.
         // Architecture-invariant-at-layer-boundary: same flag, every role.
-        if (useAdminModerationStore.getState().demoClearedAt) {
+        //
+        // pin-26 (Fix B from task_931 RCA): demoMode-AND-gate. Pre-fix the
+        // gate fired on demoClearedAt alone, so prod vendors (VITE_DEMO_MODE
+        // baked 'false' in secrets.env) whose localStorage carried a stale
+        // demoClearedAt from a prior demo session stayed at 0 leads forever
+        // — server replay never ran. Apollo live-repro confirmed Rod's
+        // /vendor dashboard hit this exact gate. Adding `demoMode &&` makes
+        // the gate dev/demo-only, matching the 12-callsite house idiom
+        // `(import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'`.
+        const demoMode = (import.meta.env.VITE_DEMO_MODE ?? 'true') !== 'false'
+        if (demoMode && useAdminModerationStore.getState().demoClearedAt) {
           return
         }
 
@@ -391,7 +426,9 @@ export const useProjectsStore = create<ProjectsState>()(
           'confirmed_at, rep_assigned_at, review_status, reviewed_at, ' +
           'reviewed_by, review_note, price_line_items, quoted_price_cents, ' +
           'cancellation_request, applied_financing_amount_cents, ' +
-          'applied_financing_application_id'
+          'applied_financing_application_id, project_permit, ' +
+          'project_permit_waiver, project_association, pool_survey, ' +
+          'work_started_at'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -438,15 +475,44 @@ export const useProjectsStore = create<ProjectsState>()(
           quotedPriceCents:row.quoted_price_cents ?? undefined,
           applied_financing_amount_cents:    row.applied_financing_amount_cents ?? null,
           applied_financing_application_id:  row.applied_financing_application_id ?? null,
+          projectPermit:        row.project_permit ?? undefined,
+          projectPermitWaiver:  row.project_permit_waiver ?? undefined,
+          projectAssociation:   row.project_association ?? undefined,
+          poolSurvey:           row.pool_survey ?? undefined,
+          workStartedAt:        row.work_started_at ?? undefined,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
 
-        // 3. Merge: Supabase wins on conflict by id; local-only rows kept.
+        // 3. Merge: Supabase wins on conflict by id; local-only rows kept
+        // ONLY for roles that legitimately author sentProjects locally
+        // (homeowner via vendor-compare optimistic-write; admin = full
+        // substrate access + back-compat). For role='vendor' / 'account_rep'
+        // substrate is canonical-truth — vendors don't author sentProjects
+        // (homeowners send them via vendor-compare, substrate-write is the
+        // canonical path), so any LS-only-not-in-substrate carry-forward
+        // is by-definition stale from a prior demo session. Pre-fix,
+        // Rod-vendor (3e0821aa) saw 3 cards on /vendor/leads (1 real Donald
+        // + 2 stale "Demo Homeowner" L-6D58 / L-A826 from prior demo-Vendor
+        // session) — bundle-byte-grep (helios) ZERO HITS on Demo-Homeowner /
+        // L-6D58 / L-A826 / address-parts + substrate-axis-probe (hephaestus)
+        // confirmed vendor_id=3e0821aa has 4 Donald rows ZERO Demo Homeowner,
+        // collapsing class to LS-persist-carry-forward at this merge.
         set((state) => {
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // Item-3 Option B: Supabase is the AUTHORITATIVE source for
+          // sentProjects across all roles + all browsers + all devices.
+          // localCarryForward = [] universally — never merge stale LS into the
+          // hydrated DB rows on this once/session hydrate. Eliminates the
+          // homeowner-side cross-browser drift Rod called "most important":
+          // every browser/device shows the identical Supabase truth. Brief
+          // pre-hydrate flash of stale LS is acceptable; hydrate replaces it.
+          // Vendor + account_rep branches were already [] per the prior
+          // demo-Vendor LS-stale fix; homeowner role now joins them.
+          const localCarryForward: SentProject[] = []
           const seen = new Set<string>()
           const merged: SentProject[] = []
-          for (const p of [...dbProjects, ...state.sentProjects]) {
+          for (const p of [...dbProjects, ...localCarryForward]) {
             if (!seen.has(p.id)) { seen.add(p.id); merged.push(dbById.get(p.id) ?? p) }
           }
           const newAssignedRep: Record<string, VendorRep> = { ...state.assignedRepByLead }
@@ -482,6 +548,116 @@ export const useProjectsStore = create<ProjectsState>()(
             cancellationRequestsByLead:  newCancellationByLead,
           }
         })
+
+        // pin-31 — legacy hydrate backfill (runs BEFORE the pin-29 reconcile
+        // sweep). For sold roofing projects whose priceLineItems carry no
+        // preset_calculated base rows (only auto_sold_adjustment, or empty),
+        // rebuild base lines via the shared buildRoofingBaseLines helper so
+        // the per-unit math display has rows to render and sum-to-total
+        // holds end-to-end.
+        //
+        // Sanity gate — write only when sum(base lines) === quoted_price_cents
+        // (cent-exact). On divergence the row is left as-is (one-honest-
+        // residual-line fallback) so a human can investigate; pin-29 sweep
+        // still keeps the existing total-line invariant downstream.
+        // Idempotent: a second hydrate sees preset_calculated rows already
+        // present and skips the candidate set entirely.
+        const backfillState = get()
+        const backfillCandidates = backfillState.sentProjects.filter((p) => {
+          if (p.status !== 'sold' || p.quotedPriceCents == null) return false
+          if (p.item?.serviceId !== 'roofing') return false
+          const vendorUuid = p.vendor_id ?? p.contractor?.vendor_id
+          if (!vendorUuid) return false
+          const hasBase = (p.priceLineItems ?? []).some(
+            (l) => l.source === 'preset_calculated',
+          )
+          return !hasBase
+        })
+        if (backfillCandidates.length > 0) {
+          const vendorUuids = Array.from(
+            new Set(
+              backfillCandidates
+                .map((p) => p.vendor_id ?? p.contractor?.vendor_id)
+                .filter((v): v is string => !!v),
+            ),
+          )
+          const priceMaps = new Map<string, VendorPriceMap>()
+          const permitMaps = new Map<string, VendorPermitMap>()
+          for (const vid of vendorUuids) {
+            try {
+              const [pm, perm] = await Promise.all([
+                getVendorPriceMap(vid),
+                getVendorPermitMap(vid),
+              ])
+              priceMaps.set(vid, pm)
+              permitMaps.set(vid, perm)
+            } catch (err) {
+              console.warn('[projects] pin-31 backfill vendor maps fetch failed:', vid, err)
+            }
+          }
+          const backfillWrites: Array<{ id: string; nextLines: PriceLineItem[] }> = []
+          set((state) => ({
+            sentProjects: state.sentProjects.map((p) => {
+              if (!backfillCandidates.some((c) => c.id === p.id)) return p
+              const vendorUuid = p.vendor_id ?? p.contractor?.vendor_id
+              if (!vendorUuid) return p
+              const priceMap = priceMaps.get(vendorUuid)
+              if (!priceMap) return p
+              const permitMap = permitMaps.get(vendorUuid)
+              const baseLines = buildRoofingBaseLines(
+                p.item,
+                p.projectPermit,
+                priceMap,
+                permitMap,
+              )
+              if (!baseLines) return p
+              const baseCents = Math.round(sumRoofingBaseLines(baseLines) * 100)
+              if (baseCents !== p.quotedPriceCents) {
+                console.warn(
+                  '[projects] pin-31 backfill divergence — leaving as-is:',
+                  p.id,
+                  'base_cents',
+                  baseCents,
+                  'quoted_price_cents',
+                  p.quotedPriceCents,
+                )
+                return p
+              }
+              const existingAutos = (p.priceLineItems ?? []).filter(
+                (l) => l.source === 'auto_sold_adjustment',
+              )
+              const nextLines: PriceLineItem[] = [...baseLines, ...existingAutos]
+              backfillWrites.push({ id: p.id, nextLines })
+              return { ...p, priceLineItems: nextLines }
+            }),
+          }))
+          for (const u of backfillWrites) {
+            updateProject(u.id, { price_line_items: u.nextLines })
+          }
+        }
+
+        // pin-29 — one-shot backfill sweep: reconcile every legacy sold
+        // project to the sum(priceLineItems) == saleAmount invariant.
+        // Content-guarded: each row is re-reconciled in memory, but the DB
+        // persist fires ONLY when the reconcile result differs from the
+        // currently-stored lines (ignoring the volatile id + timestamp
+        // suffix on auto_sold_adjustment rows). Already-reconciled rows
+        // are detected and skipped, so a second hydrate produces zero DB
+        // writes. saleAmount or baseLine changes after the sweep correctly
+        // re-trigger a write.
+        const sweepUpdates: Array<{ id: string; nextLines: PriceLineItem[] }> = []
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) => {
+            if (p.status !== 'sold' || p.saleAmount == null) return p
+            const nextLines = reconcileLines(p.saleAmount, p.priceLineItems)
+            if (reconcileLinesEquivalent(p.priceLineItems, nextLines)) return p
+            sweepUpdates.push({ id: p.id, nextLines })
+            return { ...p, priceLineItems: nextLines }
+          }),
+        }))
+        for (const u of sweepUpdates) {
+          updateProject(u.id, { price_line_items: u.nextLines })
+        }
 
         // 4. One-time migration: upsert homeowner localStorage-only rows to Supabase.
         if (role !== 'homeowner' || get()._supabaseMigrationDone) {
@@ -559,6 +735,15 @@ export const useProjectsStore = create<ProjectsState>()(
         const cartState = useCartStore.getState()
         const projectPermitSnapshot = cartState.projectPermit ?? undefined
         const projectPermitWaiverSnapshot = cartState.projectPermitWaiver ?? undefined
+        const projectAssociationSnapshot = cartState.projectAssociation ?? undefined
+        const poolSurveySnapshot = cartState.poolSurvey ?? undefined
+        // Deferred-FK reconcile (task_1780776240716_817 Option B): Association
+        // permit doc was uploaded with sent_project_id=NULL (FK accepts null;
+        // no draft sent_projects row exists, so vendor list stays clean by
+        // construction). cart-store stored the doc id in projectAssociationDocId
+        // at upload time. After upsertProject lands the sent_projects row, we
+        // reconcile by UPDATEing the doc's sent_project_id to the new row id.
+        const projectAssociationDocId = cartState.projectAssociationDocId
         const next: SentProject = {
           id: crypto.randomUUID(),
           item,
@@ -575,6 +760,8 @@ export const useProjectsStore = create<ProjectsState>()(
             : {}),
           ...(projectPermitSnapshot ? { projectPermit: projectPermitSnapshot } : {}),
           ...(projectPermitWaiverSnapshot ? { projectPermitWaiver: projectPermitWaiverSnapshot } : {}),
+          ...(projectAssociationSnapshot ? { projectAssociation: projectAssociationSnapshot } : {}),
+          ...(poolSurveySnapshot ? { poolSurvey: poolSurveySnapshot } : {}),
         }
         set((state) => {
           if (state.sentProjects.some((p) => p.item.id === item.id)) return state
@@ -596,7 +783,7 @@ export const useProjectsStore = create<ProjectsState>()(
         })
         logEvent({ eventType: 'submitted', projectId: undefined, meta: { serviceName: item.serviceName, vendor: contractor.company } })
         if (next.contractor.vendor_id) {
-          upsertProject({
+          const upsertPromise = upsertProject({
             id: next.id,
             vendor_id: next.contractor.vendor_id,
             homeowner_id: next.homeowner_id ?? null,
@@ -613,8 +800,36 @@ export const useProjectsStore = create<ProjectsState>()(
             id_document: next.idDocument ?? null,
             price_line_items: next.priceLineItems ?? null,
             quoted_price_cents: next.quotedPriceCents ?? null,
+            project_permit: next.projectPermit ?? null,
+            project_permit_waiver: next.projectPermitWaiver ?? null,
+            project_association: next.projectAssociation ?? null,
+            pool_survey: next.poolSurvey ?? null,
           })
+          // task_817 Option B reconcile — backfill sent_project_id on the
+          // association doc uploaded with NULL FK. MUST serialize AFTER
+          // sent_projects upsert resolves; firing in parallel races the
+          // network and the PATCH lands before the INSERT, tripping
+          // homeowner_documents_sent_project_id_fkey (23503). Apollo P-A2
+          // pinned this race on 0332faf. Early-return on upsert error so we
+          // don't fire a reconcile guaranteed to FK-violate.
+          if (projectAssociationDocId) {
+            upsertPromise.then(({ error }) => {
+              if (error) return
+              supabase.from('homeowner_documents')
+                .update({ sent_project_id: next.id })
+                .eq('id', projectAssociationDocId)
+                .then(({ error: reconcileError }) => {
+                  if (reconcileError) console.error('[projects] assoc doc reconcile failed:', reconcileError.message)
+                })
+            })
+          }
         }
+        // task_817 — clear cart-side FK refs after submit so a second
+        // sendProject in the same cart session starts fresh. pendingProjectId
+        // is no longer load-bearing (Option B uses deferred reconcile) but
+        // clearing it is still correct hygiene.
+        useCartStore.getState().clearPendingProjectId()
+        useCartStore.getState().setProjectAssociationDocId(null)
         return next.id
       },
 
@@ -645,63 +860,34 @@ export const useProjectsStore = create<ProjectsState>()(
       },
 
       markSold: (id, saleAmount) => {
-        // Ship #343 Phase A — auto-inject 'EXTRA $' line when newSaleAmount
-        // exceeds sum-of-preset-originals so Pricing Breakdown total
-        // matches sold-final per Rodolfo "auto populated to what the
-        // vendor outputs". HIGHER-case-only this Phase A; LOWER-case
-        // (newSaleAmount < sum-original) leaves Pricing Breakdown at
-        // sum-of-originals as-is — TBD pending Rodolfo verdict on
-        // discount-line vs leave-as-is vs block-entirely.
+        // pin-29 — reconcile invariant: sum(priceLineItems) == saleAmount
+        // for every sold project, in every render surface. Achieved by
+        // anchoring delta to sum(non-auto_sold_adjustment lines) — the
+        // ACTUAL set that renders in Pricing Breakdown — so the invariant
+        // is a property of the data at write-time, not of any render.
         //
-        // Per banked rodolfo-vocabulary-preference-as-label-discipline:
-        // exact-string label 'EXTRA $' + delta-amount per Rodolfo verbatim.
+        // Symmetric labels: delta > 0 → 'Upsale' (Rod's term); delta < 0
+        // → 'Discount' (plain-language symmetric, Rod-voiced). delta == 0
+        // → no row appended.
         //
-        // Per banked new-feature-as-display-extension-not-flow-bypass:
-        // existing #316 contract-upload + #313 admin-review enforcement
-        // UNCHANGED. Auto-line is display + commission-source addition
-        // (commission still = saleAmount × commission_pct; no canonical-
-        // source divergence introduced).
+        // Integer-cent guarantee: saleAmount + baseLine amounts are
+        // integer dollars; delta = integer - sum(integers) = integer.
+        // No fractional cents possible. No rounding gap.
+        //
+        // Downstream financial calc unaffected: commission/revenue read
+        // saleAmount directly (transactions.tsx:284 + sales.ts createSale
+        // RPC), never priceLineItems — verified pre-merge zero-consumer
+        // audit across admin/revenue + banking + reports + overview +
+        // analytics + supabase. priceLineItems is display-only.
         set((state) => ({
           sentProjects: state.sentProjects.map((p) => {
             if (p.id !== id) return p
-            // Compute auto-adjustment delta from preset-source originals only.
-            // vendor_edit + auto_sold_adjustment lines are excluded so re-marks
-            // don't double-count prior adjustments.
-            const presetSum = (p.priceLineItems ?? [])
-              .filter((line) => (line.source ?? 'preset') === 'preset')
-              .reduce((sum, line) => sum + (line.originalAmount ?? line.amount ?? 0), 0)
-            // Upsale anchor = what homeowner saw at booking (quotedPriceCents frozen
-            // at vendor-select per Ship #355). Falls back to presetSum for legacy
-            // records without quotedPriceCents. Fixes Upsale = saleAmount minus
-            // catalog-total (not minus flat-preset) per Rodolfo clarification.
-            const anchor = (p.quotedPriceCents && p.quotedPriceCents > 0)
-              ? Math.round(p.quotedPriceCents / 100)
-              : presetSum
-            // Strip prior auto_sold_adjustment lines so re-mark replaces
-            // (not appends) the EXTRA $ line.
-            const baseLines = (p.priceLineItems ?? []).filter(
-              (line) => line.source !== 'auto_sold_adjustment',
-            )
-            const delta = saleAmount - anchor
-            const nextLineItems =
-              delta > 0
-                ? [
-                    ...baseLines,
-                    {
-                      id: `auto-extra-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      label: `Upsale`,
-                      amount: delta,
-                      originalAmount: 0,
-                      source: 'auto_sold_adjustment' as const,
-                    },
-                  ]
-                : baseLines
             return {
               ...p,
               status: 'sold' as const,
               soldAt: new Date().toISOString(),
               saleAmount,
-              priceLineItems: nextLineItems,
+              priceLineItems: reconcileLines(saleAmount, p.priceLineItems),
             }
           }),
         }))
@@ -726,6 +912,17 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
         logEvent({ eventType: 'completed', projectId: id })
         updateProject(id, { completed_at: completedAt })
+      },
+
+      markWorkStarted: (id) => {
+        const workStartedAt = new Date().toISOString()
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === id ? { ...p, workStartedAt } : p
+          ),
+        }))
+        logEvent({ eventType: 'work_started', projectId: id })
+        updateProject(id, { work_started_at: workStartedAt })
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {

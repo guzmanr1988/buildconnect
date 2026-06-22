@@ -11,10 +11,11 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { generateSubmissionPdf } from '@/lib/generate-submission-pdf'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
-import { getVendorPriceMap, getVendorPermitMap, getPermitForItem } from '@/lib/api/pricing'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
-import { findCatalogOption, getOptionMetadata, sqftToSquares } from '@/lib/option-metadata'
-import { computeGutterTotalLinFt, isRepairOption, resolveRepairAreaSqft } from '@/lib/roof-pricing'
+import { getVendorPriceMap, getVendorPermitMap } from '@/lib/api/pricing'
+import { computeRemodelLineItems } from '@/lib/remodel-pricing'
+import { computeBathroomLineItems } from '@/lib/bathroom-pricing'
+import { getVendorServiceRateMap } from '@/lib/api/vendor-service-rates'
+import { buildRoofingBaseLines } from '@/lib/roofing-base-lines'
 import { useCatalogStore } from '@/stores/catalog-store'
 import type { PriceLineItem, ServiceConfig } from '@/types'
 import type { CartItem } from '@/stores/cart-store'
@@ -53,209 +54,29 @@ function formatBookingTime(timeStr: string) {
 // than this is treated as stale and triggers the explicit error state.
 const RECENT_SEND_WINDOW_MS = 5 * 60 * 1000
 
-// Build computed roofing price-line-items from a vendor's Supabase catalog.
-// Each selected material gets its own line ($X/square × squares, waste-included). Selected
-// addons (gutters/soffit/fascia) get their own line ($X/lin ft × linFt).
-// Flat-roof option id for split detection
-const FLAT_ROOF_OPTION_ID = 'flat_roof'
-
+// pin-31 — async wrapper around the shared roofing base-line helper. The
+// pure-sync core moved to src/lib/roofing-base-lines.ts so booking-time
+// write, vendor-compare quote, and projects-store hydrate-time backfill
+// all consume the SAME line-item math. See that module's header for the
+// permit-gate doctrine.
 async function buildRoofingLineItems(
   item: CartItem,
   vendorMockId: string,
   projectPermit?: 'yes' | 'no',
-  // Catalog overlay for priceUnit. Caller passes
-  // useCatalogStore.getState().services so admin-edited priceUnit on a
-  // roofing option overrides the static OPTION_METADATA fallback. Optional
-  // for back-compat — undefined preserves legacy static-only behavior.
   services?: ServiceConfig[],
 ): Promise<PriceLineItem[] | null> {
   const uuid = DEMO_VENDOR_UUID_BY_MOCK_ID[vendorMockId]
   if (!uuid) return null
 
-  let priceMap: ReturnType<typeof getVendorPriceMap> extends Promise<infer T> ? T : never
-  let permitMap: ReturnType<typeof getVendorPermitMap> extends Promise<infer T> ? T : never
   try {
-    ;[priceMap, permitMap] = await Promise.all([
+    const [priceMap, permitMap] = await Promise.all([
       getVendorPriceMap(uuid),
       getVendorPermitMap(uuid),
     ])
+    return buildRoofingBaseLines(item, projectPermit, priceMap, permitMap, services)
   } catch {
     return null
   }
-
-  const areaSqft = item.roofMeasurement?.areaSqft ?? 0
-  const pitchedAreaSqft = item.roofMeasurement?.pitchedAreaSqft
-  const flatAreaSqft = item.roofMeasurement?.flatAreaSqft
-  const hasFlatSection = item.roofMeasurement?.pitchedAreaSqft !== undefined && item.roofMeasurement?.flatAreaSqft !== undefined
-
-  // Determine if this cart item has both a pitched material AND flat_roof selected.
-  // When hasFlatSection, each material gets its own area slice.
-  const allMaterialIds = Object.values(item.selections ?? {}).flat()
-  const hasFlatRoofSelected = allMaterialIds.includes(FLAT_ROOF_OPTION_ID) || allMaterialIds.includes('repair_flat_roof')
-  const hasPitchedSelected = allMaterialIds.some((id) => {
-    if (id === FLAT_ROOF_OPTION_ID || id === 'repair_flat_roof') return false
-    const sib = services ? findCatalogOption(services, 'roofing', id) : undefined
-    const u = getOptionMetadata(id, 'roofing', sib).priceUnit
-    return u === 'square' || u === 'sqft'
-  })
-  const includeMaterialOrderOpt = item.roofMeasurement?.includeMaterialOrder !== false
-  const includeFlatAreaOpt = item.roofMeasurement?.includeFlatArea !== false
-  const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
-  const useSplit = hasFlatSection && hasFlatRoofSelected && hasPitchedSelected
-    && includeMaterialOrderOpt
-
-  const lines: PriceLineItem[] = []
-  let anyComputed = false
-
-  for (const [groupId, optionIds] of Object.entries(item.selections ?? {})) {
-    // service_type (replace/repair) is vendor-internal — not shown on
-    // customer-facing breakdown per Rodolfo: "There is no replace cost just material"
-    if (groupId === 'service_type') continue
-    for (const optionId of optionIds) {
-      const key = `roofing|${groupId}|${optionId}`
-      const priceCents = priceMap.get(key)
-      if (priceCents === undefined) continue
-
-      const catalogOption = services ? findCatalogOption(services, 'roofing', optionId) : undefined
-      const meta = getOptionMetadata(optionId, 'roofing', catalogOption)
-      const unitRateDollars = priceCents / 100
-
-      if (meta.priceUnit === 'square' || meta.priceUnit === 'sqft') {
-        // Per-material repair lines: route through the shared resolver so the
-        // booking-confirmation total reconciles with vendor-compare per
-        // Math-is-god. Repair has no waste-factor (homeowner repairs the
-        // exact existing surface — not a re-installation).
-        if (isRepairOption(optionId)) {
-          const rawSqft = resolveRepairAreaSqft(item, optionId)
-          const amount = Math.round(unitRateDollars * rawSqft * 100) / 100
-          const labelName = optionId.replace(/^repair_/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-          lines.push({
-            id: `roofing-repair-${optionId}`,
-            label: `Repair — ${labelName}`,
-            amount,
-            originalAmount: amount,
-            source: 'preset_calculated',
-            priceUnit: 'sqft',
-            unitRate: unitRateDollars,
-            unitQuantity: rawSqft,
-          })
-          anyComputed = true
-          continue
-        }
-        // Split mode: flat_roof material uses its own area slice; pitched uses the other.
-        // Non-split mode (single material): use full area.
-        // Material-order opt-out: when the section toggle is OFF both pitched
-        // and flat slices read 0 (no material lines on the quote). Mirrors
-        // pricing.ts gate.
-        const isFlat = optionId === FLAT_ROOF_OPTION_ID
-        const useSquares = meta.priceUnit === 'square'
-        const sliceZeroed = !includeMaterialOrderOpt || (isFlat && !includeFlatAreaOpt)
-        let rawSqft: number
-        let note: string | undefined
-        if (sliceZeroed) {
-          rawSqft = 0
-        } else if (useSplit) {
-          if (isFlat) {
-            rawSqft = flatAreaSqft ?? 0
-            if (rawSqft === 0) note = 'No flat section detected by satellite imagery — confirm with vendor.'
-          } else {
-            rawSqft = pitchedAreaSqft ?? 0
-            if (rawSqft === 0) note = 'No pitched section detected by satellite imagery — confirm with vendor.'
-          }
-        } else if (isFlat) {
-          rawSqft = flatAreaSqft ?? areaSqft
-        } else {
-          rawSqft = pitchedAreaSqft ?? areaSqft
-        }
-        // For square pricing: apply 2% waste (top-of-real bias) then convert.
-        // For legacy sqft pricing: bill directly against raw sqft.
-        const wasteFactor = 1.02
-        const qty = useSquares ? sqftToSquares(Math.round(rawSqft * wasteFactor)) : rawSqft
-        const amount = Math.round(unitRateDollars * qty * 100) / 100
-        const labelName = optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-        const areaLabel = useSplit ? (isFlat ? ' (flat section)' : ' (pitched section)') : ''
-        lines.push({
-          id: `roofing-material-${optionId}`,
-          label: `Material — ${labelName}${areaLabel}`,
-          amount,
-          originalAmount: amount,
-          source: 'preset_calculated',
-          priceUnit: useSquares ? 'square' : 'sqft',
-          unitRate: unitRateDollars,
-          unitQuantity: qty,
-          ...(note ? { note } : {}),
-        } as PriceLineItem & { note?: string })
-        anyComputed = true
-      } else if (meta.priceUnit === 'linear_ft') {
-        // Perimeter section toggle gates gutter/fascia/soffit add-ons. When
-        // OFF the line item drops out of the breakdown entirely.
-        if (!includePerimeterOpt) continue
-        const linFt = item.roofAddonLinearFt?.[optionId] ?? 0
-        const effectiveLinFt = optionId === 'gutters'
-          ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
-          : linFt
-        if (effectiveLinFt > 0) {
-          const amount = Math.round(unitRateDollars * effectiveLinFt * 100) / 100
-          lines.push({
-            id: `roofing-addon-${optionId}`,
-            label: `${optionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`,
-            amount,
-            originalAmount: amount,
-            source: 'preset_calculated',
-            priceUnit: 'linear_ft',
-            unitRate: unitRateDollars,
-            unitQuantity: effectiveLinFt,
-          })
-          anyComputed = true
-        }
-      }
-    }
-  }
-
-  if (!anyComputed) return null
-
-  // Permit: always render a row so homeowner/vendor always sees the permit status.
-  // PR #118 fix-forward: amount is now the vendor's ONE flat per-service
-  // permit fee (not summed across selected options). Label varies by
-  // customer config + vendor permit state:
-  //   customer YES + vendor has service permit set → "Permit" with dollar amount
-  //   customer YES + vendor has no permit set      → "Permit — no price" with amount 0
-  //   customer NO                                  → "Permit — no permit, no price" with amount 0
-  // Project-level permit (PR #140 universalization) is the SoT; legacy
-  // per-item item.roofPermit is the fallback for cart entries persisted
-  // pre-PR-140. widen-reads-narrow-writes preserves Math-is-god across
-  // both shapes without dual-write at the wizard side.
-  const permitChoice: 'yes' | 'no' | undefined = projectPermit ?? (item.roofPermit as 'yes' | 'no' | undefined)
-  if (permitChoice === 'yes') {
-    const permitCents = getPermitForItem(item, permitMap)
-    if (permitCents > 0) {
-      lines.push({
-        id: 'roofing-permit',
-        label: 'Permit',
-        amount: Math.round(permitCents) / 100,
-        originalAmount: Math.round(permitCents) / 100,
-        source: 'preset_calculated' as const,
-      })
-    } else {
-      lines.push({
-        id: 'roofing-permit',
-        label: 'Permit — no price',
-        amount: 0,
-        originalAmount: 0,
-        source: 'preset_calculated' as const,
-      })
-    }
-  } else {
-    lines.push({
-      id: 'roofing-permit',
-      label: 'Permit — no permit, no price',
-      amount: 0,
-      originalAmount: 0,
-      source: 'preset_calculated' as const,
-    })
-  }
-
-  return lines
 }
 
 export function BookingConfirmationPage() {
@@ -344,35 +165,46 @@ export function BookingConfirmationPage() {
             const services = useCatalogStore.getState().services
             const built = await buildRoofingLineItems(pendingItem, contractor.vendor_id, projectPermit ?? undefined, services)
             if (built) computedLineItems = built
-          } else if (contractor.vendor_id) {
-            // PR #118 fix-forward — for non-roofing services, snapshot a
-            // permit-line from vendor's flat per-service permit fee
-            // (vendor_service_permits) instead of PRICE_LINE_ITEM_PRESETS'
-            // static category-permit. Other line categories (Material,
-            // Install, etc.) keep using PRESETS shape until per-vendor
-            // pricing for those exists too.
-            const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id]
-            if (vendorUuid) {
-              try {
-                const permitMap = await getVendorPermitMap(vendorUuid)
-                const permitCents = getPermitForItem(pendingItem, permitMap)
-                const presets = PRICE_LINE_ITEM_PRESETS[pendingItem.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? []
-                if (presets.length > 0) {
-                  const nonPermit = presets.filter((p) => !/permit/i.test(p.id))
-                  const permitLine: PriceLineItem = {
-                    id: `${pendingItem.serviceId}-permit`,
-                    label: 'Permit Price',
-                    amount: Math.round(permitCents) / 100,
-                    originalAmount: Math.round(permitCents) / 100,
-                    source: 'preset',
-                  }
-                  computedLineItems = [...nonPermit.map((p) => ({ ...p })), permitLine]
-                }
-              } catch {
-                // fall through — undefined keeps PRESETS fallback on display surfaces
-              }
+          } else if (pendingItem.serviceId === 'remodel' && pendingItem.remodelMeasurements) {
+            // Ship #475+1 — Interior Remodel: every line auto-computed from
+            // L×W×H×numWalls via REMODEL_RATES (per-line rate + measurement-
+            // derived qty stamped as preset_calculated, same snapshot
+            // semantics as roofing).
+            //
+            // Mig 068 — per-vendor unit-rate overlay via vendor_service_rates.
+            // When contractor.vendor_id maps to a real UUID, fetch the per-
+            // vendor rate map and pass it to the compute engine; otherwise
+            // the engine falls back to the in-code MEDIAN baseline.
+            let remodelRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { remodelRateMap = await getVendorServiceRateMap(vendorUuid, 'remodel') } catch { /* silent fallback */ }
             }
+            computedLineItems = computeRemodelLineItems(pendingItem.remodelMeasurements, remodelRateMap)
+          } else if (pendingItem.serviceId === 'bathroom' && pendingItem.bathroomMeasurements) {
+            // Ship #475+2 — Bathroom Remodel: line scope from L×W×H×tile-coverage
+            // + tub toggle via BATHROOM_RATES. FIXTURES rows ($0 client-provided)
+            // are included in the snapshot so the vendor inbox sees the full
+            // scope, but contractor subtotal === grand total by construction.
+            //
+            // Mig 068 — per-vendor unit-rate overlay (same pattern as remodel).
+            let bathroomRateMap = undefined
+            if (contractor.vendor_id) {
+              const vendorUuid = DEMO_VENDOR_UUID_BY_MOCK_ID[contractor.vendor_id] ?? contractor.vendor_id
+              try { bathroomRateMap = await getVendorServiceRateMap(vendorUuid, 'bathroom') } catch { /* silent fallback */ }
+            }
+            computedLineItems = computeBathroomLineItems(pendingItem.bathroomMeasurements, bathroomRateMap)
           }
+          // Rod 2026-06-09 rev5 (kratos GO via 1781036363641-kratos-qzxq1) —
+          // PRESET-fallback assembly for non-roof/remodel/bath services is
+          // KILLED. Rod rule: a lead appears WITH a real per-vendor price or
+          // does NOT appear at all (no "Price pending", no "$0", no PRESET
+          // fallback). Roofing / remodel / bathroom compute paths above are
+          // UNTOUCHED (they pull real per-vendor catalog math). For everything
+          // else, computedLineItems remains undefined — the rev4 display
+          // filter on lead-inbox / lead-workflow / lead-stages then hides any
+          // lead whose priceLineItems are empty / fall below total>0, matching
+          // the marketplace-matching rule (coversAllServices && totalCents>0).
 
           // Ship #269 — pass profile.id as homeowner_id snapshot for admin
           // auditing. Optional on the SentProject side, so undefined here

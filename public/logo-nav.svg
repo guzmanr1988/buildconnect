@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <!-- Navy rounded-square brand shape -->
+  <rect width="36" height="36" rx="7" fill="#1C3D7B"/>
+
+  <!-- Subtle ring — badge silhouette without interior detail -->
+  <circle cx="18" cy="18" r="13.5" fill="none" stroke="white" stroke-width="0.8" opacity="0.22"/>
+
+  <!-- Hammer: bold T-head NW, handle SE. Rotated -38deg around badge center. -->
+  <g transform="rotate(-38, 18, 18)">
+    <!-- Handle -->
+    <rect x="16.5" y="13" width="3" height="13.5" rx="1.5" fill="rgba(255,255,255,0.92)"/>
+    <!-- Head: wide bar -->
+    <rect x="10.5" y="8.5" width="15" height="5.5" rx="2" fill="white"/>
+  </g>
+
+  <!-- Wrench: open fork NE, handle SW. Rotated +38deg around badge center. -->
+  <g transform="rotate(38, 18, 18)">
+    <!-- Handle -->
+    <rect x="16.5" y="13" width="3" height="13.5" rx="1.5" fill="rgba(255,255,255,0.82)"/>
+    <!-- Fork left prong -->
+    <rect x="11.5" y="8.5" width="2.5" height="6.5" rx="1.25" fill="white"/>
+    <!-- Fork right prong -->
+    <rect x="22" y="8.5" width="2.5" height="6.5" rx="1.25" fill="white"/>
+    <!-- Fork top bridge -->
+    <rect x="11.5" y="8.5" width="13" height="2.5" rx="1.25" fill="white"/>
+  </g>
+</svg>

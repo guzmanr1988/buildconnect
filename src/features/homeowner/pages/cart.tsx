@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { formatProjectTitle } from '@/lib/format-project-title'
 import type { CartItem } from '@/stores/cart-store'
 import { RoofSpecCard } from '@/components/shared/roof-spec-card'
-import { PermitDisplayRow } from '@/features/homeowner/components/permit-step-section'
+import { PermitDisplayRow, AssociationDisplayRow, PoolSurveyDisplayRow } from '@/features/homeowner/components/permit-step-section'
 import { shouldAskProjectPermit } from '@/lib/permit-rules'
 import { ProjectPermitDialog } from '@/features/homeowner/components/project-permit-dialog'
 import { applyAreaWaste } from '@/lib/area-waste'
@@ -93,6 +93,8 @@ export function CartPage() {
     projectPermit,
     setProjectPermit,
     setProjectPermitWaiver,
+    projectAssociation,
+    poolSurvey,
   } = useCartStore()
   const { sentProjects } = useProjectsStore()
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
@@ -196,6 +198,7 @@ export function CartPage() {
     windows_doors: 'W&D', roofing: 'Roofing', pool: 'Pool', driveways: 'Driveways',
     pergolas: 'Pergolas & Terraces', air_conditioning: 'A/C', kitchen: 'Kitchen', bathroom: 'Bathroom',
     wall_paneling: 'Wall Paneling', garage: 'Remodel', house_painting: 'Painting',
+    remodel: 'Interior Remodel',
   }
   const autoProjectName = profile
     ? `${profile.name} - ${items.map(i => serviceAbbrev[i.serviceId] || i.serviceName).join(', ')}`
@@ -913,6 +916,13 @@ export function CartPage() {
                   )}
                   {/* Permit — project-level (cart-store), legacy per-item fallback. */}
                   <PermitDisplayRow permit={projectPermit ?? viewItem.roofPermit} />
+                  {/* Association — project-level, all services. task_1780776240716_817.
+                      Homeowner cart review surface; download link omitted (homeowner
+                      already has the file). */}
+                  <AssociationDisplayRow association={projectAssociation} />
+                  {/* Pool survey — Pool-only; null on every other service so the
+                      component returns null cleanly via its own null-gate. */}
+                  <PoolSurveyDisplayRow survey={poolSurvey} />
                   {/* Measured area — driveways + pergolas items with satellite measurement.
                       Display routes through applyAreaWaste so driveway shows raw × 1.03
                       while pergolas passes raw through unchanged. Cost layer mirrors
@@ -995,11 +1005,15 @@ export function CartPage() {
                       const doorsTotal = viewItem.doorSelections?.reduce((s, d) => s + d.quantity, 0) ?? 0
                       const stormFrontsTotal = viewItem.stormFrontSelections?.reduce((s, sf) => s + sf.quantity, 0) ?? 0
                       return (
-                        <div key={groupId} data-project-summary-products-block>
-                          <p className="text-sm font-semibold text-foreground mb-1.5" data-section-label-source={group ? 'group' : 'fallback'}>
+                        <div
+                          key={groupId}
+                          data-project-summary-products-block
+                          className="rounded-lg bg-background border p-3 space-y-1.5 min-w-0"
+                        >
+                          <p className="text-sm font-semibold text-foreground" data-section-label-source={group ? 'group' : 'fallback'}>
                             {stripSubSuffix(group?.label || groupId.replace(/_/g, ' '))}
                           </p>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 min-w-0">
                             {optionIds.map((optId) => {
                               const option = group?.options.find((o) => o.id === optId)
                               const label = option?.label || optId.replace(/_/g, ' ')
@@ -1035,7 +1049,7 @@ export function CartPage() {
                                 }
                               }
                               return (
-                                <Badge key={optId} variant="secondary" className="text-sm px-3 py-1">
+                                <Badge key={optId} variant="secondary" className="text-xs px-2 py-0.5 max-w-full truncate" title={`${label}${qty}`}>
                                   {label}{qty}
                                 </Badge>
                               )
@@ -1062,7 +1076,7 @@ export function CartPage() {
                           Total: {viewItem.windowSelections.reduce((s, w) => s + w.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
                         {viewItem.windowSelections.map((w) => (
                           <div key={w.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -1090,7 +1104,7 @@ export function CartPage() {
                           Total: {viewItem.doorSelections.reduce((s, d) => s + d.quantity, 0)}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4" data-project-summary-grid>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
                         {viewItem.doorSelections.map((d) => (
                           <div key={d.id} className="rounded-lg bg-background border p-3 space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -1105,6 +1119,70 @@ export function CartPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Storm Front selections — same 2-col + per-card-specs as
+                      Doors. stormFrontSelections shape mirrors doorSelections
+                      (id, quantity, size, type, frameColor, glassColor,
+                      glassType). Section was previously omitted from this
+                      project-summary block even though "Install for" chips
+                      and project-items-card-grid both render storm_fronts. */}
+                  {viewItem.stormFrontSelections && viewItem.stormFrontSelections.length > 0 && (
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="storm-fronts">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-foreground">Storm Fronts</p>
+                        <span className="text-sm font-bold text-primary">
+                          Total: {viewItem.stormFrontSelections.reduce((s, sf) => s + sf.quantity, 0)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
+                        {viewItem.stormFrontSelections.map((sf) => (
+                          <div key={sf.id} className="rounded-lg bg-background border p-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-base font-bold">{sf.size.replace('x', '" × ')}"</span>
+                              <span className="text-base font-bold text-primary">×{sf.quantity}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                              <Badge variant="secondary" className="text-xs">{sf.type}</Badge>
+                              <Badge variant="outline" className="text-xs">Frame: {sf.frameColor}</Badge>
+                              <Badge variant="outline" className="text-xs">Glass: {sf.glassColor}</Badge>
+                              <Badge variant="outline" className="text-xs">{sf.glassType}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Garage Door selection — single card (gd is 1 selection not array). */}
+                  {viewItem.garageDoorSelection?.type && (
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-3" data-project-summary-section="garage-doors">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-foreground">Garage Door</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" data-project-summary-grid>
+                        <div className="rounded-lg bg-background border p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-base font-bold">
+                              {viewItem.garageDoorSelection.type === 'single_garage' ? 'Single Garage Door' : 'Double Garage Door'}
+                            </span>
+                          </div>
+                          {((viewItem.garageDoorSelection.type === 'double_garage' && viewItem.garageDoorSelection.size) || viewItem.garageDoorSelection.color || viewItem.garageDoorSelection.glass) && (
+                            <div className="flex flex-wrap gap-1.5 border-t border-border pt-2" data-project-summary-card-specs>
+                              {viewItem.garageDoorSelection.type === 'double_garage' && viewItem.garageDoorSelection.size && (
+                                <Badge variant="outline" className="text-xs">{viewItem.garageDoorSelection.size === 'gd_4_panels' ? '4 Panels' : '5 Panels'}</Badge>
+                              )}
+                              {viewItem.garageDoorSelection.color && (
+                                <Badge variant="outline" className="text-xs">Color: {viewItem.garageDoorSelection.color.charAt(0).toUpperCase() + viewItem.garageDoorSelection.color.slice(1)}</Badge>
+                              )}
+                              {viewItem.garageDoorSelection.glass && (
+                                <Badge variant="outline" className="text-xs">Glass: {viewItem.garageDoorSelection.glass.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}</Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { toast } from 'sonner'
@@ -7,7 +6,7 @@ import {
   Inbox, CalendarCheck, MapPin,
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
-  UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign,
+  UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign, AlertCircle, Bell, Download, Hammer,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,12 +24,15 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useVendorLeadStages, LEAD_STAGES, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
 import type { LeadStageKey, LeadExt } from '@/lib/vendor-lead-stages'
 import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
+import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { DIALOG_HORIZONTAL_GRID } from '@/lib/dialog-layouts'
 import { getReviewStatusDisplay } from '@/lib/review-status-display'
 import { useVendorEmployeesStore } from '@/stores/vendor-employees-store'
-import { uploadDocAsVendor } from '@/lib/api/homeowner-documents'
+import { uploadDocAsVendor, getSignedUrl as getDocSignedUrl } from '@/lib/api/homeowner-documents'
+import { maybeGenerateProjectReportOnSold } from '@/lib/project-report-on-sold'
+import { useAssociationDocForProject } from '@/features/vendor/lib/use-association-doc'
+import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { useFlagThreadStore } from '@/stores/flag-thread-store'
-import { PRICE_LINE_ITEM_PRESETS } from '@/lib/price-line-item-presets'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { useVendorScope, useResolvedVendor } from '@/lib/vendor-scope'
@@ -75,6 +77,11 @@ export default function VendorLeadWorkflow() {
   // the sentProject; bucketing reads completedAt-presence to override
   // age-based 90d auto-transition.
   const markCompleted = useProjectsStore((s) => s.markCompleted)
+  // task_066 — vendor "Start Work" action. Writes work_started_at +
+  // logs work_started event. Gated client-side by association_permit
+  // doc presence when sp.projectAssociation='yes' (see Sold/Active
+  // branch in the Lead Detail Modal below).
+  const markWorkStarted = useProjectsStore((s) => s.markWorkStarted)
   // Ship #311 — lead-id-keyed manual-completion override; covers
   // MOCK_LEADS without sentProject backing. Bucketing + label
   // derivation read effective completedAt downstream so the override
@@ -208,16 +215,22 @@ export default function VendorLeadWorkflow() {
       const leadId = `L-${p.id.slice(0, 4).toUpperCase()}`
       if (p.saleAmount && p.saleAmount > 0) {
         map[leadId] = p.saleAmount
-      } else if (p.quotedPriceCents && p.quotedPriceCents > 0) {
-        map[leadId] = Math.round(p.quotedPriceCents / 100)
-      } else {
-        const lineItems = (p.priceLineItems && p.priceLineItems.length > 0)
-          ? p.priceLineItems
-          : (PRICE_LINE_ITEM_PRESETS[p.item?.serviceId as keyof typeof PRICE_LINE_ITEM_PRESETS] ?? [])
+      } else if (p.priceLineItems && p.priceLineItems.length > 0) {
+        // Rod-go 2026-06-09 — STOP fabricating from PRICE_LINE_ITEM_PRESETS
+        // (was producing fake $14,950 on every unpriced roofing lead).
+        // Only sum REAL vendor-configured line items; if none, omit from
+        // map → display site shows "Price pending" instead of a fake number.
         const value = p.item?.serviceId === 'windows_doors'
-          ? computeWindowsDoorsCatalogTotal(p.item as any, lineItems, getVendorPrice)
-          : lineItems.reduce((s: number, l: { amount: number }) => s + (l.amount || 0), 0)
+          ? computeWindowsDoorsCatalogTotal(p.item as any, p.priceLineItems, getVendorPrice)
+          : p.priceLineItems.reduce((s: number, l: { amount: number }) => s + (l.amount || 0), 0)
         if (value > 0) map[leadId] = value
+      } else if (p.quotedPriceCents && p.quotedPriceCents > 0) {
+        // 2026-06-10 launch-night fix — when no per-line breakdown exists
+        // but the homeowner saw a vendor quote at booking time (Ship #355
+        // freeze), surface the quote as the lead total (cents → dollars).
+        // Aligns with the price-or-no-show rule: a contractor-quoted price
+        // IS a real price.
+        map[leadId] = Math.round(p.quotedPriceCents / 100)
       }
     }
     return map
@@ -905,7 +918,7 @@ export default function VendorLeadWorkflow() {
           + operations-right) on sm+. Mobile portrait preserved exactly
           as-is per Rodolfo "mobile no changes" strict directive. */}
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent className="max-w-md sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] overflow-y-auto" data-testid="vendor-lead-detail-dialog">
           {selected && (
             <div className="space-y-3">
               <DialogHeader className="space-y-1.5">
@@ -1251,123 +1264,27 @@ export default function VendorLeadWorkflow() {
                 </div>
               </div>
 
-              {/* Roof Measurements, No-Permit Waiver, Roof Add-ons */}
+              {/* No-Permit Waiver — vendor-only legal artifact, KEPT in
+                  left col (Arc-35: configurator selections moved to the
+                  full-width ProjectItemsCardGrid below the 2-col grid). */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
-                if (!sp) return null
-                const rm = sp.item?.roofMeasurement
-                const waiver = (sp.item as any)?.permitWaiver
-                const addons = sp.item?.roofAddonLinearFt
+                const waiver = (sp?.item as any)?.permitWaiver
+                if (!waiver?.acknowledged) return null
                 return (
-                  <>
-                    {rm && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Measurements</p>
-                        <div className="space-y-1 text-sm">
-                          {(rm.includeMaterialOrder ?? true) && rm.pitchedAreaSqft != null && (rm.pitchedAreaSqft ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Pitched area</span>
-                              <span className="font-medium">{rm.pitchedAreaSqft.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && (rm.includeFlatArea ?? true) && (rm.flatAreaSqft ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Flat area</span>
-                              <span className="font-medium">{rm.flatAreaSqft!.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Total</span>
-                              <span className="font-medium">{rm.areaSqft.toLocaleString()} sq ft</span>
-                            </div>
-                          )}
-                          {(rm.includeMaterialOrder ?? true) && rm.pitch && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Pitch</span>
-                              <span className="font-medium">{rm.pitch}</span>
-                            </div>
-                          )}
-                          {(rm.includePerimeter ?? true) && (rm.perimeterFt ?? 0) > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Perimeter</span>
-                              <span className="font-medium">{rm.perimeterFt!.toLocaleString()} ft</span>
-                            </div>
-                          )}
-                        </div>
+                  <div className="rounded-lg border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">No-Permit Waiver</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-800/70 dark:text-amber-200/70">Signed by</span>
+                        <span className="font-medium text-amber-900 dark:text-amber-100">{waiver.signedName}</span>
                       </div>
-                    )}
-                    {waiver?.acknowledged && (
-                      <div className="rounded-lg border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">No-Permit Waiver</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed by</span>
-                            <span className="font-medium text-amber-900 dark:text-amber-100">{waiver.signedName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-amber-800/70 dark:text-amber-200/70">Signed at</span>
-                            <span className="font-medium text-amber-900 dark:text-amber-100">{new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-800/70 dark:text-amber-200/70">Signed at</span>
+                        <span className="font-medium text-amber-900 dark:text-amber-100">{new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </div>
-                    )}
-                    {addons && Object.keys(addons).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Roof Add-ons</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(addons).map(([key, ft]) => {
-                            const isGutters = key === 'gutters'
-                            const cfg = sp.item?.gutterDropsConfig
-                            const totalFt = isGutters ? computeGutterTotalLinFt(ft, cfg) : ft
-                            const showBreakdown = isGutters && !!cfg
-                            const perFloor = showBreakdown ? GUTTER_DROP_FT_BY_FLOORS[cfg!.floors] : 0
-                            const drops = cfg?.drops ?? 0
-                            const floorsLabel = cfg?.floors === 1 ? '1-story' : '2-story'
-                            return (
-                              <div key={key} className="flex flex-col">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                                  <span className="font-medium">{totalFt.toLocaleString()} ft</span>
-                                </div>
-                                {showBreakdown && (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {ft.toLocaleString()} perimeter + {drops} drop{drops === 1 ? '' : 's'} × {perFloor} ft for {floorsLabel}
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {sp.item?.customSizeSqft && Object.keys(sp.item.customSizeSqft).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Custom-size measurements</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(sp.item.customSizeSqft).map(([key, sqft]) => (
-                            <div key={key} className="flex items-center justify-between">
-                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="font-medium">{sqft.toLocaleString()} sqft</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {sp.item?.addonLinearFt && Object.keys(sp.item.addonLinearFt).length > 0 && (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Linear-ft add-ons</p>
-                        <div className="space-y-1 text-sm">
-                          {Object.entries(sp.item.addonLinearFt).map(([key, ft]) => (
-                            <div key={key} className="flex items-center justify-between">
-                              <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="font-medium">{ft.toLocaleString()} ft</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                    </div>
+                  </div>
                 )
               })()}
 
@@ -1395,39 +1312,33 @@ export default function VendorLeadWorkflow() {
                   (PC uses column-gap to separate the info/ops sides). */}
               <Separator className="sm:hidden" />
 
-              {/* Ship #332 — Selections section (PC-only). Mobile keeps
-                  the chips inside the LEFT Project section (rendered
-                  inline below for mobile via a sibling sm:hidden block
-                  inside the Project section). On PC the chips render
-                  here so the right column has visual mass to balance
-                  the left column for confirmed/rejected/cancelled
-                  states (was 16/6 imbalance). */}
-              {(() => {
-                const selectionChips = Object.values(selected.pack_items ?? {})
-                  .flat()
-                  .filter((s) => s !== 'permit' && s !== 'financed' && s !== 'financing')
-                if (selectionChips.length === 0) return null
-                return (
-                  <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Selections</p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {selectionChips.map((s) => (
-                        <Badge
-                          key={s}
-                          variant="secondary"
-                          className="text-[10px] capitalize bg-primary/10 text-primary border-primary/20"
-                        >
-                          {s.replace(/_/g, ' ')}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* Appointment — PC-only slot. Pin-24: relocated from
+                  bottom→top of right col so the appointment time leads
+                  the operations side (under-Reschedule placement
+                  superseded by floating-menu empty-space fill spec).
+                  Sibling mobile-only block lives in the left column with
+                  `sm:hidden` so the mobile single-column stack is
+                  unchanged. Always rendered for all 4 lead states
+                  (pending/confirmed/completed/rejected). */}
+              <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2" data-testid="vendor-lead-detail-appointment">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
+                <div className="flex items-center gap-2 text-sm text-foreground/90">
+                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
+                </div>
+              </div>
+
+              {/* Arc-35: Selections chips REPLACED by full-width
+                  ProjectItemsCardGrid below the 2-col grid (per-card
+                  pricing + section $Total badges supersede the flat
+                  Selections chips). */}
 
               {/* Pricing Breakdown — strict render: only when sp.priceLineItems is
-                  populated at sendProject time. No PRESETS fallback, no reconciliation,
-                  no Upsale injection. Hide > wrong number per MATH IS GOD. */}
+                  populated at sendProject time. No PRESETS fallback, no display-side
+                  reconciliation. pin-29 reconcile invariant — sum(priceLineItems) ==
+                  saleAmount — is baked into markSold at write time (Upsale / Discount
+                  appended as an auto_sold_adjustment row), so this surface just
+                  iterates lines + sums. Hide > wrong number per MATH IS GOD. */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                 if (!sp?.priceLineItems || sp.priceLineItems.length === 0) return null
@@ -1549,6 +1460,18 @@ export default function VendorLeadWorkflow() {
                           {sp.soldAt && (
                             <p className="text-xs text-muted-foreground text-center">
                               Sold on {new Date(sp.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          )}
+                          <AssociationDocGateBlock
+                            sp={sp}
+                            onStartWork={() => markWorkStarted(sp.id)}
+                          />
+                          {sp.workStartedAt && (
+                            <p
+                              className="text-xs text-emerald-700 dark:text-emerald-400 text-center font-medium"
+                              data-association-work-started
+                            >
+                              Work started on {new Date(sp.workStartedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                           )}
                           {sp.completedAt && (
@@ -1792,24 +1715,26 @@ export default function VendorLeadWorkflow() {
                   </>
                 )}
               </div>
-              {/* Appointment — PC-only slot. Ship #323: paired below the
-                  Actions container so on PC (sm:+) the appointment time
-                  sits directly under Reschedule (visual association
-                  between the action and the data it modifies). Sibling
-                  mobile-only block lives in the left column with
-                  `sm:hidden` so the mobile single-column stack is
-                  unchanged. Always rendered for all 4 lead states
-                  (pending/confirmed/completed/rejected) — Appointment-
-                  visibility preserved across the matrix. */}
-              <div className="hidden sm:block rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Appointment</p>
-                <div className="flex items-center gap-2 text-sm text-foreground/90">
-                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="font-medium">{fmtDateTime(selected.slot)}</span>
-                </div>
               </div>
               </div>
-              </div>
+              {/* Arc-35: Full-width per-card configurator selections grid
+                  with vendor per-unit catalog pricing + section $Total
+                  badges. Shared component mirrors appointment-status. */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp?.item) return null
+                return (
+                  <ProjectItemsCardGrid
+                    item={sp.item}
+                    projectPermit={sp.projectPermit}
+                    projectAssociation={sp.projectAssociation}
+                    poolSurvey={sp.poolSurvey}
+                    showPricing
+                    getPrice={getVendorPrice}
+                    resolvedLineItems={sp.priceLineItems}
+                  />
+                )
+              })()}
             </div>
           )}
         </DialogContent>
@@ -2122,6 +2047,17 @@ export default function VendorLeadWorkflow() {
                         console.error('[lead-workflow] contract upload failed:', err)
                       }
                     })()
+                  }
+                  // Mark-as-Sold project-report trigger. Reads back the
+                  // post-markSold sp from the store (markSold has just
+                  // appended status='sold' + soldAt + saleAmount + the
+                  // auto_sold_adjustment line synchronously). Helper has
+                  // its own idempotent guard against duplicate generation.
+                  if (sp) {
+                    const updatedSp = useProjectsStore.getState().sentProjects.find((p) => p.id === sp.id)
+                    if (updatedSp) {
+                      void maybeGenerateProjectReportOnSold(updatedSp)
+                    }
                   }
                 }
                 setSoldDialogOpen(false)
@@ -2451,5 +2387,146 @@ export default function VendorLeadWorkflow() {
         }}
       />
     </motion.div>
+  )
+}
+
+// task_066 — vendor-side Start-Work gate. Drives the new "Start Work"
+// action in the Sold/Active branch above and the WAITING/UPLOADED status
+// pill alongside it. Hidden entirely once workStartedAt is set (work-
+// already-started terminal state). Reads the per-sent_project association
+// doc via useAssociationDocForProject — own hook because the existing
+// VendorProjectDocumentsPanel mounts a separate per-list query and we
+// don't want to drag in its store wiring for a single-row gate.
+//
+// Gate semantics (matches kratos spec):
+//   projectAssociation !== 'yes'  -> Start Work enabled, no pill, no nudge
+//   projectAssociation === 'yes' + no doc -> Start Work DISABLED + amber
+//     WAITING pill + Nudge homeowner button
+//   projectAssociation === 'yes' + doc    -> Start Work ENABLED + emerald
+//     UPLOADED pill with Download (signed URL)
+//
+// Nudge is a v1 placeholder per kratos greenlight ("Include 'Nudge
+// homeowner' fallback in v1 via existing messages flow"); toasts back to
+// the vendor that the homeowner was nudged. Wiring it into the real
+// vendor↔homeowner messages thread is a follow-up — picked the toast
+// stub to keep the gate-shape testable without dragging the messages
+// store into the gate component.
+function AssociationDocGateBlock({
+  sp,
+  onStartWork,
+}: {
+  sp: import('@/stores/projects-store').SentProject
+  onStartWork: () => void
+}) {
+  const { loading, docId, filename, storagePath, refetch } =
+    useAssociationDocForProject(sp.id)
+  const loadDocs = useHomeownerDocsStore((s) => s.loadDocs)
+
+  if (sp.workStartedAt) return null
+
+  const needsAssoc = sp.projectAssociation === 'yes'
+  const docPresent = !!docId
+  const gated = needsAssoc && !docPresent
+
+  const handleDownload = async () => {
+    if (!storagePath) return
+    const url = await getDocSignedUrl(storagePath)
+    if (!url) {
+      toast.error('Could not open the association permit. Please try again.')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleNudge = async () => {
+    await refetch()
+    if (sp.homeowner_id) {
+      await loadDocs(sp.homeowner_id)
+    }
+    toast.success('Nudged homeowner to upload the association permit.')
+  }
+
+  const handleStartWork = () => {
+    if (gated) return
+    onStartWork()
+    toast.success('Work started — homeowner has been notified.')
+  }
+
+  return (
+    <div className="space-y-2" data-association-gate-block data-sent-project-id={sp.id}>
+      {needsAssoc && (
+        <div
+          className={cn(
+            'rounded-lg border p-2.5 flex items-start gap-2',
+            docPresent
+              ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-700'
+              : 'border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700',
+          )}
+          data-association-status-pill
+          data-association-status={docPresent ? 'uploaded' : 'waiting'}
+        >
+          {docPresent ? (
+            <FileCheck className="h-4 w-4 shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p
+              className={cn(
+                'text-xs font-semibold',
+                docPresent
+                  ? 'text-emerald-800 dark:text-emerald-300'
+                  : 'text-amber-800 dark:text-amber-300',
+              )}
+            >
+              {docPresent
+                ? 'Association permit: uploaded'
+                : 'Waiting on homeowner to upload association permit'}
+            </p>
+            {docPresent && filename && (
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 truncate mt-0.5">
+                {filename}
+              </p>
+            )}
+          </div>
+          {docPresent && storagePath && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 gap-1 shrink-0"
+              onClick={handleDownload}
+              data-association-download-button
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="text-xs">Open</span>
+            </Button>
+          )}
+        </div>
+      )}
+
+      <Button
+        className="w-full bg-primary hover:bg-primary/90 text-white"
+        onClick={handleStartWork}
+        disabled={gated || loading}
+        title={gated ? 'Waiting on homeowner to upload association permit' : undefined}
+        data-association-start-work-button
+        data-association-start-work-disabled={gated ? 'true' : 'false'}
+      >
+        <Hammer className="h-4 w-4 mr-1.5" />
+        Start Work
+      </Button>
+
+      {gated && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleNudge}
+          data-association-nudge-button
+        >
+          <Bell className="h-4 w-4 mr-1.5" />
+          Nudge homeowner
+        </Button>
+      )}
+    </div>
   )
 }

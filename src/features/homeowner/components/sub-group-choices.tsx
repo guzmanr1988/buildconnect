@@ -8,6 +8,13 @@ interface SubGroupChoicesProps {
   onSelect: (parentOptionId: string, choiceId: string) => void
   linearFeet: string
   onLinearFeetChange: (parentOptionId: string, value: string) => void
+  // PR-#402 follow-up. When true, suppress the inline Linear feet input row
+  // at the bottom of this component. Caller (e.g. roofing-addons render path
+  // in service-detail.tsx) renders a dedicated AddonLinearFtConfigurator card
+  // below the chips that owns the input + Save button (Fascia-style mirror
+  // per Rod screenshot). Kitchen Stone pattern omits this prop → existing
+  // inline input + no-Save contract preserved.
+  hideInlineLinearFt?: boolean
 }
 
 export function SubGroupChoices({
@@ -16,6 +23,7 @@ export function SubGroupChoices({
   onSelect,
   linearFeet,
   onLinearFeetChange,
+  hideInlineLinearFt = false,
 }: SubGroupChoicesProps) {
   const subGroups = parentOption.subGroups ?? []
   if (subGroups.length === 0) return null
@@ -126,7 +134,7 @@ export function SubGroupChoices({
           })()
       )}
 
-      {hasPick && (
+      {hasPick && !hideInlineLinearFt && (
         <div className="mt-3 flex items-center gap-2">
           <label
             htmlFor={`sub-linear-feet-${parentOption.id}`}
