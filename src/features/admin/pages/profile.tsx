@@ -4,6 +4,7 @@ import { LogOut, Shield, Mail, Phone, MapPin, User } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
+import { useAvatarUrl } from '@/hooks/use-avatar-url'
 import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/auth-store'
@@ -11,8 +12,8 @@ import { useAuthStore } from '@/stores/auth-store'
 export default function AdminProfile() {
   const profile = useAuthStore((s) => s.profile)
   const logout = useAuthStore((s) => s.logout)
-  const updateProfile = useAuthStore((s) => s.updateProfile)
   const navigate = useNavigate()
+  const resolvedAvatarUrl = useAvatarUrl(profile, profile?.id)
 
   // Ship #209 — fallback chain for missing name. Admin Supabase accounts
   // created via the admin API may lack the `name` field that sign-up
@@ -48,11 +49,10 @@ export default function AdminProfile() {
           <div className="flex items-center gap-4">
             {profile && (
               <AvatarUpload
-                avatarUrl={profile.avatar_url}
+                avatarUrl={resolvedAvatarUrl}
                 initials={profile.initials ?? ''}
                 color={profile.avatar_color}
                 size="lg"
-                onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}
               />
             )}
             <div className="flex-1 min-w-0">

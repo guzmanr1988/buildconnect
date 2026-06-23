@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
+import { useAvatarUrl } from '@/hooks/use-avatar-url'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_VENDOR_BY_ID } from '@/lib/vendor-scope'
 import { useAuthStore } from '@/stores/auth-store'
@@ -41,6 +42,7 @@ export default function VendorProfile() {
     [allRequests, vendorIdKey],
   )
   const pendingRequest = myRequests.find((r) => r.status === 'pending')
+  const resolvedAvatarUrl = useAvatarUrl(profile, profile?.id ?? null)
 
   useEffect(() => {
     hydrateVendor(vendorIdKey)
@@ -184,9 +186,8 @@ export default function VendorProfile() {
               <AvatarUpload
                 initials={(profile?.initials ?? vendor.initials) ?? ''}
                 color={profile?.avatar_color ?? vendor.avatar_color}
-                avatarUrl={profile?.avatar_url}
+                avatarUrl={resolvedAvatarUrl ?? profile?.avatar_url}
                 size="lg"
-                onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}
               />
               <div className="flex-1 min-w-0 space-y-4 w-full">
                 {/* Company Name & Badges */}

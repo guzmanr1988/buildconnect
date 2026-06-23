@@ -51,7 +51,8 @@ export const useAuthStore = create<AuthState>()(
         // Filter to columns that exist in the profiles table.
         const PROFILE_DB_COLUMNS = new Set([
           'name', 'phone', 'address', 'company', 'avatar_color', 'initials', 'status',
-          'avatar_url', 'id_document_url', 'additional_addresses', 'contractor_licenses',
+          'avatar_url', 'avatar_storage_path', 'avatar_moderation_status',
+          'id_document_url', 'additional_addresses', 'contractor_licenses',
           'noncircumvention_agreement_signed_at', 'noncircumvention_agreement_signed_name',
           'noncircumvention_agreement_version', 'noncircumvention_agreement_text_snapshot',
           'noncircumvention_agreement_signature_metadata',
@@ -105,10 +106,24 @@ export const useAuthStore = create<AuthState>()(
       // PRs #189-#196 spent the night fixing. Server is authoritative:
       // AuthBootstrap.getProfile rehydrates id_document_url on session
       // resume, so the in-memory profile stays complete across reloads.
+      //
+      // Tranche-2 (mig 098) — same family: strip avatar_url (legacy base64
+      // up to 2MB) plus avatar_storage_path + avatar_moderation_status.
+      // The Storage-backed path always re-derives signed-URL via
+      // useAvatarUrl(profile) on mount from the server-rehydrated pointer,
+      // so persisting either pointer or moderation status would be stale on
+      // the next admin queue flip. Render priority resolver handles legacy
+      // base64 grandfather case from the server-side rehydrated avatar_url.
       partialize: (state) => ({
         ...state,
         profile: state.profile
-          ? { ...state.profile, id_document_url: undefined }
+          ? {
+              ...state.profile,
+              id_document_url: undefined,
+              avatar_url: undefined,
+              avatar_storage_path: undefined,
+              avatar_moderation_status: undefined,
+            }
           : null,
       }),
     },

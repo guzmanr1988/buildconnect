@@ -46,6 +46,8 @@ const navItems: NavEntry[] = [
   // surface (vendor + homeowner + financial all touch) so top-level
   // rather than nested under Banking.
   { to: '/admin/reviews', icon: ShieldCheck, label: 'Reviews' },
+  // Tranche-2 (mig 098) — avatar moderation queue. v1 admin only.
+  { to: '/admin/moderation', icon: ShieldCheck, label: 'Avatar Moderation' },
   { to: '/admin/employees', icon: UserCog, label: 'Employees' },
   { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
   {

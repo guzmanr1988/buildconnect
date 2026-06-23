@@ -79,6 +79,7 @@ import AdminActivityPage from '@/features/admin/pages/activity'
 import AdminFinancingPage from '@/features/admin/pages/financing'
 import AdminFinancingApplicationDetail from '@/features/admin/pages/financing-application-detail'
 import AdminReferralProgramPage from '@/features/admin/pages/referral-program'
+import AdminModerationPage from '@/features/admin/pages/moderation'
 
 export const router = createBrowserRouter([
   {
@@ -206,6 +207,11 @@ export const router = createBrowserRouter([
           { path: 'homeowners/:homeownerId', element: <AdminHomeownerDetail />, handle: { title: 'Admin · Homeowner' } },
           // Ship #314 — BuildConnect contract review queue (Phase 1).
           { path: 'reviews', element: <ReviewsPage />, handle: { title: 'Admin · Reviews' } },
+          // Tranche-2 (mig 098) — avatar moderation queue. v1 admin only
+          // (NOT admin_employee per Q1 align). Approve/Reject pending
+          // avatars before they show across the platform; "Authenticated
+          // users select approved avatars" RLS gates cross-user reads.
+          { path: 'moderation', element: <AdminModerationPage />, handle: { title: 'Admin · Avatar Moderation' } },
           // Phase 1 Admin Financing — task_1779054206392_927. Page internally
           // checks profiles.role='admin' via RequireAuth + reads feature_flags
           // for master/category gates. Edge Fn admin-create-approval already

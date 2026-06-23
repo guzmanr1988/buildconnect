@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { AvatarUpload } from '@/components/shared/avatar-upload'
+import { useAvatarUrl } from '@/hooks/use-avatar-url'
 import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { SecondaryAddress } from '@/types'
@@ -37,6 +38,7 @@ export function HomeownerProfilePage() {
   const updateProfile = useAuthStore((s) => s.updateProfile)
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const additionalAddresses = profile.additional_addresses ?? []
+  const resolvedAvatarUrl = useAvatarUrl(profile, profile.id)
 
   const [addressDialogOpen, setAddressDialogOpen] = useState(false)
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
@@ -171,18 +173,17 @@ export function HomeownerProfilePage() {
             <div className="mb-6 flex flex-col items-center text-center">
               {profileEditing ? (
                 <AvatarUpload
-                  avatarUrl={profile.avatar_url}
+                  avatarUrl={resolvedAvatarUrl}
                   initials={profile.initials ?? ''}
                   color={profile.avatar_color}
                   size="lg"
-                  onChange={(dataUrl) => updateProfile({ avatar_url: dataUrl ?? undefined })}
                   className="mb-3"
                 />
               ) : (
                 <AvatarInitials
                   initials={profile.initials}
                   color={profile.avatar_color}
-                  avatarUrl={profile.avatar_url}
+                  avatarUrl={resolvedAvatarUrl ?? undefined}
                   size="lg"
                   className="mb-3"
                 />

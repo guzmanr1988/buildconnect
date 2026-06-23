@@ -1,34 +1,42 @@
-import { useRef } from 'react'
-import { Camera, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Camera, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
+import { supabase } from '@/lib/supabase'
+import { uploadOwnAvatar, BUCKET } from '@/lib/api/avatars'
 
 interface AvatarUploadProps {
-  // Current avatar — base64 dataURL or Supabase URL. null/undefined = initials fallback.
-  avatarUrl?: string
+  // Resolved avatar URL for preview — caller passes useAvatarUrl(profile).
+  // null/undefined → initials fallback.
+  avatarUrl?: string | null
   initials: string
   color: string
   size?: 'sm' | 'md' | 'lg'
-  // Called when user uploads a new image; caller persists the dataURL
-  // to the appropriate profile store (useAuthStore.updateProfile or
-  // vendor-profile patch).
-  onChange: (dataUrl: string | null) => void
+  // Called post-upload (status='pending' or 'approved') / post-remove.
+  // Storage upload + profile row update happens inside this component;
+  // callers used to push base64 through updateProfile but Tranche-2
+  // (mig 098) moves that ownership inside so the moderation gate is
+  // never bypassed by a careless caller.
+  onChange?: (next: { storagePath: string | null; status: 'pending' | 'approved' | 'rejected' | null }) => void
   className?: string
 }
 
-const MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MAX_SIZE_BYTES = 2 * 1024 * 1024
 
 /**
  * Avatar image upload with initials fallback. Shared between homeowner
- * /profile edit + vendor /profile (vendors edit avatar directly; other
- * vendor fields are admin-mediated via Request Info Change per ship
- * Phase C). File picker accepts image/*; converts to base64 dataURL
- * on client, no server upload for v1 (Tranche-2: Supabase Storage
- * bucket + image moderation).
+ * /profile, vendor /profile, and admin /profile.
  *
- * Ship #115 per kratos msg 1776720328611 + extension 1776720343679.
+ * Tranche-2 (mig 098) — uploads land in the avatars Storage bucket at
+ * {user_id}/avatar.{ext} and the profile row records avatar_storage_path
+ * + avatar_moderation_status. Non-admin uploads queue at 'pending' and
+ * are gated cross-user by the "Authenticated users select approved
+ * avatars" RLS policy on storage.objects (FE fallback-to-initials is
+ * cosmetic, RLS is the real boundary). Admin uploads auto-approve.
  */
 export function AvatarUpload({
   avatarUrl,
@@ -39,39 +47,70 @@ export function AvatarUpload({
   className,
 }: AvatarUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const profile = useAuthStore((s) => s.profile)
+  const updateProfile = useAuthStore((s) => s.updateProfile)
+  const userId = profile?.id ?? null
+  const isAdmin = profile?.role === 'admin'
 
   const handlePick = () => inputRef.current?.click()
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    // Reset the input so the same file can be re-picked after a remove+add cycle
     e.target.value = ''
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Pick an image file (JPG, PNG, etc.)')
+    if (!userId) {
+      toast.error('Sign in to upload an avatar')
+      return
+    }
+    if (!ALLOWED_MIME.has(file.type)) {
+      toast.error('Pick a JPG, PNG, or WebP image')
       return
     }
     if (file.size > MAX_SIZE_BYTES) {
       toast.error('Image too large — keep it under 2MB')
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result
-      if (typeof result === 'string') {
-        onChange(result)
-        toast.success('Avatar updated')
+    setBusy(true)
+    try {
+      const result = await uploadOwnAvatar({ userId, file, isAdmin })
+      if (!result) {
+        toast.error('Upload failed — try again')
+        return
       }
+      await updateProfile({
+        avatar_storage_path: result.storagePath,
+        avatar_moderation_status: result.status,
+      })
+      onChange?.({ storagePath: result.storagePath, status: result.status })
+      toast.success(
+        result.status === 'approved'
+          ? 'Avatar updated'
+          : 'Avatar uploaded — pending review before it shows to others',
+      )
+    } finally {
+      setBusy(false)
     }
-    reader.onerror = () => {
-      toast.error('Could not read the image — try another file')
-    }
-    reader.readAsDataURL(file)
   }
 
-  const handleRemove = () => {
-    onChange(null)
-    toast.success('Avatar removed')
+  const handleRemove = async () => {
+    if (!userId) return
+    setBusy(true)
+    try {
+      const path = profile?.avatar_storage_path
+      if (path) {
+        await supabase.storage.from(BUCKET).remove([path]).catch(() => undefined)
+      }
+      await updateProfile({
+        avatar_storage_path: null,
+        avatar_moderation_status: null,
+        avatar_url: undefined,
+      })
+      onChange?.({ storagePath: null, status: null })
+      toast.success('Avatar removed')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
