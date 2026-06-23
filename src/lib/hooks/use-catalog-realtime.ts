@@ -24,6 +24,13 @@ export function useCatalogRealtime(refetchCatalog: () => void) {
   useEffect(() => {
     let cancelled = false
     let channel: ReturnType<typeof supabase.channel> | null = null
+    // Single-flight guard: the initial `void subscribe()` is async; while it
+    // awaits getSession(), onAuthStateChange can fire INITIAL_SESSION and call
+    // subscribe() again. Both reach `supabase.channel('catalog-changes')` (name-
+    // cached, returns the same instance) and add .on() handlers; the second
+    // .on() lands after the first .subscribe() → "cannot add postgres_changes
+    // callbacks after subscribe()" warning + duplicated handlers.
+    let subscribing = false
 
     // Arc-32 v2 — auth-await guard for the WS subscribe. The Realtime client
     // attaches anon claims if subscribe() fires before the user JWT is on the
@@ -34,19 +41,25 @@ export function useCatalogRealtime(refetchCatalog: () => void) {
     // same race, WS surface this time. Mirror of
     // use-vendor-price-realtime auth-state re-fire pattern.
     async function subscribe() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) return
-      if (cancelled) return
-      supabase.realtime.setAuth(session.access_token)
-      channel = supabase.channel('catalog-changes')
-      for (const table of CATALOG_TABLES) {
-        channel.on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table },
-          () => refetchCatalog()
-        )
+      if (subscribing || channel) return
+      subscribing = true
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        if (cancelled) return
+        supabase.realtime.setAuth(session.access_token)
+        channel = supabase.channel('catalog-changes')
+        for (const table of CATALOG_TABLES) {
+          channel.on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table },
+            () => refetchCatalog()
+          )
+        }
+        channel.subscribe()
+      } finally {
+        subscribing = false
       }
-      channel.subscribe()
     }
 
     void subscribe()
