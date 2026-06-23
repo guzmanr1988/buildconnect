@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Camera, Trash2, Loader2 } from 'lucide-react'
+import { Camera, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -119,7 +119,7 @@ export function AvatarUpload({
         initials={initials}
         color={color}
         size={size}
-        avatarUrl={avatarUrl}
+        avatarUrl={avatarUrl ?? undefined}
       />
       <div className="flex items-center gap-2">
         <Button
@@ -127,10 +127,11 @@ export function AvatarUpload({
           variant="outline"
           size="sm"
           onClick={handlePick}
+          disabled={busy}
           className="gap-1.5"
         >
           <Camera className="h-3.5 w-3.5" />
-          {avatarUrl ? 'Change' : 'Upload'}
+          {busy ? 'Working…' : avatarUrl ? 'Change' : 'Upload'}
         </Button>
         {avatarUrl && (
           <Button
@@ -138,6 +139,7 @@ export function AvatarUpload({
             variant="outline"
             size="sm"
             onClick={handleRemove}
+            disabled={busy}
             className="gap-1.5 text-destructive hover:bg-destructive/5 border-destructive/30"
           >
             <Trash2 className="h-3.5 w-3.5" />
