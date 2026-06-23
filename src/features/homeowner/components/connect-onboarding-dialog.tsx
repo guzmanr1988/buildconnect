@@ -71,7 +71,7 @@ export function ConnectOnboardingDialog({ open, onOpenChange, mode, partyType }:
       return
     }
     if (!PUBLISHABLE_KEY) {
-      setError('Stripe is not configured. Contact support.')
+      setError('Payouts are not configured. Contact support.')
       return
     }
 
@@ -92,9 +92,9 @@ export function ConnectOnboardingDialog({ open, onOpenChange, mode, partyType }:
   const title = mode === 'onboarding' ? 'Set Up Payouts' : 'Update Banking Details'
   const description = useMemo(() => {
     if (mode === 'onboarding') {
-      return 'Stripe will collect the identity and banking details required to receive payouts. Your information is handled by Stripe — BuildConnect never sees your full SSN or account numbers.'
+      return "We'll collect the identity and banking details required to receive payouts. Your information is handled by our secure payments partner — BuildConnect never sees your full SSN or account numbers."
     }
-    return 'Update your linked bank account or KYC information. Changes save directly to Stripe.'
+    return 'Update your linked bank account or verification information. Changes save directly to your payouts profile.'
   }, [mode])
 
   const handleExit = () => {
@@ -123,15 +123,15 @@ export function ConnectOnboardingDialog({ open, onOpenChange, mode, partyType }:
               <ConnectAccountOnboarding
                 onExit={handleExit}
                 onLoadError={(e) => {
-                  toast.error('Could not load Stripe onboarding. Please try again.')
-                  setError(e?.error?.message || 'Stripe load error')
+                  toast.error('Could not load payouts onboarding. Please try again.')
+                  setError(e?.error?.message || 'Payouts load error')
                 }}
               />
             ) : (
               <ConnectAccountManagement
                 onLoadError={(e) => {
-                  toast.error('Could not load Stripe management. Please try again.')
-                  setError(e?.error?.message || 'Stripe load error')
+                  toast.error('Could not load payouts management. Please try again.')
+                  setError(e?.error?.message || 'Payouts load error')
                 }}
               />
             )}

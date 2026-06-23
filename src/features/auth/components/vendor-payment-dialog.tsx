@@ -388,7 +388,7 @@ function PaymentFormInner({
         return
       }
       if (!setupIntent) {
-        setError('Stripe did not return a SetupIntent.')
+        setError('Payment processor did not return a SetupIntent.')
         setSubmitting(false)
         return
       }

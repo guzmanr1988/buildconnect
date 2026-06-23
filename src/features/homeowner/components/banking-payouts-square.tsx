@@ -53,7 +53,7 @@ function copyFor(state: ConnectUiState): StateCopy {
     case 'pending_verification':
       return {
         title: 'Verifying',
-        description: 'Stripe is verifying your information. This usually takes a few minutes. You can continue or update your details below.',
+        description: "We're verifying your information. This usually takes a few minutes. You can continue or update your details below.",
         ctaLabel: 'Continue Onboarding',
         ctaVariant: 'outline',
         showCta: true,
@@ -71,7 +71,7 @@ function copyFor(state: ConnectUiState): StateCopy {
     case 'restricted':
       return {
         title: 'Action Required',
-        description: 'Stripe needs additional information to keep payouts active. Update your details to continue receiving funds.',
+        description: 'Additional information is required to keep payouts active. Update your details to continue receiving funds.',
         ctaLabel: 'Update Information',
         ctaVariant: 'outline',
         showCta: true,
@@ -80,7 +80,7 @@ function copyFor(state: ConnectUiState): StateCopy {
     case 'rejected':
       return {
         title: 'Account Closed',
-        description: 'Your Stripe Connect account was closed. Contact BuildConnect support to restore payouts.',
+        description: 'Your payouts account was closed. Contact BuildConnect support to restore payouts.',
         ctaLabel: 'Contact Support',
         ctaVariant: 'destructive',
         showCta: false,

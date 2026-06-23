@@ -154,7 +154,7 @@ export function TransactionDetailDialog({ open, onClose, transaction }: Transact
                         <span className="font-medium">{pm.brand} **** {pm.last4}</span>
                         <Badge variant="outline" className="text-[10px] ml-auto">Mock</Badge>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">Real Stripe PaymentMethod wiring lands in Tranche-2.</p>
+                      <p className="text-[11px] text-muted-foreground">Real PaymentMethod wiring lands in Tranche-2.</p>
                     </div>
                     <div className="rounded-xl border p-4 space-y-1.5">
                       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bank Statement Descriptor</h4>

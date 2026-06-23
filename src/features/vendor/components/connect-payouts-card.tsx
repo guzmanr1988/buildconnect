@@ -32,14 +32,14 @@ function copyFor(state: ConnectUiState): StateCopy {
       return {
         title: 'Not Set Up',
         description: 'Connect a payout account to receive milestone releases and commission payouts directly to your business bank.',
-        ctaLabel: 'Set Up Stripe Connect',
+        ctaLabel: 'Set Up Payouts',
         ctaVariant: 'default',
         showCta: true,
       };
     case 'pending_verification':
       return {
         title: 'Verifying',
-        description: 'Stripe is verifying your business information. You can continue providing details below — verification usually completes within minutes.',
+        description: "We're verifying your business information. You can continue providing details below — verification usually completes within minutes.",
         ctaLabel: 'Continue Onboarding',
         ctaVariant: 'outline',
         showCta: true,
@@ -55,7 +55,7 @@ function copyFor(state: ConnectUiState): StateCopy {
     case 'restricted':
       return {
         title: 'Action Required',
-        description: 'Stripe needs additional documentation to keep payouts active. Update your information to continue receiving milestone releases.',
+        description: 'Additional documentation is required to keep payouts active. Update your information to continue receiving milestone releases.',
         ctaLabel: 'Update Information',
         ctaVariant: 'outline',
         showCta: true,
@@ -63,7 +63,7 @@ function copyFor(state: ConnectUiState): StateCopy {
     case 'rejected':
       return {
         title: 'Account Closed',
-        description: 'Your Stripe Connect account was closed. Contact BuildConnect support to restore payouts.',
+        description: 'Your payouts account was closed. Contact BuildConnect support to restore payouts.',
         ctaLabel: 'Contact Support',
         ctaVariant: 'destructive',
         showCta: false,
@@ -106,9 +106,9 @@ export function VendorConnectPayoutsCard() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/stripe_not_configured/i.test(msg)) {
-        toast.error('Stripe is not configured yet. Reach out to BuildConnect to enable payouts.');
+        toast.error('Payouts are not configured yet. Reach out to BuildConnect to enable them.');
       } else {
-        toast.error('Could not open Stripe onboarding. Please try again.');
+        toast.error('Could not open payouts onboarding. Please try again.');
       }
     }
   };
@@ -122,7 +122,7 @@ export function VendorConnectPayoutsCard() {
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-2.5">
             <StatusIcon state={state} />
-            <CardTitle className="font-heading">Payouts via Stripe Connect</CardTitle>
+            <CardTitle className="font-heading">Payouts</CardTitle>
           </div>
           <span
             className={
@@ -155,7 +155,7 @@ export function VendorConnectPayoutsCard() {
                   {pending ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Opening Stripe…
+                      Opening payouts…
                     </>
                   ) : (
                     <>
