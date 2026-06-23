@@ -280,8 +280,9 @@ export function VendorPaymentDialog({
             </Tabs>
 
             <p className="pt-3 text-[11px] text-center text-muted-foreground leading-relaxed">
-              Card and bank details are entered directly into Stripe — we never
-              see or store the raw numbers. Update anytime from your vendor portal.
+              Card and bank details are entered directly into our secure payments
+              partner — BuildConnect never sees or stores the raw numbers. Update
+              anytime from your vendor portal.
             </p>
           </>
         )}
