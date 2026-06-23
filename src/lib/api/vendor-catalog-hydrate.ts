@@ -24,6 +24,11 @@ export type HydrateSubOptionRow = {
 export type HydratePriceRow = {
   price_cents: number
   active: boolean
+  // Phase A (task_547) — vendor markup in basis points (5000 = 50.00%).
+  // Stored only at this phase; computeVendorTotal does not read it yet.
+  // NULL on every legacy row (migration 096 additive-nullable, no backfill).
+  // Optional so existing test fixtures stay valid; absent treated as null.
+  price_percent_bp?: number | null
   options: {
     id?: string
     option_id: string
@@ -45,6 +50,10 @@ export type EnabledState = {
 export type PriceMaps = {
   priceBySvcOption: Record<string, Record<string, number>>
   permitByService: Record<string, number>
+  // Phase A — percent values converted bp → human (1000bp = 10%). Mirrors
+  // priceBySvcOption shape so the store can merge into pricingPercent in
+  // a single map-walk. Only non-null rows surface here.
+  percentBySvcOption: Record<string, Record<string, number>>
 }
 
 export function buildEnabledStateFromRows(
@@ -83,6 +92,7 @@ export function buildPriceMapFromRows(
   permitRows: HydratePermitRow[],
 ): PriceMaps {
   const priceBySvcOption: Record<string, Record<string, number>> = {}
+  const percentBySvcOption: Record<string, Record<string, number>> = {}
   for (const row of priceRows) {
     if (!row.active) continue
     const og = row.options?.option_groups
@@ -92,6 +102,10 @@ export function buildPriceMapFromRows(
     if (!optId) continue
     if (!priceBySvcOption[svc]) priceBySvcOption[svc] = {}
     priceBySvcOption[svc][optId] = row.price_cents
+    if (row.price_percent_bp != null) {
+      if (!percentBySvcOption[svc]) percentBySvcOption[svc] = {}
+      percentBySvcOption[svc][optId] = row.price_percent_bp / 100
+    }
   }
   const permitByService: Record<string, number> = {}
   for (const row of permitRows) {
@@ -99,7 +113,7 @@ export function buildPriceMapFromRows(
     if (!row.service_id) continue
     permitByService[row.service_id] = row.permit_price_cents ?? 0
   }
-  return { priceBySvcOption, permitByService }
+  return { priceBySvcOption, permitByService, percentBySvcOption }
 }
 
 export function buildSubOptionIdsByService(

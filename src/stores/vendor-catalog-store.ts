@@ -26,6 +26,10 @@ type PendingWrite =
   | { kind: 'option'; serviceId: string; optionId: string; cents: number }
   | { kind: 'permit'; serviceId: string; cents: number }
   | { kind: 'cascadeServiceActive'; serviceId: string; isActive: boolean }
+  // Phase A (task_547) — percent markup write queued when caches/auth
+  // aren't ready. Same shape as 'option' kind so dedup collapses rapid
+  // typing on the same input to the latest value.
+  | { kind: 'percent'; serviceId: string; optionId: string; percent: number }
 
 type HydrationStatus = 'idle' | 'in_flight' | 'complete'
 
@@ -172,6 +176,9 @@ function enqueuePending(
       if (w.kind === 'option' && write.kind === 'option') {
         return w.optionId !== write.optionId
       }
+      if (w.kind === 'percent' && write.kind === 'percent') {
+        return w.optionId !== write.optionId
+      }
       return false
     })
     return { _pendingWrites: [...queue, write] }
@@ -237,6 +244,25 @@ async function drainPendingWrites(
       if (error) {
         console.error('[catalog] drain permit upsert failed:', error.message)
         toast.error('Could not save permit price — please retry')
+      }
+      continue
+    }
+    if (w.kind === 'percent') {
+      const ckP = cacheKey(w.serviceId, w.optionId)
+      const optionDbIdP = getState()._optionDbIdCache[ckP]
+      if (!optionDbIdP) {
+        console.error('[catalog] drain percent: option id not in cache after hydrate', w)
+        continue
+      }
+      const { error } = await supabase
+        .from('vendor_option_prices')
+        .upsert(
+          { vendor_id: vendorUuid, option_id: optionDbIdP, price_percent_bp: Math.round(w.percent * 100) },
+          { onConflict: 'vendor_id,option_id' },
+        )
+      if (error) {
+        console.error('[catalog] drain percent upsert failed:', error.message)
+        toast.error('Could not save percent markup — please retry')
       }
       continue
     }
@@ -491,6 +517,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
       },
 
       setPricePercent: (serviceId, optionId, percent) => {
+        // Sync local state first (fast, no await) — mirrors setPrice.
         set((state) => ({
           services: state.services.map((s) =>
             s.serviceId === serviceId
@@ -498,6 +525,36 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
               : s
           ),
         }))
+        // Phase A (task_547) — persist percent to vendor_option_prices.
+        // UI accepts human percent (10 = 10%); DB stores basis points
+        // (1000bp = 10.00%). Round-trip at the boundary.
+        const vendorUuid = resolveVendorUuid(get()._vendorUuid)
+        const status = get()._hydrationStatus
+        if (!vendorUuid || status !== 'complete') {
+          enqueuePending(set, { kind: 'percent', serviceId, optionId, percent })
+          return
+        }
+        const ck = cacheKey(serviceId, optionId)
+        const optionDbId = get()._optionDbIdCache[ck]
+        if (!optionDbId) {
+          console.error('[catalog] setPricePercent: option id not in cache after hydrate', { serviceId, optionId })
+          return
+        }
+        // Upsert with ONLY the percent column so existing price_cents /
+        // active stay untouched. New rows get DB defaults (price_cents=0,
+        // active=true, currency='USD').
+        supabase
+          .from('vendor_option_prices')
+          .upsert(
+            { vendor_id: vendorUuid, option_id: optionDbId, price_percent_bp: Math.round(percent * 100) },
+            { onConflict: 'vendor_id,option_id' }
+          )
+          .then(({ error }) => {
+            if (error) {
+              console.error('[catalog] upsert percent failed:', error.message)
+              toast.error('Could not save percent markup — please retry')
+            }
+          })
       },
 
       setServicePermit: (serviceId, cents) => {
@@ -582,7 +639,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // their full pricing history (re-toggle ON restores prices).
         const { data: priceRows, error: priceErr } = await supabase
           .from('vendor_option_prices')
-          .select('price_cents,active,options(id,option_id,option_groups(group_id,service_id))')
+          .select('price_cents,active,price_percent_bp,options(id,option_id,option_groups(group_id,service_id))')
           .eq('vendor_id', vendorUuid)
 
         if (priceErr) {
@@ -663,7 +720,7 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // the vendor's UI can restore prices on re-toggle ON.
         const typedPriceRows = (priceRows ?? []) as unknown as HydratePriceRow[]
         const typedPermitRows = (permitRows ?? []) as unknown as HydratePermitRow[]
-        const { priceBySvcOption, permitByService } = buildPriceMapFromRows(
+        const { priceBySvcOption, permitByService, percentBySvcOption } = buildPriceMapFromRows(
           typedPriceRows,
           typedPermitRows,
         )
@@ -706,11 +763,15 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           services: state.services.map((s) => {
             const sbPricing = priceBySvcOption[s.serviceId]
             const sbPermit = permitByService[s.serviceId]
+            const sbPercent = percentBySvcOption[s.serviceId]
             return {
               ...s,
               enabled: enabledByService[s.serviceId] ?? false,
               enabledOptions: enabledOptionsByService[s.serviceId] ?? {},
               pricing: sbPricing ? { ...s.pricing, ...sbPricing } : s.pricing,
+              pricingPercent: sbPercent
+                ? { ...(s.pricingPercent ?? {}), ...sbPercent }
+                : s.pricingPercent,
               permitCents: sbPermit !== undefined ? sbPermit : s.permitCents,
             }
           }),
