@@ -15,6 +15,7 @@ import { CURRENT_AGREEMENT_VERSION } from '@/lib/non-circumvention-agreement'
 import { useEffectiveMockLeads } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { useVendorEmployeesStore, EMPLOYEE_STATUS_LABELS, type VendorEmployee } from '@/stores/vendor-employees-store'
 import { PAYMENT_METHOD_LABELS, type VendorPaymentMethod } from '@/stores/vendor-billing-store'
 import { useVendorHomeownerDocsStore, VENDOR_HOMEOWNER_DOC_CATEGORY_LABELS } from '@/stores/vendor-homeowner-documents-store'
@@ -77,6 +78,7 @@ export default function AdminVendorDetail() {
 
   const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
   const setVendorCommission = useAdminModerationStore((s) => s.setVendorCommission)
+  const isAdminEmployee = useAuthStore((s) => s.profile?.role === 'admin_employee')
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const leadStatusOverrides = useProjectsStore((s) => s.leadStatusOverrides)
   const cancellationRequestsByLead = useProjectsStore((s) => s.cancellationRequestsByLead)
@@ -273,13 +275,11 @@ export default function AdminVendorDetail() {
         </CardContent>
       </Card>
 
-      {/* Section: Commission Fee — Ship #286 explicit Save button.
-          Pre-#286 onChange auto-saved on each keystroke; user couldn't
-          tell if their value persisted. Now: input updates local
-          draft only; Save Changes button commits via setVendorCommission
-          + toast confirmation (matches existing "Save Changes" +
-          toast.success convention from admin/users + admin/banking +
-          admin/products per banked cross-file-idiom-consistency). */}
+      {/* Section: Commission Fee — gated to non-admin_employee role.
+          admin_employee sees the rest of the vendor detail (projects,
+          agreement, products) but NOT the commission % control; only
+          full admins manage platform-fee economics. */}
+      {!isAdminEmployee && (
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Percent className="h-5 w-5 text-amber-700 dark:text-amber-400" />
@@ -332,6 +332,7 @@ export default function AdminVendorDetail() {
           </CardContent>
         </Card>
       </section>
+      )}
 
       {/* Section: Agreement */}
       <section className="space-y-3">

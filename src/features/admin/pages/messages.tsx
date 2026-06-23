@@ -9,11 +9,8 @@
 // in the Live Conversations feed below). v2 may surface a dedicated
 // vendor-thread inbox if Rod re-prioritizes.
 
-import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
-import { LifeBuoy, ArrowRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useAdminLiveConversations } from '@/lib/hooks/use-admin-live-conversations'
 
@@ -81,28 +78,9 @@ function LiveConversationsCard() {
 }
 
 export default function AdminMessagesPage() {
-  const navigate = useNavigate()
   return (
     <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-6">
       <PageHeader title="Messages" description="Lead-scoped vendor ↔ homeowner conversations across the platform" />
-
-      <Card className="rounded-xl shadow-sm p-4 flex items-start gap-3 bg-primary/5 border-primary/20">
-        <LifeBuoy className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold">Homeowner support threads</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Reply to homeowner support questions on the dedicated Support inbox.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => navigate('/admin/support')}
-          data-testid="admin-messages-support-link"
-        >
-          Open Support <ArrowRight className="h-3.5 w-3.5 ml-1" />
-        </Button>
-      </Card>
-
       <LiveConversationsCard />
     </motion.div>
   )

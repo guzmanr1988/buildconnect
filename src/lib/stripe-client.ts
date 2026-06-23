@@ -31,7 +31,10 @@ export function getStripe(): Promise<Stripe | null> {
     cachedPromise = Promise.resolve(null)
     return cachedPromise
   }
-  cachedPromise = loadStripe(PUBLISHABLE_KEY)
+  // developerTools.assistant.enabled=false suppresses the floating "stripe >"
+  // dev-overlay launcher Stripe.js injects in test mode. Anti-fraud (Radar /
+  // advancedFraudSignals) stays at default-enabled — unrelated lever.
+  cachedPromise = loadStripe(PUBLISHABLE_KEY, { developerTools: { assistant: { enabled: false } } })
   return cachedPromise
 }
 
