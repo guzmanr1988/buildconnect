@@ -88,15 +88,24 @@ COMMIT;
 --       (storage.foldername(name))[1] = auth.uid()::text
 --
 --   - "Authenticated users select approved avatars" (LOAD-BEARING moderation gate)
---       bucket_id = 'avatars' AND EXISTS (
+--       bucket_id = 'avatars' AND auth.role() = 'authenticated' AND EXISTS (
 --         SELECT 1 FROM public.profiles p
---         WHERE p.id::text = (storage.foldername(name))[1]
+--         WHERE p.id::text = (storage.foldername(storage.objects.name))[1]
 --           AND p.avatar_moderation_status = 'approved'
 --       )
 --       -- Cross-user render path. RLS denies pending/rejected reads at API
 --       -- layer — the FE fallback-to-initials is COSMETIC, this RLS is the
 --       -- real moderation boundary. Kratos steer 2: apollo walker MUST
 --       -- probe with second user JWT to verify denial, NOT just check FE.
+--       --
+--       -- COLUMN-BINDING CAVEAT (caught at apply-time, fix-up shipped same
+--       -- session): the inner subquery MUST qualify storage.objects.name
+--       -- explicitly. Unqualified `name` inside the EXISTS resolves to
+--       -- profiles.name (the inner table) per Postgres column-resolution
+--       -- precedence, which silently turns the gate into deny-always for
+--       -- cross-user reads (fails closed, not a security hole, but breaks
+--       -- the moderation rail functionally). Walker A3 would have surfaced
+--       -- it as "admin-approve then user-B GET → 403 expected 200".
 --
 --   - "Admins manage all avatars"
 --       bucket_id = 'avatars' AND EXISTS (
