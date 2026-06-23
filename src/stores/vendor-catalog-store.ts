@@ -125,6 +125,10 @@ type DbSubOptionRow = {
 type DbSubPriceRow = {
   price_cents: number
   active: boolean
+  // Phase A-Completion (task_122) — vendor markup in basis points
+  // (1000bp = 10.00%). NULL = no markup. Mirrors the option-side shape
+  // on HydratePriceRow.price_percent_bp; absent treated as null.
+  price_percent_bp?: number | null
   sub_options: {
     id: string
     sub_option_id: string
@@ -250,20 +254,34 @@ async function drainPendingWrites(
     if (w.kind === 'percent') {
       const ckP = cacheKey(w.serviceId, w.optionId)
       const optionDbIdP = getState()._optionDbIdCache[ckP]
-      if (!optionDbIdP) {
-        console.error('[catalog] drain percent: option id not in cache after hydrate', w)
+      if (optionDbIdP) {
+        const { error } = await supabase
+          .from('vendor_option_prices')
+          .upsert(
+            { vendor_id: vendorUuid, option_id: optionDbIdP, price_percent_bp: Math.round(w.percent * 100) },
+            { onConflict: 'vendor_id,option_id' },
+          )
+        if (error) {
+          console.error('[catalog] drain percent upsert failed:', error.message)
+          toast.error('Could not save percent markup — please retry')
+        }
         continue
       }
-      const { error } = await supabase
-        .from('vendor_option_prices')
-        .upsert(
-          { vendor_id: vendorUuid, option_id: optionDbIdP, price_percent_bp: Math.round(w.percent * 100) },
-          { onConflict: 'vendor_id,option_id' },
-        )
-      if (error) {
-        console.error('[catalog] drain percent upsert failed:', error.message)
-        toast.error('Could not save percent markup — please retry')
+      const subOptionDbIdP = getState()._subOptionDbIdCache[ckP]
+      if (subOptionDbIdP) {
+        const { error } = await supabase
+          .from('vendor_sub_option_prices')
+          .upsert(
+            { vendor_id: vendorUuid, sub_option_id: subOptionDbIdP, price_percent_bp: Math.round(w.percent * 100) },
+            { onConflict: 'vendor_id,sub_option_id' },
+          )
+        if (error) {
+          console.error('[catalog] drain sub_option percent upsert failed:', error.message)
+          toast.error('Could not save percent markup — please retry')
+        }
+        continue
       }
+      console.error('[catalog] drain percent: id not in option OR sub_option cache after hydrate', w)
       continue
     }
     const ck = cacheKey(w.serviceId, w.optionId)
@@ -536,25 +554,45 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         }
         const ck = cacheKey(serviceId, optionId)
         const optionDbId = get()._optionDbIdCache[ck]
-        if (!optionDbId) {
-          console.error('[catalog] setPricePercent: option id not in cache after hydrate', { serviceId, optionId })
+        if (optionDbId) {
+          // Upsert with ONLY the percent column so existing price_cents /
+          // active stay untouched. New rows get DB defaults (price_cents=0,
+          // active=true, currency='USD').
+          supabase
+            .from('vendor_option_prices')
+            .upsert(
+              { vendor_id: vendorUuid, option_id: optionDbId, price_percent_bp: Math.round(percent * 100) },
+              { onConflict: 'vendor_id,option_id' }
+            )
+            .then(({ error }) => {
+              if (error) {
+                console.error('[catalog] upsert percent failed:', error.message)
+                toast.error('Could not save percent markup — please retry')
+              }
+            })
           return
         }
-        // Upsert with ONLY the percent column so existing price_cents /
-        // active stay untouched. New rows get DB defaults (price_cents=0,
-        // active=true, currency='USD').
-        supabase
-          .from('vendor_option_prices')
-          .upsert(
-            { vendor_id: vendorUuid, option_id: optionDbId, price_percent_bp: Math.round(percent * 100) },
-            { onConflict: 'vendor_id,option_id' }
-          )
-          .then(({ error }) => {
-            if (error) {
-              console.error('[catalog] upsert percent failed:', error.message)
-              toast.error('Could not save percent markup — please retry')
-            }
-          })
+        // Phase A-Completion (task_122) — the 4 markup-eligible keys
+        // (casement / windows_low_e / doors_low_e / storm_front_low_e) are
+        // sub_options; their prices live in vendor_sub_option_prices. Mirrors
+        // setPrice cache-A-then-cache-B shape at L498-513.
+        const subOptionDbId = get()._subOptionDbIdCache[ck]
+        if (subOptionDbId) {
+          supabase
+            .from('vendor_sub_option_prices')
+            .upsert(
+              { vendor_id: vendorUuid, sub_option_id: subOptionDbId, price_percent_bp: Math.round(percent * 100) },
+              { onConflict: 'vendor_id,sub_option_id' }
+            )
+            .then(({ error }) => {
+              if (error) {
+                console.error('[catalog] upsert sub_option percent failed:', error.message)
+                toast.error('Could not save percent markup — please retry')
+              }
+            })
+          return
+        }
+        console.error('[catalog] setPricePercent: id not in option OR sub_option cache after hydrate', { serviceId, optionId })
       },
 
       setServicePermit: (serviceId, cents) => {
@@ -659,9 +697,12 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         }
 
         // 1c. Load this vendor's sub_option prices (Arc-41 — sub-option layer).
+        // Phase A-Completion (task_122): price_percent_bp added to SELECT so
+        // hydrate populates percentBySvcOption for sub_option keys (mirrors
+        // vendor_option_prices SELECT at L585 above).
         const { data: subPriceRows, error: subPriceErr } = await supabase
           .from('vendor_sub_option_prices')
-          .select('price_cents,active,sub_options(id,sub_option_id,sub_groups(options(option_groups(service_id))))')
+          .select('price_cents,active,price_percent_bp,sub_options(id,sub_option_id,sub_groups(options(option_groups(service_id))))')
           .eq('vendor_id', vendorUuid)
           .eq('active', true)
 
@@ -738,6 +779,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
         // sub_option_id. Cart/configurator selections that target a sub_option
         // id hit getPrice with the sub_option_id; flat key shape mirrors the
         // option-side fold so consumer code stays one-shape.
+        // Phase A-Completion (task_122): parallel percent fold into
+        // percentBySvcOption so sub_option markup persists across reload —
+        // mirrors the bp/100 boundary conversion in buildPriceMapFromRows for
+        // the option side.
         for (const row of (subPriceRows ?? []) as unknown as DbSubPriceRow[]) {
           const so = row.sub_options
           const svcId = so?.sub_groups?.options?.option_groups?.service_id
@@ -746,6 +791,10 @@ export const useVendorCatalogStore = create<VendorCatalogState>()(
           priceBySvcOption[svcId][so.sub_option_id] = row.price_cents
           const ck = cacheKey(svcId, so.sub_option_id)
           if (!subOptionDbIdCache[ck]) subOptionDbIdCache[ck] = so.id
+          if (row.price_percent_bp != null) {
+            if (!percentBySvcOption[svcId]) percentBySvcOption[svcId] = {}
+            percentBySvcOption[svcId][so.sub_option_id] = row.price_percent_bp / 100
+          }
         }
 
         // 4b. EDIT 1.D KEYSTONE FOLD/MERGE — reconstruct services[].enabled
