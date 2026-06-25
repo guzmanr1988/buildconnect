@@ -131,7 +131,11 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
       setLastFormData(formData)
       setFormState({ kind: 'submitting' })
 
-      const parsed = parseFlatAddress(formData.address)
+      // Prefer structured address from Google Places Autocomplete (pin-58 wire).
+      // Falls back to parseFlatAddress when the homeowner typed past the
+      // autocomplete or the Maps SDK failed to load — graceful degradation,
+      // keeping the post-pin-57 comma-less parser as the safety net.
+      const parsed = formData.structuredAddress ?? parseFlatAddress(formData.address)
       if (!parsed) {
         setFormState({
           kind: 'paymentError',

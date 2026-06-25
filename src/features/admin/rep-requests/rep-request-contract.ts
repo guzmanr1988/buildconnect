@@ -122,6 +122,17 @@ export type RepRequestAvailabilityBucket =
 
 export interface IntakeFormData {
   address: string
+  // Populated when Google Places Autocomplete returns a selection with full
+  // address_components. The submit hook prefers this over parseFlatAddress to
+  // avoid the unpunctuated-multi-word-city failure mode. Stays undefined when
+  // Maps SDK fails to load or the homeowner typed past the autocomplete —
+  // submit then falls back to parseFlatAddress(address).
+  structuredAddress?: {
+    line1: string
+    city: string
+    state: string
+    zip: string
+  }
   description?: string
   photos: File[]
   contactName: string

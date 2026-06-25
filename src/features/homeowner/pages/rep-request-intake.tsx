@@ -11,12 +11,18 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useRepRequestSubmit } from '@/hooks/use-rep-request-submit'
+import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
 import { stripePromise } from '@/lib/stripe-client'
 import type {
   IntakeFormData,
   RepRequestAvailabilityBucket,
   SubmitFormState,
 } from '@/features/admin/rep-requests/rep-request-contract'
+
+// Same Google Maps key the roof flow uses (VITE_-baked at build time). When
+// missing, the autocomplete hook short-circuits to no-op and the input degrades
+// to plain text → parseFlatAddress fallback in use-rep-request-submit.
+const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 
 // Concierge Rep Request — 3-step homeowner intake.
 // Step 1 project info → Step 2 contact + availability → Step 3 review,
@@ -58,6 +64,20 @@ export function RepRequestIntakePage() {
   // per athena §4.3.1 idempotency. confirmPayment is component-side.
   const { formState, submit, retry, clientSecret } = useRepRequestSubmit()
   const fileInput = useRef<HTMLInputElement>(null)
+
+  // Google Places autocomplete on the Step1 address Input. onPlace writes the
+  // canonical formatted_address into form.address (display string); onStructured
+  // writes the parsed {line1,city,state,zip} into form.structuredAddress so
+  // submit() can hand the edge fn a structured payload without re-parsing.
+  // ref-setter re-binds on step unmount/remount (Step1 only mounts when step===1).
+  const setAddressInputRef = usePlacesAutocomplete(
+    !!MAPS_KEY,
+    MAPS_KEY,
+    (formatted) =>
+      setForm((prev) => ({ ...prev, address: formatted })),
+    (parts) =>
+      setForm((prev) => ({ ...prev, structuredAddress: parts })),
+  )
 
   const step1Valid = form.address.trim().length > 0
   const step2Valid =
@@ -153,7 +173,14 @@ export function RepRequestIntakePage() {
         <StepHeader step={step} />
 
         {step === 1 && (
-          <Step1 form={form} setForm={setForm} addPhotos={addPhotos} removePhoto={removePhoto} fileInput={fileInput} />
+          <Step1
+            form={form}
+            setForm={setForm}
+            addPhotos={addPhotos}
+            removePhoto={removePhoto}
+            fileInput={fileInput}
+            setAddressInputRef={setAddressInputRef}
+          />
         )}
         {step === 2 && (
           <Step2 form={form} setForm={setForm} toggleBucket={toggleBucket} />
@@ -232,8 +259,9 @@ interface Step1Props {
   addPhotos: (files: FileList | null) => void
   removePhoto: (i: number) => void
   fileInput: React.RefObject<HTMLInputElement | null>
+  setAddressInputRef: (el: HTMLInputElement | null) => void
 }
-function Step1({ form, setForm, addPhotos, removePhoto, fileInput }: Step1Props) {
+function Step1({ form, setForm, addPhotos, removePhoto, fileInput, setAddressInputRef }: Step1Props) {
   return (
     <div className="space-y-5">
       <div>
@@ -241,10 +269,17 @@ function Step1({ form, setForm, addPhotos, removePhoto, fileInput }: Step1Props)
         <Input
           id="rri-address"
           data-testid="rep-request-intake-address"
+          ref={setAddressInputRef}
           value={form.address}
-          onChange={(e) => setForm({ ...form, address: e.target.value })}
-          placeholder="123 Main St, Anytown FL 33101"
+          onChange={(e) =>
+            // Manual edit clears the structured address — the formatted string
+            // and the parsed parts can drift, so we drop structuredAddress and
+            // let the submit hook fall back to parseFlatAddress on confirm.
+            setForm({ ...form, address: e.target.value, structuredAddress: undefined })
+          }
+          placeholder="Start typing your address…"
           className="mt-1.5"
+          autoComplete="off"
         />
       </div>
       <div>
