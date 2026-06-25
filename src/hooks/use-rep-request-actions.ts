@@ -100,12 +100,20 @@ export function useRepRequestActions(
     [wrap, repRequestId],
   )
 
-  // cancel: Stripe Refund.create needs server-side secret + book-balance
-  // math ($200 refundable / $50 retained per Rod §11). Tracked as a
-  // separate edge-fn deliverable; UI gates on canCancel still wire here.
+  // cancel: server-side Stripe Refund.create($200 refundable / $50
+  // retained per Rod §11 book-balance) is owned by the cancel-rep-request
+  // edge fn; the UI just triggers it. Both homeowner self-row and admin
+  // any-row callers route through the same fn — server reads auth.uid()
+  // and validates against rep_requests.homeowner_id.
   const cancel = useCallback(
-    (_reason?: string) => wrap(async () => ({ ok: true })),
-    [wrap],
+    (reason?: string) =>
+      wrap(async () => {
+        const { error } = await supabase.functions.invoke('cancel-rep-request', {
+          body: { rep_request_id: repRequestId, reason },
+        })
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
   const markVisited = useCallback(
