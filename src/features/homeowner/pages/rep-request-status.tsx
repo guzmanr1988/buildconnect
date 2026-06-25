@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
+import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
 import {
   CUSTOMER_TRACKER_STATES,
   STATUS_LABELS,
@@ -44,7 +45,6 @@ export function RepRequestStatusPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [cancelOpen, setCancelOpen] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
 
   // Hook is wired; commit 2.5 fills in react-query + Realtime so this
   // surface starts rendering real data without component-side changes.
@@ -52,7 +52,8 @@ export function RepRequestStatusPage() {
   // synthetic row so the page stays reviewable end-to-end alongside
   // commit 3. canCancel comes from RepRequestActions (per-role
   // derivation) not the detail row itself.
-  const { detail: liveDetail, actions, isLoading } = useRepRequestDetail(id)
+  const { detail: liveDetail, actions, isLoading, refetch } = useRepRequestDetail(id)
+  const { cancel, mutating } = useRepRequestActions(id)
   const detail = liveDetail
     ? {
         id: liveDetail.id,
@@ -99,11 +100,15 @@ export function RepRequestStatusPage() {
     detail.status === 'contractor_selected'
 
   async function onConfirmCancel() {
-    setCancelling(true)
-    // TODO commit 4: await actions.cancel() → flips status optimistically,
-    // edge fn cancel-rep-request handles RLS gating + Refund.create.
-    setCancelling(false)
-    setCancelOpen(false)
+    // Hook is wired through useRepRequestActions.cancel(); commit 5
+    // swaps the no-op for the cancel-rep-request edge-fn POST that
+    // fires Stripe Refund.create for the $200 refundable portion.
+    // refetch() pulls the optimistic post-cancel row state.
+    const r = await cancel()
+    if (r.ok) {
+      await refetch()
+      setCancelOpen(false)
+    }
   }
 
   return (
@@ -189,13 +194,13 @@ export function RepRequestStatusPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelling}>Keep Request</AlertDialogCancel>
+            <AlertDialogCancel disabled={mutating}>Keep Request</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmCancel}
-              disabled={cancelling}
+              disabled={mutating}
               data-testid="rep-request-status-cancel-confirm"
             >
-              {cancelling ? 'Cancelling…' : 'Cancel & Get $200 Back'}
+              {mutating ? 'Cancelling…' : 'Cancel & Get $200 Back'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

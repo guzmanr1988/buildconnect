@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useRepRequestQueueParams } from '@/hooks/use-rep-request-queue-params'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
+import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
 import {
   STATUS_LABELS,
   STATUS_PILL_CLASSES,
@@ -205,7 +206,8 @@ function FilterPill({
 }
 
 function DetailPane({ selectedId }: { selectedId: string | null }) {
-  const { detail, actions, isLoading } = useRepRequestDetail(selectedId)
+  const { detail, actions, isLoading, refetch } = useRepRequestDetail(selectedId)
+  const m = useRepRequestActions(selectedId)
 
   if (!selectedId) {
     return (
@@ -311,9 +313,16 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
           <Button
             size="sm"
             variant="outline"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // TODO commit 5: open assign dialog → repId from rep
+              // picker. For now, null unassigns or no-op when actions
+              // gate is still scaffold-null.
+              const r = await m.assignRep(null)
+              if (r.ok) await refetch()
+            }}
             data-testid="admin-rep-requests-assign-btn"
-            title="Assignment dialog lands in commit 5"
+            title={actions ? undefined : 'Assignment dialog lands in commit 5'}
           >
             <UserPlus className="h-3.5 w-3.5 mr-1" />
             {row.assignedRep ? 'Reassign' : 'Assign'}
@@ -323,9 +332,15 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
           <Button
             size="sm"
             variant="outline"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // TODO commit 5: next-status picker driven by current
+              // status (scheduled→visited→project_ready→contractor_selected).
+              const r = await m.advanceStatus(row.status)
+              if (r.ok) await refetch()
+            }}
             data-testid="admin-rep-requests-advance-btn"
-            title="Status advance lands in commit 5"
+            title={actions ? undefined : 'Status advance lands in commit 5'}
           >
             <CheckCheck className="h-3.5 w-3.5 mr-1" />
             Advance Status
@@ -335,9 +350,13 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
           <Button
             size="sm"
             variant="outline"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              const r = await m.cancel()
+              if (r.ok) await refetch()
+            }}
             data-testid="admin-rep-requests-cancel-btn"
-            title="Cancel + refund lands in commit 5"
+            title={actions ? undefined : 'Cancel + refund lands in commit 5'}
           >
             <XCircle className="h-3.5 w-3.5 mr-1" />
             Cancel + Refund

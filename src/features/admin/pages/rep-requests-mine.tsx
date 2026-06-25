@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useRepRequestQueueParams } from '@/hooks/use-rep-request-queue-params'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
+import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
 import {
   STATUS_LABELS,
   STATUS_PILL_CLASSES,
@@ -203,7 +204,8 @@ function MineDetailPane({
   selectedId: string | null
   onBack: () => void
 }) {
-  const { detail, actions, isLoading } = useRepRequestDetail(selectedId)
+  const { detail, actions, isLoading, refetch } = useRepRequestDetail(selectedId)
+  const m = useRepRequestActions(selectedId)
 
   if (!selectedId) {
     return (
@@ -339,9 +341,16 @@ function MineDetailPane({
         {canMarkVisited && (
           <Button
             size="sm"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // TODO commit 5: open assessment-notes sheet inline,
+              // pass the entered text. Empty string keeps the no-op
+              // contract truthful while the editor is still scaffold.
+              const r = await m.markVisited({ assessmentNotes: '' })
+              if (r.ok) await refetch()
+            }}
             data-testid="rep-mine-mark-visited-btn"
-            title="Mark visited lands in commit 5"
+            title={actions ? undefined : 'Mark visited lands in commit 5'}
             className="flex-1 min-w-[140px]"
           >
             <CheckCheck className="h-3.5 w-3.5 mr-1" />
@@ -352,9 +361,22 @@ function MineDetailPane({
           <Button
             size="sm"
             variant="outline"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // TODO commit 5: open the build-on-behalf form sheet
+              // (service picker + scope + estimated amount). The
+              // server INSERTs a projects row keyed to the
+              // homeowner_id of this rep request.
+              const r = await m.buildProjectOnBehalf({
+                serviceId: '',
+                scope: '',
+                estimatedAmountCents: null,
+                notes: null,
+              })
+              if (r.ok) await refetch()
+            }}
             data-testid="rep-mine-build-project-btn"
-            title="Build project lands in commit 5"
+            title={actions ? undefined : 'Build project lands in commit 5'}
             className="flex-1 min-w-[140px]"
           >
             <FileText className="h-3.5 w-3.5 mr-1" />
@@ -364,9 +386,17 @@ function MineDetailPane({
         {canMarkProjectReady && (
           <Button
             size="sm"
-            disabled
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // TODO commit 5: project_id comes from detail.projectId
+              // once useRepRequestDetail returns the joined row from
+              // commit 2.5 (Build Project step writes the FK back).
+              const projectId = detail?.projectId ?? ''
+              const r = await m.markProjectReady(projectId)
+              if (r.ok) await refetch()
+            }}
             data-testid="rep-mine-mark-project-ready-btn"
-            title="Mark project ready lands in commit 5"
+            title={actions ? undefined : 'Mark project ready lands in commit 5'}
             className="flex-1 min-w-[140px]"
           >
             <CheckCheck className="h-3.5 w-3.5 mr-1" />
