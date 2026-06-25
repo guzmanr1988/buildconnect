@@ -209,17 +209,53 @@ export default function EmployeesPage() {
 
     setProvisioningLogin(true)
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password: tempPassword,
-        options: {
-          data: {
-            name: `${form.firstName} ${form.lastName}`.trim(),
-            role: 'admin_employee',
-          },
+      // kratos msg 1782413570982 — anon-key signUp({ data: { role:
+      // 'admin_employee' } }) is now blocked by hephaestus's
+      // handle_new_user trigger guard (throws 42501). The legitimate
+      // path is the admin-create-employee Edge Function, which
+      // re-verifies operator.role === 'admin' service-side then calls
+      // auth.admin.createUser via the service-role JWT (bypasses the
+      // guard). Shape mirrors callAdminResetFn in users.tsx.
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        toast.error('Employee added, but no admin session — log in again to provision login.', { duration: 15000 })
+        return
+      }
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-employee`
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          email,
+          password: tempPassword,
+          name: `${form.firstName} ${form.lastName}`.trim(),
+        }),
       })
-      if (error) throw error
+      let data: Record<string, unknown> = {}
+      try { data = await resp.json() } catch { data = { error: 'invalid_response' } }
+      if (!resp.ok) {
+        const code = typeof data.error === 'string' ? data.error : 'unknown_error'
+        let msg: string
+        if (resp.status === 403 && code === 'forbidden_not_admin') {
+          msg = 'Only admins can create employees — admin_employee accounts cannot mint new logins per security policy.'
+        } else if (resp.status === 409 || code === 'email_already_registered') {
+          msg = 'A user with this email already exists in Supabase Auth.'
+        } else if (code === 'invalid_password_length') {
+          msg = 'Password rejected — must be at least 8 characters.'
+        } else if (code === 'invalid_email') {
+          msg = 'Email rejected (format).'
+        } else if (resp.status === 401) {
+          msg = 'Admin session expired — log in again.'
+        } else {
+          msg = typeof data.detail === 'string' ? friendlyAuthError(new Error(data.detail)) : code
+        }
+        toast.error(`Employee added, but login provisioning failed: ${msg}`, { duration: 15000 })
+        return
+      }
       toast.success(
         `Employee added. Login: ${email} / temp pw: ${tempPassword}. Confirmation email sent — they must click the link before first sign-in, then change the password.`,
         { duration: 20000 },
