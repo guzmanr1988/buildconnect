@@ -65,7 +65,7 @@ const FILTER_STATUSES: ReadonlyArray<RepRequestStatus> = [
 
 export default function RepRequestsPage() {
   const { selectedId, setSelectedId, statusFilter, setStatusFilter } = useRepRequestQueueParams()
-  const { rows, isLoading, error } = useRepRequestsList(statusFilter)
+  const { rows, isLoading, error, refetch: refetchList } = useRepRequestsList(statusFilter)
 
   const selectedRow = useMemo(
     () => (selectedId ? rows.find((r) => r.id === selectedId) ?? null : null),
@@ -89,7 +89,7 @@ export default function RepRequestsPage() {
           isLoading={isLoading}
           error={error}
         />
-        <DetailPane selectedId={selectedId} selectedRow={selectedRow} />
+        <DetailPane selectedId={selectedId} selectedRow={selectedRow} refetchList={refetchList} />
       </div>
     </motion.div>
   )
@@ -236,9 +236,10 @@ function FilterPill({
 interface DetailPaneProps {
   selectedId: string | null
   selectedRow: RepRequestListRow | null
+  refetchList: () => Promise<void>
 }
 
-function DetailPane({ selectedId, selectedRow }: DetailPaneProps) {
+function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
   const { detail, actions, isLoading, refetch } = useRepRequestDetail(selectedId)
   const m = useRepRequestActions(selectedId)
   const { reps } = useReps()
@@ -340,7 +341,7 @@ function DetailPane({ selectedId, selectedRow }: DetailPaneProps) {
             onChange={async (e) => {
               const next = e.target.value || null
               const r = await m.assignRep(next)
-              if (r.ok) await refetch()
+              if (r.ok) await Promise.all([refetch(), refetchList()])
             }}
             data-testid="admin-rep-requests-assign-select"
             className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
