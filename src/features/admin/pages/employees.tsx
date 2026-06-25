@@ -250,6 +250,13 @@ export default function EmployeesPage() {
           msg = 'Email rejected (format).'
         } else if (resp.status === 401) {
           msg = 'Admin session expired — log in again.'
+        } else if (code === 'role_promote_failed') {
+          // Two-step pattern: auth.users row CREATED but profile UPDATE
+          // to admin_employee failed. The login exists at homeowner role
+          // and needs manual reconciliation. Surface the new uid so the
+          // admin can act on it directly.
+          const uid = typeof data.userId === 'string' ? data.userId : 'unknown'
+          msg = `Login created but role promotion failed (uid: ${uid}). Profile is stuck at homeowner — promote manually in Supabase or contact ops.`
         } else {
           msg = typeof data.detail === 'string' ? friendlyAuthError(new Error(data.detail)) : code
         }
