@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Camera, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Camera, Loader2, X } from 'lucide-react'
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import type { StripeElementsOptions } from '@stripe/stripe-js'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useRepRequestSubmit } from '@/hooks/use-rep-request-submit'
+import { stripePromise } from '@/lib/stripe-client'
 import type {
   IntakeFormData,
   RepRequestAvailabilityBucket,
@@ -16,10 +19,11 @@ import type {
 } from '@/features/admin/rep-requests/rep-request-contract'
 
 // Concierge Rep Request — 3-step homeowner intake.
-// Step 1 project info → Step 2 contact + availability → Step 3 review + pay.
-// Stripe Elements wiring lands in commit 4 alongside helios's
-// useRepRequestSubmit hook; Step 3 [Confirm & Pay] is intentionally
-// inert here so the scaffold ships compile-clean without a Stripe dep.
+// Step 1 project info → Step 2 contact + availability → Step 3 review,
+// PaymentElement, confirmPayment. The submit hook owns the
+// create-rep-request POST (idle → submitting → succeeded); the
+// PaymentForm subcomponent owns the actual stripe.confirmPayment call
+// (mounted inside <Elements> so useStripe/useElements resolve).
 
 type Step = 1 | 2 | 3
 
@@ -48,11 +52,11 @@ export function RepRequestIntakePage() {
     availabilityBuckets: [],
     accessNotes: '',
   })
-  // Stripe submit state from helios's hook. retry() re-uses the same
-  // PaymentIntent client_secret per athena §4.3.1 idempotency rule.
-  // submit/retry are no-ops in the scaffold; commit 2.5 wires the
-  // edge-fn POST, commit 4 mounts <Elements> + drives confirmPayment.
-  const { formState: submitState } = useRepRequestSubmit()
+  // Helios's hook. submit() POSTs create-rep-request and transitions
+  // formState idle → submitting → succeeded (with rep_request_id) +
+  // populates clientSecret. retry() preserves the same client_secret
+  // per athena §4.3.1 idempotency. confirmPayment is component-side.
+  const { formState, submit, retry, clientSecret } = useRepRequestSubmit()
   const fileInput = useRef<HTMLInputElement>(null)
 
   const step1Valid = form.address.trim().length > 0
@@ -83,6 +87,61 @@ export function RepRequestIntakePage() {
     })
   }
 
+  // Footer right-button state machine. The Pay-$250 action moves
+  // INSIDE <Elements> once clientSecret arrives (useStripe needs the
+  // Elements provider scope), so the footer suppresses its own primary
+  // CTA in that window.
+  const footerRightButton = (() => {
+    if (step < 3) {
+      return (
+        <Button
+          onClick={() => setStep((s) => (s + 1) as Step)}
+          disabled={(step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
+          data-testid="rep-request-intake-next-btn"
+        >
+          Next <ArrowRight className="h-4 w-4 ml-1" />
+        </Button>
+      )
+    }
+    // Step 3 — branches on formState.
+    if (formState.kind === 'submitting') {
+      return (
+        <Button disabled data-testid="rep-request-intake-pay-btn">
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Setting up payment…
+        </Button>
+      )
+    }
+    if (formState.kind === 'paymentError') {
+      return (
+        <Button
+          onClick={() => retry()}
+          data-testid="rep-request-intake-retry-btn"
+        >
+          Try Again
+        </Button>
+      )
+    }
+    if (formState.kind === 'succeeded' && clientSecret) {
+      // Suppress footer CTA — inline PaymentForm renders its own Pay
+      // button inside the Elements provider scope.
+      return null
+    }
+    // idle — gather form clicks Confirm to fire submit().
+    return (
+      <Button
+        onClick={() => submit(form)}
+        data-testid="rep-request-intake-confirm-btn"
+      >
+        Confirm Details & Continue
+      </Button>
+    )
+  })()
+
+  // Back button disabled while a create POST is in flight — going
+  // back mid-submit would leak the in-progress request.
+  const backDisabled = step === 3 && formState.kind === 'submitting'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -99,7 +158,14 @@ export function RepRequestIntakePage() {
         {step === 2 && (
           <Step2 form={form} setForm={setForm} toggleBucket={toggleBucket} />
         )}
-        {step === 3 && <Step3 form={form} submitState={submitState} />}
+        {step === 3 && (
+          <Step3
+            form={form}
+            formState={formState}
+            clientSecret={clientSecret}
+            onPaid={(repRequestId) => navigate(`/home/rep-requests/${repRequestId}`)}
+          />
+        )}
 
         <div className="mt-8 flex items-center justify-between gap-3">
           {step === 1 ? (
@@ -114,28 +180,13 @@ export function RepRequestIntakePage() {
             <Button
               variant="ghost"
               onClick={() => setStep((s) => (s - 1) as Step)}
+              disabled={backDisabled}
               data-testid="rep-request-intake-back-btn"
             >
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           )}
-          {step < 3 ? (
-            <Button
-              onClick={() => setStep((s) => (s + 1) as Step)}
-              disabled={(step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
-              data-testid="rep-request-intake-next-btn"
-            >
-              Next <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          ) : (
-            <Button
-              disabled
-              data-testid="rep-request-intake-pay-btn"
-              title="Stripe Elements wiring lands in commit 4"
-            >
-              Confirm & Pay $250
-            </Button>
-          )}
+          {footerRightButton ?? <div />}
         </div>
       </Card>
     </motion.div>
@@ -326,19 +377,32 @@ function Step2({ form, setForm, toggleBucket }: Step2Props) {
   )
 }
 
-function Step3({ form, submitState }: { form: IntakeFormData; submitState: SubmitFormState }) {
-  const isError = submitState.kind === 'paymentError'
+interface Step3Props {
+  form: IntakeFormData
+  formState: SubmitFormState
+  clientSecret: string | null
+  onPaid: (repRequestId: string) => void
+}
+function Step3({ form, formState, clientSecret, onPaid }: Step3Props) {
+  const isCreateError =
+    formState.kind === 'paymentError' && !formState.intentClientSecret
+  const repRequestId =
+    formState.kind === 'succeeded' ? formState.repRequestId : null
+
   return (
     <div className="space-y-5">
-      {isError && (
+      {isCreateError && (
         <div
           role="alert"
-          data-testid="rep-request-intake-payment-error"
+          data-testid="rep-request-intake-create-error"
           className="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-4 py-3 text-sm"
         >
-          Payment didn't go through — please try again.
+          {formState.kind === 'paymentError'
+            ? formState.reason || "Couldn't create the request — please try again."
+            : null}
         </div>
       )}
+
       <Card className="rounded-lg bg-muted/40 p-4 text-sm space-y-1.5">
         <p className="font-medium">{form.address || '(no address)'}</p>
         {form.description && (
@@ -353,6 +417,7 @@ function Step3({ form, submitState }: { form: IntakeFormData; submitState: Submi
           Contact: {form.contactName} · {form.contactPhone}
         </p>
       </Card>
+
       <Card className="rounded-lg bg-muted/40 p-4 text-sm">
         <p className="font-semibold mb-3">Visit fee breakdown</p>
         <div className="space-y-1.5">
@@ -375,11 +440,130 @@ function Step3({ form, submitState }: { form: IntakeFormData; submitState: Submi
           trip fee is retained.
         </p>
       </Card>
-      {/* TODO commit 4: mount <Elements stripe={stripePromise}> here and
-          render <PaymentElement /> + drive stripe.confirmPayment from
-          the [Confirm & Pay $250] button via helios's
-          useRepRequestSubmit hook. submitState wiring is already in
-          place above for the paymentError variant. */}
+
+      {/* Payment surface only mounts once the create-rep-request edge
+          fn has returned a clientSecret. Elements re-mounts cleanly if
+          the secret changes (e.g. retry path generates a new PI). */}
+      {clientSecret && repRequestId && (
+        <StripePaymentBlock
+          clientSecret={clientSecret}
+          repRequestId={repRequestId}
+          onPaid={onPaid}
+        />
+      )}
+    </div>
+  )
+}
+
+interface StripePaymentBlockProps {
+  clientSecret: string
+  repRequestId: string
+  onPaid: (repRequestId: string) => void
+}
+function StripePaymentBlock({ clientSecret, repRequestId, onPaid }: StripePaymentBlockProps) {
+  // clientSecret keys the Elements provider — when it changes, the
+  // provider re-mounts with a fresh PaymentIntent context. Theme stays
+  // neutral so the form blends with the surrounding Card surface.
+  const options: StripeElementsOptions = {
+    clientSecret,
+    appearance: { theme: 'stripe' },
+  }
+  return (
+    <Card
+      className="rounded-lg border-primary/20 p-4 space-y-4"
+      data-testid="rep-request-intake-payment-block"
+    >
+      <p className="text-sm font-semibold">Payment</p>
+      <Elements stripe={stripePromise} options={options} key={clientSecret}>
+        <PaymentForm repRequestId={repRequestId} onPaid={onPaid} />
+      </Elements>
+    </Card>
+  )
+}
+
+interface PaymentFormProps {
+  repRequestId: string
+  onPaid: (repRequestId: string) => void
+}
+function PaymentForm({ repRequestId, onPaid }: PaymentFormProps) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [paymentElementReady, setPaymentElementReady] = useState(false)
+
+  // Clear stale error on PaymentElement remount (e.g. after a retry
+  // that swaps the clientSecret).
+  useEffect(() => {
+    setError(null)
+  }, [repRequestId])
+
+  async function onPay() {
+    if (!stripe || !elements || confirming) return
+    setConfirming(true)
+    setError(null)
+
+    // return_url drives the 3DS / redirect-required path. For
+    // non-redirect cards, redirect:'if_required' keeps the homeowner
+    // on this page so we can navigate ourselves on success and
+    // surface the error inline on failure.
+    const returnUrl = `${window.location.origin}/home/rep-requests/${repRequestId}`
+    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: returnUrl },
+      redirect: 'if_required',
+    })
+
+    if (confirmError) {
+      setError(confirmError.message ?? 'Payment failed — please try again.')
+      setConfirming(false)
+      return
+    }
+
+    // Non-redirect success path. succeeded | processing both progress
+    // the homeowner to the status page; the Stripe webhook eventually
+    // flips status=pending_payment → new + sends the email.
+    if (paymentIntent && (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing')) {
+      onPaid(repRequestId)
+      return
+    }
+
+    setError('Payment did not complete. Please try again.')
+    setConfirming(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div data-testid="rep-request-intake-payment-element">
+        <PaymentElement
+          onReady={() => setPaymentElementReady(true)}
+          options={{ layout: 'tabs' }}
+        />
+      </div>
+      {error && (
+        <p
+          role="alert"
+          data-testid="rep-request-intake-payment-error"
+          className="text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+      <Button
+        onClick={onPay}
+        disabled={!stripe || !elements || !paymentElementReady || confirming}
+        className="w-full"
+        data-testid="rep-request-intake-pay-btn"
+      >
+        {confirming ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Processing…
+          </>
+        ) : (
+          'Pay $250'
+        )}
+      </Button>
     </div>
   )
 }
