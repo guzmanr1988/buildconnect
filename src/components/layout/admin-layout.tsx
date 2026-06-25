@@ -80,7 +80,9 @@ function isNavGroup(item: NavEntry): item is NavGroup {
 }
 
 // Slim sidebar for admin_employee: Profile, Overview, Vendors, Users,
-// Messages, Support (wave-18 #3 — kratos widen 1781112259222) — no
+// Messages, Support (wave-18 #3 — kratos widen 1781112259222), Rep
+// Requests (task_324 — admin_employee co-manages the Concierge queue;
+// backend RLS + build-project-on-behalf already admit the role) — no
 // Banking dropdown, Bug Tracker, Settings, etc.
 const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
   '/admin/profile',
@@ -89,6 +91,7 @@ const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
   '/admin/users',
   '/admin/messages',
   '/admin/support',
+  '/admin/rep-requests',
 ])
 
 // Concierge rep role — sidebar shows ONLY Profile + own-queue entry.
@@ -252,7 +255,8 @@ export function AdminLayout() {
     const path = location.pathname
     const isAllowed =
       ADMIN_EMPLOYEE_ALLOWED_ROUTES.has(path) ||
-      path.startsWith('/admin/vendors/')
+      path.startsWith('/admin/vendors/') ||
+      path.startsWith('/admin/rep-requests/')
     if (!isAllowed) {
       navigate('/admin', { replace: true })
     }
