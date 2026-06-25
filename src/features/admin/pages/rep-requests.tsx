@@ -4,28 +4,45 @@
 // ?status= search param (URL-source-of-truth, owned by
 // useRepRequestQueueParams).
 //
-// COMMIT 3 SCAFFOLD: the queue-list query is not yet wired (helios's
-// commit 2.5 lands the list hook). Synthetic queue rows below keep
-// the surface reviewable end-to-end. The detail pane already consumes
-// useRepRequestDetail via the homeowner status page pattern; the
-// admin assign/advance/cancel actions land in commit 5 once
-// useRepRequestActions returns the per-role permission set.
+// Data: useRepRequestsList drives the queue pane (react-query +
+// Realtime, status filter applied server-side). useRepRequestDetail
+// drives the right pane keyed off selectedId. useRepRequestActions
+// owns the 6 mutation paths (4 RLS-direct + 2 invoke per
+// hephaestus's commit-5 anchor bundle).
 
 import { useMemo } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { Inbox, MapPin, UserPlus, CheckCheck, XCircle } from 'lucide-react'
+import { Inbox, MapPin, CheckCheck, XCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useRepRequestQueueParams } from '@/hooks/use-rep-request-queue-params'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
 import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
+import { useRepRequestsList, type RepRequestListRow } from '@/hooks/use-rep-requests-list'
+import { useReps } from '@/hooks/use-reps'
 import {
   STATUS_LABELS,
   STATUS_PILL_CLASSES,
   type RepRequestStatus,
 } from '@/features/admin/rep-requests/rep-request-contract'
 import { cn } from '@/lib/utils'
+
+// Admin status-advance next-state mapping. Mig 105 status-transition
+// guard enforces legality server-side; this function selects the one
+// legal admin-driven forward step. markVisited / markProjectReady have
+// dedicated buttons in commit-5 follow-ons (rep workflow); advance is
+// the admin escape hatch covering the same forward edges.
+const STATUS_ADVANCE_MAP: Partial<Record<RepRequestStatus, RepRequestStatus>> = {
+  new: 'scheduled',
+  scheduled: 'visited',
+  visited: 'project_ready',
+  project_ready: 'contractor_selected',
+}
+
+function nextAdvanceStatus(s: RepRequestStatus): RepRequestStatus | null {
+  return STATUS_ADVANCE_MAP[s] ?? null
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -45,33 +62,14 @@ const FILTER_STATUSES: ReadonlyArray<RepRequestStatus> = [
   'cancelled',
 ]
 
-interface QueueRow {
-  id: string
-  status: RepRequestStatus
-  homeowner: string
-  address: string
-  description: string
-  age: string
-  assignedRep: string | null
-}
-
-// SCAFFOLD-ONLY synthetic rows. Replaced by helios's list query in
-// commit 2.5 — list shape will be approximately this plus
-// requested_visit_times + last_activity_at.
-const SYNTH_ROWS: QueueRow[] = [
-  { id: 'demo-1', status: 'new', homeowner: 'Jane Doe', address: '123 Main St, Anytown FL', description: 'Kitchen renovation', age: '12m', assignedRep: null },
-  { id: 'demo-2', status: 'scheduled', homeowner: 'John Smith', address: '456 Oak Ave, Springfield FL', description: 'Bathroom remodel', age: '2h', assignedRep: 'Alex Rep' },
-  { id: 'demo-3', status: 'visited', homeowner: 'Mary Johnson', address: '789 Pine Rd, Coral Gables FL', description: 'Roof replacement', age: '1d', assignedRep: 'Alex Rep' },
-  { id: 'demo-4', status: 'project_ready', homeowner: 'Bob Williams', address: '321 Elm St, Miami FL', description: 'HVAC install', age: '3d', assignedRep: 'Sam Rep' },
-]
-
 export default function RepRequestsPage() {
   const { selectedId, setSelectedId, statusFilter, setStatusFilter } = useRepRequestQueueParams()
+  const { rows, isLoading, error } = useRepRequestsList(statusFilter)
 
-  const rows = useMemo(() => {
-    if (!statusFilter) return SYNTH_ROWS
-    return SYNTH_ROWS.filter((r) => r.status === statusFilter)
-  }, [statusFilter])
+  const selectedRow = useMemo(
+    () => (selectedId ? rows.find((r) => r.id === selectedId) ?? null : null),
+    [rows, selectedId],
+  )
 
   return (
     <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-6">
@@ -87,22 +85,34 @@ export default function RepRequestsPage() {
           onSelect={setSelectedId}
           statusFilter={statusFilter}
           onFilterChange={setStatusFilter}
+          isLoading={isLoading}
+          error={error}
         />
-        <DetailPane selectedId={selectedId} />
+        <DetailPane selectedId={selectedId} selectedRow={selectedRow} />
       </div>
     </motion.div>
   )
 }
 
 interface QueueListPaneProps {
-  rows: QueueRow[]
+  rows: RepRequestListRow[]
   selectedId: string | null
   onSelect: (id: string | null) => void
   statusFilter: RepRequestStatus | null
   onFilterChange: (s: RepRequestStatus | null) => void
+  isLoading: boolean
+  error: Error | null
 }
 
-function QueueListPane({ rows, selectedId, onSelect, statusFilter, onFilterChange }: QueueListPaneProps) {
+function QueueListPane({
+  rows,
+  selectedId,
+  onSelect,
+  statusFilter,
+  onFilterChange,
+  isLoading,
+  error,
+}: QueueListPaneProps) {
   return (
     <Card className="rounded-xl shadow-sm flex flex-col overflow-hidden">
       <div className="p-3 border-b">
@@ -125,11 +135,28 @@ function QueueListPane({ rows, selectedId, onSelect, statusFilter, onFilterChang
         </div>
       </div>
       <div className="flex-1 overflow-y-auto" data-testid="admin-rep-requests-queue-list">
-        {rows.length === 0 ? (
+        {isLoading ? (
+          <div
+            className="flex flex-col items-center justify-center text-center py-12 px-4"
+            data-testid="admin-rep-requests-queue-loading"
+          >
+            <p className="text-sm text-muted-foreground">Loading rep requests…</p>
+          </div>
+        ) : error ? (
+          <div
+            className="flex flex-col items-center justify-center text-center py-12 px-4"
+            data-testid="admin-rep-requests-queue-error"
+          >
+            <p className="text-sm text-destructive">Couldn't load rep requests.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
+          </div>
+        ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-12 px-4">
             <Inbox className="h-10 w-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">
-              {statusFilter ? `No ${STATUS_LABELS[statusFilter].toLowerCase()} requests` : 'No rep requests'}
+              {statusFilter
+                ? `No ${STATUS_LABELS[statusFilter].toLowerCase()} requests`
+                : 'No rep requests'}
             </p>
           </div>
         ) : (
@@ -149,7 +176,7 @@ function QueueListPane({ rows, selectedId, onSelect, statusFilter, onFilterChang
                 )}
               >
                 <div className="flex items-center justify-between gap-2 w-full">
-                  <span className="text-sm font-semibold truncate">{r.homeowner}</span>
+                  <span className="text-sm font-semibold truncate">{r.homeownerName}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{r.age}</span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate w-full">{r.description}</p>
@@ -205,9 +232,15 @@ function FilterPill({
   )
 }
 
-function DetailPane({ selectedId }: { selectedId: string | null }) {
+interface DetailPaneProps {
+  selectedId: string | null
+  selectedRow: RepRequestListRow | null
+}
+
+function DetailPane({ selectedId, selectedRow }: DetailPaneProps) {
   const { detail, actions, isLoading, refetch } = useRepRequestDetail(selectedId)
   const m = useRepRequestActions(selectedId)
+  const { reps } = useReps()
 
   if (!selectedId) {
     return (
@@ -220,27 +253,20 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
     )
   }
 
-  // SCAFFOLD: synthetic row lookup until helios's commit 2.5 wires the
-  // list query into the cache that useRepRequestDetail reads from. The
-  // hook signature is correct; only the data source is stubbed.
-  const synth = SYNTH_ROWS.find((r) => r.id === selectedId)
+  // Detail hook is canonical for the per-row state; selectedRow comes
+  // from the list query and supplies the assigned-rep display name
+  // (detail hook only exposes assignedRepId — the name join lives in
+  // the list query). Both rails react to the same Realtime channel so
+  // they stay in lockstep without manual reconciliation.
   const row = detail
     ? {
-        homeowner: detail.contactName,
+        homeowner: detail.contactName || selectedRow?.homeownerName || '',
         address: detail.address,
         description: detail.description ?? '',
         status: detail.status,
-        assignedRep: detail.assignedRepId,
+        assignedRepName: selectedRow?.assignedRepName ?? null,
       }
-    : synth
-      ? {
-          homeowner: synth.homeowner,
-          address: synth.address,
-          description: synth.description,
-          status: synth.status,
-          assignedRep: synth.assignedRep,
-        }
-      : null
+    : null
 
   if (isLoading && !row) {
     return (
@@ -258,12 +284,9 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
     )
   }
 
-  // Action gating — scaffold defaults to admin permission-set until
-  // commit 2.5 wires the hook-returned actions object. canAdvance is
-  // true while the request isn't in a terminal state.
-  const canAssign = actions?.canAssignRep ?? true
-  const canAdvance = actions?.canAdvanceStatus ?? (row.status !== 'cancelled' && row.status !== 'contractor_selected')
-  const canCancel = actions?.canCancel ?? (row.status !== 'cancelled' && row.status !== 'contractor_selected')
+  const canAssign = actions?.canAssignRep ?? false
+  const canAdvance = actions?.canAdvanceStatus ?? false
+  const canCancel = actions?.canCancel ?? false
 
   return (
     <Card className="rounded-xl shadow-sm flex flex-col overflow-hidden" data-testid="admin-rep-requests-detail-pane">
@@ -295,7 +318,7 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
             Assigned rep
           </p>
           <p className="text-sm" data-testid="admin-rep-requests-detail-assigned">
-            {row.assignedRep ?? <span className="text-muted-foreground italic">Unassigned</span>}
+            {row.assignedRepName ?? <span className="text-muted-foreground italic">Unassigned</span>}
           </p>
         </div>
 
@@ -308,42 +331,43 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
         </div>
       </div>
 
-      <div className="p-3 border-t bg-background flex flex-wrap gap-2 justify-end">
+      <div className="p-3 border-t bg-background flex flex-wrap gap-2 justify-end items-center">
         {canAssign && (
-          <Button
-            size="sm"
-            variant="outline"
+          <select
+            value={detail?.assignedRepId ?? ''}
             disabled={!actions || m.mutating}
-            onClick={async () => {
-              // TODO commit 5: open assign dialog → repId from rep
-              // picker. For now, null unassigns or no-op when actions
-              // gate is still scaffold-null.
-              const r = await m.assignRep(null)
+            onChange={async (e) => {
+              const next = e.target.value || null
+              const r = await m.assignRep(next)
               if (r.ok) await refetch()
             }}
-            data-testid="admin-rep-requests-assign-btn"
-            title={actions ? undefined : 'Assignment dialog lands in commit 5'}
+            data-testid="admin-rep-requests-assign-select"
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <UserPlus className="h-3.5 w-3.5 mr-1" />
-            {row.assignedRep ? 'Reassign' : 'Assign'}
-          </Button>
+            <option value="">— Unassigned —</option>
+            {reps.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
         )}
-        {canAdvance && (
+        {canAdvance && nextAdvanceStatus(row.status) && (
           <Button
             size="sm"
             variant="outline"
             disabled={!actions || m.mutating}
             onClick={async () => {
-              // TODO commit 5: next-status picker driven by current
-              // status (scheduled→visited→project_ready→contractor_selected).
-              const r = await m.advanceStatus(row.status)
+              const next = nextAdvanceStatus(row.status)
+              if (!next) return
+              const r = await m.advanceStatus(next)
               if (r.ok) await refetch()
             }}
             data-testid="admin-rep-requests-advance-btn"
-            title={actions ? undefined : 'Status advance lands in commit 5'}
+            title={`Advance to ${STATUS_LABELS[nextAdvanceStatus(row.status)!]}`}
           >
             <CheckCheck className="h-3.5 w-3.5 mr-1" />
-            Advance Status
+            Advance → {STATUS_LABELS[nextAdvanceStatus(row.status)!]}
           </Button>
         )}
         {canCancel && (
@@ -356,7 +380,6 @@ function DetailPane({ selectedId }: { selectedId: string | null }) {
               if (r.ok) await refetch()
             }}
             data-testid="admin-rep-requests-cancel-btn"
-            title={actions ? undefined : 'Cancel + refund lands in commit 5'}
           >
             <XCircle className="h-3.5 w-3.5 mr-1" />
             Cancel + Refund
