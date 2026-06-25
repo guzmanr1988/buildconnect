@@ -8,7 +8,7 @@
 // cache so admin actions / webhook flips propagate to the open status
 // page without a manual refetch.
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
@@ -153,11 +153,26 @@ export function useRepRequestDetail(
   const viewerId = useAuthStore((s) => s.session?.user.id ?? null)
 
   const queryKey = useMemo(() => ['rep-request', repRequestId ?? null] as const, [repRequestId])
+  // realtimeTriggeredRef: set true by the Realtime UPDATE handler right
+  // before it invalidates the cache, so the queryFn that runs in response
+  // knows the refetch came from the Realtime rail (not the polling
+  // fallback). Lets the walker discriminate rail-of-delivery cleanly —
+  // hephaestus instrumentation handoff msg 1782371694126.
+  const realtimeTriggeredRef = useRef(false)
 
   const query = useQuery<RepRequestDetail | null, Error>({
     queryKey,
     enabled: !!repRequestId,
     staleTime: 10_000,
+    // Bounded polling fallback while the row is still pre-webhook. The
+    // Realtime UPDATE subscription below handles the steady-state flip,
+    // but a ws-handshake race can swallow the post-charge transition
+    // (status pending_payment → new fires ~6s after Pay, but if subscribe
+    // hadn't ack'd by then the event is lost). Polling every 2s only
+    // while status === 'pending_payment' bounds the worst-case stuck
+    // window without burning bandwidth on steady-state rows.
+    refetchInterval: (q) =>
+      q.state.data?.status === 'pending_payment' ? 2000 : false,
     queryFn: async () => {
       if (!repRequestId) return null
       const { data, error } = await supabase
@@ -169,7 +184,21 @@ export function useRepRequestDetail(
         .maybeSingle()
       if (error) throw error
       if (!data) return null
-      return mapRow(data as unknown as RepRequestRow)
+      const mapped = mapRow(data as unknown as RepRequestRow)
+      // Channel-of-delivery tag (hephaestus instrumentation handoff
+      // msg 1782371694126). If the refetch was triggered by the Realtime
+      // UPDATE handler (ref set just below), the rail is realtime;
+      // otherwise it's the polling fallback. Walkers parse these markers
+      // to prove which rail carried the flip post mig 106.
+      if (mapped.status !== 'pending_payment') {
+        const channel = realtimeTriggeredRef.current ? 'realtime' : 'poll'
+        // eslint-disable-next-line no-console
+        console.log(
+          `[flip] channel=${channel} t=${Date.now()} rep_request_id=${mapped.id} new_status=${mapped.status}`,
+        )
+      }
+      realtimeTriggeredRef.current = false
+      return mapped
     },
   })
 
@@ -186,6 +215,7 @@ export function useRepRequestDetail(
           filter: `id=eq.${repRequestId}`,
         },
         () => {
+          realtimeTriggeredRef.current = true
           queryClient.invalidateQueries({ queryKey })
         }
       )
