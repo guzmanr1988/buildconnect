@@ -1,4 +1,4 @@
-export type UserRole = 'homeowner' | 'vendor' | 'admin'
+export type UserRole = 'homeowner' | 'vendor' | 'admin' | 'admin_employee'
 
 export type LeadStatus = 'pending' | 'confirmed' | 'rejected' | 'rescheduled' | 'completed'
 

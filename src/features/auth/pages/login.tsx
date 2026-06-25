@@ -56,7 +56,12 @@ export function LoginPage() {
         user: { id: profile.id, email: profile.email },
       })
       setProfile(profile)
-      const dest = profile.role === 'admin' ? '/admin' : profile.role === 'vendor' ? '/vendor' : '/home'
+      const dest =
+        profile.role === 'admin' || profile.role === 'admin_employee'
+          ? '/admin'
+          : profile.role === 'vendor'
+            ? '/vendor'
+            : '/home'
       navigate(dest)
       setIsLoading(false)
     }, 400)

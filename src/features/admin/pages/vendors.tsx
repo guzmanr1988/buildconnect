@@ -51,6 +51,7 @@ import {
   MOCK_LEADS,
   MOCK_CLOSED_SALES,
 } from '@/lib/mock-data'
+import { useAuthStore } from '@/stores/auth-store'
 import type { LeadStatus, Vendor } from '@/types'
 
 const fadeUp = {
@@ -64,6 +65,10 @@ const fadeUp = {
 
 export default function VendorsPage() {
   const navigate = useNavigate()
+  // Main-admin-only: employee-tier admins do not see commission fields.
+  // Promotion/demotion between admin and admin_employee is owner-managed
+  // (users page); the field stays present on the row for main admin.
+  const isMainAdmin = useAuthStore((s) => s.role) === 'admin'
   const [commissionOverrides, setCommissionOverrides] = useState<Record<string, number>>({})
   const [suspendedVendors, setSuspendedVendors] = useState<Set<string>>(new Set())
   const [verifiedVendors, setVerifiedVendors] = useState<Set<string>>(new Set())
@@ -221,22 +226,27 @@ export default function VendorsPage() {
                   </div>
                 </div>
 
-                {/* Commission % */}
-                <div className="flex items-center gap-2 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3">
-                  <Percent className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Commission Fee</span>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={commissionOverrides[vendor.id] ?? vendor.commission_pct}
-                      onChange={(e) => updateCommission(vendor.id, Number(e.target.value))}
-                      className="w-16 h-8 text-center text-sm font-bold"
-                    />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
+                {/* Commission % — main admin only */}
+                {isMainAdmin && (
+                  <div
+                    className="flex items-center gap-2 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3"
+                    data-testid="vendor-commission-fee"
+                  >
+                    <Percent className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Commission Fee</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={commissionOverrides[vendor.id] ?? vendor.commission_pct}
+                        onChange={(e) => updateCommission(vendor.id, Number(e.target.value))}
+                        className="w-16 h-8 text-center text-sm font-bold"
+                      />
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">%</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 mb-4">

@@ -90,20 +90,29 @@ const fadeUp = {
 const ROLE_TABS: { value: UserRole | 'all'; label: string; icon: React.ElementType }[] = [
   { value: 'all', label: 'All', icon: Users },
   { value: 'admin', label: 'Admin', icon: Shield },
+  { value: 'admin_employee', label: 'Employee Admin', icon: Shield },
   { value: 'vendor', label: 'Vendor', icon: Briefcase },
   { value: 'homeowner', label: 'Homeowner', icon: Home },
 ]
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
+  admin_employee: 'Employee Admin',
+  vendor: 'Vendor',
+  homeowner: 'Homeowner',
+}
+
 function roleBadge(role: UserRole) {
   const map: Record<UserRole, { className: string }> = {
     admin: { className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
+    admin_employee: { className: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300' },
     vendor: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
     homeowner: { className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
   }
   const cfg = map[role]
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', cfg.className)}>
-      {role}
+    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', cfg.className)}>
+      {ROLE_LABELS[role]}
     </span>
   )
 }
