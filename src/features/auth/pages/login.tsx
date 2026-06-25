@@ -77,6 +77,7 @@ export function LoginPage() {
   const [demoSubmitting, setDemoSubmitting] = useState(false)
   const [demoLoadingRole, setDemoLoadingRole] = useState<DemoRole | null>(null)
   const [demoError, setDemoError] = useState<string | null>(null)
+  const [isDemoStillWorking, setIsDemoStillWorking] = useState(false)
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -89,6 +90,15 @@ export function LoginPage() {
     const handle = setTimeout(() => setIsStillWorking(true), 5_000)
     return () => clearTimeout(handle)
   }, [isLoading])
+
+  useEffect(() => {
+    if (!demoSubmitting) {
+      setIsDemoStillWorking(false)
+      return
+    }
+    const handle = setTimeout(() => setIsDemoStillWorking(true), 5_000)
+    return () => clearTimeout(handle)
+  }, [demoSubmitting])
 
   const {
     register,
@@ -548,6 +558,16 @@ export function LoginPage() {
                   <>Unlock demo <ArrowRight className="h-4 w-4" /></>
                 )}
               </Button>
+              {isDemoStillWorking && (
+                <p
+                  className="mt-3 text-center text-xs text-muted-foreground"
+                  data-demo-loading-still-working
+                  role="status"
+                  aria-live="polite"
+                >
+                  Still working... if this takes more than a few seconds, check your connection.
+                </p>
+              )}
             </form>
           ) : (
             <div className="flex flex-col gap-2" data-demo-role-grid>
