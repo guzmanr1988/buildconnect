@@ -29,6 +29,13 @@ import { supabase } from '@/lib/supabase'
 import type { RepRequestStatus } from '@/features/admin/rep-requests/rep-request-contract'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
+// buildProjectOnBehalf returns the new project_id so the caller can
+// chain markProjectReady(project_id) to flip status visited →
+// project_ready in the same admin/rep gesture. The edge fn body
+// already returns { ok: true, project_id }; this surface bubbles it.
+export type BuildProjectResult =
+  | { ok: true; projectId: string }
+  | { ok: false; error: string }
 
 export interface BuildProjectOnBehalfPayload {
   serviceId: string
@@ -48,8 +55,9 @@ export interface UseRepRequestActionsResult {
   markVisited: (payload: { assessmentNotes: string }) => Promise<ActionResult>
   /** Rep (or admin) — flips status=visited→project_ready after build-on-behalf. */
   markProjectReady: (projectId: string) => Promise<ActionResult>
-  /** Rep (or admin) — server-side project INSERT keyed to the rep request. */
-  buildProjectOnBehalf: (payload: BuildProjectOnBehalfPayload) => Promise<ActionResult>
+  /** Rep (or admin) — server-side project INSERT keyed to the rep request.
+   *  Returns the new project_id so the caller can chain markProjectReady. */
+  buildProjectOnBehalf: (payload: BuildProjectOnBehalfPayload) => Promise<BuildProjectResult>
   /** True while any mutation is in flight — disables action buttons. */
   mutating: boolean
 }
@@ -64,8 +72,10 @@ export function useRepRequestActions(
   const [mutating, setMutating] = useState(false)
 
   const wrap = useCallback(
-    async (fn: () => Promise<ActionResult>): Promise<ActionResult> => {
-      if (!repRequestId) return { ok: false, error: 'No rep request selected.' }
+    async <T extends { ok: boolean }>(fn: () => Promise<T>): Promise<T> => {
+      if (!repRequestId) {
+        return { ok: false, error: 'No rep request selected.' } as unknown as T
+      }
       setMutating(true)
       try {
         return await fn()
@@ -142,8 +152,8 @@ export function useRepRequestActions(
 
   const buildProjectOnBehalf = useCallback(
     (payload: BuildProjectOnBehalfPayload) =>
-      wrap(async () => {
-        const { error } = await supabase.functions.invoke<BuildProjectOnBehalfResponse>(
+      wrap<BuildProjectResult>(async () => {
+        const { data, error } = await supabase.functions.invoke<BuildProjectOnBehalfResponse>(
           'build-project-on-behalf',
           {
             body: {
@@ -155,7 +165,11 @@ export function useRepRequestActions(
             },
           },
         )
-        return error ? { ok: false, error: error.message } : { ok: true }
+        if (error) return { ok: false, error: error.message }
+        if (!data?.project_id) {
+          return { ok: false, error: 'build-project-on-behalf returned no project_id' }
+        }
+        return { ok: true, projectId: data.project_id }
       }),
     [wrap, repRequestId],
   )

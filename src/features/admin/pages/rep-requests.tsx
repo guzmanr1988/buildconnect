@@ -12,7 +12,7 @@
 
 import { useMemo } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { Inbox, MapPin, CheckCheck, XCircle } from 'lucide-react'
+import { Inbox, MapPin, CheckCheck, XCircle, Hammer } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
@@ -30,13 +30,14 @@ import { cn } from '@/lib/utils'
 
 // Admin status-advance next-state mapping. Mig 105 status-transition
 // guard enforces legality server-side; this function selects the one
-// legal admin-driven forward step. markVisited / markProjectReady have
-// dedicated buttons in commit-5 follow-ons (rep workflow); advance is
-// the admin escape hatch covering the same forward edges.
+// legal admin-driven forward step that does NOT require side-effects.
+// visited→project_ready is excluded because it requires a project row
+// to exist first (build-project-on-behalf edge fn handles the
+// privileged INSERT, then markProjectReady chains the status flip);
+// that path is its own Build Project button.
 const STATUS_ADVANCE_MAP: Partial<Record<RepRequestStatus, RepRequestStatus>> = {
   new: 'scheduled',
   scheduled: 'visited',
-  visited: 'project_ready',
   project_ready: 'contractor_selected',
 }
 
@@ -368,6 +369,35 @@ function DetailPane({ selectedId, selectedRow }: DetailPaneProps) {
           >
             <CheckCheck className="h-3.5 w-3.5 mr-1" />
             Advance → {STATUS_LABELS[nextAdvanceStatus(row.status)!]}
+          </Button>
+        )}
+        {row.status === 'visited' && actions?.canBuildProject && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!actions || m.mutating}
+            onClick={async () => {
+              // Chained: build-project-on-behalf (privileged INSERT) →
+              // markProjectReady (RLS-direct status flip + project_id
+              // stamp). Default service_id='roofing' covers the dev
+              // walkthrough; a proper service-picker ships in the iris
+              // detail-pane follow-on alongside photo/availability UX.
+              const scope = row.description || 'Concierge-built project'
+              const build = await m.buildProjectOnBehalf({
+                serviceId: 'roofing',
+                scope,
+                estimatedAmountCents: null,
+                notes: null,
+              })
+              if (!build.ok) return
+              const flip = await m.markProjectReady(build.projectId)
+              if (flip.ok) await refetch()
+            }}
+            data-testid="admin-rep-requests-build-project-btn"
+            title="Build project for homeowner and flip to Project Ready"
+          >
+            <Hammer className="h-3.5 w-3.5 mr-1" />
+            Build Project + Mark Ready
           </Button>
         )}
         {canCancel && (
