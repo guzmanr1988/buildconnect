@@ -126,6 +126,12 @@ export const router = createBrowserRouter([
           { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
           { path: 'documents', element: <HomeownerDocumentsPage />, handle: { title: 'Documents' } },
           { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
+          // Concierge "Request a Rep" homeowner surfaces. Intake is a
+          // 3-step funnel (address+description+photos → contact+availability
+          // → payment); status is the tracker page for an existing
+          // rep-request row keyed by :id.
+          { path: 'rep-request', element: <RepRequestIntakePage />, handle: { title: 'Request a Rep' } },
+          { path: 'rep-requests/:id', element: <RepRequestStatusPage />, handle: { title: 'Rep Request' } },
           // Phase-2 financing — gated by feature_flags.financing_enabled DB
           // row at component level (Navigate to /home when off). Routes still
           // register so a flag-flip ship doesn't require a router code change.
@@ -232,6 +238,36 @@ export const router = createBrowserRouter([
           // integration owns this transition path post-launch.
           { path: 'financing-applications/:appId', element: <AdminFinancingApplicationDetail />, handle: { title: 'Admin · Application stepper' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
+          // Concierge "Request a Rep" — admin god-view queue. Two routes
+          // back the same component: the listless URL renders the queue
+          // (no detail), and :id pins the detail pane via URL-param so
+          // deep-links + back/forward navigation round-trip correctly.
+          { path: 'rep-requests', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Requests' } },
+          { path: 'rep-requests/:id', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Request' } },
+        ],
+      },
+
+      // Concierge "Request a Rep" — rep-scoped queue. Mounted as a
+      // SEPARATE /admin/rep-requests/mine block (sibling of the main
+      // /admin block) so the inner RequireRole admits {'rep','admin'}
+      // without widening the parent /admin role gate. admin is in the
+      // allow-list because its permission-set is a strict superset of
+      // rep (PURE-SEPARATE role enum, no junction); rep is NOT in the
+      // parent /admin block's allow-list so a rep hitting /admin
+      // bounces to ROLE_HOME['rep'] = /admin/rep-requests/mine.
+      {
+        path: '/admin/rep-requests/mine',
+        element: (
+          <RequireAuth>
+            <RequireRole roles={['rep', 'admin']}>
+              <AdminLayout />
+            </RequireRole>
+          </RequireAuth>
+        ),
+        handle: { title: 'Admin · My Rep Requests' },
+        children: [
+          { index: true, element: <RepRequestsMinePage /> },
+          { path: ':id', element: <RepRequestsMinePage />, handle: { title: 'Admin · Rep Request' } },
         ],
       },
 
