@@ -26,6 +26,12 @@ import { HomeownerTutorialsPage } from '@/features/homeowner/pages/tutorials'
 import { HomeownerDocumentsPage } from '@/features/homeowner/pages/documents'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
 import { CartPage } from '@/features/homeowner/pages/cart'
+// Concierge "Request a Rep" — homeowner-facing intake + status pages.
+// Components owned by phaethon (commit 3+); commit 1 wires routes
+// against placeholder shells so admin shell + role gating can land
+// independent of component scaffolding.
+import RepRequestIntakePage from '@/features/homeowner/pages/rep-request-intake'
+import RepRequestStatusPage from '@/features/homeowner/pages/rep-request-status'
 
 // Financing (Phase-2, dark behind feature_flags.financing_enabled DB row
 // read via useFeatureFlag('financing_enabled') — pages internally redirect
@@ -79,6 +85,14 @@ import AdminActivityPage from '@/features/admin/pages/activity'
 import AdminFinancingPage from '@/features/admin/pages/financing'
 import AdminFinancingApplicationDetail from '@/features/admin/pages/financing-application-detail'
 import AdminReferralProgramPage from '@/features/admin/pages/referral-program'
+// Concierge "Request a Rep" — admin god-view queue + rep-scoped
+// "mine" queue. rep queue lives at /admin/rep-requests/mine and is
+// gated by a separate RequireRole block (roles=['rep','admin'])
+// nested below the admin route element so admin permission-set
+// remains a strict SUPERSET of rep (PURE-SEPARATE role enum, no
+// junction).
+import RepRequestsPage from '@/features/admin/pages/rep-requests'
+import RepRequestsMinePage from '@/features/admin/pages/rep-requests-mine'
 
 export const router = createBrowserRouter([
   {

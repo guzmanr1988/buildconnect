@@ -1,0 +1,8 @@
+// Concierge Rep Request — admin god-view queue (queue + detail
+// two-pane on lg, single-column with route-driven detail on mobile).
+// phaethon owns the component implementation; this is a commit-1
+// placeholder so the router can wire the route before scaffolding
+// lands and the build stays green.
+export default function RepRequestsPage() {
+  return null
+}
