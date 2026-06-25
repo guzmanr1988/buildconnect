@@ -1,8 +1,8 @@
 // Concierge Rep Request — per-row mutation hook.
 // Companion to useRepRequestDetail (which derives the permission set
 // from viewerRole × status × assignedRepId). This hook owns the
-// imperative side: the actual edge-fn POSTs that flip status, write
-// assessment notes, and create the project-on-behalf row.
+// imperative side: the actual mutations that flip status, assign reps,
+// persist assessment notes, and create the project-on-behalf row.
 //
 // Component pattern:
 //   const { actions, refetch } = useRepRequestDetail(id)
@@ -12,14 +12,20 @@
 //     onClick={async () => { const r = await m.markVisited({...}); if (r.ok) refetch() }}
 //   />
 //
-// COMMIT 5-PREP SCAFFOLD: signatures locked, edge-fn POSTs deferred to
-// commit 5 (post helios 2.5 substrate up + dev-deploy Rod-go). Every
-// mutation returns ActionResult{ok:true} as a no-op so consumers can
-// wire onClick + the optimistic refetch path without blocking on the
-// edge-fn integration. The body comment on each fn names the edge fn
-// it will eventually POST to so commit 5 is a one-line-per-fn swap.
+// Mechanism split (per hephaestus commit-5 bundle msg 1782369349384):
+//   • 4 RLS-direct supabase.from('rep_requests').update({...}) — assignRep,
+//     advanceStatus, markVisited, markProjectReady. RLS policies on
+//     rep_requests gate admin vs rep WITH CHECK (mig 101 5e231ed).
+//   • 1 supabase.functions.invoke('build-project-on-behalf') —
+//     projects-table INSERT keyed to rep_request.homeowner_id needs
+//     server-side auth-uid extraction + cross-table validation that
+//     RLS-direct can't express cleanly.
+//   • cancel: still no-op — Stripe Refund.create($200 partial) needs
+//     server-side stripe-secret access. Deferred to a separate edge fn
+//     (cancel-rep-request) outside this commit's scope.
 
 import { useCallback, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import type { RepRequestStatus } from '@/features/admin/rep-requests/rep-request-contract'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -32,7 +38,7 @@ export interface BuildProjectOnBehalfPayload {
 }
 
 export interface UseRepRequestActionsResult {
-  /** Admin only — assigns or reassigns the rep. Empty repId unassigns. */
+  /** Admin only — assigns or reassigns the rep. Null repId unassigns. */
   assignRep: (repId: string | null) => Promise<ActionResult>
   /** Admin only — forces the next legal status transition. */
   advanceStatus: (next: RepRequestStatus) => Promise<ActionResult>
@@ -48,11 +54,18 @@ export interface UseRepRequestActionsResult {
   mutating: boolean
 }
 
-export function useRepRequestActions(_repRequestId: string | null | undefined): UseRepRequestActionsResult {
+interface BuildProjectOnBehalfResponse {
+  project_id: string
+}
+
+export function useRepRequestActions(
+  repRequestId: string | null | undefined,
+): UseRepRequestActionsResult {
   const [mutating, setMutating] = useState(false)
 
   const wrap = useCallback(
-    async (_op: string, fn: () => Promise<ActionResult>): Promise<ActionResult> => {
+    async (fn: () => Promise<ActionResult>): Promise<ActionResult> => {
+      if (!repRequestId) return { ok: false, error: 'No rep request selected.' }
       setMutating(true)
       try {
         return await fn()
@@ -60,63 +73,83 @@ export function useRepRequestActions(_repRequestId: string | null | undefined): 
         setMutating(false)
       }
     },
-    [],
+    [repRequestId],
   )
 
-  // TODO(commit 5): POST /functions/v1/assign-rep
-  // Body: { rep_request_id, rep_id | null }
-  // RLS: admin update policy on concierge_rep_requests.
   const assignRep = useCallback(
-    (_repId: string | null) => wrap('assign-rep', async () => ({ ok: true })),
-    [wrap],
+    (repId: string | null) =>
+      wrap(async () => {
+        const { error } = await supabase
+          .from('rep_requests')
+          .update({ assigned_rep_id: repId })
+          .eq('id', repRequestId!)
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
-  // TODO(commit 5): POST /functions/v1/advance-rep-request-status
-  // Body: { rep_request_id, next_status }
-  // RLS: admin update policy; legal-transition guard server-side.
   const advanceStatus = useCallback(
-    (_next: RepRequestStatus) => wrap('advance-status', async () => ({ ok: true })),
-    [wrap],
+    (next: RepRequestStatus) =>
+      wrap(async () => {
+        const { error } = await supabase
+          .from('rep_requests')
+          .update({ status: next })
+          .eq('id', repRequestId!)
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
-  // TODO(commit 5): POST /functions/v1/cancel-rep-request
-  // Body: { rep_request_id, reason? }
-  // Server: flips status=cancelled, fires Stripe Refund.create for
-  // $200 (refundable portion), sets cancelled_at + cancelled_by from
-  // the JWT role. RLS: homeowner self-row OR admin any-row.
+  // cancel: Stripe Refund.create needs server-side secret + book-balance
+  // math ($200 refundable / $50 retained per Rod §11). Tracked as a
+  // separate edge-fn deliverable; UI gates on canCancel still wire here.
   const cancel = useCallback(
-    (_reason?: string) => wrap('cancel', async () => ({ ok: true })),
+    (_reason?: string) => wrap(async () => ({ ok: true })),
     [wrap],
   )
 
-  // TODO(commit 5): POST /functions/v1/mark-rep-request-visited
-  // Body: { rep_request_id, assessment_notes }
-  // RLS rep_update_assigned WITH CHECK status whitelist (mig 101
-  // 5e231ed) admits this transition: scheduled→visited (or new→visited
-  // if rep visits same-day).
   const markVisited = useCallback(
-    (_payload: { assessmentNotes: string }) =>
-      wrap('mark-visited', async () => ({ ok: true })),
-    [wrap],
+    (payload: { assessmentNotes: string }) =>
+      wrap(async () => {
+        const { error } = await supabase
+          .from('rep_requests')
+          .update({ status: 'visited', assessment_notes: payload.assessmentNotes })
+          .eq('id', repRequestId!)
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
-  // TODO(commit 5): POST /functions/v1/mark-rep-request-project-ready
-  // Body: { rep_request_id, project_id }
-  // Server: validates project_id is rep-request-keyed + flips status.
   const markProjectReady = useCallback(
-    (_projectId: string) => wrap('mark-project-ready', async () => ({ ok: true })),
-    [wrap],
+    (projectId: string) =>
+      wrap(async () => {
+        const { error } = await supabase
+          .from('rep_requests')
+          .update({ status: 'project_ready', project_id: projectId })
+          .eq('id', repRequestId!)
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
-  // TODO(commit 5): POST /functions/v1/build-project-on-behalf
-  // Body: { rep_request_id, service_id, scope, estimated_amount_cents, notes }
-  // Server: INSERTs projects row keyed to rep_request.homeowner_id +
-  // returns project_id for the markProjectReady call. RLS rep policy
-  // admits INSERT only for projects.created_by_rep_id = auth.uid().
   const buildProjectOnBehalf = useCallback(
-    (_payload: BuildProjectOnBehalfPayload) =>
-      wrap('build-project-on-behalf', async () => ({ ok: true })),
-    [wrap],
+    (payload: BuildProjectOnBehalfPayload) =>
+      wrap(async () => {
+        const { error } = await supabase.functions.invoke<BuildProjectOnBehalfResponse>(
+          'build-project-on-behalf',
+          {
+            body: {
+              rep_request_id: repRequestId,
+              service_id: payload.serviceId,
+              scope: payload.scope,
+              estimated_amount_cents: payload.estimatedAmountCents,
+              notes: payload.notes,
+            },
+          },
+        )
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
   )
 
   return {
