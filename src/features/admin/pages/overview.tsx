@@ -43,7 +43,6 @@ import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
 import { useAdminModerationStore } from '@/stores/admin-moderation-store'
-import { useAuthStore } from '@/stores/auth-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { getAdminFinancingStats } from '@/lib/api/financing'
 import type { AppSettings, ClosedSale, Transaction } from '@/types'
@@ -84,8 +83,6 @@ const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').le
 
 export default function OverviewPage() {
   const navigate = useNavigate()
-  const profile = useAuthStore((s) => s.profile)
-  const isAdminEmployee = profile?.role === 'admin_employee'
   const financingEnabled = useFeatureFlag('financing_enabled')
   const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
 
@@ -272,51 +269,6 @@ export default function OverviewPage() {
       pctPayouts: pct(by.payouts),
     }
   }, [transactionChartData])
-
-  // admin_employee slim Overview: only Active Vendors + Active Homeowners
-  // tiles. No revenue/GMV/financing/transactions surfaces — limited view
-  // per role spec. Sidebar already scoped via admin-layout; this guards
-  // the page body when the route is reached directly.
-  if (isAdminEmployee) {
-    return (
-      <div className="space-y-6" data-admin-employee-slim-overview="true">
-        <PageHeader title="Admin Overview" description="Active platform participants" />
-        <div className="kpi-grid grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-          {[
-            {
-              title: 'Active Vendors',
-              value: activeVendors.toString(),
-              change: `${MOCK_VENDORS.length} total`,
-              trend: 'up' as const,
-              icon: Users,
-              iconColor: 'bg-violet-500',
-              link: '/admin/vendors',
-            },
-            {
-              title: 'Active Homeowners',
-              value: activeHomeowners.toString(),
-              change: `${MOCK_HOMEOWNERS.length} total`,
-              trend: 'up' as const,
-              icon: Home,
-              iconColor: 'bg-cyan-500',
-            },
-          ].map((kpi, i) => (
-            <motion.div
-              key={kpi.title}
-              custom={i}
-              variants={fadeUp}
-              initial="hidden"
-              animate="visible"
-              onClick={kpi.link ? () => navigate(kpi.link!) : undefined}
-              className={kpi.link ? 'cursor-pointer' : ''}
-            >
-              <KpiCard {...kpi} />
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">

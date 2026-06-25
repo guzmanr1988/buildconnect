@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, Compass, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -439,8 +439,51 @@ export function HomeownerHome() {
         </motion.p>
       </div>
 
+      {/* Concierge "Request a Rep" entry split-screen. Two stacked cards
+          on mobile, side-by-side on sm+. "Do it myself" anchors-scrolls
+          to the services grid below; "Have a Rep help me" navigates to
+          the rep-request intake funnel. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.35 }}
+        className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4"
+        data-testid="homeowner-start-project-split"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            document.getElementById('home-service-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+          data-testid="homeowner-start-project-self"
+          className="group rounded-2xl border bg-card hover:border-primary/40 hover:bg-primary/5 transition-colors p-5 text-left flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <Compass className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold">Do it myself</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Browse services and request quotes from contractors directly.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/home/rep-request')}
+          data-testid="homeowner-start-project-rep"
+          className="group rounded-2xl border bg-card hover:border-primary/40 hover:bg-primary/5 transition-colors p-5 text-left flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold">Have a Rep help me</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A concierge rep will visit, scope the project, and build it for you. $250 visit fee.
+          </p>
+        </button>
+      </motion.div>
+
       {/* Service grid — always 4 columns on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div id="home-service-grid" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {activeServices.map((service, i) => (
           <motion.div
             key={service.id}
