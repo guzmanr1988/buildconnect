@@ -38,8 +38,8 @@ const navItems: NavEntry[] = [
   { to: '/admin/messages', icon: MessageSquare, label: 'Messages' },
   // Wave-18 #3 — Platform Support v1 inbox. admin AND admin_employee
   // (kratos widen 1781112259222) — RLS admits both roles + FE renders
-  // identically, so the nav must show + the route guard must admit.
-  // See ADMIN_EMPLOYEE_ALLOWED_ROUTES below.
+  // identically. As of Rod-final 2026-06-25 admin_employee renders the
+  // full admin sidebar so no per-entry scoping is needed.
   { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
   // Concierge "Request a Rep" — TWO nav entries, role-filtered: admin
@@ -79,20 +79,11 @@ function isNavGroup(item: NavEntry): item is NavGroup {
   return 'children' in item
 }
 
-// Slim sidebar for admin_employee: Profile, Overview, Vendors, Users,
-// Messages, Support (wave-18 #3 — kratos widen 1781112259222), Rep
-// Requests (task_324 — admin_employee co-manages the Concierge queue;
-// backend RLS + build-project-on-behalf already admit the role) — no
-// Banking dropdown, Bug Tracker, Settings, etc.
-const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
-  '/admin/profile',
-  '/admin',
-  '/admin/vendors',
-  '/admin/users',
-  '/admin/messages',
-  '/admin/support',
-  '/admin/rep-requests',
-])
+// admin_employee = FULL admin parity (Rod final 2026-06-25 via kratos
+// msg 1782411375480). No FE-side scoping at this layer — admin and
+// admin_employee render the same shell. Privilege-escalation HOLD lives
+// in users.tsx role-create dropdown (kratos surfacing to Rod as a
+// separate yes/no).
 
 // Concierge rep role — sidebar shows ONLY Profile + own-queue entry.
 // rep is mounted inside the /admin tree (admin permission-set is a
@@ -115,16 +106,13 @@ const REP_ONLY_ROUTES = new Set<string>([
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const profile = useAuthStore((s) => s.profile)
-  const isAdminEmployee = profile?.role === 'admin_employee'
   const isRep = profile?.role === 'rep'
-  const visibleNavItems = isAdminEmployee
-    ? navItems.filter((item): item is NavLeaf => !isNavGroup(item) && ADMIN_EMPLOYEE_ALLOWED_ROUTES.has(item.to))
-    : isRep
-      ? navItems.filter((item): item is NavLeaf => !isNavGroup(item) && REP_ALLOWED_ROUTES.has(item.to))
-      // Default (admin) sidebar: hide rep-only entries to avoid the
-      // duplicate Rep Requests label (rep-mine alias only renders
-      // for rep role).
-      : navItems.filter((item) => !REP_ONLY_ROUTES.has(item.to))
+  const visibleNavItems = isRep
+    ? navItems.filter((item): item is NavLeaf => !isNavGroup(item) && REP_ALLOWED_ROUTES.has(item.to))
+    // admin + admin_employee share the full admin sidebar. Hide rep-only
+    // entries to avoid the duplicate Rep Requests label (rep-mine alias
+    // only renders for rep role).
+    : navItems.filter((item) => !REP_ONLY_ROUTES.has(item.to))
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // Ship #315 — pending-review count badge on the Reviews nav entry.
   // Ship #328 — refactored to use shared NavBadge primitive + badges-by-
@@ -148,7 +136,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <nav className="flex flex-col gap-1 px-3 py-2" data-admin-nav-employee-filtered={isAdminEmployee ? 'true' : undefined}>
+    <nav className="flex flex-col gap-1 px-3 py-2">
       {visibleNavItems.map((item) => {
         const Icon = item.icon
         if (isNavGroup(item)) {
@@ -245,22 +233,6 @@ export function AdminLayout() {
     maybeBackfillLegacyApprovals()
     maybeSeedSampleReview()
   }, [])
-
-  // admin_employee route guard: redirect any non-allowed admin/* surface
-  // back to /admin. Allowed paths = sidebar set + /admin/vendors/<id> for
-  // vendor-detail drill-down. Server-side authz still enforced by RLS on
-  // the data layer; this is UX scoping only.
-  useEffect(() => {
-    if (profile?.role !== 'admin_employee') return
-    const path = location.pathname
-    const isAllowed =
-      ADMIN_EMPLOYEE_ALLOWED_ROUTES.has(path) ||
-      path.startsWith('/admin/vendors/') ||
-      path.startsWith('/admin/rep-requests/')
-    if (!isAllowed) {
-      navigate('/admin', { replace: true })
-    }
-  }, [profile?.role, location.pathname, navigate])
 
   // rep route guard: redirect any non-allowed admin/* surface back to
   // the rep's own queue. Allowed paths = REP_ALLOWED_ROUTES sidebar set
