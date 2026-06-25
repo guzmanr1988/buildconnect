@@ -88,6 +88,11 @@ export const router = createBrowserRouter([
       { path: '/', element: <Navigate to="/login" replace /> },
       { path: '/login', element: <LoginPage />, handle: { title: 'Sign in' } },
       { path: '/register', element: <RegisterPage />, handle: { title: 'Create account' } },
+      // /signup alias for invite-link CTA — referral-invite edge-fn builds
+      // ${appUrl}/signup?ref=<id>; alias prevents 404 on already-sent emails.
+      // ?ref passes through (same URL surface); attribution capture is a
+      // separate follow-up. kratos msg 1782425680242.
+      { path: '/signup', element: <RegisterPage />, handle: { title: 'Create account' } },
 
       {
         path: '/home',
