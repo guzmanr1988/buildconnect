@@ -297,8 +297,18 @@ CREATE POLICY rep_requests_rep_read_assigned
     AND EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'rep')
   );
 
--- Rep: update own assignments (status transitions Visited / ProjectReady,
--- notes, photo_paths additions). Cannot reassign or change parties.
+-- Rep: update own assignments (status transitions scheduled/visited/
+-- project_ready, plus notes / assessment_notes additions). Cannot reassign,
+-- change parties, OR CANCEL.
+--
+-- Per kratos T+1 fix msg 1782351800507: WITH CHECK MUST whitelist the rep
+-- visit-workflow lane (scheduled / visited / project_ready) and exclude
+-- 'cancelled'. Without this gate, a rep could direct-UPDATE via PostgREST
+-- to status=cancelled, satisfy the status_consistency CHECK by also setting
+-- cancelled_at + cancelled_by, and cancel the row WITHOUT the $200 Stripe
+-- refund firing (because the cancel-rep-request edge fn is the ONLY caller
+-- that fires refunds.create). Routing all cancels through the edge fn
+-- (which 403s reps) preserves Rod's uniform-refund promise §11 Q3.
 CREATE POLICY rep_requests_rep_update_assigned
   ON rep_requests FOR UPDATE
   TO authenticated
@@ -309,6 +319,7 @@ CREATE POLICY rep_requests_rep_update_assigned
   WITH CHECK (
     assigned_rep_id = auth.uid()
     AND EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'rep')
+    AND status IN ('scheduled', 'visited', 'project_ready')
   );
 
 -- Admin / admin_employee: full read + manage (assignment, scheduling,
