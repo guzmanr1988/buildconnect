@@ -51,6 +51,13 @@ interface ParsedAddress {
 // structured object. Best-effort parse: trailing token = zip, second-to-last
 // = state, leading segment = line1+city. Component-side intake redesign
 // (commit 4+) will replace the flat input with a structured form.
+//
+// Two split strategies for beforeState (line1 + city portion):
+//   - Comma path: "10990 SW 2256 Ter, Miami" → line1="10990 SW 2256 Ter", city="Miami"
+//   - No-comma path: "10990 sw 2256 ter Miami" → line1="10990 sw 2256 ter", city="Miami"
+// Real-world intake (kratos msg 1782431014742 — Rod hit a launch-blocker)
+// produces unpunctuated addresses; reject only when there isn't enough text
+// to identify both a line1 and a city.
 function parseFlatAddress(input: string): ParsedAddress | null {
   const trimmed = input.trim()
   if (!trimmed) return null
@@ -62,10 +69,21 @@ function parseFlatAddress(input: string): ParsedAddress | null {
   if (!stateMatch) return null
   const state = stateMatch[1].toUpperCase()
   const beforeState = beforeZip.slice(0, stateMatch.index).trim().replace(/[,\s]+$/, '')
-  const parts = beforeState.split(',').map((p) => p.trim()).filter(Boolean)
-  if (parts.length < 2) return null
-  const city = parts[parts.length - 1]
-  const line1 = parts.slice(0, -1).join(', ')
+
+  let line1: string
+  let city: string
+  if (beforeState.includes(',')) {
+    const parts = beforeState.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length < 2) return null
+    city = parts[parts.length - 1]
+    line1 = parts.slice(0, -1).join(', ')
+  } else {
+    const tokens = beforeState.split(/\s+/).filter(Boolean)
+    if (tokens.length < 2) return null
+    city = tokens[tokens.length - 1]
+    line1 = tokens.slice(0, -1).join(' ')
+  }
+
   if (!line1 || !city) return null
   return { line1, city, state, zip }
 }
