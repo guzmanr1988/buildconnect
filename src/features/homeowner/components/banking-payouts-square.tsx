@@ -21,6 +21,7 @@
 // updated row. If the webhook is in flight, the 30s polling in useConnectAccount
 // catches up as a fallback.
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Banknote, CheckCircle2, AlertTriangle, XCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -29,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { useConnectUiState } from '@/lib/hooks/use-connect-onboarding';
 import type { ConnectUiState } from '@/lib/financing/escrow/constants';
 import { ConnectOnboardingDialog } from './connect-onboarding-dialog';
+import { VendorPaymentDialog } from '@/features/auth/components/vendor-payment-dialog';
 
 interface StateCopy {
   title: string;
@@ -105,9 +107,22 @@ function StatusIcon({ state }: { state: ConnectUiState }) {
 }
 
 export function HomeownerBankingPayoutsSquare() {
-  const { state, isLoading } = useConnectUiState('homeowner');
+  const { state, isLoading, account } = useConnectUiState('homeowner');
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Bank-attach dialog is a separate surface from the KYC onboarding dialog
+  // (compliance boundary: KYC iframe is non-removable, bank-attach is a
+  // typed-fields createToken path that requires an already-onboarded account
+  // per hephaestus contract msg 1782433981527 connect_account_not_eligible
+  // gate). Both can't be open simultaneously.
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const qc = useQueryClient();
   const copy = copyFor(state);
+  const externalAccount = account?.externalAccount ?? null;
+  // bank-attach surface is reachable only when the Connect account is already
+  // onboarded. Mirrors hephaestus connect_account_not_eligible whitelist on
+  // the edge fn so we don't render a CTA that the server would reject.
+  const canAttachBank =
+    state === 'active' || state === 'pending_verification' || state === 'restricted';
 
   return (
     <>
@@ -142,6 +157,35 @@ export function HomeownerBankingPayoutsSquare() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">{copy.description}</p>
+
+                {externalAccount && (
+                  <div
+                    data-testid="banking-payouts-external-account"
+                    className="mt-3 rounded-lg border bg-emerald-500/5 px-3 py-2 text-xs"
+                  >
+                    <p className="font-medium text-emerald-700 dark:text-emerald-400">
+                      Payouts bank
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">
+                      {externalAccount.bankName ?? 'Bank'} •••• {externalAccount.last4}
+                    </p>
+                  </div>
+                )}
+
+                {canAttachBank && !externalAccount && (
+                  <div
+                    data-testid="banking-payouts-no-bank-yet"
+                    className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs"
+                  >
+                    <p className="font-medium text-amber-700 dark:text-amber-400">
+                      Bank not yet attached
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">
+                      Add a payout bank so we can release funds to you.
+                    </p>
+                  </div>
+                )}
+
                 {copy.showCta && (
                   <Button
                     variant={copy.ctaVariant}
@@ -152,6 +196,19 @@ export function HomeownerBankingPayoutsSquare() {
                     {copy.ctaLabel}
                   </Button>
                 )}
+
+                {canAttachBank && (
+                  <Button
+                    variant={externalAccount ? 'outline' : 'default'}
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={() => setBankDialogOpen(true)}
+                    data-testid="banking-payouts-attach-bank-btn"
+                  >
+                    {externalAccount ? 'Change payout bank' : 'Add payout bank'}
+                  </Button>
+                )}
+
                 {!copy.showCta && state === 'rejected' && (
                   <p className="mt-3 text-xs text-muted-foreground">
                     Email <a className="underline" href="mailto:support@buildconnect.app">support@buildconnect.app</a> with your account ID and we will help reopen access.
@@ -168,6 +225,25 @@ export function HomeownerBankingPayoutsSquare() {
         mode={copy.dialogMode}
         partyType="homeowner"
       />
+      {canAttachBank && (
+        <VendorPaymentDialog
+          open={bankDialogOpen}
+          onOpenChange={setBankDialogOpen}
+          mode="pay_out"
+          partyType="homeowner"
+          blocking={false}
+          showPurposeRadio={false}
+          ctaSuccessCopy="Your payout bank is on file."
+          onSuccess={() => {
+            // Server-side write already landed on stripe-connect-external-
+            // account-attach 200. Invalidate the escrow_accounts query so
+            // the next render reads the freshly-attached external_account_*
+            // fields. No persisted-store write — payment-methods source of
+            // truth is the DB row, not Zustand.
+            qc.invalidateQueries({ queryKey: ['escrow_accounts', 'homeowner'] });
+          }}
+        />
+      )}
     </>
   );
 }
