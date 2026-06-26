@@ -52,6 +52,18 @@ export interface VendorPaymentDialogProps {
   initialKind?: VendorPaymentMethodKind
   initialHolder?: string
   initialPurpose?: VendorPaymentPurpose
+  /** Render the membership/commissions/both purpose-radio. Default true keeps
+   *  the existing vendor flows (register, banking, membership) untouched.
+   *  Homeowner banking-payouts square will pass false — payouts dialog has
+   *  one purpose, no UI choice to expose. */
+  showPurposeRadio?: boolean
+  /** Subset of purposes to render in the radio. Default is the full set
+   *  ['both','membership','commissions']. Ignored when showPurposeRadio=false. */
+  purposeOptions?: VendorPaymentPurpose[]
+  /** Copy under the post-save check-mark. Default 'Heading to your vendor
+   *  portal...' preserves the current vendor-flow copy. Homeowner / admin
+   *  consumers can pass their own (e.g. 'Your payouts bank is on file.'). */
+  ctaSuccessCopy?: string
 }
 
 type UIKind = 'card' | 'checking'
@@ -67,6 +79,8 @@ function stripeKindFor(uiKind: UIKind): StripeKind {
 
 const stripePromise = getStripe()
 
+const DEFAULT_PURPOSE_OPTIONS: VendorPaymentPurpose[] = ['both', 'membership', 'commissions']
+
 export function VendorPaymentDialog({
   open,
   onOpenChange,
@@ -75,6 +89,9 @@ export function VendorPaymentDialog({
   initialKind = 'card',
   initialHolder = '',
   initialPurpose = 'both',
+  showPurposeRadio = true,
+  purposeOptions = DEFAULT_PURPOSE_OPTIONS,
+  ctaSuccessCopy = 'Your payment method is on file. Heading to your vendor portal...',
 }: VendorPaymentDialogProps) {
   const [kind, setKind] = useState<UIKind>(uiKindFrom(initialKind))
   const [purpose, setPurpose] = useState<VendorPaymentPurpose>(initialPurpose)
@@ -196,7 +213,7 @@ export function VendorPaymentDialog({
                 Payment method saved
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Your payment method is on file. Heading to your vendor portal...
+                {ctaSuccessCopy}
               </p>
             </div>
           </div>
@@ -212,34 +229,41 @@ export function VendorPaymentDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div
-              role="radiogroup"
-              aria-label="Payment method purpose"
-              className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
-            >
-              {(['both', 'membership', 'commissions'] as const).map((p) => {
-                const selected = purpose === p
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    data-payment-purpose={p}
-                    data-payment-purpose-selected={selected ? 'true' : 'false'}
-                    onClick={() => setPurpose(p)}
-                    className={cn(
-                      'rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
-                      selected
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {PAYMENT_PURPOSE_LABELS[p]}
-                  </button>
-                )
-              })}
-            </div>
+            {showPurposeRadio && (
+              <div
+                role="radiogroup"
+                aria-label="Payment method purpose"
+                className={cn(
+                  'mt-2 grid gap-1 rounded-lg bg-muted p-1',
+                  purposeOptions.length === 3 && 'grid-cols-3',
+                  purposeOptions.length === 2 && 'grid-cols-2',
+                  purposeOptions.length === 1 && 'grid-cols-1',
+                )}
+              >
+                {purposeOptions.map((p) => {
+                  const selected = purpose === p
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      data-payment-purpose={p}
+                      data-payment-purpose-selected={selected ? 'true' : 'false'}
+                      onClick={() => setPurpose(p)}
+                      className={cn(
+                        'rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                        selected
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {PAYMENT_PURPOSE_LABELS[p]}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-2">
               <TabsList className="grid grid-cols-2 w-full">

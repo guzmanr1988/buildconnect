@@ -11,26 +11,17 @@
 // idempotently on first hydrate of usePaymentMethods() — client-side
 // only, no DB row removal. See src/lib/hooks/use-payment-methods.ts.
 
-// Pre-M3 kinds included 'credit_card' and 'debit_card' from legacy mock
-// data. M3 writes only emit 'card' | 'checking', but the type retains the
-// older variants so any in-flight pre-M3 cached row that briefly survives
-// the localStorage clear can still be rendered without runtime cast errors.
-export type VendorPaymentMethodKind = 'card' | 'checking' | 'credit_card' | 'debit_card'
-
-export type VendorPaymentPurpose = 'membership' | 'commissions' | 'both'
-
-export interface VendorPaymentMethod {
-  id: string
-  purpose: VendorPaymentPurpose
-  kind: VendorPaymentMethodKind
-  last4: string
-  holder: string
-  brand?: string
-  expiry?: string
-  bankName?: string
-  routingLast4?: string
-  addedAt: string
-}
+// Type + label re-exports for back-compat.
+// Source of truth lives in src/types/payment-method.ts so non-vendor consumers
+// (homeowner banking-payouts square once the in-app dialog generalizes) can
+// pull the shape without a vendor-store import. All three vendor call sites
+// (auth/register, vendor/banking, vendor/membership) keep importing from here
+// unchanged.
+export type {
+  VendorPaymentMethodKind,
+  VendorPaymentPurpose,
+  VendorPaymentMethod,
+} from '@/types/payment-method'
 
 // Lightweight IIN-prefix-based brand detection — kept for the legacy
 // manual-input path inside the mock dialog (pre-M2). Live Stripe Elements
@@ -49,15 +40,4 @@ export function detectCardBrand(rawNumber: string): string | null {
   return null
 }
 
-export const PAYMENT_METHOD_LABELS: Record<VendorPaymentMethodKind, string> = {
-  card: 'Card',
-  checking: 'Checking Account',
-  credit_card: 'Card',
-  debit_card: 'Card',
-}
-
-export const PAYMENT_PURPOSE_LABELS: Record<VendorPaymentPurpose, string> = {
-  membership: 'Membership',
-  commissions: 'Commissions',
-  both: 'All Payments',
-}
+export { PAYMENT_METHOD_LABELS, PAYMENT_PURPOSE_LABELS } from '@/types/payment-method'
