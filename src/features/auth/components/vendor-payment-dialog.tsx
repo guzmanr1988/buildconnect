@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { getStripe } from '@/lib/stripe-client'
@@ -22,6 +24,7 @@ import {
   type VendorPaymentMethodKind,
   type VendorPaymentPurpose,
 } from '@/stores/vendor-billing-store'
+import type { PartyType } from '@/lib/financing/escrow/constants'
 
 // Real-Stripe rewrite of the post-signup payment-method picker.
 //
@@ -64,6 +67,16 @@ export interface VendorPaymentDialogProps {
    *  portal...' preserves the current vendor-flow copy. Homeowner / admin
    *  consumers can pass their own (e.g. 'Your payouts bank is on file.'). */
   ctaSuccessCopy?: string
+  /** 'pay_in' (default) = original SetupIntent + PaymentElement flow for
+   *  membership-IN / commissions-IN charges. 'pay_out' = createToken(
+   *  bank_account) + stripe-connect-external-account-attach for payout
+   *  bank-attach on an already-onboarded Connect account. The two paths
+   *  share dialog chrome + success-state but render different forms
+   *  internally. partyType is required when mode='pay_out'. */
+  mode?: 'pay_in' | 'pay_out'
+  /** Required when mode='pay_out'. Identifies which Connect account
+   *  the bank-attach lands on. */
+  partyType?: PartyType
 }
 
 type UIKind = 'card' | 'checking'
@@ -92,7 +105,15 @@ export function VendorPaymentDialog({
   showPurposeRadio = true,
   purposeOptions = DEFAULT_PURPOSE_OPTIONS,
   ctaSuccessCopy = 'Your payment method is on file. Heading to your vendor portal...',
+  mode = 'pay_in',
+  partyType,
 }: VendorPaymentDialogProps) {
+  // mode='pay_out' requires partyType to know which Connect account to attach
+  // the bank to. Fail loud at the boundary rather than silently 401-ing the
+  // edge fn — caller bug should surface at dialog mount, not on submit.
+  if (mode === 'pay_out' && !partyType) {
+    throw new Error('VendorPaymentDialog: partyType is required when mode="pay_out"')
+  }
   const [kind, setKind] = useState<UIKind>(uiKindFrom(initialKind))
   const [purpose, setPurpose] = useState<VendorPaymentPurpose>(initialPurpose)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -121,6 +142,13 @@ export function VendorPaymentDialog({
 
   useEffect(() => {
     if (!open || success) return
+    // pay_out branch skips setup-intent entirely — PayoutBankForm tokenizes
+    // via stripe.createToken('bank_account') + hits stripe-connect-external-
+    // account-attach directly. No SetupIntent client_secret needed.
+    if (mode === 'pay_out') {
+      setIntentLoading(false)
+      return
+    }
     // Wait for session hydrate — POST without a Bearer JWT returns 401 from
     // stripe-setup-intent-create, and the useEffect won't re-fire unless
     // sessionToken is in deps. Clear stale error so the loader shows until
@@ -166,7 +194,7 @@ export function VendorPaymentDialog({
     return () => {
       cancelled = true
     }
-  }, [open, kind, purpose, success, sessionToken])
+  }, [open, kind, purpose, success, sessionToken, mode])
 
   const elementsOptions: StripeElementsOptions | null = useMemo(
     () =>
@@ -217,6 +245,25 @@ export function VendorPaymentDialog({
               </p>
             </div>
           </div>
+        ) : mode === 'pay_out' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Connect a payout bank account
+              </DialogTitle>
+              <DialogDescription>
+                Add the bank account where you'd like to receive payouts.
+                Routing + account numbers go directly to our secure payments
+                partner — BuildConnect never sees or stores the raw values.
+              </DialogDescription>
+            </DialogHeader>
+
+            <PayoutBankForm
+              partyType={partyType!}
+              initialHolder={initialHolder}
+              onAttached={handleSuccess}
+            />
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -486,6 +533,216 @@ function PaymentFormInner({
           submitLabel
         )}
       </Button>
+    </div>
+  )
+}
+
+// pay_out branch — bank-attach via stripe.createToken('bank_account') +
+// stripe-connect-external-account-attach edge fn. PCI-safe per Stripe.js
+// (tokenization happens via the SDK call; the routing/account values cross
+// our DOM but never hit our server, satisfying SAQ A scope).
+// Per hephaestus contract (msg 1782433981527 + 1782433047894): partyType in,
+// btok_ from createToken, response { ok, external_account_id, last4, bank_name, currency, default_for_currency }.
+// setDefault defaults to true on the edge fn side; v1 ships swap-by-redefault
+// (no detach-first; kratos msg 1782432903335 accepted orphan-bank clutter).
+
+interface PayoutBankFormProps {
+  partyType: PartyType
+  initialHolder: string
+  onAttached: (method: Omit<VendorPaymentMethod, 'id'>) => void
+}
+
+function PayoutBankForm({
+  partyType,
+  initialHolder,
+  onAttached,
+}: PayoutBankFormProps) {
+  const [routingNumber, setRoutingNumber] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [holderName, setHolderName] = useState(initialHolder)
+  const [holderType, setHolderType] = useState<'individual' | 'company'>('individual')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const canSubmit =
+    !submitting &&
+    routingNumber.replace(/\D/g, '').length === 9 &&
+    accountNumber.replace(/\D/g, '').length >= 4 &&
+    holderName.trim().length > 0
+
+  async function handleSubmit() {
+    setError(null)
+    setSubmitting(true)
+    try {
+      const stripe = await stripePromise
+      if (!stripe) {
+        setError('Stripe.js failed to load.')
+        setSubmitting(false)
+        return
+      }
+
+      const { token, error: tokenError } = await stripe.createToken('bank_account', {
+        country: 'US',
+        currency: 'usd',
+        routing_number: routingNumber.replace(/\D/g, ''),
+        account_number: accountNumber.replace(/\D/g, ''),
+        account_holder_name: holderName.trim(),
+        account_holder_type: holderType,
+      })
+
+      if (tokenError || !token) {
+        setError(tokenError?.message || 'Could not tokenize bank account.')
+        setSubmitting(false)
+        return
+      }
+
+      const { data, error: attachError } = await supabase.functions.invoke<{
+        ok: boolean
+        external_account_id: string
+        last4: string
+        bank_name: string | null
+        currency: string
+        default_for_currency: boolean
+        code?: string
+        error?: string
+        stripe_external_account_id?: string
+      }>('stripe-connect-external-account-attach', {
+        body: { partyType, token_id: token.id, setDefault: true },
+      })
+
+      if (attachError || !data?.ok) {
+        setError(
+          attachError?.message ||
+            data?.error ||
+            'Bank attach failed. Please try again.',
+        )
+        setSubmitting(false)
+        return
+      }
+
+      // Synthesize VendorPaymentMethod-shaped success payload for the
+      // shared handleSuccess pathway. purpose='both' is a placeholder —
+      // payouts dialog never renders the purpose-radio so the value is
+      // not user-meaningful, only required by the existing onSuccess
+      // contract that vendor callers rely on.
+      onAttached({
+        purpose: 'both',
+        kind: 'checking',
+        last4: data.last4,
+        holder: holderName.trim(),
+        bankName: data.bank_name ?? undefined,
+        addedAt: new Date().toISOString(),
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-3">
+      <div>
+        <Label htmlFor="payout-holder-name" className="text-xs">
+          Account holder name
+        </Label>
+        <Input
+          id="payout-holder-name"
+          data-testid="payout-bank-holder-name"
+          value={holderName}
+          onChange={(e) => setHolderName(e.target.value)}
+          placeholder="Jane Doe"
+          className="mt-1"
+          autoComplete="off"
+        />
+      </div>
+      <div>
+        <Label className="text-xs">Account type</Label>
+        <div
+          role="radiogroup"
+          aria-label="Account holder type"
+          className="mt-1 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+        >
+          {(['individual', 'company'] as const).map((t) => {
+            const selected = holderType === t
+            return (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                data-testid={`payout-bank-holder-type-${t}`}
+                onClick={() => setHolderType(t)}
+                className={cn(
+                  'rounded-md px-2 py-1.5 text-xs font-medium transition-colors capitalize',
+                  selected
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="payout-routing-number" className="text-xs">
+          Routing number
+        </Label>
+        <Input
+          id="payout-routing-number"
+          data-testid="payout-bank-routing"
+          value={routingNumber}
+          onChange={(e) => setRoutingNumber(e.target.value)}
+          inputMode="numeric"
+          maxLength={9}
+          placeholder="9 digits"
+          className="mt-1 font-mono"
+          autoComplete="off"
+        />
+      </div>
+      <div>
+        <Label htmlFor="payout-account-number" className="text-xs">
+          Account number
+        </Label>
+        <Input
+          id="payout-account-number"
+          data-testid="payout-bank-account"
+          value={accountNumber}
+          onChange={(e) => setAccountNumber(e.target.value)}
+          inputMode="numeric"
+          placeholder="Checking account number"
+          className="mt-1 font-mono"
+          autoComplete="off"
+        />
+      </div>
+      {error && (
+        <div
+          role="alert"
+          data-testid="payout-bank-error"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+      <Button
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+        size="lg"
+        className="w-full h-11 text-sm font-medium"
+        data-testid="payout-bank-submit"
+      >
+        {submitting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          'Connect bank for payouts'
+        )}
+      </Button>
+      <p className="pt-1 text-[11px] text-center text-muted-foreground leading-relaxed">
+        Bank details are tokenized client-side by Stripe.js — BuildConnect
+        never sees or stores the raw routing or account numbers.
+      </p>
     </div>
   )
 }
