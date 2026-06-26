@@ -11,7 +11,7 @@
 // useSearchParams().get('status'); setStatusFilter swaps the param.
 
 import { useCallback, useMemo } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { RepRequestStatus } from '@/features/admin/rep-requests/rep-request-contract'
 
 const VALID_STATUSES: ReadonlySet<RepRequestStatus> = new Set<RepRequestStatus>([
@@ -36,6 +36,7 @@ export function useRepRequestQueueParams(): UseRepRequestQueueParamsResult {
   const params = useParams<{ id?: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // :id from route — null when on the listless URL (queue alone, no
   // detail pin). Empty-string and the literal "mine" sentinel (rep
@@ -51,16 +52,22 @@ export function useRepRequestQueueParams(): UseRepRequestQueueParamsResult {
     (id: string | null) => {
       const query = searchParams.toString()
       const suffix = query ? `?${query}` : ''
+      // Derive ABSOLUTE base path from current pathname — relative
+      // navigation from a detail route (/admin/rep-requests/{uuid})
+      // produces doubled-uuid 404s (./{newId} resolves to
+      // /admin/rep-requests/{currentUuid}/{newId}). The hook backs
+      // both /admin/rep-requests/:id and /admin/rep-requests/mine/:id,
+      // so the base is one of two literals.
+      const basePath = location.pathname.startsWith('/admin/rep-requests/mine')
+        ? '/admin/rep-requests/mine'
+        : '/admin/rep-requests'
       if (id) {
-        navigate(`./${id}${suffix}`, { relative: 'path' })
+        navigate(`${basePath}/${id}${suffix}`)
       } else {
-        // Drop the :id segment by navigating up one level + preserving
-        // the query string. relative:'path' makes ../ pop the URL
-        // segment regardless of route nesting.
-        navigate(`../${suffix}`, { relative: 'path' })
+        navigate(`${basePath}${suffix}`)
       }
     },
-    [navigate, searchParams]
+    [navigate, searchParams, location.pathname]
   )
 
   const statusFilter = useMemo<RepRequestStatus | null>(() => {
