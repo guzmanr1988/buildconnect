@@ -25,7 +25,6 @@ import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { SecondaryAddress } from '@/types'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
-import { HomeownerBankingPayoutsSquare } from '@/features/homeowner/components/banking-payouts-square'
 import { MyReferralsCard } from '@/features/homeowner/components/my-referrals-card'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
@@ -340,13 +339,14 @@ export function HomeownerProfilePage() {
         </Card>
       </motion.div>
 
-      {/* Banking / Payouts — Stripe Connect Express entry point. Lands under
-          Additional Properties per kratos directive #2 (task_132 msg
-          1781574203384). Receives referral bonuses + financing-disbursement
-          returns once Rod-provided test keys are set in Edge Function env. */}
-      <HomeownerBankingPayoutsSquare />
+      {/* Banking / Payouts (Stripe Connect Express) — HIDDEN for homeowner role
+          per Model A (kratos msg 1782449152661 / file_747 reconcile). Homeowners
+          never receive a payout: refunds auto-return to original PM source and
+          escrow-to-homeowner is 0-row scaffolding. Their card lives in the new
+          Payment Methods section above. Vendor/rep payout surfaces are unaffected
+          (separate callsites in their own profile pages). */}
 
-      {/* My Referrals & Rewards — sits directly below Banking/Payouts square */}
+      {/* My Referrals & Rewards */}
       <MyReferralsCard />
 
       {/* Day/Night Mode */}
