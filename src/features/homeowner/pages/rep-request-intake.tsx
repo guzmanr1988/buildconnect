@@ -210,14 +210,6 @@ export function RepRequestIntakePage() {
   const paymentMethodsQuery = useQuery({
     queryKey: PAYMENT_METHODS_QUERY_KEY,
     enabled: step === 3 && !!sessionToken,
-    // App-wide staleTime is 5min (App.tsx); without an explicit refetchOnMount
-    // override here, a prior Step-3 visit that cached [] (no saved PM yet) stays
-    // "fresh" across a /home/profile?pm=add round-trip — even though the profile
-    // section invalidates the shared key on finalize, the invalidate fires while
-    // this query's observer is detached (step !== 3), so the cached [] survives
-    // and gets served on Step-3 re-mount without a network fetch. Force a fetch
-    // on every enable-flip so the Pay button picks up a just-added card.
-    refetchOnMount: 'always',
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke<unknown>(
         'payment-method-list',
@@ -237,9 +229,21 @@ export function RepRequestIntakePage() {
       return obj.payment_methods
     },
   })
+  // Charge against the homeowner's flagged default PM when one exists; if the
+  // homeowner only ever added a single card (the BE finalize fn doesn't
+  // auto-promote first-PM to is_default=true — that's an explicit user action
+  // on the profile page's "☆ Set default" CTA), fall back to the first active
+  // PM so the Pay button still works. Without this fallback the first-card
+  // homeowner sees an empty-state on Step-3 even though their card is sitting
+  // ready on /home/profile (apollo pin-66 walk failure mode — the card is
+  // there, is_default is just false).
   const defaultMethod = useMemo(() => {
     const methods = paymentMethodsQuery.data ?? []
-    return methods.find((m) => m.is_default && m.status === 'active') ?? null
+    return (
+      methods.find((m) => m.is_default && m.status === 'active') ??
+      methods.find((m) => m.status === 'active') ??
+      null
+    )
   }, [paymentMethodsQuery.data])
 
   // After create-rep-request settles into 'succeeded', drive the PR-7 #505
