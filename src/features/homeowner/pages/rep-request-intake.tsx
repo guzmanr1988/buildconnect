@@ -9,6 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Calendar } from '@/components/ui/calendar'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { useRepRequestSubmit } from '@/hooks/use-rep-request-submit'
@@ -44,13 +52,6 @@ const MAX_PHOTOS = 5
 // non-selectable client-side (mirrors hephaestus create-rep-request
 // future-datetime 400 validation per contract msg 1782434304254).
 
-// datetime-local min attr format: YYYY-MM-DDTHH:MM (local-tz, no seconds).
-function nowDatetimeLocalMin(): string {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function formatPickedVisitDisplay(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
@@ -62,6 +63,59 @@ function formatPickedVisitDisplay(iso: string): string {
     minute: '2-digit',
   })
 }
+
+// form.requestedVisitAt holds YYYY-MM-DDTHH:MM (local-tz) so the
+// submit-hook synthesizeBucketFromDatetime contract stays wire-stable.
+// The picker UI splits into Calendar (date) + Select (time slot) and
+// joins back into that string. Empty/invalid string → both undefined,
+// step2Valid gate keeps Next disabled.
+function splitVisitAt(s: string | undefined): {
+  date: Date | undefined
+  time: string | undefined
+} {
+  if (!s) return { date: undefined, time: undefined }
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(s)
+  if (!m) return { date: undefined, time: undefined }
+  const [, y, mo, d, hh, mm] = m
+  const date = new Date(Number(y), Number(mo) - 1, Number(d))
+  return { date, time: `${hh}:${mm}` }
+}
+
+function joinVisitAt(
+  date: Date | undefined,
+  time: string | undefined,
+): string | undefined {
+  if (!date || !time) return undefined
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${time}`
+}
+
+function todayMidnight(): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+// 15-min slots, 7:00 AM through 9:00 PM (last slot = 21:00 sharp).
+// Closed-low / closed-high on the hour → 57 entries; covers the homeowner-
+// visit window kratos sketched ("home visits"). Display in 12-hour
+// am/pm, value stays 24h HH:MM to keep joinVisitAt simple.
+const TIME_SLOTS: { value: string; label: string }[] = (() => {
+  const slots: { value: string; label: string }[] = []
+  for (let h = 7; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      if (h === 21 && m > 0) break
+      const period = h >= 12 ? 'PM' : 'AM'
+      const display12 = h % 12 === 0 ? 12 : h % 12
+      const pad = (n: number) => String(n).padStart(2, '0')
+      slots.push({
+        value: `${pad(h)}:${pad(m)}`,
+        label: `${display12}:${pad(m)} ${period}`,
+      })
+    }
+  }
+  return slots
+})()
 
 export function RepRequestIntakePage() {
   const navigate = useNavigate()
@@ -532,7 +586,15 @@ function Step2({
   contactEdit,
   setContactEdit,
 }: Step2Props) {
-  const minDatetime = nowDatetimeLocalMin()
+  const { date: pickedDate, time: pickedTime } = splitVisitAt(
+    form.requestedVisitAt,
+  )
+  const minDate = todayMidnight()
+  const requestedVisitAt = form.requestedVisitAt
+  const requestedVisitIsFuture =
+    !!requestedVisitAt &&
+    Number.isFinite(Date.parse(requestedVisitAt)) &&
+    Date.parse(requestedVisitAt) > Date.now()
   return (
     <div className="space-y-5">
       <div>
@@ -619,24 +681,76 @@ function Step2({
         )}
       </div>
       <div>
-        <Label htmlFor="rri-visit-at">
-          Pick a date & time for the visit
-        </Label>
-        <Input
-          id="rri-visit-at"
-          type="datetime-local"
-          data-testid="rep-request-intake-visit-at"
-          value={form.requestedVisitAt ?? ''}
-          min={minDatetime}
-          onChange={(e) =>
-            setForm({ ...form, requestedVisitAt: e.target.value || undefined })
-          }
-          className="mt-1.5"
-        />
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          Your rep will confirm or counter-propose a time after the request is
-          received. Past dates can't be selected.
-        </p>
+        <Label>Pick a date &amp; time for the visit</Label>
+        <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
+          <div
+            className="rounded-lg border bg-card p-2 sm:p-3 self-start"
+            data-testid="rep-request-intake-visit-date-card"
+          >
+            <Calendar
+              mode="single"
+              selected={pickedDate}
+              onSelect={(date) =>
+                setForm({
+                  ...form,
+                  requestedVisitAt: joinVisitAt(date, pickedTime),
+                })
+              }
+              disabled={(date) => date < minDate}
+              fromDate={minDate}
+              className="[--cell-size:--spacing(10)]"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-3 min-w-0">
+            <div>
+              <Label htmlFor="rri-visit-time">Time of day</Label>
+              <Select
+                value={pickedTime}
+                onValueChange={(t) =>
+                  setForm({
+                    ...form,
+                    requestedVisitAt: joinVisitAt(pickedDate, t ?? undefined),
+                  })
+                }
+              >
+                <SelectTrigger
+                  id="rri-visit-time"
+                  data-testid="rep-request-intake-visit-time"
+                  className="mt-1.5 h-11 text-base"
+                >
+                  <SelectValue placeholder="Choose a time" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {TIME_SLOTS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {requestedVisitAt && requestedVisitIsFuture && (
+              <p
+                className="text-sm rounded-md bg-emerald-50 text-emerald-900 px-3 py-2 border border-emerald-200"
+                data-testid="rep-request-intake-visit-summary"
+              >
+                Requested visit: {formatPickedVisitDisplay(requestedVisitAt)}
+              </p>
+            )}
+            {requestedVisitAt && !requestedVisitIsFuture && (
+              <p
+                className="text-sm rounded-md bg-amber-50 text-amber-900 px-3 py-2 border border-amber-200"
+                data-testid="rep-request-intake-visit-past-warning"
+              >
+                That time has passed — pick a future date and time.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Your rep will confirm or counter-propose after the request is
+              received. Past dates aren&apos;t selectable.
+            </p>
+          </div>
+        </div>
       </div>
       <div>
         <Label htmlFor="rri-notes">Any notes for the rep? <span className="text-muted-foreground font-normal">(optional)</span></Label>
