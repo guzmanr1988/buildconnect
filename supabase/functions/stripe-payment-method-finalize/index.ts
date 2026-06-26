@@ -189,6 +189,20 @@ serve(async (req: Request) => {
       type: kind,
     })
   }
+  // Stripe Link wallets surface as type='card' with card.brand='link' /
+  // card.last4='0000' (the Link-display placeholder). Tier-1 cards-on-file is
+  // cards-only and the Step-3 saved-PM charge path can't authorize redirect-
+  // based PMs without a return_url, so we reject Link wallets at save-time.
+  // Upstream payment-method-setup-intent-create now restricts
+  // payment_method_types:['card'] so SetupIntent itself should not offer Link,
+  // but this is the defensive belt for any seti_ created before that flip.
+  if (kind === 'card' && paymentMethod.card?.brand === 'link') {
+    return jsonResponse(400, {
+      error: 'unsupported_card_brand',
+      brand: 'link',
+      hint: 'Stripe Link wallet is not supported for Tier-1 cards-on-file — enter a card directly.',
+    })
+  }
 
   let last4: string | null = null
   let brand: string | null = null

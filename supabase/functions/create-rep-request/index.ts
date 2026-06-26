@@ -342,6 +342,12 @@ serve(async (req) => {
           },
           customer: savedPm.stripeCustomerId,
           payment_method: savedPm.stripePaymentMethodId,
+          // Tier-1 cards-on-file is cards-only by contract. Restricting
+          // payment_method_types here both (a) matches the FE Step-3 surface
+          // (no PaymentElement, saved-PM card list) and (b) prevents a Stripe
+          // Link wallet PM (brand='link', type='link') from silently entering
+          // this path and 502'ing with the cryptic redirect/return_url error.
+          payment_method_types: ['card'],
           confirm: true,
           off_session: false,
         }

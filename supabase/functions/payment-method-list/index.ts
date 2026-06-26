@@ -90,6 +90,14 @@ serve(async (req: Request) => {
     .select('id, kind, brand, last4, exp_month, exp_year, bank_name, routing_last4, purpose, status, stripe_customer_id, stripe_payment_method_id, created_at')
     .eq('user_id', caller.id)
     .eq('status', 'active')
+    // Tier-1 cards-on-file is cards-only by contract — exclude Stripe Link
+    // wallet rows that may have slipped through finalize before HOTFIX-C
+    // tightened the save-time gate. (kind='card' is too loose because finalize
+    // historically mapped pm.type='link' rows into kind='card' with
+    // brand='link', last4='0000'.) FE Step-3 surface has no PaymentElement to
+    // authorize redirect-based PMs anyway, so listing a Link wallet would
+    // only surface a misleading "Link ••0000" row that 502's on Pay.
+    .neq('brand', 'link')
     .order('created_at', { ascending: false })
 
   if (filterPurpose) query = query.eq('purpose', filterPurpose)
