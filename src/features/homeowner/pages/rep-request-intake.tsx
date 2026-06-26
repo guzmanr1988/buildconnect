@@ -210,6 +210,14 @@ export function RepRequestIntakePage() {
   const paymentMethodsQuery = useQuery({
     queryKey: PAYMENT_METHODS_QUERY_KEY,
     enabled: step === 3 && !!sessionToken,
+    // App-wide staleTime is 5min (App.tsx); without an explicit refetchOnMount
+    // override here, a prior Step-3 visit that cached [] (no saved PM yet) stays
+    // "fresh" across a /home/profile?pm=add round-trip — even though the profile
+    // section invalidates the shared key on finalize, the invalidate fires while
+    // this query's observer is detached (step !== 3), so the cached [] survives
+    // and gets served on Step-3 re-mount without a network fetch. Force a fetch
+    // on every enable-flip so the Pay button picks up a just-added card.
+    refetchOnMount: 'always',
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke<unknown>(
         'payment-method-list',
