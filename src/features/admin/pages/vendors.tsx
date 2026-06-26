@@ -42,6 +42,7 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { Input } from '@/components/ui/input'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { matchesSearch } from '@/lib/search-match'
+import { formatEnumDisplay } from '@/lib/format-helpers'
 import {
   useEffectiveMockLeads,
   useEffectiveMockClosedSales,
@@ -547,7 +548,7 @@ export default function VendorsPage() {
                   <div className="flex flex-wrap gap-1 mb-3">
                     {vendor.service_categories.map((cat) => (
                       <span key={cat} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary capitalize">
-                        {cat.replace(/_/g, ' ')}
+                        {formatEnumDisplay(cat)}
                       </span>
                     ))}
                   </div>

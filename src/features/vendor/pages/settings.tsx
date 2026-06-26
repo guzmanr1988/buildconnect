@@ -1,10 +1,11 @@
 import { motion, type Variants } from 'framer-motion'
-import { Settings2, UsersRound, CreditCard } from 'lucide-react'
+import { Settings2, UsersRound, CreditCard, Database } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/shared/page-header'
 import { useVendorSettingsStore } from '@/stores/vendor-settings-store'
+import { ClearTestHomeownersDialog } from '../components/clear-test-homeowners-dialog'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -74,6 +75,28 @@ export default function VendorSettingsPage() {
                 onCheckedChange={setFinancingEnabled}
                 data-testid="vendor-settings-financing-toggle"
               />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
+        <Card className="rounded-xl shadow-sm hover:shadow-md transition border-destructive/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Database className="h-4 w-4 text-muted-foreground" />
+              Data Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+              <div>
+                <p className="text-sm font-medium">Clear test homeowners</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Permanently delete homeowner accounts you created for testing, including their projects and documents.
+                </p>
+              </div>
+              <ClearTestHomeownersDialog />
             </div>
           </CardContent>
         </Card>

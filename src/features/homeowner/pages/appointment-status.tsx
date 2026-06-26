@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import type { Lead, LeadStatus } from '@/types'
+import { formatEnumDisplay } from '@/lib/format-helpers'
 
 const statusPulse: Record<string, string> = {
   pending: 'bg-amber-500 animate-pulse',
@@ -1037,5 +1038,5 @@ function DetailRow({
 }
 
 function humanizeId(id: string): string {
-  return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return formatEnumDisplay(id)
 }

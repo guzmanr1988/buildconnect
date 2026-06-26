@@ -19,6 +19,28 @@ export function formatPhoneNumber(raw: string): string {
 }
 
 /**
+ * Convert a snake_case enum string to Title Case for display.
+ * Domain-specific acronyms (TPO, EPDM, HVAC) are uppercased correctly.
+ * e.g. 'full_replacement' → 'Full Replacement', 'tpo' → 'TPO'
+ */
+const ENUM_ACRONYMS: Record<string, string> = {
+  tpo: 'TPO',
+  epdm: 'EPDM',
+  hvac: 'HVAC',
+  ac: 'AC',
+}
+
+export function formatEnumDisplay(value: string | null | undefined): string {
+  if (!value) return ''
+  const lower = value.toLowerCase()
+  if (ENUM_ACRONYMS[lower]) return ENUM_ACRONYMS[lower]
+  return value
+    .split('_')
+    .map((w) => ENUM_ACRONYMS[w.toLowerCase()] ?? (w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ')
+}
+
+/**
  * Compose a structured address into a single-line display string.
  * 'Street, City, State ZIP' format. Empty parts omitted.
  */

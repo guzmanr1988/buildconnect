@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { useAssigneeMap } from '@/lib/hooks/use-assignee-map'
 import { VendorProjectDocumentsPanel } from '@/features/vendor/components/vendor-project-documents-panel'
 import type { Lead } from '@/types'
+import { formatEnumDisplay } from '@/lib/format-helpers'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -169,7 +170,7 @@ export default function LeadInbox() {
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
       homeowner_name: p.homeowner?.name || 'New Customer',
-      project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+      project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => formatEnumDisplay(s)).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
       // Ship #338 — bridge sp.saleAmount → lead.value.
       // Ship #349 — pre-sale projects compute headline from catalog-first
@@ -238,7 +239,7 @@ export default function LeadInbox() {
   const categoryLabelFor = useMemo(() => {
     const map: Record<string, string> = {}
     for (const s of services) map[s.id] = s.name
-    return (id: string) => map[id] ?? id.replace(/_/g, ' ')
+    return (id: string) => map[id] ?? formatEnumDisplay(id)
   }, [services])
 
   const groupedLeads = useMemo(() => {
@@ -452,12 +453,12 @@ export default function LeadInbox() {
                           <h4 className="text-sm font-semibold text-foreground">Project Details</h4>
                           {packEntries.map(([category, selections]) => (
                             <div key={category} className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-medium text-muted-foreground capitalize min-w-[70px]">
-                                {category.replace(/_/g, ' ')}:
+                              <span className="text-xs font-medium text-muted-foreground min-w-[70px]">
+                                {formatEnumDisplay(category)}:
                               </span>
                               {selections.map((selection) => (
-                                <Badge key={selection} variant="secondary" className="text-xs capitalize">
-                                  {selection.replace(/_/g, ' ')}
+                                <Badge key={selection} variant="secondary" className="text-xs">
+                                  {formatEnumDisplay(selection)}
                                 </Badge>
                               ))}
                             </div>

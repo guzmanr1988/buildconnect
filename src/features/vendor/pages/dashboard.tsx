@@ -27,6 +27,7 @@ import { LEAD_STAGES, STAGE_PULSE_BY_KEY, useVendorLeadStages } from '@/lib/vend
 import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { SERVICE_CATALOG } from '@/lib/constants'
 import type { Lead } from '@/types'
+import { formatEnumDisplay } from '@/lib/format-helpers'
 
 // Ship #293 — VendorDashboard slimmed down per Rodolfo "more clean
 // dashboard" directive. The 5 status tiles + Lead Detail Modal +
@@ -191,7 +192,7 @@ export default function VendorDashboard() {
       homeowner_id: 'ho-current',
       vendor_id: VENDOR_ID,
       homeowner_name: p.homeowner?.name || 'New Customer',
-      project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => s.replace(/_/g, ' ')).join(', '),
+      project: p.item.serviceName + ' — ' + Object.values(p.item.selections ?? {}).flat().map((s) => formatEnumDisplay(s)).join(', '),
       status: (statusMap[p.status] || 'pending') as Lead['status'],
       // pin-27 (task_1781159869876_405): carry saleAmount as Lead.value
       // for sold projects so Pipeline Value KPI reflects booked revenue

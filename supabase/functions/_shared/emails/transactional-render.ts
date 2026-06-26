@@ -384,6 +384,67 @@ function renderReferralInvite(data: ReferralInvitePayload): string {
   return shell(`${data.referrerName} invited you to BuildConnect`, body)
 }
 
+// ── 6. Vendor New Lead ────────────────────────────────────────────────────────
+export interface VendorNewLeadPayload {
+  vendorFirstName: string     // {{vendorFirstName}}
+  homeownerName: string       // {{homeownerName}}
+  serviceName: string         // {{serviceName}}
+  scheduledDate: string       // {{scheduledDate}} — pre-formatted, e.g. "June 25, 2026"
+  scheduledTime: string       // {{scheduledTime}} — pre-formatted, e.g. "2:00 PM"
+  homeownerAddress: string    // {{homeownerAddress}} — full address (vendor is authorized party)
+  quotedPriceLabel?: string   // {{quotedPriceLabel}} — pre-formatted dollar string, e.g. "$2,500"; optional
+  leadUrl: string             // {{leadUrl}} — vendor dashboard link to view/respond
+  unsubscribeUrl: string      // {{unsubscribeUrl}} — CAN-SPAM compliance, per-recipient settings link
+}
+
+function renderVendorNewLead(data: VendorNewLeadPayload): string {
+  const priceRow = data.quotedPriceLabel
+    ? infoRow('Quoted Price', `<span style="font-size:18px;font-weight:700;color:${C.primary};">${data.quotedPriceLabel}</span>`)
+    : ''
+  const body = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="background-color:${C.amberLight};border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0;font-size:13px;font-weight:600;color:${C.amber};text-transform:uppercase;letter-spacing:0.5px;">
+            New Lead
+          </p>
+        </td>
+      </tr>
+    </table>
+    <h1 style="margin:0 0 10px;font-size:26px;font-weight:700;color:${C.textDark};letter-spacing:-0.4px;">
+      You have a new lead
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;color:${C.textMuted};line-height:1.6;">
+      Hi ${data.vendorFirstName}, ${data.homeownerName} just sent you a project request. Review the details and respond from your dashboard to lock in the booking.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="border:1px solid ${C.border};border-radius:10px;padding:20px 24px;">
+      <tr>
+        <td>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            ${infoRow('Homeowner', data.homeownerName)}
+            ${infoRow('Service', data.serviceName)}
+            ${infoRow('Scheduled', `<span style="font-weight:600;color:${C.textDark};">${data.scheduledDate} at ${data.scheduledTime}</span>`)}
+            ${infoRow('Address', data.homeownerAddress)}
+            ${priceRow}
+          </table>
+        </td>
+      </tr>
+    </table>
+    ${ctaButton('Review Lead', data.leadUrl, C.primary)}
+    ${divider}
+    <p style="margin:0 0 12px;font-size:13px;color:${C.textMuted};line-height:1.6;">
+      Respond promptly to keep your acceptance rate strong. Questions?
+      <a href="mailto:support@buildc.net" style="color:${C.primary};">support@buildc.net</a>
+    </p>
+    <p style="margin:0;font-size:12px;color:${C.textMuted};line-height:1.5;">
+      You are receiving this because you are an active BuildConnect vendor.
+      <a href="${data.unsubscribeUrl}" style="color:${C.textMuted};text-decoration:underline;">Manage notification preferences</a>.
+    </p>`
+  return shell(`New lead from ${data.homeownerName} — ${data.serviceName}`, body)
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export type EmailPayload =
   | { type: 'welcome'; data: WelcomePayload }
@@ -392,6 +453,7 @@ export type EmailPayload =
   | { type: 'quote-received'; data: QuoteReceivedPayload }
   | { type: 'booking-confirmation'; data: BookingConfirmationPayload }
   | { type: 'referral-invite'; data: ReferralInvitePayload }
+  | { type: 'vendor-new-lead'; data: VendorNewLeadPayload }
 
 export function renderEmail(payload: EmailPayload): { subject: string; html: string } {
   switch (payload.type) {
@@ -424,6 +486,11 @@ export function renderEmail(payload: EmailPayload): { subject: string; html: str
       return {
         subject: `${payload.data.referrerName} invited you to BuildConnect`,
         html: renderReferralInvite(payload.data),
+      }
+    case 'vendor-new-lead':
+      return {
+        subject: `New lead from ${payload.data.homeownerName} — ${payload.data.serviceName}`,
+        html: renderVendorNewLead(payload.data),
       }
   }
 }
