@@ -67,7 +67,11 @@ function copyFor(state: ConnectUiState): StateCopy {
         description: 'Payouts are enabled. Bonuses and returns will deposit to your linked bank account.',
         ctaLabel: 'Update Details',
         ctaVariant: 'outline',
-        showCta: true,
+        // Banking-rewire: the Stripe-hosted "Update Details" management
+        // surface is replaced by the in-app "Change payout bank" path below.
+        // Suppress the hosted CTA so the active state shows only the
+        // direct-attach button (kratos msg 1782448318308 / Rod live-test).
+        showCta: false,
         dialogMode: 'management',
       };
     case 'restricted':
