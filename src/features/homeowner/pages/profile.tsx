@@ -26,6 +26,7 @@ import type { SecondaryAddress } from '@/types'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
 import { MyReferralsCard } from '@/features/homeowner/components/my-referrals-card'
+import { PaymentMethodsSection } from '@/features/homeowner/components/payment-methods-section'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
 const emptyAddressForm: AddressFormData = { label: '', street: '', city: '', state: '', zip: '' }
@@ -339,10 +340,15 @@ export function HomeownerProfilePage() {
         </Card>
       </motion.div>
 
+      {/* Payment Methods (pay-in) — saved cards and bank accounts the homeowner
+          can use to pay for services. D1 of the kratos msg 1782449152661 sequence
+          (file_747 reconcile). Backed by hephaestus's payment-method-* edge fns. */}
+      <PaymentMethodsSection />
+
       {/* Banking / Payouts (Stripe Connect Express) — HIDDEN for homeowner role
           per Model A (kratos msg 1782449152661 / file_747 reconcile). Homeowners
           never receive a payout: refunds auto-return to original PM source and
-          escrow-to-homeowner is 0-row scaffolding. Their card lives in the new
+          escrow-to-homeowner is 0-row scaffolding. Their card lives in the
           Payment Methods section above. Vendor/rep payout surfaces are unaffected
           (separate callsites in their own profile pages). */}
 
