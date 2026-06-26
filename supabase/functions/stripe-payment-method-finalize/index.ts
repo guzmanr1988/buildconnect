@@ -18,7 +18,14 @@
 //     microdeposits, processing for FC). Server pulls the live state.
 //
 // Request body:
-//   { setup_intent_id: string, purpose: 'membership' | 'commissions' | 'both' }
+//   { setup_intent_id: string,
+//     purpose: 'membership' | 'commissions' | 'service_pay_in' | 'both' }
+//
+// 'service_pay_in' (added in Tier-1 cards-on-file PR-6): homeowner attaches a
+// PaymentMethod intended for paying rep_request service-fees ($75/$150). The
+// payment_methods row stores purpose=service_pay_in so payment-method-list's
+// downstream purpose filter resolves the saved card on the homeowner-side
+// rep-request intake. Mig 111 superset CHECK constraint admits the value.
 //
 // Response (200):
 //   {
@@ -37,7 +44,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno'
 
-type Purpose = 'membership' | 'commissions' | 'both'
+type Purpose = 'membership' | 'commissions' | 'service_pay_in' | 'both'
 
 interface RequestBody {
   setup_intent_id: string
@@ -59,7 +66,12 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
 }
 
 function isValidPurpose(v: unknown): v is Purpose {
-  return v === 'membership' || v === 'commissions' || v === 'both'
+  return (
+    v === 'membership' ||
+    v === 'commissions' ||
+    v === 'service_pay_in' ||
+    v === 'both'
+  )
 }
 
 serve(async (req: Request) => {
