@@ -26,6 +26,12 @@ import { HomeownerTutorialsPage } from '@/features/homeowner/pages/tutorials'
 import { HomeownerDocumentsPage } from '@/features/homeowner/pages/documents'
 import { ServiceDetailPage } from '@/features/homeowner/pages/service-detail'
 import { CartPage } from '@/features/homeowner/pages/cart'
+// Concierge "Request a Rep" — homeowner-facing intake + status pages.
+// Components owned by phaethon (commit 3+); commit 1 wires routes
+// against placeholder shells so admin shell + role gating can land
+// independent of component scaffolding.
+import RepRequestIntakePage from '@/features/homeowner/pages/rep-request-intake'
+import RepRequestStatusPage from '@/features/homeowner/pages/rep-request-status'
 
 // Financing (Phase-2, dark behind feature_flags.financing_enabled DB row
 // read via useFeatureFlag('financing_enabled') — pages internally redirect
@@ -80,6 +86,14 @@ import AdminFinancingPage from '@/features/admin/pages/financing'
 import AdminFinancingApplicationDetail from '@/features/admin/pages/financing-application-detail'
 import AdminReferralProgramPage from '@/features/admin/pages/referral-program'
 import AdminModerationPage from '@/features/admin/pages/moderation'
+// Concierge "Request a Rep" — admin god-view queue + rep-scoped
+// "mine" queue. rep queue lives at /admin/rep-requests/mine and is
+// gated by a separate RequireRole block (roles=['rep','admin'])
+// nested below the admin route element so admin permission-set
+// remains a strict SUPERSET of rep (PURE-SEPARATE role enum, no
+// junction).
+import RepRequestsPage from '@/features/admin/pages/rep-requests'
+import RepRequestsMinePage from '@/features/admin/pages/rep-requests-mine'
 
 export const router = createBrowserRouter([
   {
@@ -88,6 +102,11 @@ export const router = createBrowserRouter([
       { path: '/', element: <Navigate to="/login" replace /> },
       { path: '/login', element: <LoginPage />, handle: { title: 'Sign in' } },
       { path: '/register', element: <RegisterPage />, handle: { title: 'Create account' } },
+      // /signup alias for invite-link CTA — referral-invite edge-fn builds
+      // ${appUrl}/signup?ref=<id>; alias prevents 404 on already-sent emails.
+      // ?ref passes through (same URL surface); attribution capture is a
+      // separate follow-up. kratos msg 1782425680242.
+      { path: '/signup', element: <RegisterPage />, handle: { title: 'Create account' } },
 
       {
         path: '/home',
@@ -113,6 +132,12 @@ export const router = createBrowserRouter([
           { path: 'messages', element: <HomeownerMessagesPage />, handle: { title: 'Messages' } },
           { path: 'documents', element: <HomeownerDocumentsPage />, handle: { title: 'Documents' } },
           { path: 'profile', element: <HomeownerProfilePage />, handle: { title: 'Profile' } },
+          // Concierge "Request a Rep" homeowner surfaces. Intake is a
+          // 3-step funnel (address+description+photos → contact+availability
+          // → payment); status is the tracker page for an existing
+          // rep-request row keyed by :id.
+          { path: 'rep-request', element: <RepRequestIntakePage />, handle: { title: 'Request a Rep' } },
+          { path: 'rep-requests/:id', element: <RepRequestStatusPage />, handle: { title: 'Rep Request' } },
           // Phase-2 financing — gated by feature_flags.financing_enabled DB
           // row at component level (Navigate to /home when off). Routes still
           // register so a flag-flip ship doesn't require a router code change.
@@ -224,6 +249,36 @@ export const router = createBrowserRouter([
           // integration owns this transition path post-launch.
           { path: 'financing-applications/:appId', element: <AdminFinancingApplicationDetail />, handle: { title: 'Admin · Application stepper' } },
           { path: 'profile', element: <AdminProfilePage />, handle: { title: 'Admin · Profile' } },
+          // Concierge "Request a Rep" — admin god-view queue. Two routes
+          // back the same component: the listless URL renders the queue
+          // (no detail), and :id pins the detail pane via URL-param so
+          // deep-links + back/forward navigation round-trip correctly.
+          { path: 'rep-requests', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Requests' } },
+          { path: 'rep-requests/:id', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Request' } },
+        ],
+      },
+
+      // Concierge "Request a Rep" — rep-scoped queue. Mounted as a
+      // SEPARATE /admin/rep-requests/mine block (sibling of the main
+      // /admin block) so the inner RequireRole admits {'rep','admin'}
+      // without widening the parent /admin role gate. admin is in the
+      // allow-list because its permission-set is a strict superset of
+      // rep (PURE-SEPARATE role enum, no junction); rep is NOT in the
+      // parent /admin block's allow-list so a rep hitting /admin
+      // bounces to ROLE_HOME['rep'] = /admin/rep-requests/mine.
+      {
+        path: '/admin/rep-requests/mine',
+        element: (
+          <RequireAuth>
+            <RequireRole roles={['rep', 'admin']}>
+              <AdminLayout />
+            </RequireRole>
+          </RequireAuth>
+        ),
+        handle: { title: 'Admin · My Rep Requests' },
+        children: [
+          { index: true, element: <RepRequestsMinePage /> },
+          { path: ':id', element: <RepRequestsMinePage />, handle: { title: 'Admin · Rep Request' } },
         ],
       },
 

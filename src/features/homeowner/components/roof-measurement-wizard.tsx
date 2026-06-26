@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PITCHED_WASTE_FACTOR } from '@/lib/roof-pricing'
 import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { Loader2, MapPin, Home, RotateCcw } from 'lucide-react'
@@ -12,81 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
-
-// ─── Places Autocomplete hook ────────────────────────────────────────────────
-// Loads the Maps JS SDK once (idempotent), then binds google.maps.places.Autocomplete
-// to the input element passed via ref. On place selection, calls onPlace with the
-// canonical formatted_address. No-ops when GMP is disabled (falls through to plain input).
-
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    google?: any
-  }
-}
-
-const GMAPS_SCRIPT_ID = 'gmaps-places-sdk'
-
-function loadMapsScript(apiKey: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.google?.maps?.places) { resolve(); return }
-    const existing = document.getElementById(GMAPS_SCRIPT_ID)
-    if (existing) {
-      existing.addEventListener('load', () => resolve())
-      return
-    }
-    const script = document.createElement('script')
-    script.id = GMAPS_SCRIPT_ID
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
-    script.async = true
-    script.defer = true
-    script.onload = () => resolve()
-    document.head.appendChild(script)
-  })
-}
-
-function usePlacesAutocomplete(
-  enabled: boolean,
-  apiKey: string,
-  onPlace: (formatted: string) => void,
-) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const acRef = useRef<{ unbind: () => void } | null>(null)
-
-  const bind = useCallback(() => {
-    const el = inputRef.current
-    if (!el || acRef.current || !window.google?.maps?.places) return
-    const ac = new window.google.maps.places.Autocomplete(el, {
-      types: ['address'],
-      fields: ['formatted_address'],
-    })
-    const listener = ac.addListener('place_changed', () => {
-      const place = ac.getPlace()
-      if (place?.formatted_address) onPlace(place.formatted_address)
-    })
-    acRef.current = {
-      unbind: () => {
-        window.google?.maps?.event?.removeListener(listener)
-        acRef.current = null
-      },
-    }
-  }, [onPlace])
-
-  // Load SDK and bind on mount when enabled
-  useEffect(() => {
-    if (!enabled || !apiKey) return
-    loadMapsScript(apiKey).then(bind)
-    return () => { acRef.current?.unbind() }
-  }, [enabled, apiKey, bind])
-
-  // Re-bind when the input element re-mounts (step changes cause unmount/remount)
-  const setInputRef = useCallback((el: HTMLInputElement | null) => {
-    ;(inputRef as React.MutableRefObject<HTMLInputElement | null>).current = el
-    if (el && enabled && window.google?.maps?.places) bind()
-  }, [enabled, bind])
-
-  return setInputRef
-}
+import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
