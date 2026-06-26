@@ -50,7 +50,16 @@ interface CreateRepRequestPayload {
     zip: string
   }
   contact_phone: string
-  visit_window_picks: Array<{
+  // PHASE-2 calendar (mig 108): single ISO datetime homeowner picked at intake.
+  // When present, populates rep_requests.requested_visit_at + appointment_status
+  // defaults to 'proposed'. Synthesizes a minimal requested_visit_times entry
+  // for back-compat with rep clients that still read the bucket array.
+  requested_visit_at?: string
+  // PHASE-1 bucket model (mig 101 path) — kept for back-compat. If
+  // requested_visit_at is provided AND visit_window_picks is empty/absent,
+  // a single synthesized window is generated. If both are provided, both are
+  // written; visit_window_picks expansion still runs for back-compat reads.
+  visit_window_picks?: Array<{
     bucket: VisitWindowBucket
     iso_date: string // YYYY-MM-DD in homeowner's local frame; service_tz overlay applied
   }>
@@ -137,11 +146,14 @@ serve(async (req) => {
 
   // Validate payload shape (minimal — full validation deferred to FE + DB
   // CHECKs; here we catch the structural failures cheaply).
-  const { address, contact_phone, visit_window_picks } = payload
+  // Phase-2 calendar OR Phase-1 buckets must be provided (at least one path).
+  const { address, contact_phone, visit_window_picks, requested_visit_at } = payload
+  const hasCalendar = typeof requested_visit_at === 'string' && requested_visit_at.length > 0
+  const hasBuckets = Array.isArray(visit_window_picks) && visit_window_picks.length > 0
   if (
     !address || !address.line1 || !address.city || !address.state || !address.zip ||
     !contact_phone ||
-    !Array.isArray(visit_window_picks) || visit_window_picks.length === 0
+    (!hasCalendar && !hasBuckets)
   ) {
     return new Response(JSON.stringify({ error: 'invalid_payload' }), {
       status: 400,
@@ -157,21 +169,56 @@ serve(async (req) => {
     })
   }
 
-  // Expand the categorical picks into canonical VisitWindow rows.
-  const requestedWindows = []
-  for (const pick of visit_window_picks) {
-    const window = bucketToWindow(pick.bucket, pick.iso_date, serviceTz)
-    if (!window) {
-      return new Response(JSON.stringify({ error: 'invalid_visit_window', detail: `bucket=${pick.bucket} date=${pick.iso_date} does not match the bucket's allowed day-of-week` }), {
+  // Validate Phase-2 calendar datetime if provided.
+  let calendarIso: string | null = null
+  if (hasCalendar) {
+    const parsed = new Date(requested_visit_at!)
+    if (Number.isNaN(parsed.getTime())) {
+      return new Response(JSON.stringify({ error: 'invalid_requested_visit_at', detail: 'not a valid ISO datetime' }), {
         status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       })
     }
+    if (parsed.getTime() <= Date.now()) {
+      return new Response(JSON.stringify({ error: 'invalid_requested_visit_at', detail: 'must be in the future' }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    calendarIso = parsed.toISOString()
+  }
+
+  // Expand the categorical picks into canonical VisitWindow rows (Phase-1).
+  // If Phase-2 calendar is provided without buckets, synthesize one bucket
+  // entry from the calendar datetime so requested_visit_times (NOT NULL)
+  // satisfies the column constraint and reps reading the old shape still
+  // see a window.
+  const requestedWindows = []
+  if (hasBuckets) {
+    for (const pick of visit_window_picks!) {
+      const window = bucketToWindow(pick.bucket, pick.iso_date, serviceTz)
+      if (!window) {
+        return new Response(JSON.stringify({ error: 'invalid_visit_window', detail: `bucket=${pick.bucket} date=${pick.iso_date} does not match the bucket's allowed day-of-week` }), {
+          status: 400,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        })
+      }
+      requestedWindows.push({
+        window_start_utc: window.window_start_utc,
+        window_end_utc: window.window_end_utc,
+        service_tz: serviceTz,
+        bucket_label: pick.bucket,
+      })
+    }
+  } else {
+    // Calendar-only: synthesize a 1-hour window centered on the picked time
+    // so the legacy requested_visit_times JSONB column stays populated.
+    const startMs = new Date(calendarIso!).getTime()
     requestedWindows.push({
-      window_start_utc: window.window_start_utc,
-      window_end_utc: window.window_end_utc,
+      window_start_utc: new Date(startMs).toISOString(),
+      window_end_utc: new Date(startMs + 60 * 60 * 1000).toISOString(),
       service_tz: serviceTz,
-      bucket_label: pick.bucket,
+      bucket_label: 'calendar_pick',
     })
   }
 
@@ -185,6 +232,9 @@ serve(async (req) => {
       address,
       contact_phone,
       requested_visit_times: requestedWindows,
+      // Phase-2 calendar — null when caller is bucket-only (legacy intake).
+      requested_visit_at: calendarIso,
+      // appointment_status defaults to 'proposed' via mig 108 column default.
       description: payload.description ?? null,
       access_notes: payload.access_notes ?? null,
       status: 'pending_payment',
