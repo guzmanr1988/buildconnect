@@ -1,15 +1,30 @@
 // Payment Methods (pay-in) section for the homeowner profile page.
 //
-// D1 of the kratos msg 1782449152661 sequence (D2 → D1 → D3). FE-only build
-// against hephaestus's four payment-method-* edge fns (still finalizing; we
-// build against the contract SHAPE now and reconcile on his deploy):
+// D1 of the kratos msg 1782449152661 sequence (D2 → D1 → D3). FE wires
+// hephaestus's four payment-method-* edge fns; contract-locked at kratos
+// msg 1782450542327 with the EXACT shapes below (BE owner: hephaestus):
 //
-//   payment-method-setup-intent-create { kind, purpose:'service_pay_in' }
+//   payment-method-setup-intent-create
+//     body: { kind: 'card' | 'us_bank_account', purpose: 'service_pay_in' }
 //     → { client_secret, customer_id, setup_intent_id }
-//   payment-method-list { purpose:'service_pay_in' }
-//     → [{ id, kind, brand, last4, exp, bank_name, is_default }]
+//     kind is Stripe-native — server validates the literal, no UI mapping.
+//
+//   payment-method-list { purpose: 'service_pay_in' }
+//     → { ok: true, payment_methods: PaymentMethodListItem[] }
+//     Row shape: { id, kind, brand, last4, exp_month, exp_year, bank_name,
+//                  routing_last4, purpose, status, is_default, created_at }.
+//     Discriminated by kind: card rows have brand/last4/exp_*, bank rows have
+//     bank_name/last4 (account)/routing_last4 — the other side is null.
+//     is_default is computed at READ-TIME from Stripe customer.invoice_settings
+//     .default_payment_method — there is NO is_default DB column. FE treats
+//     is_default as server-truth.
+//
 //   payment-method-set-default { payment_method_id } → { ok }
-//   payment-method-detach { payment_method_id }      → { ok }
+//     Server atomic via Stripe customer.invoice_settings.default_payment_method
+//     (single-field, single-default invariant enforced server-side). FE does
+//     NOT optimistically toggle other rows — just call + re-fetch list.
+//
+//   payment-method-detach { payment_method_id } → { ok }
 //
 // Add-flow: mount Stripe Elements on the SetupIntent client_secret →
 // stripe.confirmSetup({ return_url }). The payment_methods row lands via
@@ -68,35 +83,41 @@ export interface PaymentMethodListItem {
   kind: 'card' | 'us_bank_account'
   brand: string | null
   last4: string
-  exp: string | null
+  exp_month: number | null
+  exp_year: number | null
   bank_name: string | null
+  routing_last4: string | null
+  purpose: 'service_pay_in' | string
+  status: 'active' | 'pending_verification' | string
   is_default: boolean
+  created_at: string
 }
 
 interface ListResponseShape {
-  ok?: boolean
-  methods?: PaymentMethodListItem[]
+  ok: boolean
+  payment_methods: PaymentMethodListItem[]
   error?: string
 }
 
-// Tolerant parser — kratos contract showed a bare array literal
-// ([{id,kind,...}]) but hephaestus's other fns wrap with { ok }. Accept
-// either so the FE doesn't break on whichever final shape lands.
+// Locked to the canonical hephaestus shape per kratos msg 1782450542327:
+// { ok: true, payment_methods: [...] }. The parallel-build tolerant hedge
+// (bare-array OR { ok, methods }) collapsed here per feedback memory
+// "tolerant parsers for internal FE/BE contract drift are parallel-build
+// interim only — collapse on contract-lock."
 function parseListResponse(
   data: unknown,
 ): { ok: true; methods: PaymentMethodListItem[] } | { ok: false; error: string } {
-  if (Array.isArray(data)) {
-    return { ok: true, methods: data as PaymentMethodListItem[] }
+  if (!data || typeof data !== 'object') {
+    return { ok: false, error: 'payment-method-list returned a non-object response.' }
   }
-  if (data && typeof data === 'object') {
-    const obj = data as ListResponseShape
-    if (Array.isArray(obj.methods)) {
-      if (obj.ok === false) return { ok: false, error: obj.error || 'List request failed.' }
-      return { ok: true, methods: obj.methods }
-    }
-    if (obj.ok === false) return { ok: false, error: obj.error || 'List request failed.' }
+  const obj = data as ListResponseShape
+  if (obj.ok === false) {
+    return { ok: false, error: obj.error || 'payment-method-list returned ok:false.' }
   }
-  return { ok: false, error: 'Unexpected payment-method-list response shape.' }
+  if (!Array.isArray(obj.payment_methods)) {
+    return { ok: false, error: 'payment-method-list response missing payment_methods array.' }
+  }
+  return { ok: true, methods: obj.payment_methods }
 }
 
 function brandLabel(item: PaymentMethodListItem): string {
@@ -107,6 +128,14 @@ function brandLabel(item: PaymentMethodListItem): string {
   const brand = item.brand
   if (!brand) return 'Card'
   return brand.charAt(0).toUpperCase() + brand.slice(1)
+}
+
+// Card exp comes back as two nullable numerics on the canonical row shape
+// (exp_month + exp_year). Format as MM/YY for the row label. Bank rows
+// have both fields null per the kind discriminator and skip the label.
+function formatCardExpiry(month: number | null, year: number | null): string | null {
+  if (!month || !year) return null
+  return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`
 }
 
 function MethodIcon({ kind }: { kind: PaymentMethodListItem['kind'] }) {
@@ -276,12 +305,17 @@ export function PaymentMethodsSection() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
                             {brandLabel(m)} •••• {m.last4}
-                            {m.exp && (
+                            {m.kind === 'card' && formatCardExpiry(m.exp_month, m.exp_year) && (
                               <span className="ml-2 text-xs text-muted-foreground">
-                                exp {m.exp}
+                                exp {formatCardExpiry(m.exp_month, m.exp_year)}
                               </span>
                             )}
                           </p>
+                          {m.kind === 'us_bank_account' && m.routing_last4 && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              Routing •••• {m.routing_last4}
+                            </p>
+                          )}
                           {m.is_default && (
                             <p className="mt-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                               <CheckCircle2 className="h-3 w-3" />
