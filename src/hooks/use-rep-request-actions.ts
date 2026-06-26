@@ -44,6 +44,21 @@ export interface BuildProjectOnBehalfPayload {
   notes: string | null
 }
 
+export interface UpdateAppointmentAcceptPayload {
+  action: 'accept'
+}
+export interface UpdateAppointmentReschedulePayload {
+  action: 'reschedule'
+  /** ISO 8601 datetime — must be in the future. Server validates. */
+  proposedVisitAt: string
+  /** REQUIRED for action=reschedule per kratos msg 1782434876035
+   *  ("admin reschedule MUST carry notes"). Empty string = client rejects. */
+  rescheduleNotes: string
+}
+export type UpdateAppointmentPayload =
+  | UpdateAppointmentAcceptPayload
+  | UpdateAppointmentReschedulePayload
+
 export interface UseRepRequestActionsResult {
   /** Admin only — assigns or reassigns the rep. Null repId unassigns. */
   assignRep: (repId: string | null) => Promise<ActionResult>
@@ -58,6 +73,11 @@ export interface UseRepRequestActionsResult {
   /** Rep (or admin) — server-side project INSERT keyed to the rep request.
    *  Returns the new project_id so the caller can chain markProjectReady. */
   buildProjectOnBehalf: (payload: BuildProjectOnBehalfPayload) => Promise<BuildProjectResult>
+  /** Admin only — accept the homeowner-proposed visit time, OR counter-propose
+   *  a new time + required reschedule notes. Routes via the
+   *  update-rep-request-appointment edge fn (hephaestus contract msg
+   *  1782434304254). */
+  updateAppointment: (payload: UpdateAppointmentPayload) => Promise<ActionResult>
   /** True while any mutation is in flight — disables action buttons. */
   mutating: boolean
 }
@@ -150,6 +170,40 @@ export function useRepRequestActions(
     [wrap, repRequestId],
   )
 
+  // Phase 2 — homeowner-picked datetime acceptance / counter-proposal.
+  // Routes via update-rep-request-appointment edge fn (hephaestus contract
+  // msg 1782434304254). Body shape:
+  //   { action: 'accept' }
+  //   { action: 'reschedule', proposed_visit_at: ISO, reschedule_notes: string }
+  // Per kratos msg 1782434876035: reschedule_notes is REQUIRED — empty
+  // string short-circuits client-side with a typed error to surface a
+  // "Add notes" inline message before the server sees the call.
+  const updateAppointment = useCallback(
+    (payload: UpdateAppointmentPayload) =>
+      wrap<ActionResult>(async () => {
+        if (payload.action === 'reschedule') {
+          if (!payload.rescheduleNotes.trim()) {
+            return { ok: false, error: 'Reschedule notes are required.' }
+          }
+        }
+        const body =
+          payload.action === 'accept'
+            ? { rep_request_id: repRequestId, action: 'accept' }
+            : {
+                rep_request_id: repRequestId,
+                action: 'reschedule',
+                proposed_visit_at: payload.proposedVisitAt,
+                reschedule_notes: payload.rescheduleNotes.trim(),
+              }
+        const { error } = await supabase.functions.invoke(
+          'update-rep-request-appointment',
+          { body },
+        )
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
+  )
+
   const buildProjectOnBehalf = useCallback(
     (payload: BuildProjectOnBehalfPayload) =>
       wrap<BuildProjectResult>(async () => {
@@ -181,6 +235,7 @@ export function useRepRequestActions(
     markVisited,
     markProjectReady,
     buildProjectOnBehalf,
+    updateAppointment,
     mutating,
   }
 }

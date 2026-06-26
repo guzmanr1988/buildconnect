@@ -17,7 +17,6 @@ import { stripePromise } from '@/lib/stripe-client'
 import type { SecondaryAddress } from '@/types'
 import type {
   IntakeFormData,
-  RepRequestAvailabilityBucket,
   SubmitFormState,
 } from '@/features/admin/rep-requests/rep-request-contract'
 
@@ -37,16 +36,32 @@ type Step = 1 | 2 | 3
 
 const MAX_PHOTOS = 5
 
-const BUCKET_LABEL: Record<RepRequestAvailabilityBucket, string> = {
-  weekday_morning: 'Weekday morning',
-  weekday_afternoon: 'Weekday afternoon',
-  weekend_anytime: 'Weekend anytime',
+// Phase 2 — explicit datetime picker, no buckets in UI per kratos msg
+// 1782434876035 ("buckets FULLY REMOVED from UI; homeowner sees calendar
+// only"). The wire still carries availabilityBuckets for back-compat —
+// synthesized in use-rep-request-submit from requested_visit_at. Picker
+// min attribute is now-rounded-to-the-minute so PAST datetimes are
+// non-selectable client-side (mirrors hephaestus create-rep-request
+// future-datetime 400 validation per contract msg 1782434304254).
+
+// datetime-local min attr format: YYYY-MM-DDTHH:MM (local-tz, no seconds).
+function nowDatetimeLocalMin(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
-const BUCKETS: RepRequestAvailabilityBucket[] = [
-  'weekday_morning',
-  'weekday_afternoon',
-  'weekend_anytime',
-]
+
+function formatPickedVisitDisplay(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 export function RepRequestIntakePage() {
   const navigate = useNavigate()
@@ -65,8 +80,12 @@ export function RepRequestIntakePage() {
     photos: [],
     contactName: profile?.name ?? '',
     contactPhone: profile?.phone ?? '',
+    // availabilityBuckets stays on the type for wire back-compat; UI
+    // never writes into it. Submit hook synthesizes a single bucket from
+    // requestedVisitAt so legacy rep-side readers don't break.
     availabilityBuckets: [],
     accessNotes: '',
+    requestedVisitAt: undefined,
   }))
   const [addressEdit, setAddressEdit] = useState(false)
   const [contactEdit, setContactEdit] = useState(false)
@@ -108,10 +127,19 @@ export function RepRequestIntakePage() {
   )
 
   const step1Valid = form.address.trim().length > 0
+  // Step 2 valid iff contact present AND a future requested_visit_at is set.
+  // Future check is client-side belt; server still validates via 400
+  // invalid_requested_visit_at.
+  const requestedVisitAt = form.requestedVisitAt
+  const requestedVisitIsFuture = (() => {
+    if (!requestedVisitAt) return false
+    const t = Date.parse(requestedVisitAt)
+    return Number.isFinite(t) && t > Date.now()
+  })()
   const step2Valid =
     form.contactName.trim().length > 0 &&
     form.contactPhone.trim().length > 0 &&
-    form.availabilityBuckets.length > 0
+    requestedVisitIsFuture
 
   function addPhotos(files: FileList | null) {
     if (!files) return
@@ -124,15 +152,6 @@ export function RepRequestIntakePage() {
   }
   function removePhoto(i: number) {
     setForm({ ...form, photos: form.photos.filter((_, idx) => idx !== i) })
-  }
-  function toggleBucket(b: RepRequestAvailabilityBucket) {
-    const has = form.availabilityBuckets.includes(b)
-    setForm({
-      ...form,
-      availabilityBuckets: has
-        ? form.availabilityBuckets.filter((x) => x !== b)
-        : [...form.availabilityBuckets, b],
-    })
   }
 
   // Footer right-button state machine. The Pay-$250 action moves
@@ -218,7 +237,6 @@ export function RepRequestIntakePage() {
           <Step2
             form={form}
             setForm={setForm}
-            toggleBucket={toggleBucket}
             profileName={profile?.name ?? ''}
             profilePhone={profile?.phone ?? ''}
             contactEdit={contactEdit}
@@ -501,7 +519,6 @@ function Step1({
 interface Step2Props {
   form: IntakeFormData
   setForm: (next: IntakeFormData) => void
-  toggleBucket: (b: RepRequestAvailabilityBucket) => void
   profileName: string
   profilePhone: string
   contactEdit: boolean
@@ -510,12 +527,12 @@ interface Step2Props {
 function Step2({
   form,
   setForm,
-  toggleBucket,
   profileName,
   profilePhone,
   contactEdit,
   setContactEdit,
 }: Step2Props) {
+  const minDatetime = nowDatetimeLocalMin()
   return (
     <div className="space-y-5">
       <div>
@@ -602,30 +619,24 @@ function Step2({
         )}
       </div>
       <div>
-        <Label>Best times for a visit <span className="text-muted-foreground font-normal">(select all that apply)</span></Label>
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {BUCKETS.map((b) => {
-            const active = form.availabilityBuckets.includes(b)
-            return (
-              <button
-                key={b}
-                type="button"
-                onClick={() => toggleBucket(b)}
-                data-testid="rep-request-intake-bucket"
-                data-bucket={b}
-                data-active={active ? 'true' : 'false'}
-                className={cn(
-                  'rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors text-center',
-                  active
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-background text-muted-foreground hover:border-primary/30',
-                )}
-              >
-                {BUCKET_LABEL[b]}
-              </button>
-            )
-          })}
-        </div>
+        <Label htmlFor="rri-visit-at">
+          Pick a date & time for the visit
+        </Label>
+        <Input
+          id="rri-visit-at"
+          type="datetime-local"
+          data-testid="rep-request-intake-visit-at"
+          value={form.requestedVisitAt ?? ''}
+          min={minDatetime}
+          onChange={(e) =>
+            setForm({ ...form, requestedVisitAt: e.target.value || undefined })
+          }
+          className="mt-1.5"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Your rep will confirm or counter-propose a time after the request is
+          received. Past dates can't be selected.
+        </p>
       </div>
       <div>
         <Label htmlFor="rri-notes">Any notes for the rep? <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -674,9 +685,9 @@ function Step3({ form, formState, clientSecret, onPaid }: Step3Props) {
         {form.description && (
           <p className="text-muted-foreground">{form.description}</p>
         )}
-        {form.availabilityBuckets.length > 0 && (
+        {form.requestedVisitAt && (
           <p className="text-muted-foreground text-xs">
-            Availability: {form.availabilityBuckets.map((b) => BUCKET_LABEL[b]).join(', ')}
+            Requested visit: {formatPickedVisitDisplay(form.requestedVisitAt)}
           </p>
         )}
         <p className="text-muted-foreground text-xs">

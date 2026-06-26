@@ -88,30 +88,30 @@ function parseFlatAddress(input: string): ParsedAddress | null {
   return { line1, city, state, zip }
 }
 
-const BUCKET_TARGET_DAYS: Record<RepRequestAvailabilityBucket, number[]> = {
-  weekday_morning: [1, 2, 3, 4, 5],
-  weekday_afternoon: [1, 2, 3, 4, 5],
-  weekend_anytime: [0, 6],
-}
-
-// Pick the next iso_date (YYYY-MM-DD) ≥ tomorrow whose day-of-week matches
-// the bucket. bucketToWindow() server-side rejects mismatched day-of-week,
-// so we must hand it a date the bucket admits.
-function nextIsoDateForBucket(bucket: RepRequestAvailabilityBucket, from: Date): string {
-  const target = BUCKET_TARGET_DAYS[bucket]
-  const probe = new Date(from)
-  probe.setHours(0, 0, 0, 0)
-  probe.setDate(probe.getDate() + 1)
-  for (let i = 0; i < 14; i++) {
-    if (target.includes(probe.getDay())) {
-      const y = probe.getFullYear()
-      const m = String(probe.getMonth() + 1).padStart(2, '0')
-      const d = String(probe.getDate()).padStart(2, '0')
-      return `${y}-${m}-${d}`
-    }
-    probe.setDate(probe.getDate() + 1)
-  }
-  throw new Error(`No date found within 14 days for bucket ${bucket}`)
+// Phase 2 — datetime → bucket synthesis. UI captures an explicit
+// requested_visit_at; we still ship visit_window_picks back-compat for
+// legacy reader paths per hephaestus contract msg 1782434304254 (server
+// prefers requested_visit_at when both present). Bucket axis: Sat/Sun ⇒
+// weekend_anytime; Mon-Fri before noon ⇒ weekday_morning; Mon-Fri 12:00+
+// ⇒ weekday_afternoon. iso_date matches the picked day-of-week so
+// bucketToWindow() server-side day-of-week guard accepts it.
+function synthesizeBucketFromDatetime(iso: string): {
+  bucket: RepRequestAvailabilityBucket
+  iso_date: string
+} {
+  const d = new Date(iso)
+  const dow = d.getDay()
+  const hour = d.getHours()
+  const bucket: RepRequestAvailabilityBucket =
+    dow === 0 || dow === 6
+      ? 'weekend_anytime'
+      : hour < 12
+        ? 'weekday_morning'
+        : 'weekday_afternoon'
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return { bucket, iso_date: `${y}-${m}-${day}` }
 }
 
 interface CreateRepRequestResponse {
@@ -146,26 +146,29 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
         return
       }
 
-      const now = new Date()
-      let picks: Array<{ bucket: RepRequestAvailabilityBucket; iso_date: string }>
-      try {
-        picks = formData.availabilityBuckets.map((bucket) => ({
-          bucket,
-          iso_date: nextIsoDateForBucket(bucket, now),
-        }))
-      } catch (e) {
+      // Phase 2 — requested_visit_at is the canonical homeowner pick.
+      // visit_window_picks stays on the wire as a single-bucket
+      // synthesis for legacy rep-side reader back-compat (hephaestus
+      // server prefers requested_visit_at when both present per contract
+      // msg 1782434304254). Step 2 client-side gate already guarantees a
+      // future ISO string; this is a defensive bail.
+      if (!formData.requestedVisitAt) {
         setFormState({
           kind: 'paymentError',
-          reason: e instanceof Error ? e.message : 'Could not compute visit dates.',
+          reason: 'Pick a visit date and time before continuing.',
           canRetry: true,
           intentClientSecret: '',
         })
         return
       }
+      const picks: Array<{ bucket: RepRequestAvailabilityBucket; iso_date: string }> = [
+        synthesizeBucketFromDatetime(formData.requestedVisitAt),
+      ]
 
       const body = {
         address: parsed,
         contact_phone: formData.contactPhone,
+        requested_visit_at: formData.requestedVisitAt,
         visit_window_picks: picks,
         description: formData.description || undefined,
         access_notes: formData.accessNotes || undefined,

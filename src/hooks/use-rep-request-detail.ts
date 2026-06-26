@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import type {
   RepRequestActions,
+  RepRequestAppointmentStatus,
   RepRequestAvailabilityBucket,
   RepRequestChargeStatus,
   RepRequestDetail,
@@ -46,6 +47,12 @@ interface RepRequestRow {
     service_tz: string
     bucket_label: RepRequestAvailabilityBucket
   }>
+  // Phase 2 — mig 108 (hephaestus) adds these columns. NULL on rows
+  // created before mig 108 landed.
+  requested_visit_at: string | null
+  appointment_status: RepRequestAppointmentStatus | null
+  proposed_visit_at: string | null
+  reschedule_notes: string | null
   description: string | null
   access_notes: string | null
   assessment_notes: string | null
@@ -103,6 +110,10 @@ function mapRow(row: RepRequestRow): RepRequestDetail {
     contactName: row.homeowner?.name ?? '',
     contactPhone: row.contact_phone,
     requestedVisitTimes,
+    requestedVisitAt: row.requested_visit_at,
+    appointmentStatus: row.appointment_status,
+    proposedVisitAt: row.proposed_visit_at,
+    rescheduleNotes: row.reschedule_notes,
     accessNotes: row.access_notes,
     assessmentNotes: row.assessment_notes,
     photos,

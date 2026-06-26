@@ -138,7 +138,29 @@ export interface IntakeFormData {
   contactName: string
   contactPhone: string
   availabilityBuckets: RepRequestAvailabilityBucket[]
+  // Phase 2 intake redesign — explicit datetime picker per hephaestus
+  // contract msg 1782434304254. ISO 8601 datetime, must be in the future.
+  // Server validates (1) parseable ISO (2) future via 400
+  // invalid_requested_visit_at. availabilityBuckets stays populated as
+  // back-compat for legacy reader paths; the create-rep-request edge fn
+  // prefers requested_visit_at over visit_window_picks when both are sent.
+  requestedVisitAt?: string
   accessNotes?: string
+}
+
+// Phase 2 intake redesign — appointment status axis. Tracks the calendar
+// round-trip between homeowner pick + admin accept/reschedule. Orthogonal
+// to RepRequestStatus (lifecycle) and RepRequestChargeStatus (money). Mig
+// 108 (hephaestus) adds the column with a CHECK constraint.
+export type RepRequestAppointmentStatus =
+  | 'proposed'
+  | 'accepted'
+  | 'rescheduled'
+
+export const APPOINTMENT_STATUS_LABELS: Record<RepRequestAppointmentStatus, string> = {
+  proposed: 'Proposed by homeowner',
+  accepted: 'Accepted',
+  rescheduled: 'Counter-proposed by admin',
 }
 
 // ── Detail shape returned by useRepRequestDetail ────────────────────
@@ -160,6 +182,14 @@ export interface RepRequestDetail {
   contactName: string
   contactPhone: string
   requestedVisitTimes: RepRequestAvailabilityBucket[]
+  // Phase 2 — explicit homeowner-picked visit datetime (ISO 8601 string).
+  // Coexists with requestedVisitTimes for back-compat readers; new intakes
+  // populate both (bucket array is synthesized from the datetime for
+  // bucket-reader fallback). null on legacy rows pre-mig-108.
+  requestedVisitAt: string | null
+  appointmentStatus: RepRequestAppointmentStatus | null
+  proposedVisitAt: string | null
+  rescheduleNotes: string | null
   accessNotes: string | null
   assessmentNotes: string | null
   photos: Array<{ id: string; storagePath: string; uploadedAt: string }>

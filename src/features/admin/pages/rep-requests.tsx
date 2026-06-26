@@ -10,11 +10,14 @@
 // owns the 6 mutation paths (4 RLS-direct + 2 invoke per
 // hephaestus's commit-5 anchor bundle).
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { Inbox, MapPin, CheckCheck, XCircle, Hammer } from 'lucide-react'
+import { Inbox, MapPin, CheckCheck, XCircle, Hammer, CalendarClock, Check, CalendarX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/shared/page-header'
 import { useRepRequestQueueParams } from '@/hooks/use-rep-request-queue-params'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
@@ -22,11 +25,32 @@ import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
 import { useRepRequestsList, type RepRequestListRow } from '@/hooks/use-rep-requests-list'
 import { useReps } from '@/hooks/use-reps'
 import {
+  APPOINTMENT_STATUS_LABELS,
   STATUS_LABELS,
   STATUS_PILL_CLASSES,
+  type RepRequestDetail,
   type RepRequestStatus,
 } from '@/features/admin/rep-requests/rep-request-contract'
 import { cn } from '@/lib/utils'
+
+function formatVisitDatetime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function nowDatetimeLocalMin(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 // Admin status-advance next-state mapping. Mig 105 status-transition
 // guard enforces legality server-side; this function selects the one
@@ -324,12 +348,32 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
           </p>
         </div>
 
-        {/* TODO commit 5: photos grid, requested_visit_times pill row,
-            assessment notes editor for assigned rep. Backed by
-            detail.photos + detail.requestedVisitTimes once
-            useRepRequestDetail returns the real row. */}
+        {detail && (
+          <AppointmentBlock
+            detail={detail}
+            isAdmin
+            mutating={m.mutating}
+            onAccept={async () => {
+              const r = await m.updateAppointment({ action: 'accept' })
+              if (r.ok) await Promise.all([refetch(), refetchList()])
+            }}
+            onReschedule={async (proposedVisitAt, rescheduleNotes) => {
+              const r = await m.updateAppointment({
+                action: 'reschedule',
+                proposedVisitAt,
+                rescheduleNotes,
+              })
+              if (r.ok) await Promise.all([refetch(), refetchList()])
+              return r
+            }}
+          />
+        )}
+
+        {/* TODO commit 5: photos grid + assessment notes editor for
+            assigned rep. Backed by detail.photos once useRepRequestDetail
+            returns the real row. */}
         <div className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground text-center">
-          Photos, availability buckets, and assessment notes land in commit 5.
+          Photos + assessment notes land in commit 5.
         </div>
       </div>
 
@@ -418,5 +462,275 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
         )}
       </div>
     </Card>
+  )
+}
+
+// Phase 2 appointment block — homeowner-picked datetime + admin Accept |
+// Reschedule actions. Branches on appointment_status:
+//   null OR proposed  → "Requested by homeowner" + Accept | Reschedule actions
+//   accepted          → "Visit scheduled for ..." (read-only)
+//   rescheduled       → read-only "New time proposed: ..." with notes;
+//                       homeowner-accept arm paused per kratos msg
+//                       1782434876035 until hephaestus follow-up fn —
+//                       no dead-end CTA shown.
+// Legacy rows (requestedVisitAt=null pre-mig-108) collapse to a "no
+// datetime on file" notice with no actions.
+interface AppointmentBlockProps {
+  detail: RepRequestDetail
+  isAdmin: boolean
+  mutating: boolean
+  onAccept: () => Promise<void>
+  onReschedule: (
+    proposedVisitAt: string,
+    rescheduleNotes: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+}
+
+function AppointmentBlock({
+  detail,
+  isAdmin,
+  mutating,
+  onAccept,
+  onReschedule,
+}: AppointmentBlockProps) {
+  const [open, setOpen] = useState(false)
+  const status = detail.appointmentStatus
+  const requestedAt = detail.requestedVisitAt
+  const proposedAt = detail.proposedVisitAt
+  const notes = detail.rescheduleNotes
+
+  // Legacy row (no homeowner-picked datetime on file) — render-only notice.
+  if (!requestedAt && !proposedAt) {
+    return (
+      <div
+        className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground"
+        data-testid="admin-rep-requests-appointment-block"
+        data-appointment-status="legacy"
+      >
+        No homeowner-picked visit time on file (pre-Phase 2 row).
+      </div>
+    )
+  }
+
+  // Accepted — final read-only state. The visit is locked in.
+  if (status === 'accepted') {
+    return (
+      <div
+        className="rounded-lg border bg-emerald-50 border-emerald-200 p-3 text-sm dark:bg-emerald-950/30 dark:border-emerald-800"
+        data-testid="admin-rep-requests-appointment-block"
+        data-appointment-status="accepted"
+      >
+        <div className="flex items-start gap-2">
+          <CalendarClock className="h-4 w-4 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-emerald-800 dark:text-emerald-200">
+              Visit scheduled for {formatVisitDatetime(requestedAt)}
+            </p>
+            <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+              {APPOINTMENT_STATUS_LABELS.accepted}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Rescheduled — admin counter-proposed; homeowner-accept arm not yet
+  // wired (paused per kratos msg 1782434876035 pending hephaestus
+  // follow-up fn). Read-only display with the proposed time + the
+  // required notes the admin entered.
+  if (status === 'rescheduled') {
+    return (
+      <div
+        className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-sm dark:bg-amber-950/30 dark:border-amber-800"
+        data-testid="admin-rep-requests-appointment-block"
+        data-appointment-status="rescheduled"
+      >
+        <div className="flex items-start gap-2">
+          <CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+          <div className="space-y-1 min-w-0">
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              New time proposed: {formatVisitDatetime(proposedAt)}
+            </p>
+            {requestedAt && (
+              <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                Homeowner originally picked {formatVisitDatetime(requestedAt)}.
+              </p>
+            )}
+            {notes && (
+              <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                Admin notes: {notes}
+              </p>
+            )}
+            <p className="mt-1 text-xs italic text-amber-700/70 dark:text-amber-300/70">
+              Waiting for the homeowner to confirm.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Default — proposed (homeowner just picked). Admin can Accept or
+  // Reschedule. The reschedule modal collects the new proposed datetime
+  // + REQUIRED notes (empty submit blocked client-side).
+  return (
+    <div
+      className="rounded-lg border bg-muted/30 p-3 text-sm space-y-3"
+      data-testid="admin-rep-requests-appointment-block"
+      data-appointment-status={status ?? 'proposed'}
+    >
+      <div className="flex items-start gap-2">
+        <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <p className="font-medium">
+            Homeowner requested {formatVisitDatetime(requestedAt)}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {APPOINTMENT_STATUS_LABELS.proposed}
+          </p>
+        </div>
+      </div>
+      {isAdmin && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={mutating}
+            onClick={() => onAccept()}
+            data-testid="admin-rep-requests-appointment-accept-btn"
+          >
+            <Check className="h-3.5 w-3.5 mr-1" />
+            Accept time
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={mutating}
+            onClick={() => setOpen(true)}
+            data-testid="admin-rep-requests-appointment-reschedule-btn"
+          >
+            <CalendarX className="h-3.5 w-3.5 mr-1" />
+            Reschedule
+          </Button>
+        </div>
+      )}
+      {open && (
+        <RescheduleModal
+          defaultDatetime={requestedAt ?? ''}
+          mutating={mutating}
+          onSubmit={async (proposed, notesArg) => {
+            const r = await onReschedule(proposed, notesArg)
+            if (r.ok) setOpen(false)
+            return r
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+interface RescheduleModalProps {
+  defaultDatetime: string
+  mutating: boolean
+  onSubmit: (
+    proposedVisitAt: string,
+    rescheduleNotes: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  onCancel: () => void
+}
+
+function RescheduleModal({
+  defaultDatetime,
+  mutating,
+  onSubmit,
+  onCancel,
+}: RescheduleModalProps) {
+  // Seed with the homeowner-requested datetime so the admin only edits
+  // when truly counter-proposing. datetime-local wants YYYY-MM-DDTHH:MM
+  // local-tz; the ISO from the DB carries Z, so trim.
+  const initial = (() => {
+    if (!defaultDatetime) return ''
+    const d = new Date(defaultDatetime)
+    if (isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  })()
+  const [proposed, setProposed] = useState<string>(initial)
+  const [notes, setNotes] = useState<string>('')
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const minDatetime = nowDatetimeLocalMin()
+  const notesValid = notes.trim().length > 0
+  const proposedValid =
+    !!proposed && Number.isFinite(Date.parse(proposed)) && Date.parse(proposed) > Date.now()
+
+  return (
+    <div
+      className="rounded-lg border bg-background p-3 space-y-3"
+      data-testid="admin-rep-requests-reschedule-modal"
+    >
+      <p className="text-sm font-semibold">Counter-propose a visit time</p>
+      <div>
+        <Label htmlFor="rri-resched-when" className="text-xs">
+          New proposed datetime
+        </Label>
+        <Input
+          id="rri-resched-when"
+          type="datetime-local"
+          data-testid="admin-rep-requests-reschedule-datetime"
+          value={proposed}
+          min={minDatetime}
+          onChange={(e) => setProposed(e.target.value)}
+          className="mt-1"
+        />
+      </div>
+      <div>
+        <Label htmlFor="rri-resched-notes" className="text-xs">
+          Notes for the homeowner <span className="text-destructive">*required</span>
+        </Label>
+        <Textarea
+          id="rri-resched-notes"
+          data-testid="admin-rep-requests-reschedule-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Tell the homeowner why this time works better."
+          rows={3}
+          className="mt-1 resize-none"
+        />
+      </div>
+      {submitError && (
+        <p
+          role="alert"
+          className="text-xs text-destructive"
+          data-testid="admin-rep-requests-reschedule-error"
+        >
+          {submitError}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={mutating}
+          data-testid="admin-rep-requests-reschedule-cancel-btn"
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          disabled={mutating || !notesValid || !proposedValid}
+          onClick={async () => {
+            setSubmitError(null)
+            const r = await onSubmit(new Date(proposed).toISOString(), notes)
+            if (!r.ok) setSubmitError(r.error)
+          }}
+          data-testid="admin-rep-requests-reschedule-submit-btn"
+        >
+          Send counter-proposal
+        </Button>
+      </div>
+    </div>
   )
 }
