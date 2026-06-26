@@ -96,15 +96,16 @@ function todayMidnight(): Date {
   return d
 }
 
-// 15-min slots, 7:00 AM through 9:00 PM (last slot = 21:00 sharp).
-// Closed-low / closed-high on the hour → 57 entries; covers the homeowner-
-// visit window kratos sketched ("home visits"). Display in 12-hour
-// am/pm, value stays 24h HH:MM to keep joinVisitAt simple.
+// 15-min slots, 9:00 AM through 6:00 PM inclusive (per Rod msg
+// 1782447181436 "appointment times are only from 9 to 6"). Last slot is
+// 18:00 sharp. Display in 12-hour am/pm; value stays 24h HH:MM so
+// joinVisitAt + new Date(...) parsing in synthesizeBucketFromDatetime
+// stay simple.
 const TIME_SLOTS: { value: string; label: string }[] = (() => {
   const slots: { value: string; label: string }[] = []
-  for (let h = 7; h <= 21; h++) {
+  for (let h = 9; h <= 18; h++) {
     for (let m = 0; m < 60; m += 15) {
-      if (h === 21 && m > 0) break
+      if (h === 18 && m > 0) break
       const period = h >= 12 ? 'PM' : 'AM'
       const display12 = h % 12 === 0 ? 12 : h % 12
       const pad = (n: number) => String(n).padStart(2, '0')
@@ -115,6 +116,18 @@ const TIME_SLOTS: { value: string; label: string }[] = (() => {
     }
   }
   return slots
+})()
+
+// base-ui Select.Value resolves selected-item label via items registry,
+// but that registry can lag the trigger render under our Popup mount —
+// the result is "14:00" leaking through (the raw value) instead of
+// "2:00 PM". Pin the label render with an explicit value→label map fed
+// to Select.Value's children render-prop; deterministic regardless of
+// item-registration timing.
+const TIME_LABEL_BY_VALUE: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  for (const s of TIME_SLOTS) m[s.value] = s.label
+  return m
 })()
 
 export function RepRequestIntakePage() {
@@ -718,7 +731,13 @@ function Step2({
                   data-testid="rep-request-intake-visit-time"
                   className="mt-1.5 h-11 text-base"
                 >
-                  <SelectValue placeholder="Choose a time" />
+                  <SelectValue placeholder="Choose a time">
+                    {(v) =>
+                      typeof v === 'string' && v in TIME_LABEL_BY_VALUE
+                        ? TIME_LABEL_BY_VALUE[v]
+                        : 'Choose a time'
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
                   {TIME_SLOTS.map((s) => (
