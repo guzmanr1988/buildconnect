@@ -599,9 +599,26 @@ function Step2({
   contactEdit,
   setContactEdit,
 }: Step2Props) {
-  const { date: pickedDate, time: pickedTime } = splitVisitAt(
-    form.requestedVisitAt,
-  )
+  // Local pickedDate/pickedTime are independent slots so a half-pick
+  // (date OR time alone) is preserved across renders. Re-deriving them
+  // each render from form.requestedVisitAt dropped both picks: each
+  // half-pick composed against a derived-from-undefined other half, so
+  // joinVisitAt returned undefined and form.requestedVisitAt never
+  // moved → Next stayed gated forever even though the calendar showed
+  // the selected day. (Rod blocker live-test 2026-06-26.)
+  const initial = splitVisitAt(form.requestedVisitAt)
+  const [pickedDate, setPickedDate] = useState<Date | undefined>(initial.date)
+  const [pickedTime, setPickedTime] = useState<string | undefined>(initial.time)
+  // Sync upward whenever either half changes. joinVisitAt returns
+  // undefined when only one half is set, so the parent gate sees the
+  // partial state correctly and keeps Next disabled until both are set.
+  useEffect(() => {
+    const joined = joinVisitAt(pickedDate, pickedTime)
+    if (joined !== form.requestedVisitAt) {
+      setForm({ ...form, requestedVisitAt: joined })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedDate, pickedTime])
   const minDate = todayMidnight()
   const requestedVisitAt = form.requestedVisitAt
   const requestedVisitIsFuture =
@@ -703,12 +720,7 @@ function Step2({
             <Calendar
               mode="single"
               selected={pickedDate}
-              onSelect={(date) =>
-                setForm({
-                  ...form,
-                  requestedVisitAt: joinVisitAt(date, pickedTime),
-                })
-              }
+              onSelect={(date) => setPickedDate(date ?? undefined)}
               disabled={(date) => date < minDate}
               fromDate={minDate}
               className="[--cell-size:--spacing(10)]"
@@ -719,12 +731,7 @@ function Step2({
               <Label htmlFor="rri-visit-time">Time of day</Label>
               <Select
                 value={pickedTime}
-                onValueChange={(t) =>
-                  setForm({
-                    ...form,
-                    requestedVisitAt: joinVisitAt(pickedDate, t ?? undefined),
-                  })
-                }
+                onValueChange={(t) => setPickedTime(t ?? undefined)}
               >
                 <SelectTrigger
                   id="rri-visit-time"
