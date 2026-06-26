@@ -185,12 +185,24 @@ serve(async (req: Request) => {
   } else {
     // Create path: new Connected Account on Stripe + DB row.
     try {
+      // Item-4 (A) — proactive card_payouts request, vendor-only.
+      // Vendors have recurring payout outflow and the cost of a first-attach
+      // 'card_payouts_pending_verification' bounce is real, so we pay the
+      // proactive request at onboarding. Homeowners ride B2 lazy-on-first-
+      // attach in stripe-connect-external-account-attach — most never attach
+      // a debit card, so proactive request would burden them with incremental
+      // KYC for a feature they never engage. Per kratos contract-close + (A)
+      // provisional lean 1782459554421-kratos-80xln, awaiting Rod surface
+      // confirmation; gate is one-line-flippable if scope widens to homeowner.
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US', // kratos default — US-only preview
         email: callerEmail,
         capabilities: {
           transfers: { requested: true },
+          ...(body.partyType === 'vendor'
+            ? { card_payouts: { requested: true } }
+            : {}),
         },
         business_profile: body.businessName
           ? { name: body.businessName }
