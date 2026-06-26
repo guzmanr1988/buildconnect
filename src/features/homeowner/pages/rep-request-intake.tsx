@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Camera, Loader2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Camera, Loader2, Pencil, X } from 'lucide-react'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import type { StripeElementsOptions } from '@stripe/stripe-js'
 import { Card } from '@/components/ui/card'
@@ -10,9 +10,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 import { useRepRequestSubmit } from '@/hooks/use-rep-request-submit'
 import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
 import { stripePromise } from '@/lib/stripe-client'
+import type { SecondaryAddress } from '@/types'
 import type {
   IntakeFormData,
   RepRequestAvailabilityBucket,
@@ -48,16 +50,42 @@ const BUCKETS: RepRequestAvailabilityBucket[] = [
 
 export function RepRequestIntakePage() {
   const navigate = useNavigate()
+  const profile = useAuthStore((s) => s.profile)
   const [step, setStep] = useState<Step>(1)
-  const [form, setForm] = useState<IntakeFormData>({
-    address: '',
+  // Phase 1 intake redesign: prefill address + name + phone from the
+  // logged-in homeowner profile so the homeowner never types address
+  // (parseFlatAddress reject path can't fire on prefilled values we
+  // already trust the format of). Editable fields remain: project
+  // description, photos, availability buckets, access notes. Profile may
+  // be null on first render before AuthBootstrap hydrates — the effect
+  // below seeds empty slots once it lands without clobbering edits.
+  const [form, setForm] = useState<IntakeFormData>(() => ({
+    address: profile?.address ?? '',
     description: '',
     photos: [],
-    contactName: '',
-    contactPhone: '',
+    contactName: profile?.name ?? '',
+    contactPhone: profile?.phone ?? '',
     availabilityBuckets: [],
     accessNotes: '',
-  })
+  }))
+  const [addressEdit, setAddressEdit] = useState(false)
+  const [contactEdit, setContactEdit] = useState(false)
+
+  // Late-arriving profile hydrate. Auth-store rehydrates from the
+  // persisted Supabase session asynchronously; if the intake page mounts
+  // before that resolves, the initial useState ran with profile=null.
+  // Backfill empty slots only — don't clobber a value the homeowner
+  // already typed in Edit mode.
+  useEffect(() => {
+    if (!profile) return
+    setForm((prev) => ({
+      ...prev,
+      address: prev.address || profile.address || '',
+      contactName: prev.contactName || profile.name || '',
+      contactPhone: prev.contactPhone || profile.phone || '',
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id])
   // Helios's hook. submit() POSTs create-rep-request and transitions
   // formState idle → submitting → succeeded (with rep_request_id) +
   // populates clientSecret. retry() preserves the same client_secret
@@ -180,10 +208,22 @@ export function RepRequestIntakePage() {
             removePhoto={removePhoto}
             fileInput={fileInput}
             setAddressInputRef={setAddressInputRef}
+            profileAddress={profile?.address ?? ''}
+            additionalAddresses={profile?.additional_addresses ?? []}
+            addressEdit={addressEdit}
+            setAddressEdit={setAddressEdit}
           />
         )}
         {step === 2 && (
-          <Step2 form={form} setForm={setForm} toggleBucket={toggleBucket} />
+          <Step2
+            form={form}
+            setForm={setForm}
+            toggleBucket={toggleBucket}
+            profileName={profile?.name ?? ''}
+            profilePhone={profile?.phone ?? ''}
+            contactEdit={contactEdit}
+            setContactEdit={setContactEdit}
+          />
         )}
         {step === 3 && (
           <Step3
@@ -260,27 +300,145 @@ interface Step1Props {
   removePhoto: (i: number) => void
   fileInput: React.RefObject<HTMLInputElement | null>
   setAddressInputRef: (el: HTMLInputElement | null) => void
+  profileAddress: string
+  additionalAddresses: SecondaryAddress[]
+  addressEdit: boolean
+  setAddressEdit: (next: boolean) => void
 }
-function Step1({ form, setForm, addPhotos, removePhoto, fileInput, setAddressInputRef }: Step1Props) {
+function Step1({
+  form,
+  setForm,
+  addPhotos,
+  removePhoto,
+  fileInput,
+  setAddressInputRef,
+  profileAddress,
+  additionalAddresses,
+  addressEdit,
+  setAddressEdit,
+}: Step1Props) {
+  // additional_addresses with no state can't be handed to the edge fn
+  // (bucketToWindow needs state), so filter the dropdown to entries that
+  // have all four structured fields. Phase 1.5 can revisit a "complete
+  // missing state" affordance if Rod's homeowners ever store stateless
+  // secondaries — Donald Trump persona has additional_addresses=[].
+  const usableSecondaries = additionalAddresses.filter(
+    (a) => a.street && a.city && a.state && a.zip,
+  )
+
+  function selectSecondary(addr: SecondaryAddress) {
+    const state = addr.state ?? ''
+    const display = `${addr.street}, ${addr.city}, ${state} ${addr.zip}`.trim()
+    setForm({
+      ...form,
+      address: display,
+      structuredAddress: {
+        line1: addr.street,
+        city: addr.city,
+        state,
+        zip: addr.zip,
+      },
+    })
+    setAddressEdit(false)
+  }
+
   return (
     <div className="space-y-5">
       <div>
-        <Label htmlFor="rri-address">Project address</Label>
-        <Input
-          id="rri-address"
-          data-testid="rep-request-intake-address"
-          ref={setAddressInputRef}
-          value={form.address}
-          onChange={(e) =>
-            // Manual edit clears the structured address — the formatted string
-            // and the parsed parts can drift, so we drop structuredAddress and
-            // let the submit hook fall back to parseFlatAddress on confirm.
-            setForm({ ...form, address: e.target.value, structuredAddress: undefined })
-          }
-          placeholder="Start typing your address…"
-          className="mt-1.5"
-          autoComplete="off"
-        />
+        <Label>Project address</Label>
+        {addressEdit ? (
+          <div className="mt-1.5 space-y-2">
+            <Input
+              id="rri-address"
+              data-testid="rep-request-intake-address"
+              ref={setAddressInputRef}
+              value={form.address}
+              onChange={(e) =>
+                // Manual edit clears the structured address — the formatted
+                // string and the parsed parts can drift, so we drop
+                // structuredAddress and let the submit hook fall back to
+                // parseFlatAddress on confirm.
+                setForm({ ...form, address: e.target.value, structuredAddress: undefined })
+              }
+              placeholder="Start typing your address…"
+              autoComplete="off"
+            />
+            {profileAddress && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    address: profileAddress,
+                    structuredAddress: undefined,
+                  })
+                  setAddressEdit(false)
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                data-testid="rep-request-intake-address-reset-profile"
+              >
+                Use my home address ({profileAddress})
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className="mt-1.5 rounded-lg border bg-muted/30 px-4 py-3 flex items-start justify-between gap-3"
+            data-testid="rep-request-intake-address-readonly"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">
+                {form.address || '(no address on file)'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                From your profile
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAddressEdit(true)}
+              data-testid="rep-request-intake-address-edit-btn"
+              className="shrink-0"
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          </div>
+        )}
+        {usableSecondaries.length > 0 && (
+          <div className="mt-2">
+            <Label
+              htmlFor="rri-secondary-address"
+              className="text-xs text-muted-foreground"
+            >
+              Or pick another property:
+            </Label>
+            <select
+              id="rri-secondary-address"
+              data-testid="rep-request-intake-secondary-address"
+              onChange={(e) => {
+                const id = e.target.value
+                if (!id) return
+                const picked = usableSecondaries.find((a) => a.id === id)
+                if (picked) selectSecondary(picked)
+                e.target.value = ''
+              }}
+              defaultValue=""
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="" disabled>
+                Choose a saved address…
+              </option>
+              {usableSecondaries.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}: {a.street}, {a.city}, {a.state} {a.zip}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div>
         <Label htmlFor="rri-desc">What are you thinking? <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -344,31 +502,104 @@ interface Step2Props {
   form: IntakeFormData
   setForm: (next: IntakeFormData) => void
   toggleBucket: (b: RepRequestAvailabilityBucket) => void
+  profileName: string
+  profilePhone: string
+  contactEdit: boolean
+  setContactEdit: (next: boolean) => void
 }
-function Step2({ form, setForm, toggleBucket }: Step2Props) {
+function Step2({
+  form,
+  setForm,
+  toggleBucket,
+  profileName,
+  profilePhone,
+  contactEdit,
+  setContactEdit,
+}: Step2Props) {
   return (
     <div className="space-y-5">
       <div>
-        <Label htmlFor="rri-name">Your name</Label>
-        <Input
-          id="rri-name"
-          data-testid="rep-request-intake-name"
-          value={form.contactName}
-          onChange={(e) => setForm({ ...form, contactName: e.target.value })}
-          className="mt-1.5"
-        />
-      </div>
-      <div>
-        <Label htmlFor="rri-phone">Best phone number</Label>
-        <Input
-          id="rri-phone"
-          type="tel"
-          data-testid="rep-request-intake-phone"
-          value={form.contactPhone}
-          onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
-          placeholder="(555) 000-0000"
-          className="mt-1.5"
-        />
+        <Label>Contact</Label>
+        {contactEdit ? (
+          <div className="mt-1.5 space-y-3">
+            <div>
+              <Label htmlFor="rri-name" className="text-xs text-muted-foreground">
+                Your name
+              </Label>
+              <Input
+                id="rri-name"
+                data-testid="rep-request-intake-name"
+                value={form.contactName}
+                onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label
+                htmlFor="rri-phone"
+                className="text-xs text-muted-foreground"
+              >
+                Best phone number
+              </Label>
+              <Input
+                id="rri-phone"
+                type="tel"
+                data-testid="rep-request-intake-phone"
+                value={form.contactPhone}
+                onChange={(e) =>
+                  setForm({ ...form, contactPhone: e.target.value })
+                }
+                placeholder="(555) 000-0000"
+                className="mt-1"
+              />
+            </div>
+            {(profileName || profilePhone) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    contactName: profileName,
+                    contactPhone: profilePhone,
+                  })
+                  setContactEdit(false)
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                data-testid="rep-request-intake-contact-reset-profile"
+              >
+                Use my profile name & phone
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className="mt-1.5 rounded-lg border bg-muted/30 px-4 py-3 flex items-start justify-between gap-3"
+            data-testid="rep-request-intake-contact-readonly"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">
+                {form.contactName || '(no name on file)'}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                {form.contactPhone || '(no phone on file)'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                From your profile
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setContactEdit(true)}
+              data-testid="rep-request-intake-contact-edit-btn"
+              className="shrink-0"
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          </div>
+        )}
       </div>
       <div>
         <Label>Best times for a visit <span className="text-muted-foreground font-normal">(select all that apply)</span></Label>
