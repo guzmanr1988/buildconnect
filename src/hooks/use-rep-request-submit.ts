@@ -33,10 +33,15 @@ import type {
 
 export interface UseRepRequestSubmitResult {
   formState: SubmitFormState
-  submit: (formData: IntakeFormData) => Promise<void>
+  /** paymentMethodId is the homeowner's saved PM (purpose='service_pay_in')
+   *  the server attempts an off_session PaymentIntent confirm against. */
+  submit: (formData: IntakeFormData, paymentMethodId: string) => Promise<void>
   retry: () => Promise<void>
   /** Non-null once the create-rep-request edge fn returned a PaymentIntent
-   *  client_secret. Component reads this to mount <Elements>. */
+   *  client_secret. Surfaces for the post-create 3DS path
+   *  (stripe.handleNextAction). The webhook-INDEPENDENT confirm path lives
+   *  in use-charge-confirm — clientSecret is no longer used to mount an
+   *  Elements PaymentElement (Rod (a) — no PaymentElement on intake). */
   clientSecret: string | null
 }
 
@@ -114,21 +119,42 @@ function synthesizeBucketFromDatetime(iso: string): {
   return { bucket, iso_date: `${y}-${m}-${day}` }
 }
 
+// PR-5 #503 (29421cd) — create-rep-request additive contract:
+//   request body: + payment_method_id (string) — caller picks a saved PM
+//     from the homeowner's payment_methods list (purpose='service_pay_in')
+//     and the server attempts an off_session PaymentIntent confirmation
+//     against it inside the same INSERT round-trip.
+//   response: + payment_intent_status (string) — Stripe PI status after the
+//     server's off_session confirm attempt (succeeded | requires_action |
+//     processing | requires_payment_method | ...)
+//             + requires_action (boolean, optional) — convenience flag
+//     mirroring payment_intent_status === 'requires_action'; the FE keys
+//     the post-create branch on this:
+//       requires_action=true → caller drives stripe.handleNextAction(
+//         { clientSecret }) → re-calls confirmCharge(rep_request_id) via
+//         use-charge-confirm (PR-7 #505)
+//       requires_action=false → caller calls confirmCharge(rep_request_id)
+//         directly (server's off_session attempt already cleared OR is
+//         processing); PR-7 fn flips the row + reports the terminal state
 interface CreateRepRequestResponse {
   rep_request_id: string
   client_secret: string
   amount_cents: number
+  payment_intent_status: string
+  requires_action?: boolean
 }
 
 export function useRepRequestSubmit(): UseRepRequestSubmitResult {
   const [formState, setFormState] = useState<SubmitFormState>({ kind: 'idle' })
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [lastFormData, setLastFormData] = useState<IntakeFormData | null>(null)
+  const [lastPaymentMethodId, setLastPaymentMethodId] = useState<string | null>(null)
   const userId = useAuthStore((s) => s.session?.user.id ?? null)
 
   const doSubmit = useCallback(
-    async (formData: IntakeFormData) => {
+    async (formData: IntakeFormData, paymentMethodId: string) => {
       setLastFormData(formData)
+      setLastPaymentMethodId(paymentMethodId)
       setFormState({ kind: 'submitting' })
 
       // Prefer structured address from Google Places Autocomplete (pin-58 wire).
@@ -172,6 +198,11 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
         visit_window_picks: picks,
         description: formData.description || undefined,
         access_notes: formData.accessNotes || undefined,
+        // PR-5 #503 additive — server attempts off_session PI confirm against
+        // this PM during create. Response carries payment_intent_status +
+        // requires_action so the FE can branch into 3DS or skip-straight-to-
+        // PR-7-confirm without an Elements re-collect.
+        payment_method_id: paymentMethodId,
       }
 
       const { data, error } = await supabase.functions.invoke<CreateRepRequestResponse>(
@@ -189,7 +220,7 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
         return
       }
 
-      const { rep_request_id, client_secret } = data
+      const { rep_request_id, client_secret, payment_intent_status, requires_action } = data
       setClientSecret(client_secret)
 
       // Photo upload is best-effort post-INSERT. A failed upload does NOT
@@ -214,14 +245,19 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
         )
       }
 
-      setFormState({ kind: 'succeeded', repRequestId: rep_request_id })
+      setFormState({
+        kind: 'succeeded',
+        repRequestId: rep_request_id,
+        paymentIntentStatus: payment_intent_status,
+        requiresAction: requires_action === true,
+      })
     },
     [userId]
   )
 
   const submit = useCallback(
-    async (formData: IntakeFormData) => {
-      await doSubmit(formData)
+    async (formData: IntakeFormData, paymentMethodId: string) => {
+      await doSubmit(formData, paymentMethodId)
     },
     [doSubmit]
   )
@@ -229,16 +265,17 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
   const retry = useCallback(async () => {
     if (formState.kind !== 'paymentError') return
     // Empty client_secret → INSERT/PI.create failed pre-confirmation; re-POST
-    // the create endpoint with the cached form payload.
+    // the create endpoint with the cached form payload + PM.
     if (!formState.intentClientSecret) {
-      if (!lastFormData) return
-      await doSubmit(lastFormData)
+      if (!lastFormData || !lastPaymentMethodId) return
+      await doSubmit(lastFormData, lastPaymentMethodId)
       return
     }
     // Non-empty client_secret → PI exists; flip back to submitting so the
-    // component-side stripe.confirmPayment() can re-fire against the same PI.
+    // component-side post-create flow (3DS or sync confirm) can re-fire
+    // against the same PI.
     setFormState({ kind: 'submitting', intentClientSecret: formState.intentClientSecret })
-  }, [formState, lastFormData, doSubmit])
+  }, [formState, lastFormData, lastPaymentMethodId, doSubmit])
 
   return { formState, submit, retry, clientSecret }
 }

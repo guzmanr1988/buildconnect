@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Camera, Loader2, Pencil, X } from 'lucide-react'
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import type { StripeElementsOptions } from '@stripe/stripe-js'
+import { ArrowLeft, ArrowRight, Camera, CreditCard, Landmark, Loader2, Pencil, X } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,15 +17,29 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import { useRepRequestSubmit } from '@/hooks/use-rep-request-submit'
 import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
-import { stripePromise } from '@/lib/stripe-client'
+import {
+  useChargeConfirm,
+  type ChargeConfirmState,
+} from '@/features/homeowner/hooks/use-charge-confirm'
+import type { PaymentMethodListItem } from '@/features/homeowner/components/payment-methods-section'
 import type { SecondaryAddress } from '@/types'
 import type {
   IntakeFormData,
   SubmitFormState,
 } from '@/features/admin/rep-requests/rep-request-contract'
+
+const PAY_IN_PURPOSE = 'service_pay_in' as const
+const PAYMENT_METHODS_QUERY_KEY = ['payment_methods', PAY_IN_PURPOSE] as const
+
+interface ListResponseShape {
+  ok: boolean
+  payment_methods: PaymentMethodListItem[]
+  error?: string
+}
 
 // Same Google Maps key the roof flow uses (VITE_-baked at build time). When
 // missing, the autocomplete hook short-circuits to no-op and the input degrades
@@ -35,10 +48,13 @@ const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
 
 // Concierge Rep Request — 3-step homeowner intake.
 // Step 1 project info → Step 2 contact + availability → Step 3 review,
-// PaymentElement, confirmPayment. The submit hook owns the
-// create-rep-request POST (idle → submitting → succeeded); the
-// PaymentForm subcomponent owns the actual stripe.confirmPayment call
-// (mounted inside <Elements> so useStripe/useElements resolve).
+// Pay-with-saved-PM. The submit hook owns create-rep-request (POST +
+// off_session PI confirm against payment_method_id per PR-5 #503); the
+// webhook-INDEPENDENT confirm rail (PR-7 #505) lives in useChargeConfirm
+// and drives the post-create UX through its 6-case discriminated state.
+// No Stripe Elements PaymentElement mounts here (Rod (a) — pay button
+// charges the homeowner's saved profile PM; "Use a different card" links
+// out to /home/profile where they can switch the default).
 
 type Step = 1 | 2 | 3
 
@@ -172,12 +188,95 @@ export function RepRequestIntakePage() {
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
-  // Helios's hook. submit() POSTs create-rep-request and transitions
-  // formState idle → submitting → succeeded (with rep_request_id) +
-  // populates clientSecret. retry() preserves the same client_secret
-  // per athena §4.3.1 idempotency. confirmPayment is component-side.
+  // Helios's hook. submit(form, paymentMethodId) POSTs create-rep-request,
+  // attempts an off_session PI confirm against the saved PM server-side
+  // (PR-5 #503 / 29421cd), transitions formState idle → submitting →
+  // succeeded with paymentIntentStatus + requiresAction populated.
+  // clientSecret is surfaced for the 3DS handoff path; we no longer mount
+  // an Elements PaymentElement (Rod (a) — pay-with-saved-PM, no
+  // PaymentElement on intake). The webhook-INDEPENDENT confirm rail lives
+  // in useChargeConfirm (PR-7 #505 sync flip) — CAPTURE-A2 routing-around.
   const { formState, submit, retry, clientSecret } = useRepRequestSubmit()
+  const sessionToken = useAuthStore((s) => s.session?.access_token ?? null)
+  const chargeConfirm = useChargeConfirm()
   const fileInput = useRef<HTMLInputElement>(null)
+
+  // Default payment method (purpose='service_pay_in') — the PM the server
+  // attempts the off_session charge against. Gate on step===3 so we don't
+  // round-trip the list query on Step 1/2. The list call also confirms the
+  // PR-5 #503 / PR-3 #501 list fn surface is reachable before we let the
+  // homeowner press Pay; if the fetch fails, Step 3 renders an error inline
+  // instead of letting the Pay button 4xx silently.
+  const paymentMethodsQuery = useQuery({
+    queryKey: PAYMENT_METHODS_QUERY_KEY,
+    enabled: step === 3 && !!sessionToken,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke<unknown>(
+        'payment-method-list',
+        { body: { purpose: PAY_IN_PURPOSE } },
+      )
+      if (error) throw new Error(error.message)
+      if (!data || typeof data !== 'object') {
+        throw new Error('payment-method-list returned a non-object response.')
+      }
+      const obj = data as ListResponseShape
+      if (obj.ok === false) {
+        throw new Error(obj.error || 'payment-method-list returned ok:false.')
+      }
+      if (!Array.isArray(obj.payment_methods)) {
+        throw new Error('payment-method-list response missing payment_methods array.')
+      }
+      return obj.payment_methods
+    },
+  })
+  const defaultMethod = useMemo(() => {
+    const methods = paymentMethodsQuery.data ?? []
+    return methods.find((m) => m.is_default && m.status === 'active') ?? null
+  }, [paymentMethodsQuery.data])
+
+  // After create-rep-request settles into 'succeeded', drive the PR-7 #505
+  // sync confirm rail. Two branches off the create response:
+  //   requiresAction=true  → stripe.handleNextAction({ clientSecret }) → re-
+  //     call PR-7 confirm. Wired via useChargeConfirm.handleThreeDSecure.
+  //   requiresAction=false → PR-7 confirm directly. Server reads PI status
+  //     from Stripe (succeeded | processing | terminal failure), flips the
+  //     row, returns the 6-case discriminated union.
+  // Guard on chargeConfirm idle so the effect doesn't re-fire after the
+  // discriminator state lands.
+  useEffect(() => {
+    if (formState.kind !== 'succeeded') return
+    if (chargeConfirm.state.kind !== 'idle') return
+    if (formState.requiresAction && clientSecret) {
+      void chargeConfirm.handleThreeDSecure(formState.repRequestId, clientSecret)
+    } else {
+      void chargeConfirm.confirmCharge(formState.repRequestId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formState.kind])
+
+  // Inner-loop 3DS: PR-7 confirm may itself return requires_action (e.g.
+  // the original off_session attempt deferred 3DS to the FE). Escalate to
+  // handleThreeDSecure which drives stripe.handleNextAction + re-calls
+  // PR-7 confirm. Recursion depth is capped inside useChargeConfirm at
+  // MAX_3DS_PASSES=3 per kratos discipline msg 1782453014320.
+  useEffect(() => {
+    if (chargeConfirm.state.kind !== 'requires_action') return
+    if (formState.kind !== 'succeeded') return
+    void chargeConfirm.handleThreeDSecure(
+      formState.repRequestId,
+      chargeConfirm.state.clientSecret,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeConfirm.state.kind])
+
+  // Terminal 'paid' → navigate to the status page. The row flipped server-
+  // side via PR-7; the status page does its own fetch + tracker render.
+  useEffect(() => {
+    if (chargeConfirm.state.kind !== 'paid') return
+    if (formState.kind !== 'succeeded') return
+    navigate(`/home/rep-requests/${formState.repRequestId}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeConfirm.state.kind])
 
   // Google Places autocomplete on the Step1 address Input. onPlace writes the
   // canonical formatted_address into form.address (display string); onStructured
@@ -221,10 +320,10 @@ export function RepRequestIntakePage() {
     setForm({ ...form, photos: form.photos.filter((_, idx) => idx !== i) })
   }
 
-  // Footer right-button state machine. The Pay-$250 action moves
-  // INSIDE <Elements> once clientSecret arrives (useStripe needs the
-  // Elements provider scope), so the footer suppresses its own primary
-  // CTA in that window.
+  // Footer right-button state machine. The Pay-$250 action lives in the
+  // footer (no Elements PaymentElement — Rod (a)) and the post-create
+  // confirm rail (PR-7 #505 via useChargeConfirm) paints the button on
+  // the discriminated state.
   const footerRightButton = (() => {
     if (step < 3) {
       return (
@@ -237,7 +336,8 @@ export function RepRequestIntakePage() {
         </Button>
       )
     }
-    // Step 3 — branches on formState.
+    // Step 3 — branches on formState first, then on chargeConfirm.state
+    // once create has settled.
     if (formState.kind === 'submitting') {
       return (
         <Button disabled data-testid="rep-request-intake-pay-btn">
@@ -256,25 +356,124 @@ export function RepRequestIntakePage() {
         </Button>
       )
     }
-    if (formState.kind === 'succeeded' && clientSecret) {
-      // Suppress footer CTA — inline PaymentForm renders its own Pay
-      // button inside the Elements provider scope.
-      return null
+    if (formState.kind === 'succeeded') {
+      // Create succeeded; PR-7 confirm rail drives the button.
+      switch (chargeConfirm.state.kind) {
+        case 'idle':
+        case 'confirming':
+          return (
+            <Button disabled data-testid="rep-request-intake-pay-btn">
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Confirming payment…
+            </Button>
+          )
+        case 'requires_action':
+          return (
+            <Button disabled data-testid="rep-request-intake-pay-btn">
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Verifying with your bank…
+            </Button>
+          )
+        case 'processing':
+          return (
+            <Button
+              onClick={() => navigate(`/home/rep-requests/${formState.repRequestId}`)}
+              data-testid="rep-request-intake-view-status-btn"
+            >
+              View status
+            </Button>
+          )
+        case 'paid':
+          return (
+            <Button disabled data-testid="rep-request-intake-pay-btn">
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Redirecting…
+            </Button>
+          )
+        case 'requires_payment_method':
+          return (
+            <Button
+              onClick={() => navigate('/home/profile?pm=add')}
+              data-testid="rep-request-intake-add-pm-btn"
+            >
+              Use a different card
+            </Button>
+          )
+        case 'unacceptable':
+          return (
+            <Button
+              onClick={() => navigate(`/home/rep-requests/${formState.repRequestId}`)}
+              data-testid="rep-request-intake-view-status-btn"
+            >
+              View request
+            </Button>
+          )
+        case 'error':
+          return (
+            <Button
+              onClick={() => {
+                chargeConfirm.reset()
+                void chargeConfirm.confirmCharge(formState.repRequestId)
+              }}
+              data-testid="rep-request-intake-retry-confirm-btn"
+            >
+              Try Again
+            </Button>
+          )
+      }
     }
-    // idle — gather form clicks Confirm to fire submit().
+    // idle — pay button gated on default PM presence. No PM → CTA to
+    // /home/profile?pm=add (PaymentMethodsSection auto-opens the Add
+    // dialog on that query param) so the homeowner can drop a card and
+    // bounce back to intake.
+    if (paymentMethodsQuery.isLoading) {
+      return (
+        <Button disabled data-testid="rep-request-intake-pay-btn">
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Loading…
+        </Button>
+      )
+    }
+    if (paymentMethodsQuery.error) {
+      return (
+        <Button
+          onClick={() => paymentMethodsQuery.refetch()}
+          data-testid="rep-request-intake-pm-retry-btn"
+        >
+          Retry
+        </Button>
+      )
+    }
+    if (!defaultMethod) {
+      return (
+        <Button
+          onClick={() => navigate('/home/profile?pm=add')}
+          data-testid="rep-request-intake-add-pm-btn"
+        >
+          Add a payment method
+        </Button>
+      )
+    }
     return (
       <Button
-        onClick={() => submit(form)}
-        data-testid="rep-request-intake-confirm-btn"
+        onClick={() => submit(form, defaultMethod.id)}
+        data-testid="rep-request-intake-pay-btn"
       >
-        Confirm Details & Continue
+        Pay $250
       </Button>
     )
   })()
 
-  // Back button disabled while a create POST is in flight — going
-  // back mid-submit would leak the in-progress request.
-  const backDisabled = step === 3 && formState.kind === 'submitting'
+  // Back button disabled while a create POST is in flight OR while the
+  // post-create confirm rail is running — going back mid-flight would
+  // leak the in-progress request OR strand the homeowner mid-3DS.
+  const chargeInFlight =
+    formState.kind === 'succeeded' &&
+    (chargeConfirm.state.kind === 'idle' ||
+      chargeConfirm.state.kind === 'confirming' ||
+      chargeConfirm.state.kind === 'requires_action')
+  const backDisabled =
+    step === 3 && (formState.kind === 'submitting' || chargeInFlight)
 
   return (
     <motion.div
@@ -314,8 +513,14 @@ export function RepRequestIntakePage() {
           <Step3
             form={form}
             formState={formState}
-            clientSecret={clientSecret}
-            onPaid={(repRequestId) => navigate(`/home/rep-requests/${repRequestId}`)}
+            defaultMethod={defaultMethod}
+            paymentMethodsLoading={paymentMethodsQuery.isLoading}
+            paymentMethodsError={
+              paymentMethodsQuery.error instanceof Error
+                ? paymentMethodsQuery.error.message
+                : null
+            }
+            chargeConfirmState={chargeConfirm.state}
           />
         )}
 
@@ -797,14 +1002,33 @@ function Step2({
 interface Step3Props {
   form: IntakeFormData
   formState: SubmitFormState
-  clientSecret: string | null
-  onPaid: (repRequestId: string) => void
+  defaultMethod: PaymentMethodListItem | null
+  paymentMethodsLoading: boolean
+  paymentMethodsError: string | null
+  chargeConfirmState: ChargeConfirmState
 }
-function Step3({ form, formState, clientSecret, onPaid }: Step3Props) {
+
+function brandTitleCase(brand: string | null): string {
+  if (!brand) return 'Card'
+  return brand.charAt(0).toUpperCase() + brand.slice(1)
+}
+
+// Step 3 — review + pay surface. Rod (a): NO PaymentElement; the saved
+// default payment method (purpose='service_pay_in') is the charge target,
+// the Pay button (in the footer) drives create-rep-request +
+// useChargeConfirm. PR-7 #505's 6-case discriminated state lands here as
+// status copy; the Pay/Retry/View-status button stays in the footer so the
+// surface visually settles between the summary cards.
+function Step3({
+  form,
+  formState,
+  defaultMethod,
+  paymentMethodsLoading,
+  paymentMethodsError,
+  chargeConfirmState,
+}: Step3Props) {
   const isCreateError =
     formState.kind === 'paymentError' && !formState.intentClientSecret
-  const repRequestId =
-    formState.kind === 'succeeded' ? formState.repRequestId : null
 
   return (
     <div className="space-y-5">
@@ -858,131 +1082,209 @@ function Step3({ form, formState, clientSecret, onPaid }: Step3Props) {
         </p>
       </Card>
 
-      {/* Payment surface only mounts once the create-rep-request edge
-          fn has returned a clientSecret. Elements re-mounts cleanly if
-          the secret changes (e.g. retry path generates a new PI). */}
-      {clientSecret && repRequestId && (
-        <StripePaymentBlock
-          clientSecret={clientSecret}
-          repRequestId={repRequestId}
-          onPaid={onPaid}
-        />
-      )}
+      <PaymentSurface
+        defaultMethod={defaultMethod}
+        paymentMethodsLoading={paymentMethodsLoading}
+        paymentMethodsError={paymentMethodsError}
+        formState={formState}
+        chargeConfirmState={chargeConfirmState}
+      />
     </div>
   )
 }
 
-interface StripePaymentBlockProps {
-  clientSecret: string
-  repRequestId: string
-  onPaid: (repRequestId: string) => void
+interface PaymentSurfaceProps {
+  defaultMethod: PaymentMethodListItem | null
+  paymentMethodsLoading: boolean
+  paymentMethodsError: string | null
+  formState: SubmitFormState
+  chargeConfirmState: ChargeConfirmState
 }
-function StripePaymentBlock({ clientSecret, repRequestId, onPaid }: StripePaymentBlockProps) {
-  // clientSecret keys the Elements provider — when it changes, the
-  // provider re-mounts with a fresh PaymentIntent context. Theme stays
-  // neutral so the form blends with the surrounding Card surface.
-  const options: StripeElementsOptions = {
-    clientSecret,
-    appearance: { theme: 'stripe' },
+
+// Renders the "paying with X" card pre-submit, then the PR-7 confirm-rail
+// status copy post-submit. Action buttons live in the footer; this is
+// status-display-only so the visual hierarchy stays settled.
+function PaymentSurface({
+  defaultMethod,
+  paymentMethodsLoading,
+  paymentMethodsError,
+  formState,
+  chargeConfirmState,
+}: PaymentSurfaceProps) {
+  // Post-submit (formState.succeeded) the PR-7 confirm-rail state owns
+  // the surface — preempt the payment-method card.
+  if (formState.kind === 'succeeded') {
+    return (
+      <ChargeStatusCard chargeConfirmState={chargeConfirmState} />
+    )
   }
+
+  if (paymentMethodsLoading) {
+    return (
+      <Card
+        className="rounded-lg border-primary/20 p-4 text-sm flex items-center gap-2 text-muted-foreground"
+        data-testid="rep-request-intake-pm-loading"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading your saved payment methods…
+      </Card>
+    )
+  }
+
+  if (paymentMethodsError) {
+    return (
+      <Card
+        className="rounded-lg border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+        data-testid="rep-request-intake-pm-error"
+        role="alert"
+      >
+        Couldn't load your saved payment methods. {paymentMethodsError}
+      </Card>
+    )
+  }
+
+  if (!defaultMethod) {
+    return (
+      <Card
+        className="rounded-lg border-primary/20 p-4 text-sm space-y-2"
+        data-testid="rep-request-intake-pm-missing"
+      >
+        <p className="font-semibold">Add a payment method</p>
+        <p className="text-muted-foreground">
+          You don't have a saved card or bank yet. Add one to charge the $250
+          visit fee — we'll bring you back here when you're done.
+        </p>
+      </Card>
+    )
+  }
+
   return (
     <Card
-      className="rounded-lg border-primary/20 p-4 space-y-4"
-      data-testid="rep-request-intake-payment-block"
+      className="rounded-lg border-primary/20 p-4 text-sm space-y-2"
+      data-testid="rep-request-intake-pm-default"
     >
-      <p className="text-sm font-semibold">Payment</p>
-      <Elements stripe={stripePromise} options={options} key={clientSecret}>
-        <PaymentForm repRequestId={repRequestId} onPaid={onPaid} />
-      </Elements>
+      <p className="font-semibold">Paying with</p>
+      <div className="flex items-center gap-2.5">
+        {defaultMethod.kind === 'us_bank_account' ? (
+          <Landmark className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <CreditCard className="h-4 w-4 text-muted-foreground" />
+        )}
+        <span>
+          {defaultMethod.kind === 'us_bank_account'
+            ? defaultMethod.bank_name || 'Bank account'
+            : brandTitleCase(defaultMethod.brand)}{' '}
+          •••• {defaultMethod.last4}
+        </span>
+      </div>
+      <a
+        href="/home/profile"
+        className="inline-block text-xs text-primary underline-offset-2 hover:underline"
+        data-testid="rep-request-intake-pm-switch-link"
+      >
+        Use a different card
+      </a>
     </Card>
   )
 }
 
-interface PaymentFormProps {
-  repRequestId: string
-  onPaid: (repRequestId: string) => void
+interface ChargeStatusCardProps {
+  chargeConfirmState: ChargeConfirmState
 }
-function PaymentForm({ repRequestId, onPaid }: PaymentFormProps) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [paymentElementReady, setPaymentElementReady] = useState(false)
 
-  // Clear stale error on PaymentElement remount (e.g. after a retry
-  // that swaps the clientSecret).
-  useEffect(() => {
-    setError(null)
-  }, [repRequestId])
-
-  async function onPay() {
-    if (!stripe || !elements || confirming) return
-    setConfirming(true)
-    setError(null)
-
-    // return_url drives the 3DS / redirect-required path. For
-    // non-redirect cards, redirect:'if_required' keeps the homeowner
-    // on this page so we can navigate ourselves on success and
-    // surface the error inline on failure.
-    const returnUrl = `${window.location.origin}/home/rep-requests/${repRequestId}`
-    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: { return_url: returnUrl },
-      redirect: 'if_required',
-    })
-
-    if (confirmError) {
-      setError(confirmError.message ?? 'Payment failed — please try again.')
-      setConfirming(false)
-      return
-    }
-
-    // Non-redirect success path. succeeded | processing both progress
-    // the homeowner to the status page; the Stripe webhook eventually
-    // flips status=pending_payment → new + sends the email.
-    if (paymentIntent && (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing')) {
-      onPaid(repRequestId)
-      return
-    }
-
-    setError('Payment did not complete. Please try again.')
-    setConfirming(false)
-  }
-
-  return (
-    <div className="space-y-4">
-      <div data-testid="rep-request-intake-payment-element">
-        <PaymentElement
-          onReady={() => setPaymentElementReady(true)}
-          options={{ layout: 'tabs' }}
-        />
-      </div>
-      {error && (
-        <p
-          role="alert"
-          data-testid="rep-request-intake-payment-error"
-          className="text-sm text-destructive"
+function ChargeStatusCard({ chargeConfirmState }: ChargeStatusCardProps) {
+  switch (chargeConfirmState.kind) {
+    case 'idle':
+    case 'confirming':
+      return (
+        <Card
+          className="rounded-lg border-primary/20 p-4 text-sm flex items-center gap-2 text-muted-foreground"
+          data-testid="rep-request-intake-charge-confirming"
         >
-          {error}
-        </p>
-      )}
-      <Button
-        onClick={onPay}
-        disabled={!stripe || !elements || !paymentElementReady || confirming}
-        className="w-full"
-        data-testid="rep-request-intake-pay-btn"
-      >
-        {confirming ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Processing…
-          </>
-        ) : (
-          'Pay $250'
-        )}
-      </Button>
-    </div>
-  )
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Confirming your $250 payment with Stripe…
+        </Card>
+      )
+    case 'requires_action':
+      return (
+        <Card
+          className="rounded-lg border-primary/20 p-4 text-sm space-y-1.5"
+          data-testid="rep-request-intake-charge-3ds"
+        >
+          <p className="font-semibold flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Extra verification needed
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {chargeConfirmState.hint ||
+              'Your bank wants to confirm this charge. Complete the prompt to finish.'}
+          </p>
+        </Card>
+      )
+    case 'processing':
+      return (
+        <Card
+          className="rounded-lg border-primary/20 p-4 text-sm space-y-1.5"
+          data-testid="rep-request-intake-charge-processing"
+        >
+          <p className="font-semibold">We're processing your payment</p>
+          <p className="text-muted-foreground text-xs">
+            Bank transfers can take a few business days to clear. Your request
+            is saved — we'll email you when payment confirms.
+          </p>
+        </Card>
+      )
+    case 'paid':
+      return (
+        <Card
+          className="rounded-lg border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-200 space-y-1.5"
+          data-testid="rep-request-intake-charge-paid"
+        >
+          <p className="font-semibold">Payment confirmed</p>
+          <p className="text-xs">
+            We charged $
+            {(chargeConfirmState.amountCents / 100).toFixed(2)} — your rep
+            request is in. Redirecting you to your status page…
+          </p>
+        </Card>
+      )
+    case 'requires_payment_method':
+      return (
+        <Card
+          className="rounded-lg border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive space-y-1.5"
+          data-testid="rep-request-intake-charge-requires-pm"
+          role="alert"
+        >
+          <p className="font-semibold">Card was declined</p>
+          <p className="text-xs">{chargeConfirmState.reason}</p>
+        </Card>
+      )
+    case 'unacceptable':
+      return (
+        <Card
+          className="rounded-lg border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive space-y-1.5"
+          data-testid="rep-request-intake-charge-unacceptable"
+          role="alert"
+        >
+          <p className="font-semibold">Payment couldn't complete</p>
+          <p className="text-xs">
+            {chargeConfirmState.reason ||
+              `The payment is in an unrecoverable state (${chargeConfirmState.status}). Open your request to see options.`}
+          </p>
+        </Card>
+      )
+    case 'error':
+      return (
+        <Card
+          className="rounded-lg border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive space-y-1.5"
+          data-testid="rep-request-intake-charge-error"
+          role="alert"
+        >
+          <p className="font-semibold">Couldn't confirm payment</p>
+          <p className="text-xs">{chargeConfirmState.reason}</p>
+        </Card>
+      )
+  }
 }
 
 export default RepRequestIntakePage

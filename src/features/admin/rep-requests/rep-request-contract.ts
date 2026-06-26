@@ -99,15 +99,28 @@ export const STATUS_SYSTEM_BADGE: Partial<Record<RepRequestStatus, { label: stri
 // charge_failed appears HERE as kind='paymentError' (recoverable
 // retry path), not as a tracker step. shouldRenderTracker() is the
 // only consumer-facing way to ask "is the tracker visible yet".
+// succeeded carries paymentIntentStatus + requiresAction per PR-5 #503
+// (29421cd) additive contract: create-rep-request now attempts an
+// off_session PaymentIntent confirm against the caller-supplied
+// payment_method_id inside the same round-trip. The FE branches on
+// requiresAction to either (a) drive stripe.handleNextAction → re-call
+// PR-7 confirm, or (b) call PR-7 confirm directly (succeeded |
+// processing already settled server-side). The webhook is no longer the
+// FE's confirm path (CAPTURE-A2 routing-around).
 export type SubmitFormState =
   | { kind: 'idle' }
   | { kind: 'submitting'; intentClientSecret?: string }
   | { kind: 'paymentError'; reason: string; canRetry: true; intentClientSecret: string }
-  | { kind: 'succeeded'; repRequestId: string }
+  | {
+      kind: 'succeeded'
+      repRequestId: string
+      paymentIntentStatus: string
+      requiresAction: boolean
+    }
 
 export function shouldRenderTracker(
   s: SubmitFormState
-): s is { kind: 'succeeded'; repRequestId: string } {
+): s is { kind: 'succeeded'; repRequestId: string; paymentIntentStatus: string; requiresAction: boolean } {
   return s.kind === 'succeeded'
 }
 

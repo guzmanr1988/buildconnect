@@ -165,6 +165,18 @@ export function PaymentMethodsSection() {
     },
   })
 
+  // Concierge "Request a Rep" Step-3 → "/home/profile?pm=add" CTA when the
+  // homeowner has no saved PM yet. Auto-open the Add dialog so they can drop
+  // a card and bounce back to intake. Strip the query param so a refresh
+  // doesn't reopen the dialog.
+  useEffect(() => {
+    if (searchParams.get('pm') !== 'add') return
+    setAddDialogOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('pm')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
   // Handle the post-confirmSetup redirect: the return_url is /home/profile
   // ?pm=added. Stripe also appends setup_intent + redirect_status query
   // params. We invalidate the list query (the webhook is the canonical
@@ -595,17 +607,43 @@ function SetupFormInner({ kind }: { kind: UIKind }) {
         return
       }
 
-      // Inline-success branch (no redirect needed). The webhook will write
-      // the row server-side; nudge the user back to the profile so the
-      // section refetches. We piggy-back on the same ?pm=added query the
-      // redirect path uses so the success handler is single-source.
-      if (setupIntent.status === 'succeeded' || setupIntent.status === 'processing') {
-        window.location.assign(returnUrl)
+      if (setupIntent.status !== 'succeeded' && setupIntent.status !== 'processing') {
+        setError(`Unexpected SetupIntent status: ${setupIntent.status}`)
+        setSubmitting(false)
         return
       }
 
-      setError(`Unexpected SetupIntent status: ${setupIntent.status}`)
-      setSubmitting(false)
+      // Webhook-INDEPENDENT sync-confirm: call stripe-payment-method-finalize
+      // (PR-6 #504 / 22f2069 — purpose union now admits 'service_pay_in')
+      // so the payment_methods row is written server-side BEFORE we redirect.
+      // CAPTURE-A2 (Supabase CF intercepts Stripe webhooks → llybxug) means
+      // the setup_intent.succeeded webhook never runs on prod, so we cannot
+      // wait for it. Sync-confirm is the load-bearing rail; the webhook (if
+      // it ever does reach the fn) is idempotent belt-and-suspenders only.
+      const { data: finalizeData, error: finalizeError } = await supabase.functions.invoke<{
+        ok: boolean
+        kind?: 'card' | 'us_bank_account'
+        status?: 'active' | 'pending_verification'
+        last4?: string
+        brand?: string
+        bank_name?: string
+        verification_method?: 'financial_connections' | 'microdeposits'
+        error?: string
+      }>('stripe-payment-method-finalize', {
+        body: { setup_intent_id: setupIntent.id, purpose: PAY_IN_PURPOSE },
+      })
+
+      if (finalizeError || !finalizeData?.ok) {
+        setError(
+          finalizeError?.message ||
+            finalizeData?.error ||
+            'Failed to save payment method on server.',
+        )
+        setSubmitting(false)
+        return
+      }
+
+      window.location.assign(returnUrl)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setSubmitting(false)
