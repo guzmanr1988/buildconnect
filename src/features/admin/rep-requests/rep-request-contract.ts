@@ -194,6 +194,7 @@ export interface RepRequestDetail {
   description: string | null
   contactName: string
   contactPhone: string
+  contactEmail: string
   requestedVisitTimes: RepRequestAvailabilityBucket[]
   // Phase 2 — explicit homeowner-picked visit datetime (ISO 8601 string).
   // Coexists with requestedVisitTimes for back-compat readers; new intakes

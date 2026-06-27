@@ -11,8 +11,9 @@
 // hephaestus's commit-5 anchor bundle).
 
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
-import { Inbox, MapPin, CheckCheck, XCircle, Hammer, CalendarClock, Check, CalendarX } from 'lucide-react'
+import { Inbox, Mail, MapPin, Phone, CheckCheck, XCircle, Hammer, CalendarClock, Check, CalendarX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -287,6 +288,9 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
   const row = detail
     ? {
         homeowner: detail.contactName || selectedRow?.homeownerName || '',
+        homeownerId: detail.homeownerId,
+        contactPhone: detail.contactPhone,
+        contactEmail: detail.contactEmail,
         address: detail.address,
         description: detail.description ?? '',
         status: detail.status,
@@ -320,11 +324,47 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-bold font-heading truncate">{row.description || '(no description)'}</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground truncate">{row.homeowner}</p>
+            {row.homeowner ? (
+              row.homeownerId ? (
+                <Link
+                  to={`/admin/homeowners/${row.homeownerId}`}
+                  data-testid="admin-rep-requests-detail-homeowner-link"
+                  className="mt-0.5 block text-sm text-primary hover:underline truncate"
+                >
+                  {row.homeowner}
+                </Link>
+              ) : (
+                <p className="mt-0.5 text-sm text-muted-foreground truncate">{row.homeowner}</p>
+              )
+            ) : null}
             <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1 truncate">
               <MapPin className="h-3 w-3" />
               {row.address}
             </p>
+            {row.contactPhone ? (
+              <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1 truncate">
+                <Phone className="h-3 w-3" />
+                <a
+                  href={`tel:${row.contactPhone}`}
+                  data-testid="admin-rep-requests-detail-phone"
+                  className="hover:text-foreground hover:underline"
+                >
+                  {row.contactPhone}
+                </a>
+              </p>
+            ) : null}
+            {row.contactEmail ? (
+              <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1 truncate">
+                <Mail className="h-3 w-3" />
+                <a
+                  href={`mailto:${row.contactEmail}`}
+                  data-testid="admin-rep-requests-detail-email"
+                  className="hover:text-foreground hover:underline"
+                >
+                  {row.contactEmail}
+                </a>
+              </p>
+            ) : null}
           </div>
           <span
             data-testid="admin-rep-requests-detail-status-pill"
@@ -369,12 +409,6 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
           />
         )}
 
-        {/* TODO commit 5: photos grid + assessment notes editor for
-            assigned rep. Backed by detail.photos once useRepRequestDetail
-            returns the real row. */}
-        <div className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground text-center">
-          Photos + assessment notes land in commit 5.
-        </div>
       </div>
 
       <div className="p-3 border-t bg-background flex flex-wrap gap-2 justify-end items-center">

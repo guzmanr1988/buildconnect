@@ -65,7 +65,7 @@ interface RepRequestRow {
   created_at: string
   updated_at: string
   photos: Array<{ id: string; storage_path: string; created_at: string }> | null
-  homeowner: { name: string | null } | null
+  homeowner: { name: string | null; email: string | null } | null
 }
 
 const TERMINAL_STATUSES: ReadonlySet<RepRequestStatus> = new Set<RepRequestStatus>([
@@ -109,6 +109,7 @@ function mapRow(row: RepRequestRow): RepRequestDetail {
     description: row.description,
     contactName: row.homeowner?.name ?? '',
     contactPhone: row.contact_phone,
+    contactEmail: row.homeowner?.email ?? '',
     requestedVisitTimes,
     requestedVisitAt: row.requested_visit_at,
     appointmentStatus: row.appointment_status,
@@ -189,7 +190,7 @@ export function useRepRequestDetail(
       const { data, error } = await supabase
         .from('rep_requests')
         .select(
-          '*, photos:rep_request_photos(id, storage_path, created_at), homeowner:profiles!homeowner_id(name)'
+          '*, photos:rep_request_photos(id, storage_path, created_at), homeowner:profiles!homeowner_id(name, email)'
         )
         .eq('id', repRequestId)
         .maybeSingle()
