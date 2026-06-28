@@ -147,6 +147,13 @@ export interface IntakeFormData {
     zip: string
   }
   description?: string
+  // Phase 3 intake — homeowner-selected project-type tiles (multi-select).
+  // FE-only this pin: at submit time, use-rep-request-submit prepends
+  // "[Project Types: A, B] " onto description before posting. Follow-on
+  // pin will lift this to a real wire-level project_types column (hephaestus
+  // mig + create-rep-request edge fn passthrough) without changing the FE
+  // shape — the form already captures the array.
+  projectTypes: string[]
   photos: File[]
   contactName: string
   contactPhone: string

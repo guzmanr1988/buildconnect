@@ -2,7 +2,28 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Camera, CreditCard, Landmark, Loader2, Pencil, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bath,
+  Camera,
+  Check,
+  ChefHat,
+  CreditCard,
+  Droplets,
+  Fence,
+  Flower2,
+  Hammer,
+  Home,
+  Landmark,
+  Loader2,
+  PaintBucket,
+  Pencil,
+  SquareSquare,
+  ThermometerSun,
+  Waves,
+  X,
+} from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -160,6 +181,7 @@ export function RepRequestIntakePage() {
   const [form, setForm] = useState<IntakeFormData>(() => ({
     address: profile?.address ?? '',
     description: '',
+    projectTypes: [],
     photos: [],
     contactName: profile?.name ?? '',
     contactPhone: profile?.phone ?? '',
@@ -304,7 +326,11 @@ export function RepRequestIntakePage() {
       setForm((prev) => ({ ...prev, structuredAddress: parts })),
   )
 
-  const step1Valid = form.address.trim().length > 0
+  // Phase 3 intake — Step 1 requires at least one project-type tile in
+  // addition to address. "Other" is one of the tiles so no homeowner can
+  // get trapped; the Notes box below is optional.
+  const step1Valid =
+    form.address.trim().length > 0 && form.projectTypes.length > 0
   // Step 2 valid iff contact present AND a future requested_visit_at is set.
   // Future check is client-side belt; server still validates via 400
   // invalid_requested_visit_at.
@@ -595,6 +621,30 @@ function StepHeader({ step }: { step: Step }) {
   )
 }
 
+// Phase 3 intake — South Florida home-service project-type tiles. Tile
+// label is the source of truth that ships into the description prefix
+// (use-rep-request-submit joins them as "[Project Types: A, B] "), so the
+// strings are user-facing AND wire-facing today. When the follow-on pin
+// lifts this to body.project_types + a real DB column, these become the
+// canonical category vocabulary — keep them stable.
+const PROJECT_TYPE_TILES: ReadonlyArray<{
+  label: string
+  Icon: React.ComponentType<{ className?: string }>
+}> = [
+  { label: 'Pool', Icon: Waves },
+  { label: 'Roof', Icon: Home },
+  { label: 'Kitchen Remodel', Icon: ChefHat },
+  { label: 'Bathroom Remodel', Icon: Bath },
+  { label: 'Flooring', Icon: SquareSquare },
+  { label: 'Painting', Icon: PaintBucket },
+  { label: 'Impact Windows & Doors', Icon: Hammer },
+  { label: 'HVAC', Icon: ThermometerSun },
+  { label: 'Pavers & Concrete', Icon: Droplets },
+  { label: 'Fence', Icon: Fence },
+  { label: 'Landscaping', Icon: Flower2 },
+  { label: 'Other', Icon: Pencil },
+]
+
 interface Step1Props {
   form: IntakeFormData
   setForm: (next: IntakeFormData) => void
@@ -743,16 +793,55 @@ function Step1({
         )}
       </div>
       <div>
-        <Label htmlFor="rri-desc">What are you thinking? <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <Textarea
-          id="rri-desc"
-          data-testid="rep-request-intake-description"
-          value={form.description ?? ''}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Describe the project — what you want, rough scope, anything we should know."
-          rows={4}
-          className="mt-1.5 resize-none"
-        />
+        <Label>
+          What kind of project?{' '}
+          <span className="text-muted-foreground font-normal">
+            (pick one or more)
+          </span>
+        </Label>
+        <div
+          className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"
+          role="group"
+          aria-label="Project type"
+          data-testid="rep-request-intake-project-type-grid"
+        >
+          {PROJECT_TYPE_TILES.map(({ label, Icon }) => {
+            const selected = form.projectTypes.includes(label)
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={selected}
+                data-testid="rep-request-intake-project-type-tile"
+                data-project-type={label}
+                data-selected={selected ? 'true' : 'false'}
+                onClick={() => {
+                  const next = selected
+                    ? form.projectTypes.filter((t) => t !== label)
+                    : [...form.projectTypes, label]
+                  setForm({ ...form, projectTypes: next })
+                }}
+                className={cn(
+                  'relative aspect-square rounded-lg border bg-muted/30 flex flex-col items-center justify-center gap-1.5 text-xs sm:text-sm font-medium text-center px-2 transition-colors',
+                  'hover:border-primary/50 hover:bg-primary/5',
+                  selected &&
+                    'border-primary ring-2 ring-primary/40 bg-primary/10 text-primary',
+                )}
+              >
+                {selected && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1.5 right-1.5 rounded-full bg-primary text-primary-foreground h-5 w-5 flex items-center justify-center shadow-sm"
+                  >
+                    <Check className="h-3 w-3" />
+                  </span>
+                )}
+                <Icon className="h-6 w-6" />
+                <span className="leading-tight">{label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
       <div>
         <Label>Optional photos <span className="text-muted-foreground font-normal">(up to {MAX_PHOTOS})</span></Label>
@@ -794,6 +883,21 @@ function Step1({
           multiple
           className="hidden"
           onChange={(e) => addPhotos(e.target.files)}
+        />
+      </div>
+      <div>
+        <Label htmlFor="rri-desc">
+          Notes / Message{' '}
+          <span className="text-muted-foreground font-normal">(optional)</span>
+        </Label>
+        <Textarea
+          id="rri-desc"
+          data-testid="rep-request-intake-description"
+          value={form.description ?? ''}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          placeholder="Anything else you want to tell us? (optional)"
+          rows={4}
+          className="mt-1.5 resize-none"
         />
       </div>
     </div>

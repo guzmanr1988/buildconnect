@@ -191,12 +191,23 @@ export function useRepRequestSubmit(): UseRepRequestSubmitResult {
         synthesizeBucketFromDatetime(formData.requestedVisitAt),
       ]
 
+      // Phase 3 intake — FE-only project-type carry-through. Tiles are not yet
+      // a real wire column; prepend "[Project Types: A, B] " to description so
+      // the admin queue + rep readers see the category signal today. Follow-on
+      // pin lifts this to body.project_types + a real DB column (hephaestus
+      // mig) and drops the prefix; the FE form shape (projectTypes: string[])
+      // already matches that future wire field so the swap is a single line.
+      const notes = (formData.description ?? '').trim()
+      const description = formData.projectTypes.length > 0
+        ? `[Project Types: ${formData.projectTypes.join(', ')}]${notes ? ` ${notes}` : ''}`
+        : (notes || undefined)
+
       const body = {
         address: parsed,
         contact_phone: formData.contactPhone,
         requested_visit_at: formData.requestedVisitAt,
         visit_window_picks: picks,
-        description: formData.description || undefined,
+        description,
         access_notes: formData.accessNotes || undefined,
         // PR-5 #503 additive — server attempts off_session PI confirm against
         // this PM during create. Response carries payment_intent_status +
