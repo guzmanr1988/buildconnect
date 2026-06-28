@@ -81,6 +81,20 @@ function isNavGroup(item: NavEntry): item is NavGroup {
   return 'children' in item
 }
 
+// Rod 2026-06-28: selecting a row on /admin/rep-requests was firing the
+// admin-shell page-swap transition because location.pathname changes
+// from /admin/rep-requests to /admin/rep-requests/{id}. Collapse the
+// god-view queue + its detail-pin variants to one stable key so list-
+// row selection does not re-trigger AnimatePresence. /admin/rep-requests/mine
+// is a separate page and intentionally not collapsed here (scoped to the
+// god-view selection transition only per kratos dispatch).
+function pageAnimateKey(pathname: string): string {
+  if (pathname === '/admin/rep-requests') return '/admin/rep-requests'
+  const m = /^\/admin\/rep-requests\/([^/]+)$/.exec(pathname)
+  if (m && m[1] !== 'mine') return '/admin/rep-requests'
+  return pathname
+}
+
 // admin_employee = FULL admin parity (Rod final 2026-06-25 via kratos
 // msg 1782411375480). No FE-side scoping at this layer — admin and
 // admin_employee render the same shell. Privilege-escalation HOLD lives
@@ -422,7 +436,7 @@ export function AdminLayout() {
         <main className={cn(isMobile ? 'px-4 pt-24 pb-4' : 'p-6')}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              key={pageAnimateKey(location.pathname)}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
