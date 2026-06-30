@@ -491,7 +491,7 @@ export function HomeownerHome() {
           >
             <div className="flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-primary" />
-              <span className="text-sm font-semibold">Have a Rep help me</span>
+              <span className="text-sm font-semibold">Have a buildconnect rep help me build my project.</span>
             </div>
             <p className="text-xs text-muted-foreground">
               A concierge rep will visit, scope the project, and build it for you. $250 visit fee.
