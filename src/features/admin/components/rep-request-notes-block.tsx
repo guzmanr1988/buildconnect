@@ -63,7 +63,7 @@ function formatTimestamp(iso: string): { abs: string; rel: string } {
 }
 
 export function NotesBlock({ repRequestId, viewerRole, addNote }: NotesBlockProps) {
-  const { notes, isLoading, error } = useRepRequestNotes(repRequestId)
+  const { notes, isLoading, error, refetch } = useRepRequestNotes(repRequestId)
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -80,6 +80,12 @@ export function NotesBlock({ repRequestId, viewerRole, addNote }: NotesBlockProp
     setSubmitting(false)
     if (r.ok) {
       setDraft('')
+      // Belt-and-suspenders refresh: the Realtime INSERT subscription in
+      // useRepRequestNotes already invalidates this query on echo, but
+      // the explicit refetch closes the gap between the edge fn 200 and
+      // the Realtime broadcast so the note lands in the thread visibly
+      // synchronous with the Add button release.
+      void refetch()
     } else {
       setSubmitError(r.error)
     }

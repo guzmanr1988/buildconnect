@@ -413,12 +413,17 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
         )}
 
         {selectedId && (
-          // V1: presentation + read-only thread. addNote prop intentionally
-          // omitted — write path waits on the add-rep-request-note edge fn
-          // contract (held by kratos until Rod resolves the add-only-vs-
-          // editable fork). The textarea + Add button light up zero-diff
-          // once the parent passes addNote here.
-          <NotesBlock repRequestId={selectedId} viewerRole={viewerRole} />
+          // V1 LIVE — presentation + read-write thread. addNote wired to
+          // useRepRequestActions.addNote, which routes to the
+          // add-rep-request-note service-role edge fn (hephaestus contract
+          // msg 1782836746462). Rows land in rep_request_events
+          // (event_type='note_added') and are append-only by the mig 102
+          // trigger — no edit/delete path even with service role.
+          <NotesBlock
+            repRequestId={selectedId}
+            viewerRole={viewerRole}
+            addNote={m.addNote}
+          />
         )}
 
       </div>

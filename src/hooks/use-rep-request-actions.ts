@@ -78,6 +78,13 @@ export interface UseRepRequestActionsResult {
    *  update-rep-request-appointment edge fn (hephaestus contract msg
    *  1782434304254). */
   updateAppointment: (payload: UpdateAppointmentPayload) => Promise<ActionResult>
+  /** Admin/admin_employee — append an immutable note to the rep_request_events
+   *  log via the add-rep-request-note service-role edge fn (hephaestus contract
+   *  msg 1782836746462). Body: { rep_request_id, note }; server trims + bounds
+   *  1..2000 chars + role-gates admin/admin_employee + 404-checks rep_request.
+   *  Append-only by trigger (mig 102) — edits/deletes impossible even with
+   *  service-role. */
+  addNote: (text: string) => Promise<ActionResult>
   /** True while any mutation is in flight — disables action buttons. */
   mutating: boolean
 }
@@ -204,6 +211,26 @@ export function useRepRequestActions(
     [wrap, repRequestId],
   )
 
+  // Admin notes — append-only thread on /admin/rep-requests/:id detail
+  // pane. Routes via add-rep-request-note (hephaestus contract msg
+  // 1782836746462, fn ezbr 0dba3fc7). Server trims + 1..2000 bounds +
+  // role-gates admin/admin_employee + 404-checks rep_request. Note row
+  // is INSERTed into rep_request_events (event_type='note_added') and
+  // becomes immutable via the trigger from mig 102. The dedicated
+  // Realtime channel in useRepRequestNotes picks up the INSERT and
+  // refetches the thread; NotesBlock also fires its own refetch() on
+  // success for zero-latency optimism.
+  const addNote = useCallback(
+    (text: string) =>
+      wrap(async () => {
+        const { error } = await supabase.functions.invoke('add-rep-request-note', {
+          body: { rep_request_id: repRequestId, note: text },
+        })
+        return error ? { ok: false, error: error.message } : { ok: true }
+      }),
+    [wrap, repRequestId],
+  )
+
   const buildProjectOnBehalf = useCallback(
     (payload: BuildProjectOnBehalfPayload) =>
       wrap<BuildProjectResult>(async () => {
@@ -236,6 +263,7 @@ export function useRepRequestActions(
     markProjectReady,
     buildProjectOnBehalf,
     updateAppointment,
+    addNote,
     mutating,
   }
 }
