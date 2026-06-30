@@ -25,6 +25,8 @@ import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
 import { useRepRequestActions } from '@/hooks/use-rep-request-actions'
 import { useRepRequestsList, type RepRequestListRow } from '@/hooks/use-rep-requests-list'
 import { useReps } from '@/hooks/use-reps'
+import { NotesBlock } from '@/features/admin/components/rep-request-notes-block'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   APPOINTMENT_STATUS_LABELS,
   STATUS_LABELS,
@@ -268,6 +270,7 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
   const { detail, actions, isLoading, refetch } = useRepRequestDetail(selectedId)
   const m = useRepRequestActions(selectedId)
   const { reps } = useReps()
+  const viewerRole = useAuthStore((s) => s.role)
 
   if (!selectedId) {
     return (
@@ -407,6 +410,15 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
               return r
             }}
           />
+        )}
+
+        {selectedId && (
+          // V1: presentation + read-only thread. addNote prop intentionally
+          // omitted — write path waits on the add-rep-request-note edge fn
+          // contract (held by kratos until Rod resolves the add-only-vs-
+          // editable fork). The textarea + Add button light up zero-diff
+          // once the parent passes addNote here.
+          <NotesBlock repRequestId={selectedId} viewerRole={viewerRole} />
         )}
 
       </div>
