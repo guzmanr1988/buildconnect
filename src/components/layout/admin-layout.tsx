@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy, Gift, Briefcase } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy, Gift, Briefcase, Calendar as CalendarIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -48,7 +48,18 @@ const navItems: NavEntry[] = [
   // gated by REP_ONLY_ROUTES so admin's default sidebar doesn't show
   // duplicate Rep Requests entries; rep's sidebar shows ONLY the
   // /mine entry via REP_ALLOWED_ROUTES (positive list).
-  { to: '/admin/rep-requests', icon: Briefcase, label: 'Rep Requests' },
+  // pin-75 — Rep Requests is now a children-group with a nested 'Visit
+  // Calendar' sub-route under it (Banking dropdown pattern, kratos
+  // 2026-06-30). Parent click still navigates to /admin/rep-requests;
+  // chevron toggles expand to surface the calendar child.
+  {
+    to: '/admin/rep-requests',
+    icon: Briefcase,
+    label: 'Rep Requests',
+    children: [
+      { to: '/admin/rep-requests/calendar', icon: CalendarIcon, label: 'Visit Calendar' },
+    ],
+  },
   { to: '/admin/rep-requests/mine', icon: Briefcase, label: 'Rep Requests' },
   // Ship #314 — BuildConnect contract review queue. Cross-functional
   // surface (vendor + homeowner + financial all touch) so top-level
@@ -91,7 +102,10 @@ function isNavGroup(item: NavEntry): item is NavGroup {
 function pageAnimateKey(pathname: string): string {
   if (pathname === '/admin/rep-requests') return '/admin/rep-requests'
   const m = /^\/admin\/rep-requests\/([^/]+)$/.exec(pathname)
-  if (m && m[1] !== 'mine') return '/admin/rep-requests'
+  // 'mine' and 'calendar' are sibling pages, NOT detail-pins on the
+  // god-view queue — keep their own animate keys so navigating to/from
+  // them runs the normal page-swap transition.
+  if (m && m[1] !== 'mine' && m[1] !== 'calendar') return '/admin/rep-requests'
   return pathname
 }
 

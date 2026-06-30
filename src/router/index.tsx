@@ -94,6 +94,8 @@ import AdminModerationPage from '@/features/admin/pages/moderation'
 // junction).
 import RepRequestsPage from '@/features/admin/pages/rep-requests'
 import RepRequestsMinePage from '@/features/admin/pages/rep-requests-mine'
+// pin-75 — admin rep-visit calendar nested under Rep Requests.
+import AdminRepVisitCalendarPage from '@/features/admin/pages/rep-visit-calendar'
 
 export const router = createBrowserRouter([
   {
@@ -254,6 +256,10 @@ export const router = createBrowserRouter([
           // (no detail), and :id pins the detail pane via URL-param so
           // deep-links + back/forward navigation round-trip correctly.
           { path: 'rep-requests', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Requests' } },
+          // pin-75 — visit calendar; sibling of the queue, declared
+          // BEFORE the ':id' wildcard so the literal 'calendar' segment
+          // wins over the param match.
+          { path: 'rep-requests/calendar', element: <AdminRepVisitCalendarPage />, handle: { title: 'Admin · Visit Calendar' } },
           { path: 'rep-requests/:id', element: <RepRequestsPage />, handle: { title: 'Admin · Rep Request' } },
         ],
       },
