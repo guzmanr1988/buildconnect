@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, Compass, UserCheck } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -42,11 +42,6 @@ export function HomeownerHome() {
   const services = useCatalogStore((s) => s.services)
   const activeServices = services.filter((s) => s.status === 'live')
 
-  // "Do it myself" toggle — hides the chooser split so the click feels like
-  // a real navigation, not a same-page scroll-to-anchor. Resets when the
-  // page remounts (next /home navigation). Pure local state, no router or
-  // store touched.
-  const [browseMode, setBrowseMode] = useState(false)
   const comingSoon = services.filter((s) => s.status === 'draft')
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
@@ -445,60 +440,33 @@ export function HomeownerHome() {
         </motion.p>
       </div>
 
-      {/* Concierge "Request a Rep" entry split-screen. Two stacked cards
-          on mobile, side-by-side on sm+. "Do it myself" dismisses this
-          chooser + scrolls to the services grid below (Rod feedback msg
-          1782795164609 — the old scroll-only behavior felt like nothing
-          happened because the grid was already partly in viewport and the
-          chooser stayed visible; dismissing makes the click feel like a
-          real navigation while keeping the surface count unchanged).
-          "Have a Rep help me" navigates to the rep-request intake funnel. */}
-      {!browseMode && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18, duration: 0.35 }}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4"
-          data-testid="homeowner-start-project-split"
+      {/* Concierge "Request a Rep" entry — single centered card.
+          The earlier "Do it myself" sibling card was removed (Rod
+          2026-06-30: "do it myself button makes no sense... it does
+          nothing"). Service grid below renders unconditionally and is
+          the self-serve path; this card is the concierge CTA. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.35 }}
+        className="flex justify-center"
+        data-testid="homeowner-start-project-split"
+      >
+        <button
+          type="button"
+          onClick={() => navigate('/home/rep-request')}
+          data-testid="homeowner-start-project-rep"
+          className="group w-full max-w-md rounded-2xl border bg-card hover:border-primary/40 hover:bg-primary/5 transition-colors p-5 text-left flex flex-col gap-2"
         >
-          <button
-            type="button"
-            onClick={() => {
-              setBrowseMode(true)
-              // Defer scroll until after the chooser unmounts and the grid
-              // reflows into its new top position — otherwise scrollIntoView
-              // targets the pre-reflow position and lands short.
-              requestAnimationFrame(() => {
-                document.getElementById('home-service-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              })
-            }}
-            data-testid="homeowner-start-project-self"
-            className="group rounded-2xl border bg-card hover:border-primary/40 hover:bg-primary/5 transition-colors p-5 text-left flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-2">
-              <Compass className="h-5 w-5 text-primary" />
-              <span className="text-sm font-semibold">Do it myself</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Browse services and request quotes from contractors directly.
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/home/rep-request')}
-            data-testid="homeowner-start-project-rep"
-            className="group rounded-2xl border bg-card hover:border-primary/40 hover:bg-primary/5 transition-colors p-5 text-left flex flex-col gap-2"
-          >
-            <div className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5 text-primary" />
-              <span className="text-sm font-semibold">Have a buildconnect rep help me build my project.</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              A concierge rep will visit, scope the project, and build it for you. $250 visit fee.
-            </p>
-          </button>
-        </motion.div>
-      )}
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold">Have a buildconnect rep help me build my project.</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A concierge rep will visit, scope the project, and build it for you. $250 visit fee.
+          </p>
+        </button>
+      </motion.div>
 
       {/* Service grid — always 4 columns on desktop */}
       <div id="home-service-grid" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
