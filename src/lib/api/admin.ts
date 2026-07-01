@@ -29,10 +29,13 @@ export async function getTransactions() {
   return data as Transaction[]
 }
 
+const APP_SETTINGS_PUBLIC_COLS =
+  'id, maintenance_mode, ar_mode, phase2_enabled, financing_enabled, updated_at'
+
 export async function getSettings() {
   const { data, error } = await supabase
     .from('app_settings')
-    .select('*')
+    .select(APP_SETTINGS_PUBLIC_COLS)
     .single()
   if (error) throw error
   return data as AppSettings
@@ -43,7 +46,7 @@ export async function updateSettings(updates: Partial<AppSettings>) {
     .from('app_settings')
     .update(updates)
     .eq('id', 1)
-    .select()
+    .select(APP_SETTINGS_PUBLIC_COLS)
     .single()
   if (error) throw error
   return data as AppSettings
