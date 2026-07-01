@@ -449,51 +449,30 @@ export function HomeownerHome() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.18, duration: 0.35 }}
-        className="flex justify-center"
         data-testid="homeowner-start-project-split"
       >
-        <motion.button
+        <button
           type="button"
           onClick={() => navigate('/home/rep-request')}
           data-testid="homeowner-start-project-rep"
-          whileHover={{ y: -3 }}
-          whileTap={{ scale: 0.98 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-          className="group relative max-w-md mx-auto w-full rounded-2xl border bg-card p-5 text-left flex flex-col shadow-sm ring-1 ring-violet-500/10 hover:shadow-lg hover:shadow-black/[0.05] hover:border-violet-400/40 transition-shadow duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50"
+          className="w-full rounded-2xl bg-red-600 p-4 flex items-center gap-4 text-left transition-all hover:shadow-md hover:brightness-105 hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
         >
-          <div className="flex items-start justify-between">
-            <motion.div
-              className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-gradient-to-br from-violet-500 to-purple-700"
-              whileHover={{ rotate: -4, scale: 1.06 }}
-            >
-              <UserCheck className="h-6 w-6 text-white" strokeWidth={1.8} />
-            </motion.div>
-            <span className="inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-semibold leading-none bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-              Concierge
-            </span>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white">
+            <UserCheck className="h-5 w-5" strokeWidth={1.8} />
           </div>
-          <h3 className="text-[15px] font-semibold font-heading text-foreground leading-snug mt-3">
-            Have a buildconnect rep help me build my project
-          </h3>
-          <p className="text-[12px] text-muted-foreground leading-[1.55] mt-1 mb-3">
-            A concierge rep will visit your home, scope the project, and guide you through the build.
-          </p>
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-auto mb-3">
-            <span className="inline-flex items-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300 px-2 py-[3px] text-[10px] font-semibold">$250 visit fee</span>
-            <span className="text-border">·</span>
-            <span>On-site scope included</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">
+              Concierge Service
+            </p>
+            <p className="text-[15px] font-semibold font-heading text-white leading-tight mt-1">
+              Have a BuildConnect rep help me build my project
+            </p>
+            <p className="text-[12px] text-white/80 mt-0.5">
+              A concierge rep will visit and scope your project · $250 visit fee
+            </p>
           </div>
-          <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <span className="text-[12px] font-medium text-violet-600 dark:text-violet-400">Book a rep</span>
-            <motion.div
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
-              whileHover={{ x: 2 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-            >
-              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </motion.div>
-          </div>
-        </motion.button>
+          <ChevronRight className="h-4 w-4 shrink-0 text-white/70" />
+        </button>
       </motion.div>
 
       {/* Service grid — always 4 columns on desktop */}
