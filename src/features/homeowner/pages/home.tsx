@@ -455,23 +455,23 @@ export function HomeownerHome() {
           type="button"
           onClick={() => navigate('/home/rep-request')}
           data-testid="homeowner-start-project-rep"
-          className="w-full rounded-2xl bg-red-600 p-4 flex items-center gap-4 text-left transition-all hover:shadow-md hover:brightness-105 hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+          className="w-full rounded-2xl border bg-card p-4 flex items-center gap-4 text-left transition-all hover:shadow-md hover:-translate-y-[1px]"
         >
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <UserCheck className="h-5 w-5" strokeWidth={1.8} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
               Concierge Service
             </p>
-            <p className="text-[15px] font-semibold font-heading text-white leading-tight mt-1">
+            <p className="text-[15px] font-semibold font-heading text-foreground leading-tight mt-1">
               Have a BuildConnect rep help me build my project
             </p>
-            <p className="text-[12px] text-white/80 mt-0.5">
+            <p className="text-[12px] text-muted-foreground mt-0.5">
               A concierge rep will visit and scope your project · $250 visit fee
             </p>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-white/70" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       </motion.div>
 
