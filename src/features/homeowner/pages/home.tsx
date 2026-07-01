@@ -18,6 +18,7 @@ import { FinancingCard } from '@/features/financing/components/financing-card'
 import { ApprovedAmountBanner } from '@/features/financing/components/approved-amount-banner'
 import { HomeownerPendingDrawsSection } from '@/features/financing/components/homeowner-pending-draws-section'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { useActiveRepRequest } from '@/hooks/use-active-rep-request'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
 // COMPLETED. Time-based heuristic since sentProject has no projectCompletedAt
@@ -38,6 +39,7 @@ export function HomeownerHome() {
   const mockLeads = useEffectiveMockLeads()
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const navigate = useNavigate()
+  const activeRepRequest = useActiveRepRequest()
 
   const services = useCatalogStore((s) => s.services)
   const activeServices = services.filter((s) => s.status === 'live')
@@ -453,7 +455,11 @@ export function HomeownerHome() {
       >
         <button
           type="button"
-          onClick={() => navigate('/home/rep-request')}
+          onClick={() =>
+            activeRepRequest
+              ? navigate(`/home/rep-requests/${activeRepRequest.id}`)
+              : navigate('/home/rep-request')
+          }
           data-testid="homeowner-start-project-rep"
           className="w-full rounded-2xl border bg-card p-4 flex items-center gap-4 text-left transition-all hover:shadow-md hover:-translate-y-[1px]"
         >
