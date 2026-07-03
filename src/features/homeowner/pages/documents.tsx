@@ -354,7 +354,7 @@ function DocPreviewDialog({
   return (
     <Dialog open={!!doc} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-3xl p-3 gap-3"
+        className="top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none sm:max-w-none rounded-none flex flex-col p-3 gap-3"
         data-testid="doc-preview-modal"
       >
         <div className="pr-8">
@@ -365,7 +365,7 @@ function DocPreviewDialog({
             {friendlyDocTitle(doc)}
           </p>
         </div>
-        <div className="rounded-lg border bg-muted/20 overflow-hidden flex items-center justify-center min-h-[40vh]">
+        <div className="rounded-lg border bg-muted/20 overflow-hidden flex items-center justify-center flex-1 min-h-0">
           {loading || !url ? (
             <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -373,16 +373,16 @@ function DocPreviewDialog({
             </div>
           ) : isPdf ? (
             <iframe
-              src={url}
+              src={`${url}#toolbar=0&navpanes=0&scrollbar=0`}
               title={filename}
-              className="w-full h-[70vh] bg-white"
+              className="w-full h-full bg-white"
               data-testid="doc-preview-iframe"
             />
           ) : isImage ? (
             <img
               src={url}
               alt={filename}
-              className="max-h-[70vh] w-auto object-contain"
+              className="max-h-full max-w-full object-contain"
               data-testid="doc-preview-image"
             />
           ) : (
