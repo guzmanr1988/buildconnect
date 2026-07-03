@@ -35,6 +35,12 @@ export interface ConnectAccountRow {
   requirements: unknown | null;
   onboardedAt: string | null;
   updatedAt: string;
+  /** Mig 110 — bank-attach metadata within an already-onboarded Connect
+   *  account. null until the homeowner/vendor attaches a payout bank via
+   *  stripe-connect-external-account-attach. Bank-attach is a metadata
+   *  state within ConnectUiState='active' (and pending_verification/
+   *  restricted per hephaestus contract) — no new state value introduced. */
+  externalAccount: { last4: string; bankName: string | null } | null;
 }
 
 interface ConnectQueryArgs {
@@ -53,7 +59,7 @@ async function fetchConnectAccount(partyType: PartyType): Promise<ConnectAccount
   const { data, error } = await supabase
     .from('escrow_accounts')
     .select(
-      'stripe_account_id, status, charges_enabled, payouts_enabled, requirements, onboarded_at, updated_at',
+      'stripe_account_id, status, charges_enabled, payouts_enabled, requirements, onboarded_at, updated_at, external_account_id, external_account_last4, external_account_bank_name',
     )
     .eq('party_type', partyType)
     .eq('party_id', userData.user.id)
@@ -61,6 +67,13 @@ async function fetchConnectAccount(partyType: PartyType): Promise<ConnectAccount
 
   if (error) throw error;
   if (!data) return null;
+
+  const externalAccount = data.external_account_id && data.external_account_last4
+    ? {
+        last4: data.external_account_last4 as string,
+        bankName: (data.external_account_bank_name as string | null) ?? null,
+      }
+    : null;
 
   return {
     stripeAccountId: data.stripe_account_id,
@@ -70,6 +83,7 @@ async function fetchConnectAccount(partyType: PartyType): Promise<ConnectAccount
     requirements: data.requirements ?? null,
     onboardedAt: data.onboarded_at ?? null,
     updatedAt: data.updated_at,
+    externalAccount,
   };
 }
 

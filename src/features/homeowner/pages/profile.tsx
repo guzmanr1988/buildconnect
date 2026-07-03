@@ -25,8 +25,8 @@ import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { SecondaryAddress } from '@/types'
 import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
-import { HomeownerBankingPayoutsSquare } from '@/features/homeowner/components/banking-payouts-square'
 import { MyReferralsCard } from '@/features/homeowner/components/my-referrals-card'
+import { PaymentMethodsSection } from '@/features/homeowner/components/payment-methods-section'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
 const emptyAddressForm: AddressFormData = { label: '', street: '', city: '', state: '', zip: '' }
@@ -340,13 +340,19 @@ export function HomeownerProfilePage() {
         </Card>
       </motion.div>
 
-      {/* Banking / Payouts — Stripe Connect Express entry point. Lands under
-          Additional Properties per kratos directive #2 (task_132 msg
-          1781574203384). Receives referral bonuses + financing-disbursement
-          returns once Rod-provided test keys are set in Edge Function env. */}
-      <HomeownerBankingPayoutsSquare />
+      {/* Payment Methods (pay-in) — saved cards and bank accounts the homeowner
+          can use to pay for services. D1 of the kratos msg 1782449152661 sequence
+          (file_747 reconcile). Backed by hephaestus's payment-method-* edge fns. */}
+      <PaymentMethodsSection />
 
-      {/* My Referrals & Rewards — sits directly below Banking/Payouts square */}
+      {/* Banking / Payouts (Stripe Connect Express) — HIDDEN for homeowner role
+          per Model A (kratos msg 1782449152661 / file_747 reconcile). Homeowners
+          never receive a payout: refunds auto-return to original PM source and
+          escrow-to-homeowner is 0-row scaffolding. Their card lives in the
+          Payment Methods section above. Vendor/rep payout surfaces are unaffected
+          (separate callsites in their own profile pages). */}
+
+      {/* My Referrals & Rewards */}
       <MyReferralsCard />
 
       {/* Day/Night Mode */}

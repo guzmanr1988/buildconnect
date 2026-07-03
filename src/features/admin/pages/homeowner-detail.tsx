@@ -76,60 +76,74 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 export default function AdminHomeownerDetail() {
   const navigate = useNavigate()
   const { homeownerId: rawId } = useParams<{ homeownerId: string }>()
-  const homeownerEmail = rawId ? decodeURIComponent(rawId) : ''
+  // URL param accepts any of: profile UUID (new admin-list links), fixture
+  // id like 'ho-N', or a legacy email (older bookmarks / Mail links). The
+  // resolver tries id-match first then email-match across both rails; the
+  // Supabase fallback UUID-regex-detects the column. Concierge phone-only
+  // guests have no email — only the id path resolves them, which is why
+  // the admin list now navigates by profiles.id.
+  const lookupKey = rawId ? decodeURIComponent(rawId) : ''
 
   // pin-23 — demo-id gate. When demoDataHidden=true, suppress the
   // seed-match branch so the Supabase from(profiles).maybeSingle()
-  // fallthrough @L97-119 wins and admin only sees real homeowners.
-  // Real-uuid + Supabase paths untouched.
+  // fallthrough wins and admin only sees real homeowners.
   const demoDataHidden = useAdminModerationStore((s) => s.demoDataHidden)
 
-  // Resolve homeowner from either inline HOMEOWNERS or MOCK_HOMEOWNERS
-  // by email (URL key). Falls back to lookup-by-id if email not found
-  // (legacy URL safety).
   const fixtureHomeowner = useMemo(
     () =>
       !demoDataHidden
-        ? (HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
-           MOCK_HOMEOWNERS.find((h) => h.email === homeownerEmail) ??
-           HOMEOWNERS.find((h) => h.id === homeownerEmail))
+        ? (HOMEOWNERS.find((h) => h.id === lookupKey) ??
+           MOCK_HOMEOWNERS.find((h) => h.id === lookupKey) ??
+           HOMEOWNERS.find((h) => h.email === lookupKey) ??
+           MOCK_HOMEOWNERS.find((h) => h.email === lookupKey))
         : null,
-    [homeownerEmail, demoDataHidden],
+    [lookupKey, demoDataHidden],
   )
 
-  // Supabase fallback: when email not in fixtures, query profiles by email.
-  // Enables admin to view detail pages for real-auth homeowners (walk-seed
-  // and future signups) that aren't in the static HOMEOWNERS array.
   const [supabaseHomeowner, setSupabaseHomeowner] = useState<AdminHomeowner | null>(null)
   const [supabaseLoading, setSupabaseLoading] = useState(false)
   useEffect(() => {
-    if (fixtureHomeowner || !homeownerEmail) return
+    if (fixtureHomeowner || !lookupKey) return
     setSupabaseLoading(true)
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const column = UUID_RE.test(lookupKey) ? 'id' : 'email'
     supabase
       .from('profiles')
       .select('id, name, email, phone, address, avatar_color, status, created_at')
-      .eq('email', homeownerEmail)
+      .eq(column, lookupKey)
       .eq('role', 'homeowner')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
+          const displayName =
+            (data.name as string) ||
+            (data.email as string) ||
+            (data.phone as string) ||
+            'Homeowner'
           setSupabaseHomeowner({
             id: data.id as string,
-            name: (data.name as string) || homeownerEmail,
-            email: data.email as string,
+            name: displayName,
+            email: (data.email as string) || '',
             phone: (data.phone as string) || '',
             address: (data.address as string) || '',
             avatar_color: (data.avatar_color as string) || '#3b82f6',
-            initials: deriveInitials((data.name as string) || homeownerEmail),
+            initials: deriveInitials(displayName),
             status: ((data.status as string) || 'active') as AdminHomeowner['status'],
             created_at: (data.created_at as string) || new Date().toISOString(),
           })
         }
         setSupabaseLoading(false)
       })
-  }, [homeownerEmail, fixtureHomeowner])
+  }, [lookupKey, fixtureHomeowner])
 
   const resolvedHomeowner = fixtureHomeowner ?? supabaseHomeowner
+
+  // Downstream stores (vendor_homeowner_documents, sentProjects.homeowner.email,
+  // MOCK_LEADS.email) are email-keyed. Derive the email from the resolved
+  // homeowner so id-keyed navigation still hydrates those rails. Empty
+  // string when the resolved row has no email on file (Concierge phone-only
+  // guest) — email-keyed sources correctly return nothing in that case.
+  const homeownerEmail = resolvedHomeowner?.email ?? ''
 
   // Status overrides + actions
   const homeownerStatusOverrides = useAdminModerationStore((s) => s.homeownerStatusOverrides)
@@ -265,7 +279,7 @@ export default function AdminHomeownerDetail() {
           <EmptyState
             icon={AlertTriangle}
             title="Homeowner not found"
-            description={`No homeowner with email ${homeownerEmail} in the registry.`}
+            description={`No homeowner matching "${lookupKey}" in the registry.`}
           />
         )}
       </div>

@@ -66,6 +66,199 @@ serve(async (req) => {
   )
 
   switch (event.type) {
+    // ─── BuildConnect Concierge Rep Request handlers ───
+    // These four events handle the $250 visit-fee lifecycle (insert-pending-
+    // payment → charge → optional refund). Matching rows are located by
+    // metadata.rep_request_id (preferred) with fallback to charge_id /
+    // payment_intent_id for refund events.
+
+    case 'charge.succeeded': {
+      // Flip pending_payment → new + stamp charge_id + charge_status=charged.
+      const charge = event.data.object as Stripe.Charge & {
+        metadata?: Record<string, string> | null
+      }
+      const repRequestId = charge.metadata?.rep_request_id
+      if (!repRequestId) break
+
+      const nowIso = new Date().toISOString()
+      const { data: rr, error: rrLookupErr } = await supabase
+        .from('rep_requests')
+        .select('id, status')
+        .eq('id', repRequestId)
+        .maybeSingle()
+      if (rrLookupErr || !rr) {
+        console.warn('charge.succeeded for unknown rep_request_id', repRequestId)
+        break
+      }
+      if (rr.status !== 'pending_payment') {
+        // Already advanced (replay) — skip the flip but still log forensically.
+        await supabase.from('rep_request_events').insert({
+          rep_request_id: repRequestId,
+          event_type: 'charge_succeeded',
+          payload: {
+            stripe_charge_id: charge.id,
+            replay: true,
+            status_at_event: rr.status,
+          },
+        })
+        break
+      }
+
+      await supabase
+        .from('rep_requests')
+        .update({
+          status: 'new',
+          charge_status: 'charged',
+          stripe_charge_id: charge.id,
+          charged_at: nowIso,
+        })
+        .eq('id', repRequestId)
+
+      await supabase.from('rep_request_events').insert({
+        rep_request_id: repRequestId,
+        event_type: 'charge_succeeded',
+        from_status: 'pending_payment',
+        to_status: 'new',
+        payload: {
+          stripe_charge_id: charge.id,
+          amount_cents: charge.amount,
+        },
+      })
+      break
+    }
+
+    case 'charge.failed': {
+      // Flip pending_payment → charge_failed (terminal). No money moved.
+      const charge = event.data.object as Stripe.Charge & {
+        metadata?: Record<string, string> | null
+      }
+      const repRequestId = charge.metadata?.rep_request_id
+      if (!repRequestId) break
+
+      const { data: rr } = await supabase
+        .from('rep_requests')
+        .select('id, status')
+        .eq('id', repRequestId)
+        .maybeSingle()
+      if (!rr) break
+      if (rr.status !== 'pending_payment') {
+        // Replay or out-of-order; just append the event.
+        await supabase.from('rep_request_events').insert({
+          rep_request_id: repRequestId,
+          event_type: 'charge_failed',
+          payload: {
+            stripe_charge_id: charge.id,
+            failure_code: charge.failure_code,
+            failure_message: charge.failure_message,
+            replay: true,
+            status_at_event: rr.status,
+          },
+        })
+        break
+      }
+
+      await supabase
+        .from('rep_requests')
+        .update({
+          status: 'charge_failed',
+          charge_status: 'not_charged',
+          stripe_charge_id: charge.id,
+        })
+        .eq('id', repRequestId)
+
+      await supabase.from('rep_request_events').insert({
+        rep_request_id: repRequestId,
+        event_type: 'charge_failed',
+        from_status: 'pending_payment',
+        to_status: 'charge_failed',
+        payload: {
+          stripe_charge_id: charge.id,
+          failure_code: charge.failure_code,
+          failure_message: charge.failure_message,
+        },
+      })
+      break
+    }
+
+    case 'charge.refunded': {
+      // The cancel-rep-request edge fn already flipped status=cancelled +
+      // charge_status=refund_pending + stamped stripe_refund_id. This webhook
+      // just flips charge_status refund_pending → refunded + stamps refunded_at.
+      const charge = event.data.object as Stripe.Charge & {
+        metadata?: Record<string, string> | null
+      }
+      // Prefer metadata.rep_request_id; fall back to stripe_charge_id lookup.
+      let repRequestId = charge.metadata?.rep_request_id
+      if (!repRequestId) {
+        const { data: viaCharge } = await supabase
+          .from('rep_requests')
+          .select('id')
+          .eq('stripe_charge_id', charge.id)
+          .maybeSingle()
+        if (viaCharge) repRequestId = viaCharge.id
+      }
+      if (!repRequestId) {
+        console.warn('charge.refunded could not resolve rep_request_id', charge.id)
+        break
+      }
+
+      const nowIso = new Date().toISOString()
+      await supabase
+        .from('rep_requests')
+        .update({
+          charge_status: 'refunded',
+          refunded_at: nowIso,
+        })
+        .eq('id', repRequestId)
+
+      // Stripe attaches the refund to charge.refunds.data[]; pick the latest.
+      const latestRefund = charge.refunds?.data?.[0]
+      await supabase.from('rep_request_events').insert({
+        rep_request_id: repRequestId,
+        event_type: 'refund_succeeded',
+        payload: {
+          stripe_charge_id: charge.id,
+          stripe_refund_id: latestRefund?.id ?? null,
+          amount_refunded_cents: charge.amount_refunded,
+        },
+      })
+      break
+    }
+
+    case 'refund.failed': {
+      // Stripe refund attempt failed post-acceptance. The cancel-rep-request
+      // edge fn already set charge_status=refund_pending; we leave the status
+      // there (admin manual intervention required) and log the failure.
+      const refund = event.data.object as Stripe.Refund & {
+        metadata?: Record<string, string> | null
+      }
+      let repRequestId = refund.metadata?.rep_request_id as string | undefined
+      if (!repRequestId && refund.charge) {
+        const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge.id
+        const { data: viaCharge } = await supabase
+          .from('rep_requests')
+          .select('id')
+          .eq('stripe_charge_id', chargeId)
+          .maybeSingle()
+        if (viaCharge) repRequestId = viaCharge.id
+      }
+      if (!repRequestId) {
+        console.warn('refund.failed could not resolve rep_request_id', refund.id)
+        break
+      }
+
+      await supabase.from('rep_request_events').insert({
+        rep_request_id: repRequestId,
+        event_type: 'refund_failed',
+        payload: {
+          stripe_refund_id: refund.id,
+          failure_reason: refund.failure_reason,
+          status: refund.status,
+        },
+      })
+      break
+    }
+
     case 'invoice.paid': {
       // Record subscription payment
       const invoice = event.data.object as Stripe.Invoice & {

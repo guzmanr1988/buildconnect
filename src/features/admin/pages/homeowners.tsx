@@ -311,7 +311,7 @@ export default function HomeownersPage() {
                     />
                     <div
                       className="flex-1 min-w-0 cursor-pointer"
-                      onClick={() => navigate(`/admin/homeowners/${encodeURIComponent(homeowner.email)}`)}
+                      onClick={() => navigate(`/admin/homeowners/${encodeURIComponent(homeowner.id)}`)}
                     >
                       <h3 className="font-heading font-semibold text-base truncate hover:text-primary transition-colors">
                         {homeowner.name}

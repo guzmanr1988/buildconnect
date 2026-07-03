@@ -823,6 +823,38 @@ export const useProjectsStore = create<ProjectsState>()(
                 })
             })
           }
+          // Tranche-2 vendor-new-lead email notification — Q5 wire-lock: post-await
+          // success-branch on upsertPromise, mirroring task_817 reconcile pattern.
+          // Server-side idempotency via notification_log UNIQUE (event_id, channel,
+          // recipient_id), so no FE retry/dedupe needed. Flag-OFF by default on apex
+          // (helios mig 099 + edge fn live, NOTIFY_VENDOR_NEW_LEAD_ENABLED secret
+          // unset) — first prod fires produce flag_off audit rows = wire-validation
+          // in prod before any send. Flag flip is kratos-relayed Rod-gated only.
+          upsertPromise.then(({ error }) => {
+            if (error) return
+            const fmtMoney = (cents?: number | null) =>
+              cents && cents > 0
+                ? `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                : undefined
+            try {
+              supabase.functions.invoke('notify-vendor-new-lead', {
+                body: {
+                  sentProjectId: next.id,
+                  vendorId: next.contractor.vendor_id,
+                  homeownerName: next.homeowner?.name ?? 'Homeowner',
+                  serviceName: next.item.serviceName,
+                  scheduledDate: next.booking.date,
+                  scheduledTime: next.booking.time,
+                  homeownerAddress: next.homeowner?.address ?? '',
+                  ...(next.quotedPriceCents ? { quotedPriceLabel: fmtMoney(next.quotedPriceCents) } : {}),
+                },
+              }).then(({ error: invokeErr }) => {
+                if (invokeErr) console.error('[projects] notify-vendor-new-lead invoke failed:', invokeErr.message)
+              })
+            } catch (err) {
+              console.error('[projects] notify-vendor-new-lead payload-build threw:', err)
+            }
+          })
         }
         // task_817 — clear cart-side FK refs after submit so a second
         // sendProject in the same cart session starts fresh. pendingProjectId

@@ -1,0 +1,147 @@
+-- 103_concierge_rep_request_photos_storage.sql
+-- BuildConnect Concierge — storage bucket + RLS for rep-request photo
+-- attachments. Companion to migrations 100/101/102.
+--
+-- DESIGN SOURCE: kratos Rod-greenlit scope — homeowner attaches photos at
+-- request submission time (existing damage / context). Rep can add photos
+-- post-visit (assessment evidence). Admin reads all for forensics.
+--
+-- PATH CONVENTION (folder = {rep_request_id}/{actor_id}/{filename}):
+--   The first folder segment is the rep_request_id (uuid). The second is the
+--   actor profile id. The filename is client-chosen + sanitized at upload.
+--   This mirrors the homeowner-documents convention (mig 046) but with a
+--   rep-request scoping segment so RLS can pivot on rep_request_id ownership
+--   without needing a join into rep_request_photos (no separate table — the
+--   rep_requests.photo_paths text[] array IS the canonical reference; storage
+--   path uniqueness enforced by bucket).
+--
+-- APPLY-AT-SHIP-TIME PATTERN (matches mig 046):
+--   The bucket + policies are applied via the Supabase Mgmt API at ship time,
+--   NOT auto-created by this migration. This file captures the spec for
+--   reproducibility on fresh env re-applies. The verification curl set below
+--   matches what helios runs as part of post-deploy storage-RLS attestation.
+--
+-- ───────────────────────────────────────────────────────────────────
+-- (1) Bucket create — apply via Mgmt API
+-- ───────────────────────────────────────────────────────────────────
+-- insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+--   values ('rep-request-photos', 'rep-request-photos', false, 10485760,
+--           array['image/jpeg', 'image/png', 'image/heic', 'image/heif']);
+--
+-- Rationale:
+--   - private (public=false): RLS-gated access only
+--   - 10 MB per-file cap: matches homeowner-documents bucket; phone photos fit
+--   - image-only MIME allowlist: blocks arbitrary uploads; rep visits don't
+--     need PDF/doc attachments (those go to the projects.docs flow downstream)
+--
+-- ───────────────────────────────────────────────────────────────────
+-- (2) storage.objects policies — apply via Mgmt API or SQL editor
+-- ───────────────────────────────────────────────────────────────────
+--
+-- POLICY: "Homeowners insert own rep-request photos"
+--   FOR INSERT TO authenticated
+--   WITH CHECK (
+--     bucket_id = 'rep-request-photos'
+--     AND (storage.foldername(name))[2] = auth.uid()::text
+--     AND EXISTS (
+--       SELECT 1 FROM public.rep_requests r
+--       WHERE r.id::text = (storage.foldername(name))[1]
+--         AND r.homeowner_id = auth.uid()
+--     )
+--   );
+--
+-- POLICY: "Reps insert assigned rep-request photos"
+--   FOR INSERT TO authenticated
+--   WITH CHECK (
+--     bucket_id = 'rep-request-photos'
+--     AND (storage.foldername(name))[2] = auth.uid()::text
+--     AND EXISTS (
+--       SELECT 1 FROM public.rep_requests r
+--       WHERE r.id::text = (storage.foldername(name))[1]
+--         AND r.assigned_rep_id = auth.uid()
+--     )
+--     AND EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'rep')
+--   );
+--
+-- POLICY: "Homeowners select own rep-request photos"
+--   FOR SELECT TO authenticated
+--   USING (
+--     bucket_id = 'rep-request-photos'
+--     AND EXISTS (
+--       SELECT 1 FROM public.rep_requests r
+--       WHERE r.id::text = (storage.foldername(name))[1]
+--         AND r.homeowner_id = auth.uid()
+--     )
+--   );
+--
+-- POLICY: "Reps select assigned rep-request photos"
+--   FOR SELECT TO authenticated
+--   USING (
+--     bucket_id = 'rep-request-photos'
+--     AND EXISTS (
+--       SELECT 1 FROM public.rep_requests r
+--       WHERE r.id::text = (storage.foldername(name))[1]
+--         AND r.assigned_rep_id = auth.uid()
+--     )
+--     AND EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'rep')
+--   );
+--
+-- POLICY: "Admins manage all rep-request photos"
+--   FOR ALL TO authenticated
+--   USING (
+--     bucket_id = 'rep-request-photos'
+--     AND EXISTS (
+--       SELECT 1 FROM public.profiles
+--       WHERE id = auth.uid() AND role IN ('admin', 'admin_employee')
+--     )
+--   );
+--
+-- POLICY: "Homeowners delete own rep-request photos"
+--   FOR DELETE TO authenticated
+--   USING (
+--     bucket_id = 'rep-request-photos'
+--     AND (storage.foldername(name))[2] = auth.uid()::text
+--     AND EXISTS (
+--       SELECT 1 FROM public.rep_requests r
+--       WHERE r.id::text = (storage.foldername(name))[1]
+--         AND r.homeowner_id = auth.uid()
+--         AND r.status IN ('pending_payment', 'new')  -- only before rep involvement
+--     )
+--   );
+--
+-- (Rep cannot DELETE — assessment evidence must survive the request lifecycle.
+-- Admin DELETE permitted via the catch-all "Admins manage all" policy above.)
+--
+-- ───────────────────────────────────────────────────────────────────
+-- (3) Cleanup on rep_request DELETE
+-- ───────────────────────────────────────────────────────────────────
+-- The rep_requests table has no client DELETE policy (mig 101). Admin cancel
+-- preserves the row + audit trail. If a future admin-purge flow is added, it
+-- MUST pair the DB DELETE with a Storage DELETE for each path in photo_paths
+-- (per feedback_homeowner_documents_db_delete_no_storage_cascade — DB delete
+-- does NOT cascade to Storage).
+--
+-- Recommended purge path: edge fn purge-rep-request reads photo_paths, fires
+-- storage.objects DELETE for each, THEN rep_requests DELETE. Mirrors the
+-- paired-cleanup discipline from migration 098 (homeowner_documents).
+--
+-- ───────────────────────────────────────────────────────────────────
+-- (4) Verification curl set (run post-bucket-create against apex)
+-- ───────────────────────────────────────────────────────────────────
+-- # As homeowner: list own rep-request photos
+-- curl -s "$SUPABASE_URL/storage/v1/object/list/rep-request-photos" \
+--   -H "Authorization: Bearer $HOMEOWNER_JWT" \
+--   -d '{"prefix":"<own_rep_request_id>/","limit":10}'
+--
+-- # As rep: list assigned rep-request photos
+-- curl -s "$SUPABASE_URL/storage/v1/object/list/rep-request-photos" \
+--   -H "Authorization: Bearer $REP_JWT" \
+--   -d '{"prefix":"<assigned_rep_request_id>/","limit":10}'
+--
+-- # Negative: anon read MUST 400/404
+-- curl -s "$SUPABASE_URL/storage/v1/object/public/rep-request-photos/foo.jpg"
+--
+-- ───────────────────────────────────────────────────────────────────
+
+-- This migration is documentation-only; no executable SQL.
+SELECT 1 WHERE FALSE;  -- no-op to satisfy migration framework expectations

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle } from 'lucide-react'
+import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -18,6 +18,7 @@ import { FinancingCard } from '@/features/financing/components/financing-card'
 import { ApprovedAmountBanner } from '@/features/financing/components/approved-amount-banner'
 import { HomeownerPendingDrawsSection } from '@/features/financing/components/homeowner-pending-draws-section'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { useActiveRepRequest } from '@/hooks/use-active-rep-request'
 
 // Sold projects stay in ACTIVE for 30 days after soldAt, then graduate to
 // COMPLETED. Time-based heuristic since sentProject has no projectCompletedAt
@@ -38,9 +39,11 @@ export function HomeownerHome() {
   const mockLeads = useEffectiveMockLeads()
   const profile = useAuthStore((s) => s.profile) ?? MOCK_HOMEOWNERS[0]
   const navigate = useNavigate()
+  const activeRepRequest = useActiveRepRequest()
 
   const services = useCatalogStore((s) => s.services)
   const activeServices = services.filter((s) => s.status === 'live')
+
   const comingSoon = services.filter((s) => s.status === 'draft')
 
   const sentProjects = useProjectsStore((s) => s.sentProjects)
@@ -439,8 +442,47 @@ export function HomeownerHome() {
         </motion.p>
       </div>
 
+      {/* Concierge "Request a Rep" entry — single centered card.
+          The earlier "Do it myself" sibling card was removed (Rod
+          2026-06-30: "do it myself button makes no sense... it does
+          nothing"). Service grid below renders unconditionally and is
+          the self-serve path; this card is the concierge CTA. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18, duration: 0.35 }}
+        data-testid="homeowner-start-project-split"
+      >
+        <button
+          type="button"
+          onClick={() =>
+            activeRepRequest
+              ? navigate(`/home/rep-requests/${activeRepRequest.id}`)
+              : navigate('/home/rep-request')
+          }
+          data-testid="homeowner-start-project-rep"
+          className="w-full rounded-2xl border bg-card p-4 flex items-center gap-4 text-left transition-all hover:shadow-md hover:-translate-y-[1px]"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <UserCheck className="h-5 w-5" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Concierge Service
+            </p>
+            <p className="text-[15px] font-semibold font-heading text-foreground leading-tight mt-1">
+              Have a BuildConnect rep help me build my project
+            </p>
+            <p className="text-[12px] text-muted-foreground mt-0.5">
+              A concierge rep will visit and scope your project · $250 visit fee
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      </motion.div>
+
       {/* Service grid — always 4 columns on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div id="home-service-grid" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {activeServices.map((service, i) => (
           <motion.div
             key={service.id}
