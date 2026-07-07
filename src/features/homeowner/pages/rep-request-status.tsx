@@ -249,7 +249,7 @@ function Tracker({ status }: { status: RepRequestStatus }) {
                 className={cn(
                   'h-8 w-8 rounded-full flex items-center justify-center transition-colors',
                   reached ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-                  isCurrent && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background',
+                  isCurrent && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-card',
                 )}
               >
                 {reached ? <Check className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
@@ -267,6 +267,7 @@ function Tracker({ status }: { status: RepRequestStatus }) {
               className={cn(
                 'text-sm font-medium sm:text-[10px] md:text-xs sm:text-center sm:max-w-[64px]',
                 reached ? 'text-foreground' : 'text-muted-foreground',
+                isCurrent && 'font-semibold',
               )}
             >
               {STATUS_LABELS[s]}
