@@ -30,6 +30,18 @@ import {
 // scaffold uses a synthetic detail so the surface is reviewable
 // alongside commit 3.
 
+// Homeowner heading parser. use-rep-request-submit packs the raw
+// description as `[Project Types: A, B] <homeowner notes>`; only the
+// bracketed prefix is customer-safe to render on the homeowner page.
+// Legacy rows without the prefix return null → heading omitted.
+function parseProjectTypes(desc: string | null | undefined): string | null {
+  if (!desc) return null
+  const m = /^\[Project Types:\s*([^\]]+)\]/.exec(desc)
+  if (!m) return null
+  const types = m[1].trim()
+  return types.length > 0 ? types : null
+}
+
 const STATUS_HINT: Record<RepRequestStatus, string> = {
   pending_payment: 'Processing payment…',
   new: 'A rep will contact you within 24 hours.',
@@ -68,7 +80,8 @@ export function RepRequestStatusPage() {
           id,
           status: 'new' as RepRequestStatus,
           address: '123 Main St, Anytown FL',
-          description: 'Kitchen renovation (your description)',
+          description:
+            '[Project Types: Pool, Impact Windows & Doors] private homeowner notes here',
           canCancel: true,
           refundedAmountCents: null as number | null,
         }
@@ -98,6 +111,12 @@ export function RepRequestStatusPage() {
     detail.status === 'cancelled' ||
     detail.status === 'charge_failed' ||
     detail.status === 'contractor_selected'
+  // Homeowner heading shows ONLY the Project Types prefix from the
+  // description; the free-text homeowner notes (packed after the
+  // prefix by use-rep-request-submit) are admin-only and never
+  // rendered on this page. Legacy rows without the prefix omit the
+  // heading rather than dump raw notes.
+  const projectTypes = parseProjectTypes(detail.description)
 
   async function onConfirmCancel() {
     // Hook is wired through useRepRequestActions.cancel(); commit 5
@@ -127,9 +146,14 @@ export function RepRequestStatusPage() {
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Rep Request
               </p>
-              <h1 className="mt-1 text-xl sm:text-2xl font-bold font-heading tracking-tight">
-                {detail.description}
-              </h1>
+              {projectTypes && (
+                <h1
+                  className="mt-1 text-xl sm:text-2xl font-bold font-heading tracking-tight"
+                  data-testid="rep-request-status-project-types"
+                >
+                  Project Type: {projectTypes}
+                </h1>
+              )}
               <p className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />
                 {detail.address}
