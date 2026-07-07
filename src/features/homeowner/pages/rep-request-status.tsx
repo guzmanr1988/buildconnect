@@ -209,68 +209,70 @@ export function RepRequestStatusPage() {
   )
 }
 
+// Short mobile labels — Rod's ask: keep the SAME horizontal tracker,
+// just uncramped. Only shortens the two long labels below sm; sm+
+// keeps the full STATUS_LABELS wording. iris finalizes exact copy;
+// treat as drop-in.
+const MOBILE_TRACKER_LABELS: Partial<Record<RepRequestStatus, string>> = {
+  project_ready: 'Ready',
+  contractor_selected: 'Selected',
+}
+
 function Tracker({ status }: { status: RepRequestStatus }) {
   // Tracker only renders the 5 customer-visible states. pending_payment,
   // cancelled, and charge_failed never reach the visible tracker path
   // (shouldRenderTracker is false on the post-submit redirect; the
   // system-state badge above handles surface for cancelled/charge_failed).
-  // Layout: vertical stepper on mobile (< sm), horizontal on sm+. Mobile
-  // uses per-segment connectors (absolute below each dot); desktop uses
-  // the two-bar treatment (bg-muted rail + bg-primary progress fill).
+  // Layout: horizontal 5-step at every viewport, structurally unchanged
+  // from the original desktop treatment. Mobile fit tuned only by (1)
+  // short-label variants ("Ready"/"Selected") via sm:hidden dual-spans,
+  // (2) text-[9px] sm:text-xs for headroom, (3) px-2 container. Dots,
+  // icons, ring, connector, and rail offsets stay identical across
+  // viewports.
   const idx = CUSTOMER_TRACKER_STATES.indexOf(status)
   const safeIdx = idx === -1 ? 0 : idx
   const pct = (safeIdx / Math.max(1, CUSTOMER_TRACKER_STATES.length - 1)) * 100
   return (
     <div
-      className="relative flex flex-col space-y-9 sm:flex-row sm:items-center sm:justify-between sm:space-y-0 sm:px-2"
+      className="relative flex items-center justify-between px-2"
       data-testid="rep-request-status-tracker"
     >
-      <div className="hidden sm:block absolute left-6 right-6 top-4 h-0.5 bg-muted -z-0" />
+      <div className="absolute left-6 right-6 top-4 h-0.5 bg-muted -z-0" />
       <div
-        className="hidden sm:block absolute left-6 top-4 h-0.5 bg-primary -z-0 transition-all"
+        className="absolute left-6 top-4 h-0.5 bg-primary -z-0 transition-all"
         style={{ width: `calc((100% - 48px) * ${pct} / 100)` }}
       />
       {CUSTOMER_TRACKER_STATES.map((s, i) => {
         const reached = i <= safeIdx
         const isCurrent = i === safeIdx
-        const isLast = i === CUSTOMER_TRACKER_STATES.length - 1
-        const nextReached = i + 1 <= safeIdx
+        const shortLabel = MOBILE_TRACKER_LABELS[s] ?? STATUS_LABELS[s]
         return (
           <div
             key={s}
-            className="relative z-10 flex flex-row items-center gap-3 sm:flex-col sm:items-center sm:gap-1.5"
+            className="relative z-10 flex flex-col items-center gap-1.5"
             data-testid="rep-request-status-tracker-step"
             data-step={s}
             data-reached={reached ? 'true' : 'false'}
             data-current={isCurrent ? 'true' : 'false'}
           >
-            <div className="relative flex flex-col items-center shrink-0">
-              <div
-                className={cn(
-                  'h-8 w-8 rounded-full flex items-center justify-center transition-colors',
-                  reached ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-                  isCurrent && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-card',
-                )}
-              >
-                {reached ? <Check className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
-              </div>
-              {!isLast && (
-                <div
-                  className={cn(
-                    'sm:hidden absolute top-full left-1/2 -translate-x-1/2 w-0.5 h-9 transition-colors',
-                    nextReached ? 'bg-primary' : 'bg-muted',
-                  )}
-                />
+            <div
+              className={cn(
+                'h-8 w-8 rounded-full flex items-center justify-center transition-colors shrink-0',
+                reached ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                isCurrent && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-card',
               )}
+            >
+              {reached ? <Check className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
             </div>
             <span
               className={cn(
-                'text-sm font-medium sm:text-[10px] md:text-xs sm:text-center sm:max-w-[64px]',
+                'text-[9px] sm:text-xs font-medium text-center max-w-[64px] leading-tight',
                 reached ? 'text-foreground' : 'text-muted-foreground',
                 isCurrent && 'font-semibold',
               )}
             >
-              {STATUS_LABELS[s]}
+              <span className="sm:hidden">{shortLabel}</span>
+              <span className="hidden sm:inline">{STATUS_LABELS[s]}</span>
             </span>
           </div>
         )
