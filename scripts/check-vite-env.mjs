@@ -29,6 +29,11 @@ const OPTIONAL = new Set([
   // src/lib/parcel.ts:22 — defaults to a documented-working FL DOR cadastral
   // endpoint. Override only if the upstream endpoint moves. Prod-safe fallback.
   'VITE_PARCEL_FL_URL',
+  // src/components/AuthBootstrap.tsx:27 — nullish-coalescing default of 'true'
+  // matches the intended production behavior (lite login-profile enabled by
+  // default). Not a dev-only leak like a localhost URL; the fallback value IS
+  // the prod value. Same shape as VITE_PARCEL_FL_URL above.
+  'VITE_LOGIN_LITE_PROFILE',
 ])
 
 function walk(dir, out = []) {
