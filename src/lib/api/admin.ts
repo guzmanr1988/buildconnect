@@ -38,7 +38,7 @@ export async function getSettings() {
     .select(APP_SETTINGS_PUBLIC_COLS)
     .single()
   if (error) throw error
-  return data as AppSettings
+  return data as unknown as AppSettings
 }
 
 export async function updateSettings(updates: Partial<AppSettings>) {
@@ -49,7 +49,7 @@ export async function updateSettings(updates: Partial<AppSettings>) {
     .select(APP_SETTINGS_PUBLIC_COLS)
     .single()
   if (error) throw error
-  return data as AppSettings
+  return data as unknown as AppSettings
 }
 
 export async function getBugs() {
