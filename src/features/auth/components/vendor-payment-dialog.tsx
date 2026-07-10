@@ -3,7 +3,6 @@ import { CheckCircle2, CreditCard, Landmark, Loader2, AlertCircle } from 'lucide
 import { motion } from 'framer-motion'
 import {
   Elements,
-  PaymentElement,
   CardNumberElement,
   CardExpiryElement,
   CardCvcElement,
@@ -42,18 +41,17 @@ import {
 // VendorPaymentMethod-shaped object via onSuccess, so /vendor/banking,
 // /vendor/membership, and /auth/register keep working without modification.
 //
-// Under the hood:
-//   1. On open / tab-change → POST stripe-setup-intent-create with {kind, purpose}.
-//   2. Receive client_secret → mount <Elements> + <PaymentElement>.
-//      For card → renders the Stripe card field; PCI-safe iframe-scoped.
-//      For us_bank_account → renders Financial Connections primary flow
-//      with microdeposit fallback in a single iframe (Stripe picks the
-//      path based on the user's bank support).
-//   3. Submit → stripe.confirmSetup({ redirect: 'if_required' }).
-//   4. On success → POST stripe-payment-method-finalize with setup_intent_id.
-//      Server re-reads the SetupIntent from Stripe (canonical), writes
-//      payment_methods row, returns display fields.
-//   5. Map server response to VendorPaymentMethod shape, fire onSuccess.
+// Card branch: Stripe Elements split fields (CardNumber/Expiry/Cvc) — PCI-safe
+// iframe-scoped (SAQ-A eligible). confirmCardSetup on submit.
+//
+// Checking branch: plain <Input> fields for routing/account/name. Bank name
+// auto-detected live from a bundled FedACH routing→bank_name map, then
+// re-confirmed by Stripe (canonical) at tokenization. Verification is
+// microdeposits (1-2 business days) — Stripe issues them automatically when
+// a manually-entered us_bank_account PM is confirmed against an SI created
+// with verification_method='automatic' AND no financial_connections_account.
+// The finalize fn already handles this shape (rowStatus='pending_verification',
+// verification_method='microdeposits').
 
 const SUCCESS_DISPLAY_MS = 1500
 
@@ -354,19 +352,37 @@ function PaymentFormInner({
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [paymentElementReady, setPaymentElementReady] = useState(false)
   const [holderName, setHolderName] = useState(initialHolder)
   const [cardNumberReady, setCardNumberReady] = useState(false)
   const [cardExpiryReady, setCardExpiryReady] = useState(false)
   const [cardCvcReady, setCardCvcReady] = useState(false)
+  const [routingNumber, setRoutingNumber] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [abaMap, setAbaMap] = useState<Record<string, string> | null>(null)
   const isCard = kind === 'card'
 
   useEffect(() => {
     setHolderName(initialHolder)
   }, [initialHolder, kind])
 
+  useEffect(() => {
+    if (isCard || abaMap) return
+    let cancelled = false
+    // Dynamic import so the ~660KB FedACH routing map only lands in the bundle
+    // when someone opens the Checking tab. Vite splits this into its own chunk.
+    void import('../data/fedach-routing-to-bank.json').then((m) => {
+      if (!cancelled) setAbaMap(m.default as Record<string, string>)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isCard, abaMap])
+
+  const routingIsComplete = /^\d{9}$/.test(routingNumber)
+  const detectedBankName = routingIsComplete && abaMap ? abaMap[routingNumber] : undefined
+
   async function handleSubmit() {
-    if (!stripe || !elements) return
+    if (!stripe) return
     setError(null)
     setSubmitting(true)
 
@@ -375,8 +391,11 @@ function PaymentFormInner({
       let setupIntent: { id: string } | null | undefined
 
       if (isCard) {
-        // Split Elements path — reference CardNumberElement; Stripe.js pulls
-        // the paired expiry + cvc from the same Elements instance automatically.
+        if (!elements) {
+          setError('Card fields not ready.')
+          setSubmitting(false)
+          return
+        }
         const cardNumber = elements.getElement(CardNumberElement)
         if (!cardNumber) {
           setError('Card fields not ready.')
@@ -392,18 +411,35 @@ function PaymentFormInner({
         confirmError = result.error
         setupIntent = result.setupIntent
       } else {
-        // us_bank_account path — PaymentElement (FC-primary + microdeposit
-        // fallback in single iframe). confirmSetup({elements}) is the canonical
-        // call for PaymentElement.
-        const result = await stripe.confirmSetup({
-          elements,
-          confirmParams: {
-            return_url: window.location.href,
-            payment_method_data: holderName
-              ? { billing_details: { name: holderName } }
-              : undefined,
+        // Manual us_bank_account path — plain routing/account/name inputs.
+        // Verification is microdeposits (1-2 business days) — Stripe issues
+        // them automatically because SetupIntent was created with
+        // verification_method='automatic' and no FC session was performed.
+        if (!routingIsComplete) {
+          setError('Enter a valid 9-digit routing number.')
+          setSubmitting(false)
+          return
+        }
+        if (!/^\d{4,17}$/.test(accountNumber)) {
+          setError('Enter a valid account number.')
+          setSubmitting(false)
+          return
+        }
+        if (!holderName.trim()) {
+          setError('Enter the account holder name.')
+          setSubmitting(false)
+          return
+        }
+        const result = await stripe.confirmUsBankAccountSetup(clientSecret, {
+          payment_method: {
+            us_bank_account: {
+              routing_number: routingNumber,
+              account_number: accountNumber,
+              account_holder_type: 'individual',
+              account_type: 'checking',
+            },
+            billing_details: { name: holderName.trim() },
           },
-          redirect: 'if_required',
         })
         confirmError = result.error
         setupIntent = result.setupIntent
@@ -420,8 +456,6 @@ function PaymentFormInner({
         return
       }
 
-      // Finalize server-side. Server re-reads the SetupIntent from Stripe
-      // (canonical) and writes the payment_methods row.
       const { data, error: finalizeError } = await supabase.functions.invoke<{
         ok: boolean
         kind: 'card' | 'us_bank_account'
@@ -457,11 +491,11 @@ function PaymentFormInner({
     }
   }
 
-  // Ready gate: for card kinds, all three split Elements must fire onReady.
-  // For checking, PaymentElement's single onReady is enough.
   const fieldsReady = isCard
     ? cardNumberReady && cardExpiryReady && cardCvcReady
-    : paymentElementReady
+    : routingIsComplete &&
+      /^\d{4,17}$/.test(accountNumber) &&
+      holderName.trim().length > 0
 
   const submitLabel = submitLabelFor(kind)
 
@@ -559,25 +593,65 @@ function PaymentFormInner({
           </div>
         </div>
       ) : (
-        <PaymentElement
-          onReady={() => setPaymentElementReady(true)}
-          options={{
-            defaultValues: initialHolder
-              ? { billingDetails: { name: initialHolder } }
-              : undefined,
-            layout: { type: 'accordion', defaultCollapsed: false, spacedAccordionItems: false },
-            fields: {
-              billingDetails: {
-                name: 'never',
-                email: 'never',
-                phone: 'never',
-                address: 'never',
-              },
-            },
-            wallets: { applePay: 'never', googlePay: 'never' },
-            terms: { card: 'never', usBankAccount: 'never' },
-          }}
-        />
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="vpd-account-holder" className="text-xs font-medium">
+              Name on account
+            </Label>
+            <Input
+              id="vpd-account-holder"
+              type="text"
+              autoComplete="name"
+              placeholder="First Last"
+              value={holderName}
+              onChange={(e) => setHolderName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vpd-routing-number" className="text-xs font-medium">
+              Routing number
+            </Label>
+            <Input
+              id="vpd-routing-number"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="123456789"
+              maxLength={9}
+              value={routingNumber}
+              onChange={(e) => setRoutingNumber(e.target.value.replace(/\D/g, ''))}
+            />
+            {routingIsComplete && (
+              <p className="text-xs text-muted-foreground">
+                {detectedBankName ? (
+                  <>Bank: <span className="font-medium text-foreground">{detectedBankName}</span></>
+                ) : abaMap ? (
+                  <>Routing number not recognized — Stripe will verify at submit.</>
+                ) : (
+                  <>Looking up bank...</>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vpd-account-number" className="text-xs font-medium">
+              Account number
+            </Label>
+            <Input
+              id="vpd-account-number"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Account number"
+              maxLength={17}
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Bank verification takes 1-2 business days via microdeposits.
+          </p>
+        </div>
       )}
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
@@ -585,11 +659,15 @@ function PaymentFormInner({
           <span>{error}</span>
         </div>
       )}
+      {/* Button color matches Rodolfo reference screenshot 2026-07-10
+          (periwinkle #8b9ec6). Sampled from the reference image pixel median.
+          Applied inline via arbitrary-value utilities — promote to a
+          --primary-soft design-system token later (own PR, argus review). */}
       <Button
         onClick={handleSubmit}
-        disabled={!stripe || !elements || !fieldsReady || submitting}
+        disabled={!stripe || (isCard && !elements) || !fieldsReady || submitting}
         size="lg"
-        className="w-full h-11 text-sm font-medium"
+        className="w-full h-11 text-sm font-medium bg-[#8b9ec6] hover:bg-[#7a8fbb] text-white focus-visible:ring-[#8b9ec6]"
       >
         {submitting ? (
           <Loader2 className="h-4 w-4 animate-spin" />
