@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { CheckCircle2, CreditCard, Landmark, Loader2, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
-import type { StripeElementsOptions } from '@stripe/stripe-js'
+import {
+  Elements,
+  PaymentElement,
+  CardNumberElement,
+  CardExpiryElement,
+  CardCvcElement,
+  useElements,
+  useStripe,
+} from '@stripe/react-stripe-js'
+import type {
+  StripeElementsOptions,
+  StripeCardNumberElementOptions,
+  StripeCardExpiryElementOptions,
+  StripeCardCvcElementOptions,
+} from '@stripe/stripe-js'
 import {
   Dialog,
   DialogContent,
@@ -11,13 +24,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import { getStripe } from '@/lib/stripe-client'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import {
-  PAYMENT_PURPOSE_LABELS,
   type VendorPaymentMethod,
   type VendorPaymentMethodKind,
   type VendorPaymentPurpose,
@@ -63,6 +76,10 @@ function uiKindFrom(kind: VendorPaymentMethodKind): UIKind {
 
 function stripeKindFor(uiKind: UIKind): StripeKind {
   return uiKind === 'checking' ? 'us_bank_account' : 'card'
+}
+
+function submitLabelFor(uiKind: UIKind): string {
+  return uiKind === 'checking' ? 'Submit Checking' : 'Submit Card'
 }
 
 const stripePromise = getStripe()
@@ -212,36 +229,7 @@ export function VendorPaymentDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div
-              role="radiogroup"
-              aria-label="Payment method purpose"
-              className="mt-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
-            >
-              {(['both', 'membership', 'commissions'] as const).map((p) => {
-                const selected = purpose === p
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    data-payment-purpose={p}
-                    data-payment-purpose-selected={selected ? 'true' : 'false'}
-                    onClick={() => setPurpose(p)}
-                    className={cn(
-                      'rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
-                      selected
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {PAYMENT_PURPOSE_LABELS[p]}
-                  </button>
-                )
-              })}
-            </div>
-
-            <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-2">
+            <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-4">
               <TabsList className="grid grid-cols-2 w-full">
                 <TabsTrigger value="card" className="text-xs gap-1.5">
                   <CreditCard className="h-3.5 w-3.5" />
@@ -280,9 +268,8 @@ export function VendorPaymentDialog({
             </Tabs>
 
             <p className="pt-3 text-[11px] text-center text-muted-foreground leading-relaxed">
-              Card and bank details are entered directly into our secure payments
-              partner — BuildConnect never sees or stores the raw numbers. Update
-              anytime from your vendor portal.
+              Payment info is stored securely and used for your membership and
+              commission payouts. Update anytime from your vendor portal.
             </p>
           </>
         )}
@@ -340,6 +327,7 @@ function PaymentForm({
       <PaymentFormInner
         kind={kind}
         purpose={purpose}
+        clientSecret={elementsOptions.clientSecret as string}
         initialHolder={initialHolder}
         onMethodSaved={onMethodSaved}
       />
@@ -350,6 +338,7 @@ function PaymentForm({
 interface PaymentFormInnerProps {
   kind: UIKind
   purpose: VendorPaymentPurpose
+  clientSecret: string
   initialHolder: string
   onMethodSaved: (method: Omit<VendorPaymentMethod, 'id'>) => void
 }
@@ -357,6 +346,7 @@ interface PaymentFormInnerProps {
 function PaymentFormInner({
   kind,
   purpose,
+  clientSecret,
   initialHolder,
   onMethodSaved,
 }: PaymentFormInnerProps) {
@@ -365,6 +355,15 @@ function PaymentFormInner({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentElementReady, setPaymentElementReady] = useState(false)
+  const [holderName, setHolderName] = useState(initialHolder)
+  const [cardNumberReady, setCardNumberReady] = useState(false)
+  const [cardExpiryReady, setCardExpiryReady] = useState(false)
+  const [cardCvcReady, setCardCvcReady] = useState(false)
+  const isCard = kind === 'card'
+
+  useEffect(() => {
+    setHolderName(initialHolder)
+  }, [initialHolder, kind])
 
   async function handleSubmit() {
     if (!stripe || !elements) return
@@ -372,16 +371,43 @@ function PaymentFormInner({
     setSubmitting(true)
 
     try {
-      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
-        elements,
-        confirmParams: {
-          return_url: window.location.href,
-          payment_method_data: initialHolder
-            ? { billing_details: { name: initialHolder } }
-            : undefined,
-        },
-        redirect: 'if_required',
-      })
+      let confirmError: { message?: string } | undefined
+      let setupIntent: { id: string } | null | undefined
+
+      if (isCard) {
+        // Split Elements path — reference CardNumberElement; Stripe.js pulls
+        // the paired expiry + cvc from the same Elements instance automatically.
+        const cardNumber = elements.getElement(CardNumberElement)
+        if (!cardNumber) {
+          setError('Card fields not ready.')
+          setSubmitting(false)
+          return
+        }
+        const result = await stripe.confirmCardSetup(clientSecret, {
+          payment_method: {
+            card: cardNumber,
+            billing_details: holderName ? { name: holderName } : {},
+          },
+        })
+        confirmError = result.error
+        setupIntent = result.setupIntent
+      } else {
+        // us_bank_account path — PaymentElement (FC-primary + microdeposit
+        // fallback in single iframe). confirmSetup({elements}) is the canonical
+        // call for PaymentElement.
+        const result = await stripe.confirmSetup({
+          elements,
+          confirmParams: {
+            return_url: window.location.href,
+            payment_method_data: holderName
+              ? { billing_details: { name: holderName } }
+              : undefined,
+          },
+          redirect: 'if_required',
+        })
+        confirmError = result.error
+        setupIntent = result.setupIntent
+      }
 
       if (confirmError) {
         setError(confirmError.message || 'Payment confirmation failed.')
@@ -419,7 +445,7 @@ function PaymentFormInner({
         purpose,
         kind: data.kind === 'us_bank_account' ? 'checking' : 'card',
         last4: data.last4,
-        holder: initialHolder || '',
+        holder: holderName || initialHolder || '',
         brand: data.brand,
         bankName: data.bank_name,
         addedAt: new Date().toISOString(),
@@ -431,30 +457,128 @@ function PaymentFormInner({
     }
   }
 
-  const submitLabel =
-    kind === 'checking' ? 'Connect bank account' : 'Save payment method'
+  // Ready gate: for card kinds, all three split Elements must fire onReady.
+  // For checking, PaymentElement's single onReady is enough.
+  const fieldsReady = isCard
+    ? cardNumberReady && cardExpiryReady && cardCvcReady
+    : paymentElementReady
+
+  const submitLabel = submitLabelFor(kind)
+
+  // Appearance-matched Element options (font + color inherit from surrounding
+  // Input styles so the iframe blends with the plain <Input> next to it).
+  const elementBaseStyle = {
+    style: {
+      base: {
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '14px',
+        color: 'hsl(var(--foreground))',
+        '::placeholder': { color: 'hsl(var(--muted-foreground))' },
+      },
+      invalid: { color: 'hsl(var(--destructive))' },
+    },
+  } as const
+
+  const cardNumberOptions: StripeCardNumberElementOptions = {
+    ...elementBaseStyle,
+    showIcon: false,
+    placeholder: '1234 5678 9012 3456',
+  }
+  const cardExpiryOptions: StripeCardExpiryElementOptions = {
+    ...elementBaseStyle,
+    placeholder: 'MM/YY',
+  }
+  const cardCvcOptions: StripeCardCvcElementOptions = {
+    ...elementBaseStyle,
+    placeholder: '123',
+  }
+
+  // Shared classNames for the <div> that wraps each Stripe Element iframe.
+  // Matches shadcn Input styling so the split iframes look native to the form.
+  const stripeFieldWrapper =
+    'flex h-10 items-center rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2'
 
   return (
     <div className="space-y-4">
-      <PaymentElement
-        onReady={() => setPaymentElementReady(true)}
-        options={{
-          defaultValues: initialHolder
-            ? { billingDetails: { name: initialHolder } }
-            : undefined,
-          layout: { type: 'accordion', defaultCollapsed: false, radios: false, spacedAccordionItems: false },
-          fields: {
-            billingDetails: {
-              name: 'never',
-              email: 'never',
-              phone: 'never',
-              address: 'never',
+      {isCard ? (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="vpd-name-on-card" className="text-xs font-medium">
+              Name on card
+            </Label>
+            <Input
+              id="vpd-name-on-card"
+              type="text"
+              autoComplete="cc-name"
+              placeholder="First Last"
+              value={holderName}
+              onChange={(e) => setHolderName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vpd-card-number" className="text-xs font-medium">
+              Card number
+            </Label>
+            <div id="vpd-card-number" className={stripeFieldWrapper}>
+              <div className="w-full">
+                <CardNumberElement
+                  options={cardNumberOptions}
+                  onReady={() => setCardNumberReady(true)}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="vpd-card-expiry" className="text-xs font-medium">
+                Expires
+              </Label>
+              <div id="vpd-card-expiry" className={stripeFieldWrapper}>
+                <div className="w-full">
+                  <CardExpiryElement
+                    options={cardExpiryOptions}
+                    onReady={() => setCardExpiryReady(true)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vpd-card-cvc" className="text-xs font-medium">
+                CVV
+              </Label>
+              <div id="vpd-card-cvc" className={stripeFieldWrapper}>
+                <div className="w-full">
+                  <CardCvcElement
+                    options={cardCvcOptions}
+                    onReady={() => setCardCvcReady(true)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <PaymentElement
+          onReady={() => setPaymentElementReady(true)}
+          options={{
+            defaultValues: initialHolder
+              ? { billingDetails: { name: initialHolder } }
+              : undefined,
+            layout: { type: 'accordion', defaultCollapsed: false, spacedAccordionItems: false },
+            fields: {
+              billingDetails: {
+                name: 'never',
+                email: 'never',
+                phone: 'never',
+                address: 'never',
+              },
             },
-          },
-          wallets: { applePay: 'never', googlePay: 'never' },
-          terms: { card: 'never', usBankAccount: 'never' },
-        }}
-      />
+            wallets: { applePay: 'never', googlePay: 'never' },
+            terms: { card: 'never', usBankAccount: 'never' },
+          }}
+        />
+      )}
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -463,7 +587,7 @@ function PaymentFormInner({
       )}
       <Button
         onClick={handleSubmit}
-        disabled={!stripe || !elements || !paymentElementReady || submitting}
+        disabled={!stripe || !elements || !fieldsReady || submitting}
         size="lg"
         className="w-full h-11 text-sm font-medium"
       >
