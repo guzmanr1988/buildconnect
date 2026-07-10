@@ -224,10 +224,14 @@ serve(async (req: Request) => {
   const idempotencyKey = `si:${caller.id}:${body.purpose}:${body.kind}:${minuteBucket}`
 
   try {
+    // Card-tab PMC narrows the iframe to card-only AND disables Link "Save my
+    // information" / wallets. Bank-tab keeps payment_method_types narrowing
+    // (PMC and payment_method_types are mutually exclusive per Stripe API).
+    // If STRIPE_PMC_CARD_ONLY_NO_LINK is unset, fall back to previous behavior.
+    const cardPmc = Deno.env.get('STRIPE_PMC_CARD_ONLY_NO_LINK')
     // deno-lint-ignore no-explicit-any
     const setupIntentParams: any = {
       customer: stripeCustomerId,
-      payment_method_types: [body.kind],
       usage: 'off_session', // we'll charge later for membership / commission
       metadata: {
         buildconnect_user_id: caller.id,
@@ -235,6 +239,11 @@ serve(async (req: Request) => {
         buildconnect_kind: body.kind,
         buildconnect_origin: 'stripe-setup-intent-create',
       },
+    }
+    if (body.kind === 'card' && cardPmc) {
+      setupIntentParams.payment_method_configuration = cardPmc
+    } else {
+      setupIntentParams.payment_method_types = [body.kind]
     }
 
     if (body.kind === 'us_bank_account') {
