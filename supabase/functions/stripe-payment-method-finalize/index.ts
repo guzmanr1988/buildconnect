@@ -186,12 +186,20 @@ serve(async (req: Request) => {
   let routingLast4: string | null = null
   let holder: string | null = null
 
+  // card.funding = 'credit' | 'debit' | 'prepaid' | 'unknown' — Stripe derives
+  // this from the BIN post-tokenization. We do NOT ask the user; auto-detect
+  // and stamp it into SetupIntent.metadata.buildconnect_card_funding for
+  // downstream reporting (queryable via Stripe API forever, no DB migration
+  // needed under freeze).
+  let cardFunding: string | null = null
+
   if (kind === 'card' && paymentMethod.card) {
     last4 = paymentMethod.card.last4
     brand = paymentMethod.card.brand
     expMonth = paymentMethod.card.exp_month
     expYear = paymentMethod.card.exp_year
     holder = paymentMethod.billing_details?.name ?? null
+    cardFunding = paymentMethod.card.funding ?? null
   } else if (kind === 'us_bank_account' && paymentMethod.us_bank_account) {
     last4 = paymentMethod.us_bank_account.last4
     bankName = paymentMethod.us_bank_account.bank_name ?? null
@@ -263,6 +271,23 @@ serve(async (req: Request) => {
       error: 'payment_method_upsert_failed',
       detail: upsertErr.message,
     })
+  }
+
+  // Best-effort stamp of card.funding into SetupIntent.metadata for reporting.
+  // Non-critical: if this fails, the primary upsert already committed and we
+  // still return success. Card funding is queryable directly off the
+  // PaymentMethod later if this write is lost.
+  if (cardFunding && !setupIntent.metadata?.buildconnect_card_funding) {
+    try {
+      await stripe.setupIntents.update(setupIntent.id, {
+        metadata: {
+          ...(setupIntent.metadata ?? {}),
+          buildconnect_card_funding: cardFunding,
+        },
+      })
+    } catch (_e) {
+      // Swallow — reporting metadata is non-load-bearing for the flow.
+    }
   }
 
   return jsonResponse(200, {
