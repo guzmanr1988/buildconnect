@@ -442,6 +442,17 @@ function PaymentFormInner({
           defaultValues: initialHolder
             ? { billingDetails: { name: initialHolder } }
             : undefined,
+          layout: { type: 'accordion', defaultCollapsed: false, radios: false, spacedAccordionItems: false },
+          fields: {
+            billingDetails: {
+              name: 'never',
+              email: 'never',
+              phone: 'never',
+              address: 'never',
+            },
+          },
+          wallets: { applePay: 'never', googlePay: 'never' },
+          terms: { card: 'never', usBankAccount: 'never' },
         }}
       />
       {error && (
