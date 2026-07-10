@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { CheckCircle2, CreditCard, Landmark, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, CreditCard, Landmark, Loader2, AlertCircle, Wallet } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
   Elements,
@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getStripe } from '@/lib/stripe-client'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
@@ -40,6 +40,15 @@ import {
 // External prop signature unchanged from the mock — caller still gets a
 // VendorPaymentMethod-shaped object via onSuccess, so /vendor/banking,
 // /vendor/membership, and /auth/register keep working without modification.
+//
+// Three tabs: Credit Card / Debit Card / Checking. Credit + Debit are
+// presentational — both render the SAME split card Elements instance so the
+// iframe (and its PM setup token) is not remounted when the user toggles
+// between them. Funding (credit vs debit) is still resolved by Stripe at
+// tokenization via paymentMethod.card.funding and persisted on
+// SetupIntent.metadata.buildconnect_card_funding by the finalize edge fn.
+// No submit-time credit-vs-debit rejection gate — the tabs are cosmetic,
+// intentionally frictionless.
 //
 // Card branch: Stripe Elements split fields (CardNumber/Expiry/Cvc) — PCI-safe
 // iframe-scoped (SAQ-A eligible). confirmCardSetup on submit.
@@ -65,11 +74,15 @@ export interface VendorPaymentDialogProps {
   initialPurpose?: VendorPaymentPurpose
 }
 
-type UIKind = 'card' | 'checking'
+type UIKind = 'credit' | 'debit' | 'checking'
 type StripeKind = 'card' | 'us_bank_account'
 
 function uiKindFrom(kind: VendorPaymentMethodKind): UIKind {
-  return kind === 'checking' ? 'checking' : 'card'
+  // VendorPaymentMethodKind is 'card' | 'checking' from the caller's view.
+  // Default card-kind entrants land on the Credit Card tab (the first card
+  // tab) — funding is auto-detected by Stripe at tokenization, so this
+  // default is cosmetic-only.
+  return kind === 'checking' ? 'checking' : 'credit'
 }
 
 function stripeKindFor(uiKind: UIKind): StripeKind {
@@ -77,7 +90,9 @@ function stripeKindFor(uiKind: UIKind): StripeKind {
 }
 
 function submitLabelFor(uiKind: UIKind): string {
-  return uiKind === 'checking' ? 'Submit Checking' : 'Submit Card'
+  if (uiKind === 'checking') return 'Submit Checking'
+  if (uiKind === 'debit') return 'Submit Debit Card'
+  return 'Submit Credit Card'
 }
 
 const stripePromise = getStripe()
@@ -105,6 +120,11 @@ export function VendorPaymentDialog({
   // and the edge fn returns 401. Including access_token in deps lets the
   // useEffect re-fire when the session lands.
   const sessionToken = useAuthStore((s) => s.session?.access_token ?? null)
+  // Fetch the SetupIntent per Stripe-kind, not per UI-tab: toggling Credit ↔
+  // Debit stays on stripeKind='card' so the same SI (and the same Stripe
+  // Elements iframe instance) is preserved across those two tabs. Switching
+  // to Checking flips to 'us_bank_account' and re-fetches.
+  const stripeKind = stripeKindFor(kind)
 
   useEffect(() => {
     if (!open) {
@@ -142,7 +162,7 @@ export function VendorPaymentDialog({
           client_secret: string
           error?: string
         }>('stripe-setup-intent-create', {
-          body: { kind: stripeKindFor(kind), purpose },
+          body: { kind: stripeKind, purpose },
         })
         if (cancelled) return
         if (error) {
@@ -164,7 +184,7 @@ export function VendorPaymentDialog({
     return () => {
       cancelled = true
     }
-  }, [open, kind, purpose, success, sessionToken])
+  }, [open, stripeKind, purpose, success, sessionToken])
 
   const elementsOptions: StripeElementsOptions | null = useMemo(
     () =>
@@ -228,10 +248,14 @@ export function VendorPaymentDialog({
             </DialogHeader>
 
             <Tabs value={kind} onValueChange={(v) => setKind(v as UIKind)} className="mt-4">
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="card" className="text-xs gap-1.5">
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="credit" className="text-xs gap-1.5">
                   <CreditCard className="h-3.5 w-3.5" />
-                  Card
+                  Credit Card
+                </TabsTrigger>
+                <TabsTrigger value="debit" className="text-xs gap-1.5">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Debit Card
                 </TabsTrigger>
                 <TabsTrigger value="checking" className="text-xs gap-1.5">
                   <Landmark className="h-3.5 w-3.5" />
@@ -239,7 +263,15 @@ export function VendorPaymentDialog({
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="card" className="mt-4">
+              {/* PaymentForm renders OUTSIDE <TabsContent> on purpose. Credit
+                  and Debit tabs must share the same Stripe Elements iframe
+                  instance so the underlying PM setup token is not regenerated
+                  when the user toggles between them. Placing the form inside
+                  per-tab TabsContent blocks would remount the CardNumberElement
+                  on every tab change. Switching to Checking triggers a
+                  legitimate SI re-fetch (different stripeKind), which does
+                  remount Elements — that's the intended behavior. */}
+              <div className="mt-4">
                 <PaymentForm
                   kind={kind}
                   purpose={purpose}
@@ -250,19 +282,7 @@ export function VendorPaymentDialog({
                   initialHolder={initialHolder}
                   onMethodSaved={handleSuccess}
                 />
-              </TabsContent>
-              <TabsContent value="checking" className="mt-4">
-                <PaymentForm
-                  kind={kind}
-                  purpose={purpose}
-                  intentLoading={intentLoading}
-                  intentError={intentError}
-                  elementsOptions={elementsOptions}
-                  setupIntentId={setupIntentId}
-                  initialHolder={initialHolder}
-                  onMethodSaved={handleSuccess}
-                />
-              </TabsContent>
+              </div>
             </Tabs>
 
             <p className="pt-3 text-[11px] text-center text-muted-foreground leading-relaxed">
@@ -359,7 +379,7 @@ function PaymentFormInner({
   const [routingNumber, setRoutingNumber] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [abaMap, setAbaMap] = useState<Record<string, string> | null>(null)
-  const isCard = kind === 'card'
+  const isCard = kind === 'credit' || kind === 'debit'
 
   useEffect(() => {
     setHolderName(initialHolder)
