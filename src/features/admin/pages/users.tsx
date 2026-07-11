@@ -82,6 +82,7 @@ function roleBadge(role: UserRole) {
     homeowner: { className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
     account_rep: { className: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400' },
     admin_employee: { className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
+    rep: { className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' },
   }
   const cfg = map[role]
   return (

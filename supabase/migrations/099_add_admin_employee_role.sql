@@ -1,0 +1,14 @@
+-- 099_add_admin_employee_role.sql
+-- Fold-back for the Concierge branch — closes a branch-fork gap:
+-- mig 101 declares creator_role/rep_role as user_role enum + compares
+-- to 'admin_employee' literal (lines 198, 210), but no mig 1-104 in
+-- the Concierge branch adds 'admin_employee' to user_role. Apex FE
+-- src/types/index.ts UserRole already declares admin_employee (per
+-- helios cross-check 2026-06-25), so the FE/DB contract was internally
+-- inconsistent before this fix.
+--
+-- Numbered 099 to land BEFORE the 100-104 Concierge slice that depends
+-- on the enum value.
+--
+-- Idempotent — safe to re-run.
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'admin_employee';
