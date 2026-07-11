@@ -11,6 +11,7 @@ const ROLE_HOME: Record<UserRole, string> = {
   account_rep: '/vendor',
   admin: '/admin',
   admin_employee: '/admin',
+  rep: '/admin/rep-requests/mine',
 }
 
 interface RequireRoleProps {

@@ -1,6 +1,6 @@
 // Stripe.js client-side singleton.
 //
-// Initializes Stripe with the VITE_STRIPE_PUBLIC_KEY at module-eval time and
+// Initializes Stripe with the publishable key at module-eval time and
 // returns the cached promise to every <Elements> wrapper. The publishable key
 // is safe to ship in the bundle by design — only the secret key (held in the
 // Edge Function env) can charge / move money.
@@ -41,3 +41,8 @@ export function getStripe(): Promise<Stripe | null> {
 export function isStripeConfigured(): boolean {
   return PUBLISHABLE_KEY.length > 0
 }
+
+// Concierge consumers (rep-request-intake) import `stripePromise` as a const.
+// Alias to getStripe() so both call shapes share the same memoized loadStripe
+// invocation — no double script-tag injection.
+export const stripePromise: Promise<Stripe | null> = getStripe()

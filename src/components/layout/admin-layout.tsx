@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { maybeSeedSampleReview } from '@/lib/sample-review-seed'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy, Gift } from 'lucide-react'
+import { LayoutDashboard, DollarSign, Users, Receipt, Landmark, Settings, Bug as BugIcon, Menu, Package, Home, User, GitBranch, MessageSquare, FileText, AlertCircle, UserCog, PlayCircle, RotateCcw, X as XIcon, Activity as ActivityIcon, ChevronDown, ChevronRight, ShieldCheck, Wallet, LifeBuoy, Gift, Briefcase, Calendar as CalendarIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -42,6 +42,25 @@ const navItems: NavEntry[] = [
   // See ADMIN_EMPLOYEE_ALLOWED_ROUTES below.
   { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
   { to: '/admin/homeowners', icon: Home, label: 'Homeowners' },
+  // Concierge "Request a Rep" — TWO nav entries, role-filtered: admin
+  // sees the god-view queue at /admin/rep-requests; rep sees the
+  // rep-scoped queue at /admin/rep-requests/mine. The /mine entry is
+  // gated by REP_ONLY_ROUTES so admin's default sidebar doesn't show
+  // duplicate Rep Requests entries; rep's sidebar shows ONLY the
+  // /mine entry via REP_ALLOWED_ROUTES (positive list).
+  // pin-75 — Rep Requests is now a children-group with a nested 'Visit
+  // Calendar' sub-route under it (Banking dropdown pattern, kratos
+  // 2026-06-30). Parent click still navigates to /admin/rep-requests;
+  // chevron toggles expand to surface the calendar child.
+  {
+    to: '/admin/rep-requests',
+    icon: Briefcase,
+    label: 'Rep Requests',
+    children: [
+      { to: '/admin/rep-requests/calendar', icon: CalendarIcon, label: 'Visit Calendar' },
+    ],
+  },
+  { to: '/admin/rep-requests/mine', icon: Briefcase, label: 'Rep Requests' },
   // Ship #314 — BuildConnect contract review queue. Cross-functional
   // surface (vendor + homeowner + financial all touch) so top-level
   // rather than nested under Banking.
@@ -73,9 +92,29 @@ function isNavGroup(item: NavEntry): item is NavGroup {
   return 'children' in item
 }
 
+// Rod 2026-06-28: selecting a row on /admin/rep-requests was firing the
+// admin-shell page-swap transition because location.pathname changes
+// from /admin/rep-requests to /admin/rep-requests/{id}. Collapse the
+// god-view queue + its detail-pin variants to one stable key so list-
+// row selection does not re-trigger AnimatePresence. /admin/rep-requests/mine
+// is a separate page and intentionally not collapsed here (scoped to the
+// god-view selection transition only per kratos dispatch).
+function pageAnimateKey(pathname: string): string {
+  if (pathname === '/admin/rep-requests') return '/admin/rep-requests'
+  const m = /^\/admin\/rep-requests\/([^/]+)$/.exec(pathname)
+  // 'mine' and 'calendar' are sibling pages, NOT detail-pins on the
+  // god-view queue — keep their own animate keys so navigating to/from
+  // them runs the normal page-swap transition.
+  if (m && m[1] !== 'mine' && m[1] !== 'calendar') return '/admin/rep-requests'
+  return pathname
+}
+
 // Slim sidebar for admin_employee: Profile, Overview, Vendors, Users,
 // Messages, Support (wave-18 #3 — kratos widen 1781112259222) — no
-// Banking dropdown, Bug Tracker, Settings, etc.
+// Banking dropdown, Bug Tracker, Settings, etc. Rep-request restore
+// 2026-07-11 (kratos msg 1783806516211): admin_employee restriction
+// preserved as-is; rep-request routes NOT added to this allowed-set.
+// Full-parity-vs-restricted question escalated separately to Rod.
 const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
   '/admin/profile',
   '/admin',
@@ -85,13 +124,36 @@ const ADMIN_EMPLOYEE_ALLOWED_ROUTES = new Set<string>([
   '/admin/support',
 ])
 
+// Concierge rep role — sidebar shows ONLY Profile + own-queue entry.
+// rep is mounted inside the /admin tree (admin permission-set is a
+// strict superset of rep, PURE-SEPARATE role enum, no junction) but
+// must NOT see the god-view queue or any other admin surface; route
+// guard in useEffect below redirects any non-allowed admin/* path
+// back to /admin/rep-requests/mine.
+const REP_ALLOWED_ROUTES = new Set<string>([
+  '/admin/profile',
+  '/admin/rep-requests/mine',
+])
+
+// Entries that should be HIDDEN from default (admin) sidebar to
+// avoid duplicate-label rendering — currently just the rep-mine
+// alias which only rep should see.
+const REP_ONLY_ROUTES = new Set<string>([
+  '/admin/rep-requests/mine',
+])
+
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const profile = useAuthStore((s) => s.profile)
   const isAdminEmployee = profile?.role === 'admin_employee'
+  const isRep = profile?.role === 'rep'
   const visibleNavItems = isAdminEmployee
     ? navItems.filter((item): item is NavLeaf => !isNavGroup(item) && ADMIN_EMPLOYEE_ALLOWED_ROUTES.has(item.to))
-    : navItems
+    : isRep
+    ? navItems.filter((item): item is NavLeaf => !isNavGroup(item) && REP_ALLOWED_ROUTES.has(item.to))
+    // admin sees full sidebar; hide rep-only entries to avoid duplicate
+    // Rep Requests label (rep-mine alias only renders for rep role).
+    : navItems.filter((item) => !REP_ONLY_ROUTES.has(item.to))
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // Ship #315 — pending-review count badge on the Reviews nav entry.
   // Ship #328 — refactored to use shared NavBadge primitive + badges-by-
@@ -225,6 +287,21 @@ export function AdminLayout() {
       path.startsWith('/admin/vendors/')
     if (!isAllowed) {
       navigate('/admin', { replace: true })
+    }
+  }, [profile?.role, location.pathname, navigate])
+
+  // rep route guard: redirect any non-allowed admin/* surface back to
+  // the rep's own queue. Allowed paths = REP_ALLOWED_ROUTES sidebar set
+  // + /admin/rep-requests/mine/<id> for detail-pin deep-links. RLS on
+  // rep_requests enforces row-level scoping; this is UX-only.
+  useEffect(() => {
+    if (profile?.role !== 'rep') return
+    const path = location.pathname
+    const isAllowed =
+      REP_ALLOWED_ROUTES.has(path) ||
+      path.startsWith('/admin/rep-requests/mine/')
+    if (!isAllowed) {
+      navigate('/admin/rep-requests/mine', { replace: true })
     }
   }, [profile?.role, location.pathname, navigate])
 
@@ -399,7 +476,7 @@ export function AdminLayout() {
         <main className={cn(isMobile ? 'px-4 pt-24 pb-4' : 'p-6')}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              key={pageAnimateKey(location.pathname)}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
