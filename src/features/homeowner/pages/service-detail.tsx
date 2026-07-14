@@ -1,6 +1,6 @@
 import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
@@ -639,9 +639,20 @@ export function ServiceDetailPage() {
   // block:'center' and pulse it for 800ms so the client sees where to go
   // next. Supersedes the wizard-complete scrollToFirstConfigSection() for
   // roofing (removed inline) so there's a single, timed scroll path.
+  // Mount-guard (iris fidelity review, kratos msg 1783992387685): the
+  // effect dep [serviceId, roofMeasurement] also fires on MOUNT, so a
+  // returning homeowner who already has a measurement would get an
+  // unwanted auto-scroll to service_type on page load. Skip the first
+  // fire when roofMeasurement is truthy at mount; new measurements
+  // (null → truthy) still land the scroll.
+  const isMountedMeasurementRef = useRef(!!roofMeasurement)
   useEffect(() => {
     if (serviceId !== 'roofing') return
     if (!roofMeasurement) return
+    if (isMountedMeasurementRef.current) {
+      isMountedMeasurementRef.current = false
+      return
+    }
     let pulseClearId: number | undefined
     const settleId = window.setTimeout(() => {
       document
@@ -3272,7 +3283,19 @@ export function ServiceDetailPage() {
             !pergolasStructuresAllAssigned
           ) && (
             <p className="text-xs text-muted-foreground text-center">
-              {gatingReason()}
+              {/* SPEC C L2 (Rod-directed roofing wizard redesign
+                  2026-07-14, iris reconciliation via kratos msg
+                  1783992252440). When the current blocker is an
+                  incomplete required optionGroup, the SPEC C L1 inline
+                  cue on the group card already names it — show a
+                  generic message here to avoid duplicate naming. For
+                  the downstream structural gates (property / permit /
+                  association / pool survey / pitched-omitted ack /
+                  pergolas structure assign) — which have no inline
+                  card — keep gatingReason()'s specific copy. This is a
+                  render-site conditional; gatingReason() itself is
+                  unchanged. */}
+              {allRequiredDone ? gatingReason() : 'Complete selections above to continue.'}
             </p>
           )}
           {alreadyInCart && (
