@@ -801,10 +801,37 @@ export function ServiceDetailPage() {
   const services = useCatalogStore((s) => s.services)
   const service = services.find((s) => s.id === serviceId)
 
+  // Rod caught (#517 post-ship): for roofing, scrollIntoView({block:'start'})
+  // on the first optionGroup landed under the fixed homeowner header pill
+  // AND overshot past the "Next" cue banner (rendered above the Configure
+  // section), leaving the user staring at a later step with no visible cue.
+  // Fix (roofing only): target the cue banner (falling back to the first
+  // VISIBLE roofing step card) and use window.scrollTo with a manual offset
+  // that clears the fixed header pill so the banner + Step 1 land above the
+  // fold. Non-roofing services keep the original scrollIntoView behavior.
   const scrollToFirstConfigSection = () => {
-    const firstGroupId = service?.optionGroups?.[0]?.id
-    if (!firstGroupId) return
     window.setTimeout(() => {
+      if (serviceId === 'roofing') {
+        const target =
+          document.querySelector<HTMLElement>('[data-testid="roofing-next-cue-banner"]') ||
+          (roofingVisibleGroups[0]
+            ? document.querySelector<HTMLElement>(
+                `[data-service-section="${roofingVisibleGroups[0].id}"]`,
+              )
+            : null)
+        if (!target) return
+        const headerEl = document.querySelector<HTMLElement>(
+          '[data-homeowner-desktop-header-pill="true"], [data-homeowner-top-header-pill="true"]',
+        )
+        const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 0
+        const clearance = 16
+        const top =
+          target.getBoundingClientRect().top + window.scrollY - headerBottom - clearance
+        window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' })
+        return
+      }
+      const firstGroupId = service?.optionGroups?.[0]?.id
+      if (!firstGroupId) return
       document
         .querySelector(`[data-service-section="${firstGroupId}"]`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
