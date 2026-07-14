@@ -1699,7 +1699,7 @@ export function ServiceDetailPage() {
                   </div>
                   {isLockedStep && stepMeta!.lockedByLabel && (
                     <p className="text-xs text-muted-foreground mt-2 ml-11">
-                      Select {stepMeta!.lockedByLabel.toLowerCase()} to continue.
+                      Select a {stepMeta!.lockedByLabel.toLowerCase()} to continue.
                     </p>
                   )}
                 </div>
