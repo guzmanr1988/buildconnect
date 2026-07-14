@@ -1219,11 +1219,11 @@ export function ServiceDetailPage() {
           <Icon className="h-8 w-8 text-white" strokeWidth={1.8} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl font-bold font-heading text-foreground tracking-tight">
               {service.name}
             </h1>
-            <TutorialButton serviceId={service.id} className="self-start sm:mt-0.5" />
+            <TutorialButton serviceId={service.id} className="mt-0.5" />
           </div>
           <p className="mt-1 text-[15px] text-muted-foreground leading-relaxed">
             {service.description}
