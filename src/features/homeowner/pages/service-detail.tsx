@@ -3011,26 +3011,28 @@ export function ServiceDetailPage() {
           if (rows.length === 0) return null
           return (
             <div className="mt-6" data-addon-summary-card="true">
-              <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Add-on Summary
-                </span>
-                <div className="space-y-2">
-                  {rows.map((r) => (
-                    <div key={r.id} className="flex items-baseline justify-between gap-3" data-addon-row={r.id}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Add-on Summary
+              </p>
+              <div className="space-y-3">
+                {rows.map((r) => (
+                  <div
+                    key={r.id}
+                    data-addon-row={r.id}
+                    className="rounded-xl border bg-background p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
                       <p className="text-sm font-medium text-foreground">{r.label}</p>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-foreground">
-                          {r.qty.toLocaleString()}{' '}
-                          <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>
-                        </p>
-                        {r.sublabel && (
-                          <p className="text-[11px] text-muted-foreground">{r.sublabel}</p>
-                        )}
-                      </div>
+                      <p className="text-sm font-semibold text-foreground shrink-0">
+                        {r.qty.toLocaleString()}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">{r.unit}</span>
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    {r.sublabel && (
+                      <p className="text-xs text-muted-foreground mt-1.5">{r.sublabel}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )
