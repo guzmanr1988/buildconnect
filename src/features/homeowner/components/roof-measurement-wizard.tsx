@@ -300,6 +300,11 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
   const [adjPerimeterFt, setAdjPerimeterFt] = useState('')
 
   const setAddressInputRef = usePlacesAutocomplete(gmpEnabled, MAPS_KEY, setAddress)
+  const addressInputEl = useRef<HTMLInputElement | null>(null)
+  const composedAddressRef = useCallback((node: HTMLInputElement | null) => {
+    addressInputEl.current = node
+    setAddressInputRef(node)
+  }, [setAddressInputRef])
 
   // Internal measurement runner — accepts an explicit address arg so the open
   // auto-trigger can call it without depending on the (just-set) `address`
@@ -356,6 +361,19 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
     setAdjFlatArea('')
     setAdjPerimeterFt('')
     setStep(1)
+    // Dialog auto-focuses the input on open; when it's pre-filled the browser
+    // scrolls the cursor to the end, hiding the leading characters on narrow
+    // (mobile) widths. Push selection + scroll back to the start so the whole
+    // address is visible.
+    if (defaultAddress) {
+      requestAnimationFrame(() => {
+        const el = addressInputEl.current
+        if (el) {
+          el.setSelectionRange(0, 0)
+          el.scrollLeft = 0
+        }
+      })
+    }
   }, [open, defaultAddress])
 
   const startMeasuring = () => {
@@ -442,7 +460,7 @@ export function RoofMeasurementWizard({ open, onClose, defaultAddress, onComplet
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <input
-                    ref={setAddressInputRef}
+                    ref={composedAddressRef}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-base ring-offset-background placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="1234 Coral Way, Miami, FL 33145"
                     value={address}
