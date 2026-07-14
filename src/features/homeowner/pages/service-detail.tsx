@@ -400,6 +400,12 @@ export function ServiceDetailPage() {
   )
   const [wizardOpen, setWizardOpen] = useState(false)
   const [roofMeasurement, setRoofMeasurement] = useState<{ areaSqft: number; pitch: string; address: string; perimeterFt?: number; pitchedAreaSqft?: number; flatAreaSqft?: number; includeMaterialOrder?: boolean; includePerimeter?: boolean; includeFlatArea?: boolean } | null>(null)
+  // Roofing step-wizard cue: after satellite measurement completes, briefly
+  // surface a prominent "Next: Step X — [label]" banner + pulse the active
+  // step card so the homeowner is never left scrolling with no next-step
+  // signal (Rod voice 2026-07-14, dispatch kratos msg 1783993919584). Auto-
+  // clears after 6s or on any first interaction with the option groups.
+  const [showRoofingNextCue, setShowRoofingNextCue] = useState(false)
   // Under-quote guard: explicit acknowledgment that order is flat-add-on only
   // when chip-tap excludes pitched but satellite detected significant pitched area.
   // Reset on material-selection change so user re-acknowledges if they re-fall
@@ -551,6 +557,9 @@ export function ServiceDetailPage() {
     toast.success('Roof measured — your config is pre-filled!')
     if (serviceId === 'roofing') {
       scrollToFirstConfigSection()
+      // Impossible-to-miss next-step cue: banner + pulse the first step card.
+      // Auto-clears after 6s (see effect below) or when user starts selecting.
+      setShowRoofingNextCue(true)
     }
   }
 
@@ -802,6 +811,15 @@ export function ServiceDetailPage() {
     }, 80)
   }
 
+  // Auto-clear the roofing next-step cue after 6s so it doesn't linger once
+  // the homeowner has seen it. Also cleared imperatively when the user makes
+  // their first selection (see handleSelect wrap below).
+  useEffect(() => {
+    if (!showRoofingNextCue) return
+    const t = window.setTimeout(() => setShowRoofingNextCue(false), 6000)
+    return () => window.clearTimeout(t)
+  }, [showRoofingNextCue])
+
   useDocumentTitle(service?.name)
 
   useEffect(() => {
@@ -918,6 +936,61 @@ export function ServiceDetailPage() {
     roofMeasurement?.includeMaterialOrder === false &&
     roofMeasurement?.includePerimeter === true
 
+  // Roofing step-wizard: numbered step per visible optionGroup. Iris audit
+  // (kratos msg 1783993919584) called out the "wall of chip groups" pattern
+  // that leaves homeowners scrolling with no signal of what's next. Anchor
+  // stays measurement-first (per feedback_ux_recommendations_must_respect_
+  // per_service_type_logic — roofing measures first because sqft drives the
+  // quote); this only adds numbered chrome around the existing groups so the
+  // step-of-N is legible without changing shape or order. Roofing only for
+  // now — pattern is structured so it can generalize later without a rewrite.
+  const roofingVisibleGroups =
+    serviceId === 'roofing'
+      ? service.optionGroups.filter((g) => {
+          if (!isRevealed(g)) return false
+          if (g.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) return false
+          if (g.id === 'material' && (selections.service_type ?? []).includes('addons')) return false
+          return true
+        })
+      : []
+  type RoofingStepStatus = 'complete' | 'active' | 'locked'
+  interface RoofingStepMeta {
+    index: number
+    total: number
+    status: RoofingStepStatus
+    lockedByLabel?: string
+  }
+  // Numbered-step metadata for a roofing groupId. A required step becomes
+  // 'complete' when it has a selection, 'active' when unselected AND all
+  // prior REQUIRED steps are complete, 'locked' otherwise. Optional steps
+  // (Add-ons, gated repair_materials) never lock — the user can skip them.
+  const getRoofingStepMeta = (groupId: string): RoofingStepMeta | null => {
+    if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
+    const total = roofingVisibleGroups.length
+    const idx = roofingVisibleGroups.findIndex((g) => g.id === groupId)
+    if (idx === -1) return null
+    const g = roofingVisibleGroups[idx]
+    const has = (selections[g.id]?.length ?? 0) > 0
+    if (has) return { index: idx + 1, total, status: 'complete' }
+    const priorBlocker = roofingVisibleGroups
+      .slice(0, idx)
+      .find((pg) => pg.required && (selections[pg.id]?.length ?? 0) === 0)
+    if (priorBlocker && g.required) {
+      return { index: idx + 1, total, status: 'locked', lockedByLabel: priorBlocker.label }
+    }
+    return { index: idx + 1, total, status: 'active' }
+  }
+  // First not-yet-complete step across the visible list — drives the
+  // post-measurement "Next" banner + which card gets the pulsing accent.
+  const roofingActiveStep = (() => {
+    if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
+    const idx = roofingVisibleGroups.findIndex(
+      (g) => (selections[g.id]?.length ?? 0) === 0,
+    )
+    if (idx === -1) return null
+    return { group: roofingVisibleGroups[idx], index: idx + 1, total: roofingVisibleGroups.length }
+  })()
+
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
 
   // Radio-across resolver: choiceId may be either a sub_group id (Cabinet
@@ -982,6 +1055,9 @@ export function ServiceDetailPage() {
   }
 
   function handleSelect(group: OptionGroup, optionId: string) {
+    // First real chip-tap clears the post-measurement cue banner (impossible-
+    // to-miss cue served its purpose the moment the user starts selecting).
+    if (showRoofingNextCue) setShowRoofingNextCue(false)
     // Arc-31 — Service Type chip-tap drives roof-measurement state.
     // Replaces the prior PR-219 toggle→service_type reverse-coupling
     // useEffects. Mapping (Rod-locked 2026-05-23):
@@ -1284,6 +1360,35 @@ export function ServiceDetailPage() {
         </motion.div>
       )}
 
+      {/* Post-measurement "Next" cue — impossible-to-miss step signal
+          per kratos msg 1783993919584 ("that scroll-with-no-signal moment
+          is the exact thing Rod flagged"). Roofing only; renders once
+          measurement has completed AND a not-yet-complete step exists.
+          Auto-clears after 6s (state effect) or on first chip tap. */}
+      {serviceId === 'roofing' && showRoofingNextCue && roofingActiveStep && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          data-testid="roofing-next-cue-banner"
+          className="rounded-2xl border-2 border-primary bg-primary/10 p-4 shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold shrink-0">
+              {roofingActiveStep.index}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Next: Step {roofingActiveStep.index} of {roofingActiveStep.total} — {roofingActiveStep.group.label}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pick below to continue.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Configuration section */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -1298,8 +1403,29 @@ export function ServiceDetailPage() {
           Select your preferences below to get matched with the right contractors.
         </p>
 
-        {/* Progress */}
-        {requiredGroups.length > 0 && (
+        {/* Progress — roofing shows numbered step-of-N with the current
+            step's label so the homeowner never has to scan the list to find
+            where they are. Other services keep the compact "done/total"
+            counter unchanged. */}
+        {serviceId === 'roofing' && roofingVisibleGroups.length > 0 ? (
+          <div className="mb-6 flex items-center gap-3">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+              <motion.div
+                className="h-full rounded-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${roofingActiveStep ? ((roofingActiveStep.index - 1) / roofingActiveStep.total) * 100 : 100}%`,
+                }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground whitespace-nowrap font-medium" data-testid="roofing-step-progress-label">
+              {roofingActiveStep
+                ? `Step ${roofingActiveStep.index} of ${roofingActiveStep.total} — ${roofingActiveStep.group.label}`
+                : `All ${roofingVisibleGroups.length} steps complete`}
+            </span>
+          </div>
+        ) : requiredGroups.length > 0 && (
           <div className="mb-6 flex items-center gap-3">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
               <motion.div
@@ -1384,6 +1510,18 @@ export function ServiceDetailPage() {
             const hasSelection = selected.length > 0
             const useAccordion = serviceId === 'wall_paneling'
             const bodyVisible = !useAccordion || isExpanded
+            // Roofing step-wizard metadata (see getRoofingStepMeta above).
+            // Null for non-roofing services — those keep the pre-existing
+            // plain header + body render below.
+            const stepMeta = getRoofingStepMeta(group.id)
+            const isRoofingStep = stepMeta !== null
+            const isLockedStep = stepMeta?.status === 'locked'
+            const isActiveStep = stepMeta?.status === 'active'
+            const isCompleteStep = stepMeta?.status === 'complete'
+            const pulseThisStep = Boolean(
+              isRoofingStep && isActiveStep && showRoofingNextCue &&
+              roofingActiveStep?.group.id === group.id,
+            )
             return (
               <div
                 key={group.id}
@@ -1393,6 +1531,8 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
+                data-roofing-step={stepMeta ? stepMeta.status : undefined}
+                data-roofing-step-index={stepMeta ? stepMeta.index : undefined}
                 {...(useAccordion
                   ? {
                       'data-group-expanded': isExpanded ? 'true' : 'false',
@@ -1400,6 +1540,13 @@ export function ServiceDetailPage() {
                     }
                   : {})}
                 style={useAccordion && isExpanded ? { gridColumn: '1 / -1' } : undefined}
+                className={cn(
+                  isRoofingStep && 'rounded-2xl border p-4 transition-all duration-200',
+                  isRoofingStep && isCompleteStep && 'border-emerald-500/30 bg-emerald-500/5',
+                  isRoofingStep && isActiveStep && 'border-primary/40 bg-primary/[0.04] shadow-sm',
+                  isRoofingStep && isLockedStep && 'border-muted bg-muted/20',
+                  pulseThisStep && 'ring-2 ring-primary/70 animate-pulse',
+                )}
               >
                 {useAccordion ? (
                 <button
@@ -1462,6 +1609,44 @@ export function ServiceDetailPage() {
                     />
                   </span>
                 </button>
+                ) : isRoofingStep ? (
+                <div className="mb-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        'inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold shrink-0',
+                        isCompleteStep && 'bg-emerald-500 text-white',
+                        isActiveStep && 'bg-primary text-primary-foreground',
+                        isLockedStep && 'bg-muted text-muted-foreground',
+                      )}
+                      aria-hidden="true"
+                    >
+                      {isCompleteStep ? <Check className="h-4 w-4" /> : stepMeta!.index}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                          Step {stepMeta!.index} of {stepMeta!.total}
+                        </span>
+                        {group.required ? (
+                          <span className="text-destructive text-xs">*</span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground font-medium bg-muted rounded-full px-2 py-0.5">
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-foreground block" data-group-label={groupLabel}>
+                        {groupLabel}
+                      </span>
+                    </div>
+                  </div>
+                  {isLockedStep && stepMeta!.lockedByLabel && (
+                    <p className="text-xs text-muted-foreground mt-2 ml-11">
+                      Complete "{stepMeta!.lockedByLabel}" to continue.
+                    </p>
+                  )}
+                </div>
                 ) : (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground" data-group-label={groupLabel}>
@@ -1477,7 +1662,13 @@ export function ServiceDetailPage() {
                 </div>
                 )}
                 {bodyVisible && (
-                <div className={useAccordion ? 'mt-3' : ''}>
+                <div
+                  className={cn(
+                    useAccordion && 'mt-3',
+                    isLockedStep && 'opacity-50 pointer-events-none select-none',
+                  )}
+                  aria-disabled={isLockedStep || undefined}
+                >
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
                     ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
