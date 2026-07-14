@@ -51,25 +51,33 @@ export function MeasurementTutorialCTA({ serviceId, className }: { serviceId: st
             Watch the step-by-step tutorial.
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="shrink-0 gap-1.5 border-sky-300 bg-white/60 text-sky-800 hover:bg-white dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100"
-          onClick={() => {
-            // Ship #254 — navigate to the homeowner tutorials page with
-            // service-id filter pre-applied. /home/tutorials already
-            // supports ?service=<id> via useSearchParams and renders
-            // the service-specific bucket + general bucket alongside.
-            // Video URLs on the tutorials page itself still placeholder-
-            // staged (pre-content); navigation path becomes real.
-            navigate(`/home/tutorials?service=${serviceId}`)
-          }}
-        >
-          <PlayCircle className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Watch tutorial</span>
-          <span className="sm:hidden">Watch</span>
-        </Button>
+        <TutorialButton serviceId={serviceId} />
       </CardContent>
     </Card>
+  )
+}
+
+// Standalone Watch-tutorial button. Rod voice-directive 2026-07-14 relocated
+// the button out of the service-detail info card and up into the page header
+// row (right of title/description) to reclaim vertical space; the info-card
+// variant above still ships inside the roofing wizard modal step 2.
+export function TutorialButton({ serviceId, className }: { serviceId: string; className?: string }) {
+  const navigate = useNavigate()
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className={cn(
+        'shrink-0 gap-1.5 border-sky-300 bg-white/60 text-sky-800 hover:bg-white dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100',
+        className,
+      )}
+      onClick={() => {
+        navigate(`/home/tutorials?service=${serviceId}`)
+      }}
+    >
+      <PlayCircle className="h-3.5 w-3.5" />
+      <span className="hidden sm:inline">Watch tutorial</span>
+      <span className="sm:hidden">Watch</span>
+    </Button>
   )
 }
