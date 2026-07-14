@@ -1136,7 +1136,37 @@ export function ServiceDetailPage() {
       // clean slate rather than the addons-leftover M=F=false state.
       const current = selections[group.id] ?? []
       if (current.includes(optionId)) {
-        setSelections((prev) => ({ ...prev, [group.id]: [] }))
+        // Rod 2026-07-14 post-#521-preview review: deselecting Step-1
+        // service_type must CASCADE-CLEAR all dependent downstream state so
+        // Step 2 re-locks as if untouched. Prior toggle-off only reset
+        // selections[service_type] + roof-measurement flags — the Step-2
+        // material chip, its saved color, and any Step-3 add-ons stayed
+        // sticky (repro: replace → metal + color → deselect replace →
+        // metal stayed selected).
+        setSelections((prev) => {
+          const next: Record<string, string[]> = {}
+          Object.entries(prev).forEach(([key, val]) => {
+            if (key === group.id) return
+            if (key === 'material' || key === 'addons' || key === 'repair_materials') return
+            if (key.endsWith('-sub')) return
+            next[key] = val
+          })
+          return next
+        })
+        setMetalRoofSelection({ color: '', roofSize: '' })
+        setMetalRoofConfigOpen(false)
+        setShingleSelection({ color: '', roofSize: '' })
+        setShingleConfigOpen(true)
+        setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
+        setTileConfigOpen(true)
+        setAluminumSelection({ color: '', roofSize: '' })
+        setAluminumConfigOpen(true)
+        setFlatRoofSelection({ membraneType: '', roofSize: '' })
+        setFlatRoofConfigOpen(true)
+        setAddonLinearFt({})
+        setAddonConfigOpen({})
+        setSubGroupLinearFt({})
+        setFlatOnlyAck(false)
         setRoofMeasurement((prev) =>
           prev
             ? { ...prev, includeMaterialOrder: true, includePerimeter: true, includeFlatArea: true }
