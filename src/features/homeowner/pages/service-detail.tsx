@@ -1331,7 +1331,7 @@ export function ServiceDetailPage() {
             <RoofMeasurementWizard
               open={wizardOpen}
               onClose={() => setWizardOpen(false)}
-              defaultAddress={selectedAddress?.full ?? ''}
+              defaultAddress={selectedAddress?.full || homeownerProfile.address || ''}
               onComplete={handleWizardComplete}
               material={dominantMaterial}
               hasFlatSection={hasFlatSection}
