@@ -385,7 +385,24 @@ export function computeVendorTotal(
             const effectiveLinFt = optionId === 'gutters'
               ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
               : linFt
-            totalCents += basePrice * effectiveLinFt
+            // Gutter style sub-option pricing (stable IDs contract with
+            // hermes: sub_group_id="gutter_style", sub_option_id=
+            // "traditional"|"modern"). Prefer the per-style sub_option
+            // price when the homeowner has picked a style AND the DB row
+            // exists; fall back to the legacy option-level basePrice when
+            // either is absent (pre-DDL preview + mid-migration carts).
+            let effectiveBasePrice = basePrice
+            if (optionId === 'gutters' && item.gutterDropsConfig?.style) {
+              const styleKey = subOptionPriceKey(
+                item.serviceId,
+                groupId,
+                'gutters',
+                item.gutterDropsConfig.style,
+              )
+              const stylePrice = priceMap.get(styleKey)
+              if (stylePrice !== undefined) effectiveBasePrice = stylePrice
+            }
+            totalCents += effectiveBasePrice * effectiveLinFt
           }
         } else {
           totalCents += basePrice
