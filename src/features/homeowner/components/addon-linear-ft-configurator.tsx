@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
+import { GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt, type GutterStyle } from '@/lib/roof-pricing'
 
 interface AddonLinearFtConfiguratorProps {
   id: string
@@ -14,8 +14,10 @@ interface AddonLinearFtConfiguratorProps {
   gutterExtras?: {
     floors: 1 | 2 | null
     drops: number
+    style: GutterStyle
     onFloorsChange: (n: 1 | 2) => void
     onDropsChange: (n: number) => void
+    onStyleChange: (s: GutterStyle) => void
   }
   // PR-#404 — consolidate variant pills inside this card (Rod live-feedback
   // on PR-#403 Soffit/Fascia: one box, not pills-row + card). When provided,
@@ -140,6 +142,38 @@ export function AddonLinearFtConfigurator({
             value={value}
             onChange={(e) => onChange(e.target.value)}
           />
+          {isGutter && gutterExtras && (
+            <div
+              className="flex items-center gap-2"
+              role="radiogroup"
+              aria-label="Gutter style"
+              data-testid="gutter-style-toggle"
+            >
+              {(['traditional', 'modern'] as const).map((s) => {
+                const isSelected = gutterExtras.style === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    data-chip-id={s}
+                    data-chip-group="gutter_style"
+                    data-chip-state={isSelected ? 'active' : 'inactive'}
+                    onClick={() => gutterExtras.onStyleChange(s)}
+                    className={cn(
+                      'rounded-xl border px-3 py-2 text-sm text-center transition-all duration-150',
+                      isSelected
+                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground',
+                    )}
+                  >
+                    {s === 'traditional' ? 'Traditional' : 'Modern'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {inlineVariantSelector && inlineVariantSelector.variants.length > 0 && (
             <div
               className="flex flex-wrap gap-2"
