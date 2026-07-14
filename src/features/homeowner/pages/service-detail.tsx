@@ -1029,6 +1029,30 @@ export function ServiceDetailPage() {
     return { group: roofingVisibleGroups[idx], index: idx + 1, total: roofingVisibleGroups.length }
   })()
 
+  // Roofing color-mandatory gate (Rule B, task_488). Every SELECTED colorable
+  // material must have its saved color before the homeowner can advance —
+  // Rod: "when you choose the roof type, you got to choose the color
+  // mandatory". `colorSelected` is post-Save (the .color field on each
+  // configurator selection), not just expanded/highlighted. flat_roof is
+  // NOT colorable (uses membraneType). Applied at two surfaces:
+  //   (1) metal collapsed color row visual (border-destructive/40 + asterisk
+  //       + "Color required to continue." caption) — B1 metal-only per iris;
+  //       shingle/tile/aluminum uniform visual is a separate follow-up.
+  //   (2) main "Add to Project" CTA disabled chain — applies to ALL 5
+  //       colorable materials regardless of visual surface.
+  const ROOFING_COLORABLE_MATERIALS = ['metal', 'shingle', 'barrel_tile', 'terracotta', 'aluminum']
+  const selectedRoofingMaterials = serviceId === 'roofing' ? (selections.material ?? []) : []
+  const hasColorableMaterial =
+    serviceId === 'roofing' &&
+    selectedRoofingMaterials.some((m) => ROOFING_COLORABLE_MATERIALS.includes(m))
+  const colorSelected =
+    (!selectedRoofingMaterials.includes('metal') || !!metalRoofSelection.color) &&
+    (!selectedRoofingMaterials.includes('shingle') || !!shingleSelection.color) &&
+    (!selectedRoofingMaterials.includes('barrel_tile') || !!tileSelection.tileColor) &&
+    (!selectedRoofingMaterials.includes('terracotta') || !!tileSelection.tileColor) &&
+    (!selectedRoofingMaterials.includes('aluminum') || !!aluminumSelection.color)
+  const roofingColorGateBlocks = hasColorableMaterial && !colorSelected
+
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
 
   // Radio-across resolver: choiceId may be either a sub_group id (Cabinet
@@ -1675,7 +1699,7 @@ export function ServiceDetailPage() {
                   </div>
                   {isLockedStep && stepMeta!.lockedByLabel && (
                     <p className="text-xs text-muted-foreground mt-2 ml-11">
-                      Complete "{stepMeta!.lockedByLabel}" to continue.
+                      Select {stepMeta!.lockedByLabel.toLowerCase()} to continue.
                     </p>
                   )}
                 </div>
@@ -2676,41 +2700,56 @@ export function ServiceDetailPage() {
                       const label = savedId
                         ? (savedEntry?.label ?? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
                         : 'Choose a color'
+                      const metalNeedsColor = !savedId
                       return (
-                        <button
-                          type="button"
-                          onClick={() => setMetalRoofConfigOpen((prev) => !prev)}
-                          data-testid="metal-color-summary-row"
-                          data-color-collapse-state={metalRoofConfigOpen ? 'expanded' : 'collapsed'}
-                          data-color-selected={savedId || 'none'}
-                          aria-expanded={metalRoofConfigOpen}
-                          aria-controls="metal-color-config-body"
-                          className="w-full rounded-xl border border-muted bg-background px-3 py-2.5 flex items-center justify-between cursor-pointer text-left"
-                        >
-                          <span className="flex items-center min-w-0">
-                            <span
-                              className={cn(
-                                'h-4 w-4 rounded-full shrink-0 border',
-                                meta ? 'border-primary/30' : 'border-muted-foreground/20 bg-muted'
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setMetalRoofConfigOpen((prev) => !prev)}
+                            data-testid="metal-color-summary-row"
+                            data-color-collapse-state={metalRoofConfigOpen ? 'expanded' : 'collapsed'}
+                            data-color-selected={savedId || 'none'}
+                            data-color-required={metalNeedsColor ? 'true' : 'false'}
+                            aria-expanded={metalRoofConfigOpen}
+                            aria-controls="metal-color-config-body"
+                            className={cn(
+                              'w-full rounded-xl border bg-background px-3 py-2.5 flex items-center justify-between cursor-pointer text-left',
+                              metalNeedsColor ? 'border-destructive/40' : 'border-muted'
+                            )}
+                          >
+                            <span className="flex items-center min-w-0">
+                              <span
+                                className={cn(
+                                  'h-4 w-4 rounded-full shrink-0 border',
+                                  meta ? 'border-primary/30' : 'border-muted-foreground/20 bg-muted'
+                                )}
+                                style={meta ? { backgroundColor: meta.color } : undefined}
+                                aria-hidden="true"
+                              />
+                              <span className={cn(
+                                'ml-2 text-sm truncate',
+                                savedId ? 'font-medium text-foreground' : 'text-muted-foreground'
+                              )}>
+                                {label}
+                              </span>
+                              {metalNeedsColor && (
+                                <span className="ml-1 text-destructive text-xs shrink-0" aria-hidden="true">*</span>
                               )}
-                              style={meta ? { backgroundColor: meta.color } : undefined}
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
+                                metalRoofConfigOpen && 'rotate-180'
+                              )}
                               aria-hidden="true"
                             />
-                            <span className={cn(
-                              'ml-2 text-sm truncate',
-                              savedId ? 'font-medium text-foreground' : 'text-muted-foreground'
-                            )}>
-                              {label}
-                            </span>
-                          </span>
-                          <ChevronDown
-                            className={cn(
-                              'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
-                              metalRoofConfigOpen && 'rotate-180'
-                            )}
-                            aria-hidden="true"
-                          />
-                        </button>
+                          </button>
+                          {metalNeedsColor && (
+                            <p className="text-xs text-destructive mt-1.5" data-testid="metal-color-required-caption">
+                              Color required to continue.
+                            </p>
+                          )}
+                        </>
                       )
                     })()}
                     <AnimatePresence initial={false}>
@@ -3158,11 +3197,13 @@ export function ServiceDetailPage() {
         <div className="mt-4 flex flex-col gap-3">
           <Button
             size="lg"
+            data-color-gate-blocks={roofingColorGateBlocks ? 'true' : 'false'}
             className={cn(
               'w-full h-12 text-sm font-semibold gap-2 rounded-xl',
-              added && 'bg-green-600 hover:bg-green-700'
+              added && 'bg-green-600 hover:bg-green-700',
+              roofingColorGateBlocks && 'opacity-50 pointer-events-none cursor-not-allowed'
             )}
-            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned}
+            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
