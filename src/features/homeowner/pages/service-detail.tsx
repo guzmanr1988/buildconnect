@@ -321,6 +321,12 @@ export function ServiceDetailPage() {
   const [added, setAdded] = useState(false)
   const [customPoolSize, setCustomPoolSize] = useState('')
   const [activeAddonMenu, setActiveAddonMenu] = useState<string | null>(null)
+  // Rod-directed roofing wizard redesign 2026-07-14 (Spec B). Names the
+  // option-group id that should render an 800ms box-shadow pulse right
+  // after a post-measurement scroll settles on it — a visual cue for the
+  // next required step. Cleared to null by the same useEffect that sets
+  // it, so it never leaks between measurement events.
+  const [pulseGroupId, setPulseGroupId] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
   const editAddons = editItemForService?.addonQuantities as { laminarJets?: number; waterfalls?: number; ledCount?: number; bubblerCount?: number } | undefined
   const [laminarJets, setLaminarJets] = useState(editAddons?.laminarJets || 0)
@@ -549,9 +555,8 @@ export function ServiceDetailPage() {
     setRoofMeasurement((prev) => ({ ...prev, areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft }))
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
-    if (serviceId === 'roofing') {
-      scrollToFirstConfigSection()
-    }
+    // Roofing scroll+pulse is handled by the post-measurement useEffect
+    // that watches roofMeasurement — one timed path, no double-scroll.
   }
 
   // PR-242 — Roof measurement PDF auto-save. Fires once the homeowner has a
@@ -625,6 +630,30 @@ export function ServiceDetailPage() {
       }
     })()
     return () => { cancelled = true }
+  }, [serviceId, roofMeasurement])
+
+  // SPEC B — Rod-directed roofing wizard redesign 2026-07-14. On a
+  // roofMeasurement transition to truthy (satellite path or manual
+  // fill-in), settle 600ms so the wizard dialog finishes closing, then
+  // smooth-scroll the first required step (Service Type) into view at
+  // block:'center' and pulse it for 800ms so the client sees where to go
+  // next. Supersedes the wizard-complete scrollToFirstConfigSection() for
+  // roofing (removed inline) so there's a single, timed scroll path.
+  useEffect(() => {
+    if (serviceId !== 'roofing') return
+    if (!roofMeasurement) return
+    let pulseClearId: number | undefined
+    const settleId = window.setTimeout(() => {
+      document
+        .querySelector('[data-service-section="service_type"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setPulseGroupId('service_type')
+      pulseClearId = window.setTimeout(() => setPulseGroupId(null), 800)
+    }, 600)
+    return () => {
+      window.clearTimeout(settleId)
+      if (pulseClearId != null) window.clearTimeout(pulseClearId)
+    }
   }, [serviceId, roofMeasurement])
 
   // Legacy localStorage-based trigger: some older callers may still set
@@ -865,6 +894,15 @@ export function ServiceDetailPage() {
     (selections['addons']?.length ?? 0) >= 1 &&
     !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
   const allRequiredDone = completedRequired === requiredGroups.length
+
+  // SPEC C L1 (Rod-directed roofing wizard redesign 2026-07-14). Derived
+  // for an inline "Required — pick one to continue" hint on the FIRST
+  // incomplete required group card. Pure re-derivation of existing state;
+  // no change to requiredGroups math or gate logic. `undefined` when
+  // every required group has at least one selection (nothing to nudge).
+  const firstMissingRequiredId = requiredGroups.find(
+    (g) => (selections[g.id]?.length ?? 0) === 0,
+  )?.id
 
   // Per-step plain-English gating message — names the topmost missing item.
   // Order matches the on-screen group order, then the secondary structural
@@ -1298,20 +1336,74 @@ export function ServiceDetailPage() {
           Select your preferences below to get matched with the right contractors.
         </p>
 
-        {/* Progress */}
+        {/* Progress — SPEC A (Rod-directed roofing wizard redesign
+            2026-07-14). Horizontal step track: one dot+label per REQUIRED
+            optionGroup (optional groups like Add-Ons get no dot).
+            States: completed (filled + check) / active (ring + number) /
+            pending (muted outline). Data-bound to existing requiredGroups
+            + completedRequired — no new gate state, no math change. The
+            numeric counter stays alongside for legibility on wider sets. */}
         {requiredGroups.length > 0 && (
-          <div className="mb-6 flex items-center gap-3">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-              <motion.div
-                className="h-full rounded-full bg-primary"
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${requiredGroups.length > 0 ? (completedRequired / requiredGroups.length) * 100 : 0}%`,
-                }}
-                transition={{ duration: 0.3 }}
-              />
+          <div
+            className="mb-6 flex items-center gap-3"
+            data-progress-track="step-dots"
+            data-completed-required={completedRequired}
+            data-required-total={requiredGroups.length}
+          >
+            <div className="flex flex-1 items-center gap-2 min-w-0">
+              {requiredGroups.map((g, idx) => {
+                const isCompleted = (selections[g.id]?.length ?? 0) > 0
+                const isActive = !isCompleted && idx === completedRequired
+                const state = isCompleted ? 'completed' : isActive ? 'active' : 'pending'
+                const isLast = idx === requiredGroups.length - 1
+                return (
+                  <div
+                    key={g.id}
+                    className="flex items-center gap-2 min-w-0"
+                    data-step-dot={g.id}
+                    data-step-state={state}
+                  >
+                    <motion.div
+                      className={cn(
+                        'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold shrink-0 border-2 transition-colors',
+                        isCompleted && 'bg-primary text-primary-foreground border-primary',
+                        isActive && 'bg-primary/10 text-primary border-primary ring-2 ring-primary/30',
+                        !isCompleted && !isActive && 'bg-background text-muted-foreground border-muted-foreground/30',
+                      )}
+                      initial={false}
+                      animate={{ scale: isActive ? 1.05 : 1 }}
+                      transition={{ duration: 0.3 }}
+                      aria-current={isActive ? 'step' : undefined}
+                    >
+                      {isCompleted ? <Check className="h-3.5 w-3.5" /> : idx + 1}
+                    </motion.div>
+                    <span
+                      className={cn(
+                        'text-xs font-medium whitespace-nowrap truncate',
+                        isActive ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                      data-step-label={g.id}
+                    >
+                      {g.label}
+                    </span>
+                    {!isLast && (
+                      <div className="flex-1 h-0.5 min-w-4 bg-muted overflow-hidden rounded-full">
+                        <motion.div
+                          className="h-full bg-primary origin-left"
+                          initial={false}
+                          animate={{ scaleX: isCompleted ? 1 : 0 }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-            <span className="text-sm text-muted-foreground whitespace-nowrap font-medium">
+            <span
+              className="text-sm text-muted-foreground whitespace-nowrap font-medium"
+              data-progress-counter
+            >
               {completedRequired} / {requiredGroups.length}
             </span>
           </div>
@@ -1384,8 +1476,13 @@ export function ServiceDetailPage() {
             const hasSelection = selected.length > 0
             const useAccordion = serviceId === 'wall_paneling'
             const bodyVisible = !useAccordion || isExpanded
+            const isPulsing = pulseGroupId === group.id
+            const isFirstMissingRequired =
+              !useAccordion &&
+              group.required &&
+              group.id === firstMissingRequiredId
             return (
-              <div
+              <motion.div
                 key={group.id}
                 data-chip-group-id={group.id}
                 data-mode={isRoofingPerimeterOnly ? 'perimeter-only' : 'standard'}
@@ -1393,6 +1490,7 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
+                data-step-pulse={isPulsing ? 'active' : undefined}
                 {...(useAccordion
                   ? {
                       'data-group-expanded': isExpanded ? 'true' : 'false',
@@ -1400,6 +1498,13 @@ export function ServiceDetailPage() {
                     }
                   : {})}
                 style={useAccordion && isExpanded ? { gridColumn: '1 / -1' } : undefined}
+                initial={false}
+                animate={
+                  isPulsing
+                    ? { boxShadow: ['0 0 0 0 rgba(37,99,235,0.55)', '0 0 0 10px rgba(37,99,235,0)'] }
+                    : { boxShadow: '0 0 0 0 rgba(37,99,235,0)' }
+                }
+                transition={{ duration: 0.8, ease: 'easeOut' }}
               >
                 {useAccordion ? (
                 <button
@@ -1475,6 +1580,22 @@ export function ServiceDetailPage() {
                     </span>
                   )}
                 </div>
+                )}
+                {/* SPEC C L1 — Rod-directed roofing wizard redesign
+                    2026-07-14. On the FIRST incomplete required group
+                    card, show a subtle inline hint below the header so
+                    the gating reason is visible next to the missing
+                    item, not only at the bottom Add-to-Project button.
+                    Purely additive; no change to gatingReason() or gate
+                    logic. Skipped for the accordion path (wall_paneling)
+                    since its collapsed-tile UI has no comparable slot. */}
+                {isFirstMissingRequired && (
+                  <div
+                    className="mb-3 text-xs font-medium text-primary/80"
+                    data-step-required-hint={group.id}
+                  >
+                    Required — pick one to continue
+                  </div>
                 )}
                 {bodyVisible && (
                 <div className={useAccordion ? 'mt-3' : ''}>
@@ -2688,7 +2809,7 @@ export function ServiceDetailPage() {
                 )}
                 </div>
                 )}
-              </div>
+              </motion.div>
             )
           })}
         </div>
