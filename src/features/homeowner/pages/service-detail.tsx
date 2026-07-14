@@ -980,12 +980,18 @@ export function ServiceDetailPage() {
     }
     return { index: idx + 1, total, status: 'active' }
   }
-  // First not-yet-complete step across the visible list — drives the
-  // post-measurement "Next" banner + which card gets the pulsing accent.
+  // First not-yet-complete REQUIRED step across the visible list — drives the
+  // post-measurement "Next" banner + which card gets the pulsing accent. Rod
+  // caught (#516 post-ship): pointing "active" at an optional step (e.g. the
+  // Add-Ons step 3 of 3) made the whole visual language — 66% progress bar,
+  // "Step 3 of 3 — Add-Ons" label, pulsing accent, "Next" cue — imply a hard
+  // gate even though Add-to-Project was enabled. Optional steps must never
+  // hold the active pointer; once required steps are done, return null so the
+  // progress reads "All N steps complete" and no cue/pulse fires.
   const roofingActiveStep = (() => {
     if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
     const idx = roofingVisibleGroups.findIndex(
-      (g) => (selections[g.id]?.length ?? 0) === 0,
+      (g) => g.required && (selections[g.id]?.length ?? 0) === 0,
     )
     if (idx === -1) return null
     return { group: roofingVisibleGroups[idx], index: idx + 1, total: roofingVisibleGroups.length }
