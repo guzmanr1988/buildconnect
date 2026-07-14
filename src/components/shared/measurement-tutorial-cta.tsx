@@ -30,7 +30,6 @@ function getServiceMeasurementPhrase(serviceId: string): string {
 }
 
 export function MeasurementTutorialCTA({ serviceId, className }: { serviceId: string; className?: string }) {
-  const navigate = useNavigate()
   const phrase = getServiceMeasurementPhrase(serviceId)
   return (
     <Card
