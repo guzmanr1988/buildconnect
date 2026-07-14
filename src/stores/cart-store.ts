@@ -75,7 +75,9 @@ export interface CartItem {
   customSizeSqft?: Record<string, number>
   // Gutter math: total lin ft = perimeter + drops × per-floor (see GUTTER_DROP_FT_BY_FLOORS
   // in lib/roof-pricing.ts). Populated on BOTH flow paths when gutters selected.
-  gutterDropsConfig?: { floors: 1 | 2; drops: number }
+  // `style` captured for pricing/vendor-menu split (Traditional vs Modern). Optional
+  // for widen-reads: legacy items treated as 'traditional' on read.
+  gutterDropsConfig?: { floors: 1 | 2; drops: number; style?: 'traditional' | 'modern' }
   addonQuantities?: AddonQuantities
   // Which property this line item applies to. Phase B2: primary OR one of
   // profile.additional_addresses, selected at add-to-project time. Optional

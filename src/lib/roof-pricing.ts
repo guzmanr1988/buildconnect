@@ -13,7 +13,8 @@ export const FLAT_WASTE_FACTOR = 1.01
 // review step, and vendor-compare price math.
 export const GUTTER_DROP_FT_BY_FLOORS = { 1: 10, 2: 25 } as const
 
-export type GutterDropsConfig = { floors: 1 | 2; drops: number }
+export type GutterStyle = 'traditional' | 'modern'
+export type GutterDropsConfig = { floors: 1 | 2; drops: number; style?: GutterStyle }
 
 export function computeGutterTotalLinFt(
   perimeterFt: number,

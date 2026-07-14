@@ -451,6 +451,14 @@ export function ServiceDetailPage() {
     const persisted = (editItemForService?.gutterDropsConfig as { drops?: number } | undefined)?.drops
     return persisted && persisted >= 1 && persisted <= 5 ? persisted : 2
   })
+  // Gutter style — Traditional (K-style, current default, maps to existing
+  // gutters option_id) vs Modern (half-round, new priceable item pending
+  // hermes catalog-shape landing). FE captures the choice today; pricing
+  // split follows once vendor_option_prices has both option_ids.
+  const [gutterStyle, setGutterStyle] = useState<'traditional' | 'modern'>(() => {
+    const persisted = (editItemForService?.gutterDropsConfig as { style?: 'traditional' | 'modern' } | undefined)?.style
+    return persisted === 'modern' ? 'modern' : 'traditional'
+  })
   // Per-addon configurator open/closed state for the 5 Class A linear-ft
   // addons (gutters / soffit_wood / fascia_wood / soffit_metal / fascia_metal).
   // Mirrors the xConfigOpen pattern used by ShingleRoofConfigurator and
@@ -1166,6 +1174,7 @@ export function ServiceDetailPage() {
         setAddonLinearFt({})
         setAddonConfigOpen({})
         setSubGroupLinearFt({})
+        setGutterStyle('traditional')
         setFlatOnlyAck(false)
         setRoofMeasurement((prev) =>
           prev
@@ -2686,8 +2695,10 @@ export function ServiceDetailPage() {
                         gutterExtras={c.id === 'gutters' ? {
                           floors: gutterFloors,
                           drops: gutterDrops,
+                          style: gutterStyle,
                           onFloorsChange: setGutterFloors,
                           onDropsChange: setGutterDrops,
+                          onStyleChange: setGutterStyle,
                         } : undefined}
                       />
                     )}
@@ -3066,9 +3077,10 @@ export function ServiceDetailPage() {
                 peri,
                 gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
               )
+              const styleLabel = gutterStyle === 'modern' ? 'Modern' : 'Traditional'
               const sublabel = gutterFloors
-                ? `${peri.toLocaleString()} perimeter + ${gutterDrops} drop${gutterDrops === 1 ? '' : 's'} × ${GUTTER_DROP_FT_BY_FLOORS[gutterFloors]} ft (${gutterFloors === 1 ? '1-story' : '2-story'})`
-                : `${peri.toLocaleString()} perimeter`
+                ? `${styleLabel} · ${peri.toLocaleString()} perimeter + ${gutterDrops} drop${gutterDrops === 1 ? '' : 's'} × ${GUTTER_DROP_FT_BY_FLOORS[gutterFloors]} ft (${gutterFloors === 1 ? '1-story' : '2-story'})`
+                : `${styleLabel} · ${peri.toLocaleString()} perimeter`
               return { id, label, qty: total, unit: 'lin ft', sublabel }
             }
             if (ADDON_LINEAR_FT_IDS.includes(id)) {
@@ -3395,7 +3407,7 @@ export function ServiceDetailPage() {
                     : {}
                 })(),
                 ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
-                  gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops },
+                  gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops, style: gutterStyle },
                 }),
                 // Arc-19 — snapshot the entered Pool Floor sqft into the
                 // canonical customSizeSqft map (keyed by option_id) at add-
