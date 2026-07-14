@@ -19,7 +19,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { MOCK_HOMEOWNERS } from '@/lib/mock-data'
 import type { OptionGroup, ServiceCategory } from '@/types'
 import { cn } from '@/lib/utils'
-import { MeasurementTutorialCTA } from '@/components/shared/measurement-tutorial-cta'
+import { TutorialButton } from '@/components/shared/measurement-tutorial-cta'
 import { RoofMeasurementBreakdownCard } from '@/components/shared/roof-measurement-breakdown-card'
 import { PermitStepSection, PoolSurveySection, isProjectPermitValid, isProjectAssociationValid, isPoolSurveyValid, PERMIT_HEADING, PERMIT_SUBTITLE } from '../components/permit-step-section'
 import { WindowConfigurator, type WindowSelection } from '../components/window-configurator'
@@ -1202,7 +1202,10 @@ export function ServiceDetailPage() {
         </Button>
       </motion.div>
 
-      {/* Service header */}
+      {/* Service header. Rod 2026-07-14: Watch-tutorial button relocated
+          from a standalone info card into this header row (right of the
+          title+description) to reclaim vertical space; shared template so
+          every service-detail page inherits it. */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1215,10 +1218,13 @@ export function ServiceDetailPage() {
         )}>
           <Icon className="h-8 w-8 text-white" strokeWidth={1.8} />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold font-heading text-foreground tracking-tight">
-            {service.name}
-          </h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold font-heading text-foreground tracking-tight">
+              {service.name}
+            </h1>
+            <TutorialButton serviceId={service.id} className="mt-0.5" />
+          </div>
           <p className="mt-1 text-[15px] text-muted-foreground leading-relaxed">
             {service.description}
           </p>
@@ -1233,18 +1239,6 @@ export function ServiceDetailPage() {
             ))}
           </div>
         </div>
-      </motion.div>
-
-      {/* Ship #253 — per-service measurement tutorial CTA. Placed above
-          the Configure-your-project card so the homeowner sees the help-
-          link BEFORE getting into option selection. Toast-placeholder
-          onClick; real video URLs land when content is produced. */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.08 }}
-      >
-        <MeasurementTutorialCTA serviceId={service.id} />
       </motion.div>
 
       {/* Roof measurement wizard CTA — roofing only, additive (CHAIN IS GOD) */}
