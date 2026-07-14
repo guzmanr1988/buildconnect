@@ -26,7 +26,7 @@ import { WindowConfigurator, type WindowSelection } from '../components/window-c
 import { DoorConfigurator, type DoorSelection } from '../components/door-configurator'
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
-import { MetalRoofConfigurator, type MetalRoofSelection } from '../components/metal-roof-configurator'
+import { MetalRoofConfigurator, type MetalRoofSelection, METAL_ROOF_COLOR_META, FALLBACK_METAL_ROOF_COLORS } from '../components/metal-roof-configurator'
 import { ShingleRoofConfigurator, type ShingleRoofSelection } from '../components/shingle-roof-configurator'
 import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
 import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
@@ -357,9 +357,12 @@ export function ServiceDetailPage() {
   const [metalRoofSelection, setMetalRoofSelection] = useState<MetalRoofSelection>(
     (editItemForService?.metalRoofSelection as MetalRoofSelection) || { color: '', roofSize: '' }
   )
-  const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(
-    !(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
-  )
+  // v2-collapse: metal color palette starts COLLAPSED regardless of saved-state.
+  // Cart-restore of a configured item lands with the summary chip populated
+  // (metalRoofSelection carries color) + row collapsed; first-mount lands with
+  // "Choose a color" + row collapsed. Every open-trigger below flips to keep
+  // this invariant (post-measurement, first-select, reset+open).
+  const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(false)
   const [shingleSelection, setShingleSelection] = useState<ShingleRoofSelection>(() => {
     const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
     if (saved) return saved
@@ -534,7 +537,9 @@ export function ServiceDetailPage() {
       : ''
     if (result.material === 'metal') {
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
-      setMetalRoofConfigOpen(true)
+      // v2-collapse: post-measurement stays collapsed. Squares are stored on
+      // selection; the collapsed summary row is what Rod sees next — he
+      // taps it to expand and pick a color.
     }
     if (result.material === 'shingle') {
       setShingleSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
@@ -2021,9 +2026,10 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setMetalRoofConfigOpen(false)
                               setMetalRoofSelection({ color: '', roofSize: '' })
-                            } else {
-                              setMetalRoofConfigOpen(true)
                             }
+                            // v2-collapse: first metal-select lands COLLAPSED.
+                            // The summary row below the material chip is the
+                            // affordance now (was: auto-open the configurator).
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'shingle') {
                             const wasSelected = selected.includes('shingle')
@@ -2652,28 +2658,92 @@ export function ServiceDetailPage() {
                     )}
                   </AnimatePresence>
                 ))}
-                {/* Metal Roof Configurator - shows when Standing Seam Metal is selected */}
-                {serviceId === 'roofing' && group.id === 'material' && (
-                  <AnimatePresence>
-                    {selected.includes('metal') && metalRoofConfigOpen && (
-                      <MetalRoofConfigurator
-                        selection={metalRoofSelection}
-                        onChange={(updated) => {
-                          setMetalRoofSelection(updated)
-                          // Squares are the source of truth; reverse-derive sqft for pricing engine.
-                          if (updated.roofSize) {
-                            const sq = Number(updated.roofSize)
-                            if (!isNaN(sq) && sq > 0) {
-                              setRoofMeasurement((prev) => prev
-                                ? { ...prev, areaSqft: sq * 100 }
-                                : { areaSqft: sq * 100, pitch: '', address: '' })
-                            }
-                          }
-                        }}
-                        onSave={() => setMetalRoofConfigOpen(false)}
-                      />
-                    )}
-                  </AnimatePresence>
+                {/* Metal Roof Configurator - v2-collapse wrapper.
+                    Summary row (always visible when metal selected) is the
+                    collapsed affordance; AnimatePresence body renders the
+                    unchanged MetalRoofConfigurator when the user taps to
+                    expand. Save inside the configurator collapses back to
+                    the summary row with selection state kept.
+                    Squares/"Configured" chip on the material option (line ~2274)
+                    + cart-item review chips (~3506) already show squares —
+                    this row intentionally shows COLOR ONLY. */}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('metal') && (
+                  <div className="mt-4 flex flex-col gap-2" data-testid="metal-color-collapse">
+                    {(() => {
+                      const savedId = metalRoofSelection.color
+                      const meta = savedId ? METAL_ROOF_COLOR_META[savedId] : undefined
+                      const savedEntry = savedId ? FALLBACK_METAL_ROOF_COLORS.find((c) => c.id === savedId) : undefined
+                      const label = savedId
+                        ? (savedEntry?.label ?? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+                        : 'Choose a color'
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setMetalRoofConfigOpen((prev) => !prev)}
+                          data-testid="metal-color-summary-row"
+                          data-color-collapse-state={metalRoofConfigOpen ? 'expanded' : 'collapsed'}
+                          data-color-selected={savedId || 'none'}
+                          aria-expanded={metalRoofConfigOpen}
+                          aria-controls="metal-color-config-body"
+                          className="w-full rounded-xl border border-muted bg-background px-3 py-2.5 flex items-center justify-between cursor-pointer text-left"
+                        >
+                          <span className="flex items-center min-w-0">
+                            <span
+                              className={cn(
+                                'h-4 w-4 rounded-full shrink-0 border',
+                                meta ? 'border-primary/30' : 'border-muted-foreground/20 bg-muted'
+                              )}
+                              style={meta ? { backgroundColor: meta.color } : undefined}
+                              aria-hidden="true"
+                            />
+                            <span className={cn(
+                              'ml-2 text-sm truncate',
+                              savedId ? 'font-medium text-foreground' : 'text-muted-foreground'
+                            )}>
+                              {label}
+                            </span>
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
+                              metalRoofConfigOpen && 'rotate-180'
+                            )}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      )
+                    })()}
+                    <AnimatePresence initial={false}>
+                      {metalRoofConfigOpen && (
+                        <motion.div
+                          key="metal-config-body"
+                          id="metal-color-config-body"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <MetalRoofConfigurator
+                            selection={metalRoofSelection}
+                            onChange={(updated) => {
+                              setMetalRoofSelection(updated)
+                              // Squares are the source of truth; reverse-derive sqft for pricing engine.
+                              if (updated.roofSize) {
+                                const sq = Number(updated.roofSize)
+                                if (!isNaN(sq) && sq > 0) {
+                                  setRoofMeasurement((prev) => prev
+                                    ? { ...prev, areaSqft: sq * 100 }
+                                    : { areaSqft: sq * 100, pitch: '', address: '' })
+                                }
+                              }
+                            }}
+                            onSave={() => setMetalRoofConfigOpen(false)}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 )}
                 {serviceId === 'roofing' && group.id === 'material' && (
                   <AnimatePresence>
@@ -3308,7 +3378,7 @@ export function ServiceDetailPage() {
               setGarageDoorSelection({ type: '', size: '', color: '', glass: '' })
               setGarageDoorConfigOpen(true)
               setMetalRoofSelection({ color: '', roofSize: '' })
-              setMetalRoofConfigOpen(true)
+              setMetalRoofConfigOpen(false) // v2-collapse: reset+open cycle lands COLLAPSED
               setShingleSelection({ color: '', roofSize: '' })
               setShingleConfigOpen(true)
               setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
