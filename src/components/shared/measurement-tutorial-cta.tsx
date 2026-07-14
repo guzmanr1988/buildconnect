@@ -76,8 +76,7 @@ export function TutorialButton({ serviceId, className }: { serviceId: string; cl
       }}
     >
       <PlayCircle className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">Watch tutorial</span>
-      <span className="sm:hidden">Watch</span>
+      Watch tutorial
     </Button>
   )
 }
