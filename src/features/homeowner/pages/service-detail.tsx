@@ -201,12 +201,52 @@ import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 
 const ADDON_LINEAR_FT_CONFIG = [
   { id: 'gutters', label: 'Gutter linear feet' },
-  { id: 'soffit_wood', label: 'Soffit Wood linear feet' },
-  { id: 'fascia_wood', label: 'Fascia Wood linear feet' },
-  { id: 'soffit_metal', label: 'Soffit Metal linear feet' },
-  { id: 'fascia_metal', label: 'Fascia Metal linear feet' },
+  { id: 'soffit_wood', label: 'Soffit linear feet' },
+  { id: 'fascia_wood', label: 'Fascia linear feet' },
+  { id: 'soffit_metal', label: 'Soffit linear feet' },
+  { id: 'fascia_metal', label: 'Fascia linear feet' },
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
+
+// Rod voice-directive — homeowner-side Soffit/Fascia consolidation. The
+// vendor/contractor pricing surface keeps all FOUR keys as independently
+// priceable catalog items (SoT = vendor_option_prices). The wizard grid
+// hides the *_metal variants and relabels *_wood parents to just
+// "Soffit"/"Fascia" — the detail panel exposes a Wood|Metal toggle that
+// swaps the selection state between the two catalog keys so pricing lookup
+// still hits the correct row per marketplace price-or-no-show rule. This
+// mapping is CONSUMPTION-side only; catalog rows are untouched.
+type RoofingAddonMaterialPair = { readonly wood: string; readonly metal: string }
+const ROOFING_ADDON_MATERIAL_PAIRS: readonly RoofingAddonMaterialPair[] = [
+  { wood: 'soffit_wood', metal: 'soffit_metal' },
+  { wood: 'fascia_wood', metal: 'fascia_metal' },
+] as const
+const ROOFING_ADDON_PAIR_CHILD_IDS = new Set<string>(
+  ROOFING_ADDON_MATERIAL_PAIRS.map((p) => p.metal),
+)
+const ROOFING_ADDON_PAIR_PARENT_LABELS: Record<string, string> = {
+  soffit_wood: 'Soffit',
+  fascia_wood: 'Fascia',
+}
+function findRoofingAddonMaterialPair(optionId: string): RoofingAddonMaterialPair | null {
+  return (
+    ROOFING_ADDON_MATERIAL_PAIRS.find(
+      (p) => p.wood === optionId || p.metal === optionId,
+    ) ?? null
+  )
+}
+function getRoofingAddonBoundId(
+  pair: RoofingAddonMaterialPair,
+  selectedAddons: readonly string[],
+): string {
+  return selectedAddons.includes(pair.metal) ? pair.metal : pair.wood
+}
+function getRoofingAddonMaterial(
+  pair: RoofingAddonMaterialPair,
+  selectedAddons: readonly string[],
+): 'wood' | 'metal' {
+  return selectedAddons.includes(pair.metal) ? 'metal' : 'wood'
+}
 
 // Arc-19 — pool_floor options that prompt for square footage when tapped.
 // N/A is excluded; tapping it does not open the configurator.
@@ -1147,6 +1187,45 @@ export function ServiceDetailPage() {
     setSubGroupLinearFt((prev) => ({ ...prev, [parentOptionId]: value }))
   }
 
+  // Rod voice-directive — Soffit/Fascia Wood|Metal toggle handler. Called
+  // when the user flips the material inside the detail panel. Migrates
+  // selections['addons'] between the pair members + preserves both the
+  // linear-ft value and configurator open state under the new key so the
+  // pricing lookup + wizard UX carry over cleanly. Homeowner-side state
+  // only; the catalog keys themselves stay intact.
+  function handleRoofingAddonMaterialToggle(
+    pair: RoofingAddonMaterialPair,
+    target: 'wood' | 'metal',
+  ) {
+    const currentSelected = selections['addons'] ?? []
+    const currentId = getRoofingAddonBoundId(pair, currentSelected)
+    const nextId = target === 'wood' ? pair.wood : pair.metal
+    if (currentId === nextId) return
+    setSelections((prev) => {
+      const addons = (prev['addons'] ?? []).filter(
+        (id) => id !== pair.wood && id !== pair.metal,
+      )
+      addons.push(nextId)
+      return { ...prev, addons }
+    })
+    setAddonLinearFt((prev) => {
+      const value = prev[currentId] ?? prev[nextId] ?? ''
+      const next = { ...prev }
+      delete next[currentId]
+      delete next[nextId]
+      if (value !== '') next[nextId] = value
+      return next
+    })
+    setAddonConfigOpen((prev) => {
+      const open = prev[currentId] ?? prev[nextId]
+      const next = { ...prev }
+      delete next[currentId]
+      delete next[nextId]
+      if (open !== undefined) next[nextId] = open
+      return next
+    })
+  }
+
   function handleSelect(group: OptionGroup, optionId: string) {
     // First real chip-tap clears the post-measurement cue banner (impossible-
     // to-miss cue served its purpose the moment the user starts selecting).
@@ -1622,8 +1701,14 @@ export function ServiceDetailPage() {
                 : group.label
             const renderOptions =
               isRoofingPerimeterOnly && group.id === 'addons'
-                ? group.options.filter((o) => ADDON_LINEAR_FT_IDS.includes(o.id))
-                : group.options
+                ? group.options.filter(
+                    (o) =>
+                      ADDON_LINEAR_FT_IDS.includes(o.id) &&
+                      !ROOFING_ADDON_PAIR_CHILD_IDS.has(o.id),
+                  )
+                : serviceId === 'roofing' && group.id === 'addons'
+                  ? group.options.filter((o) => !ROOFING_ADDON_PAIR_CHILD_IDS.has(o.id))
+                  : group.options
             const isExpanded = expandedGroups[group.id] === true
             const hasSelection = selected.length > 0
             const useAccordion = serviceId === 'wall_paneling'
@@ -1793,7 +1878,50 @@ export function ServiceDetailPage() {
                     : 'flex flex-wrap gap-2'
                 )}>
                   {renderOptions.map((option) => {
-                    const isSelected = selected.includes(option.id)
+                    // Rod voice-directive — Soffit/Fascia pair-parent detection.
+                    // For roofing/addons Soffit + Fascia the chip stays visible
+                    // under the wood parent id but represents BOTH pair members
+                    // (wood + metal) — selection state, click-toggle, and lin-ft
+                    // summary all OR-detect the currently-bound catalog key.
+                    const roofingAddonPair =
+                      serviceId === 'roofing' && group.id === 'addons'
+                        ? findRoofingAddonMaterialPair(option.id)
+                        : null
+                    const isSelected = roofingAddonPair
+                      ? selected.includes(roofingAddonPair.wood) ||
+                        selected.includes(roofingAddonPair.metal)
+                      : selected.includes(option.id)
+                    // Currently-bound catalog id for pair-parents (soffit_metal
+                    // if user toggled to Metal, else soffit_wood). Used by the
+                    // click-preempt, post-select seed, live-mirror, and chip
+                    // badge below so all four surfaces read/write under the
+                    // correct key without duplicating pair logic.
+                    const roofingAddonBoundId =
+                      roofingAddonPair
+                        ? getRoofingAddonBoundId(roofingAddonPair, selected)
+                        : serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            ADDON_LINEAR_FT_IDS.includes(option.id)
+                          ? option.id
+                          : null
+                    const roofingAddonBoundLinFt =
+                      roofingAddonBoundId
+                        ? Number(addonLinearFt[roofingAddonBoundId] ?? 0)
+                        : 0
+                    const roofingAddonBoundIsOpen =
+                      roofingAddonBoundId
+                        ? Boolean(addonConfigOpen[roofingAddonBoundId])
+                        : false
+                    // Material of the currently-bound pair member. Surfaced
+                    // in the chip-summary pill (e.g. "Metal · 40 lin ft")
+                    // when the homeowner has flipped Wood→Metal so the
+                    // collapsed chip still reads which SKU the price attaches
+                    // to. Wood is the default so its badge stays lin-ft-only,
+                    // matching the pre-consolidation UX.
+                    const roofingAddonBoundMaterial: 'wood' | 'metal' | null =
+                      roofingAddonPair
+                        ? getRoofingAddonMaterial(roofingAddonPair, selected)
+                        : null
                     const isCardTile = isTileModeGroup(serviceId, group.id)
                     const isImageTile = isCardTile && !!option.image_url
                     const TileIcon = isCardTile && !isImageTile
@@ -1883,7 +2011,9 @@ export function ServiceDetailPage() {
                         ? (areaMeasurement
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
-                        : roofingAddonSubPickLabel ?? option.label
+                        : roofingAddonPair
+                          ? ROOFING_ADDON_PAIR_PARENT_LABELS[roofingAddonPair.wood] ?? option.label
+                          : roofingAddonSubPickLabel ?? option.label
                     // PR-#462 — per-option number-input rendering. Vendor/admin
                     // flips an option's inputType to 'number-input' (catalog
                     // column, mapped through service-catalog.ts) and the
@@ -2045,10 +2175,15 @@ export function ServiceDetailPage() {
                             group.id === 'addons' &&
                             ADDON_LINEAR_FT_IDS.includes(option.id)
                           ) {
-                            const wasSelected = selected.includes(option.id)
-                            const wasOpen = addonConfigOpen[option.id] ?? false
+                            // Pair-parent: preempt against the currently-bound
+                            // pair member (soffit_metal if user toggled to
+                            // Metal, else soffit_wood) so re-tap while collapsed
+                            // reopens the configurator under the correct key.
+                            const activeId = roofingAddonBoundId ?? option.id
+                            const wasSelected = isSelected
+                            const wasOpen = addonConfigOpen[activeId] ?? false
                             if (wasSelected && !wasOpen) {
-                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                              setAddonConfigOpen((prev) => ({ ...prev, [activeId]: true }))
                               return
                             }
                           }
@@ -2069,7 +2204,15 @@ export function ServiceDetailPage() {
                               return
                             }
                           }
-                          handleSelect(group, option.id)
+                          // Pair-parents route through the currently-bound
+                          // catalog id so handleSelect toggles the right row —
+                          // e.g. deselecting the "Soffit" chip while Metal is
+                          // bound removes 'soffit_metal', not adds 'soffit_wood'.
+                          if (roofingAddonPair) {
+                            handleSelect(group, roofingAddonBoundId ?? option.id)
+                          } else {
+                            handleSelect(group, option.id)
+                          }
                           // Auto-close addon menu after size selection
                           if (group.id === 'spa_size') setActiveAddonMenu(null)
                           if (group.id === 'beach_size') setActiveAddonMenu(null)
@@ -2293,12 +2436,12 @@ export function ServiceDetailPage() {
                                 from the chip-summary span L1612+ (chip surfaces
                                 post-save outside the card; this span is live
                                 during input AND post-save, inside the card). */}
-                            {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_IDS.includes(option.id) && Number(addonLinearFt[option.id] ?? 0) > 0 && (
+                            {serviceId === 'roofing' && group.id === 'addons' && roofingAddonBoundId && roofingAddonBoundLinFt > 0 && (
                               <span
                                 className="text-[12px] leading-tight font-medium text-foreground/80"
-                                data-option-card-linear-ft-value={option.id}
+                                data-option-card-linear-ft-value={roofingAddonBoundId}
                               >
-                                {(Number(addonLinearFt[option.id]) || 0).toLocaleString()} lin ft
+                                {roofingAddonBoundLinFt.toLocaleString()} lin ft
                               </span>
                             )}
                             {serviceId === 'kitchen' && group.label.toLowerCase().includes('stone') && (option.subGroups?.length ?? 0) === 0 && Number(subGroupLinearFt[option.id] ?? 0) > 0 && (
@@ -2396,24 +2539,21 @@ export function ServiceDetailPage() {
                             {computeGutterTotalLinFt(Number(addonLinearFt['gutters']) || 0, { floors: gutterFloors, drops: gutterDrops }).toLocaleString()} lin ft
                           </span>
                         )}
-                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'soffit_wood' && !addonConfigOpen['soffit_wood'] && Number(addonLinearFt['soffit_wood'] ?? 0) > 0 && (
-                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {(Number(addonLinearFt['soffit_wood']) || 0).toLocaleString()} lin ft
-                          </span>
-                        )}
-                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'fascia_wood' && !addonConfigOpen['fascia_wood'] && Number(addonLinearFt['fascia_wood'] ?? 0) > 0 && (
-                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {(Number(addonLinearFt['fascia_wood']) || 0).toLocaleString()} lin ft
-                          </span>
-                        )}
-                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'soffit_metal' && !addonConfigOpen['soffit_metal'] && Number(addonLinearFt['soffit_metal'] ?? 0) > 0 && (
-                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {(Number(addonLinearFt['soffit_metal']) || 0).toLocaleString()} lin ft
-                          </span>
-                        )}
-                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'fascia_metal' && !addonConfigOpen['fascia_metal'] && Number(addonLinearFt['fascia_metal'] ?? 0) > 0 && (
-                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {(Number(addonLinearFt['fascia_metal']) || 0).toLocaleString()} lin ft
+                        {/* Rod voice-directive — Soffit/Fascia chip-summary
+                            pill badge, pair-aware. The two child ids
+                            (soffit_metal + fascia_metal) are filtered out of
+                            renderOptions so their chips never render; the
+                            wood parents ('Soffit' + 'Fascia' after rename)
+                            surface the lin-ft badge from the currently-bound
+                            catalog id, which flips with the Wood|Metal
+                            toggle inside the configurator. */}
+                        {serviceId === 'roofing' && group.id === 'addons' && roofingAddonPair && roofingAddonBoundId && !roofingAddonBoundIsOpen && roofingAddonBoundLinFt > 0 && (
+                          <span
+                            className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold"
+                            data-chip-lin-ft-badge={roofingAddonBoundId}
+                            data-chip-lin-ft-material={roofingAddonBoundMaterial ?? 'wood'}
+                          >
+                            {roofingAddonBoundMaterial === 'metal' ? 'Metal · ' : ''}{roofingAddonBoundLinFt.toLocaleString()} lin ft
                           </span>
                         )}
                         {/* Arc-19 — Pool Floor sqft chip badge surfaces the
@@ -2700,18 +2840,30 @@ export function ServiceDetailPage() {
                     20260525_165835 live-feedback). Gutters has no sub_groups
                     so legacy render still fires; intentional. */}
                 {serviceId === 'roofing' && group.id === 'addons' && ADDON_LINEAR_FT_CONFIG.map((c) => {
+                  // Rod voice-directive — Soffit/Fascia consolidation. Pair-
+                  // child ids (soffit_metal + fascia_metal) render nothing
+                  // here; their configurator surfaces under the pair-parent
+                  // (soffit_wood + fascia_wood) via bound-id lookup below.
+                  if (ROOFING_ADDON_PAIR_CHILD_IDS.has(c.id)) return null
                   const matchingOption = renderOptions.find((o) => o.id === c.id)
                   const hasSubGroups = matchingOption?.subGroups?.some((sg) => sg.options.length > 0) ?? false
                   if (hasSubGroups) return null
+                  // Pair-parents route selection/open/lin-ft state through
+                  // the currently-bound catalog id (soffit_metal if user
+                  // toggled Metal, else soffit_wood) so pricing lookup + all
+                  // state carry under the correct row per SoT
+                  // vendor_option_prices + price-or-no-show.
+                  const pair = findRoofingAddonMaterialPair(c.id)
+                  const boundId = pair ? getRoofingAddonBoundId(pair, selected) : c.id
                   return (
                   <AnimatePresence key={c.id}>
-                    {selected.includes(c.id) && addonConfigOpen[c.id] && (
+                    {selected.includes(boundId) && addonConfigOpen[boundId] && (
                       <AddonLinearFtConfigurator
-                        id={c.id}
+                        id={boundId}
                         label={c.label}
-                        value={addonLinearFt[c.id] ?? ''}
-                        onChange={(next) => setAddonLinearFt((prev) => ({ ...prev, [c.id]: next }))}
-                        onSave={() => setAddonConfigOpen((prev) => ({ ...prev, [c.id]: false }))}
+                        value={addonLinearFt[boundId] ?? ''}
+                        onChange={(next) => setAddonLinearFt((prev) => ({ ...prev, [boundId]: next }))}
+                        onSave={() => setAddonConfigOpen((prev) => ({ ...prev, [boundId]: false }))}
                         gutterExtras={c.id === 'gutters' ? {
                           floors: gutterFloors,
                           drops: gutterDrops,
@@ -2719,6 +2871,10 @@ export function ServiceDetailPage() {
                           onFloorsChange: setGutterFloors,
                           onDropsChange: setGutterDrops,
                           onStyleChange: setGutterStyle,
+                        } : undefined}
+                        materialToggle={pair ? {
+                          current: getRoofingAddonMaterial(pair, selected),
+                          onChange: (next) => handleRoofingAddonMaterialToggle(pair, next),
                         } : undefined}
                       />
                     )}
