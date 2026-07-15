@@ -2081,14 +2081,26 @@ export function ServiceDetailPage() {
                     const roofingAddonSubPickLabel = roofingAddonSubPickId
                       ? resolveSubChoiceLabel(option, roofingAddonSubPickId)
                       : null
+                    // PR #530 addendum — homeowner-only FE override for the
+                    // 'gutters' addon card label. The live Supabase catalog
+                    // (post-hermes 2026-07-14 gutter_style DDL activation)
+                    // hydrates option.label as 'Gutter Installation'; homeowner
+                    // surfaces must show 'Gutters' regardless. Vendor / rep /
+                    // mock-data read option.label directly and are unaffected
+                    // by this override — same live-catalog-trumps-FE class as
+                    // the #531 gutter-menu dispatch bug, patching the label leg.
+                    const homeownerAddonLabelFallback =
+                      serviceId === 'roofing' && group.id === 'addons' && option.id === 'gutters'
+                        ? 'Gutters'
+                        : option.label
                     const optionLabel =
                       serviceId === 'pergolas' && group.id === 'size' && option.id === 'measured'
                         ? (areaMeasurement
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
                         : roofingAddonPair
-                          ? ROOFING_ADDON_PAIR_PARENT_LABELS[roofingAddonPair.wood] ?? option.label
-                          : roofingAddonSubPickLabel ?? option.label
+                          ? ROOFING_ADDON_PAIR_PARENT_LABELS[roofingAddonPair.wood] ?? homeownerAddonLabelFallback
+                          : roofingAddonSubPickLabel ?? homeownerAddonLabelFallback
                     // PR-#462 — per-option number-input rendering. Vendor/admin
                     // flips an option's inputType to 'number-input' (catalog
                     // column, mapped through service-catalog.ts) and the
