@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Home, MessageCircle, User, ShoppingCart, CheckCircle2, HelpCircle, PlayCircle, RotateCcw, X as XIcon, FileText } from 'lucide-react'
@@ -168,19 +168,24 @@ export function HomeownerLayout() {
   // (ship #108) to homeowner side per Rodolfo's "for both vendor and
   // homeowner" directive. Composite IDs (reschedule-<leadId>-<flag>,
   // cancel-<leadId>-<status>) mean a status flip creates a new seen-set
-  // key → toast fires on the transition. Prevents spam on mount via
-  // firstRenderRef.
+  // key → toast fires on the transition.
   //
-  // Hydration-gate (apollo-diagnosed fresh-login re-fire): notifications
-  // derive from sentProjects, which populates asynchronously via
-  // hydrateFromSupabase after AuthBootstrap resolves. If firstRenderRef
-  // seeds the LS seen-set from the pre-hydrate empty snapshot, the next
-  // effect run (post-hydrate) reads that empty seed back and treats every
-  // already-seen approval as new → "Project Approved!" toast re-fires on
-  // every fresh login. Gate the whole effect on _sentProjectsHydrated so
-  // firstRenderRef always sees the server-truth snapshot.
+  // Hydration-gate + LS-seeded (apollo-diagnosed fresh-login re-fire, PR
+  // #527): notifications derive from sentProjects, which populates async
+  // via hydrateFromSupabase after AuthBootstrap resolves. Two guardrails:
+  //   1. Gate the whole effect on _sentProjectsHydrated so we never diff
+  //      against a pre-hydrate empty snapshot.
+  //   2. Seed the seen-set from the persisted LAST_SEEN_KEY only — never
+  //      from the hydrated server snapshot. Kratos-caught over-correction
+  //      in the first draft: a firstRenderRef branch that wrote LS =
+  //      currentIds on the first post-hydrate render folded genuinely-new
+  //      cross-session approvals into the seed silently → no toast ever
+  //      for approvals that landed while the homeowner was offline. That
+  //      defeats the whole reason LAST_SEEN_KEY is persisted.
+  // With both guardrails: already-seen ID in LS → no toast; new ID not
+  // in LS → toast once + append; empty LS (first-ever login) → all
+  // current notifications toast once as "here is your status."
   const LAST_SEEN_KEY = 'buildconnect-homeowner-last-seen-notification-ids'
-  const firstRenderRef = useRef(true)
   useEffect(() => {
     if (!projectsHydrated) return
     const currentIds = new Set(notifications.map((n) => n.id))
@@ -190,11 +195,6 @@ export function HomeownerLayout() {
       seenIds = new Set<string>(raw ? JSON.parse(raw) : [])
     } catch {
       seenIds = new Set<string>()
-    }
-    if (firstRenderRef.current) {
-      firstRenderRef.current = false
-      localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
-      return
     }
     const newOnes = notifications.filter((n) => !seenIds.has(n.id))
     for (const n of newOnes) {
