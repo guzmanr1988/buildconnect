@@ -519,11 +519,20 @@ export function ServiceDetailPage() {
   ]
   // Property selector starts empty — user must actively pick before Add-to-Project.
   // Edit mode restores the previously-saved address so updates don't lose it.
+  // Roofing anti-redundancy: solo-property auto-preselects on mount so the
+  // homeowner is not asked "which property?" when their profile only lists
+  // one — the measure-my-roof step above already established which. Multi-
+  // property carry-forward happens in handleWizardComplete post-measure.
   const [addressKey, setAddressKey] = useState<string>(() => {
     const edit = editItemForService?.address as CartItemAddress | undefined
-    if (!edit) return ''
-    const match = addressOptions.find((o) => o.label === edit.label)
-    return match?.key ?? ''
+    if (edit) {
+      const match = addressOptions.find((o) => o.label === edit.label)
+      if (match) return match.key
+    }
+    if (serviceId === 'roofing' && addressOptions.length === 1) {
+      return addressOptions[0].key
+    }
+    return ''
   })
   const selectedAddress = addressOptions.find((o) => o.key === addressKey)
 
@@ -569,6 +578,21 @@ export function ServiceDetailPage() {
     setWizardOpen(false)
     toast.success('Roof measured — your config is pre-filled!')
     if (serviceId === 'roofing') {
+      // Rod anti-redundancy: carry the just-measured address forward into
+      // the Property Select. Normalize both sides — lowercase, drop the
+      // trailing ", USA" that Google's canonical form adds, and collapse
+      // all punctuation to single spaces — so "123 Main St, Miami, FL
+      // 33101, USA" (Google) matches a profile addl "123 Main St,
+      // Springfield, FL, 32401" (form-joined with comma-before-zip).
+      // Unmatched (new / unsaved address) falls through untouched — the
+      // user still picks manually in that case.
+      const norm = (s: string) =>
+        s.toLowerCase().trim().replace(/,\s*usa\s*$/i, '').replace(/[^a-z0-9]+/g, ' ').trim()
+      const measured = norm(result.address || '')
+      if (measured) {
+        const match = addressOptions.find((o) => o.full && norm(o.full) === measured)
+        if (match) setAddressKey(match.key)
+      }
       scrollToFirstConfigSection()
       // Impossible-to-miss next-step cue: banner + pulse the first step card.
       // Auto-clears after 6s (see effect below) or when user starts selecting.
