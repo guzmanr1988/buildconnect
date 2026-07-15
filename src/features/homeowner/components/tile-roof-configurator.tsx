@@ -16,13 +16,13 @@ export interface TileRoofSelection {
 // PR-#430 — bundled fallbacks. Same substrate-derive pattern as PR-#428
 // door-configurator; fallbacks stay byte-identical to pre-rewire so the
 // rendered list does NOT churn on cold open / RLS deny / unauth.
-const FALLBACK_TILE_TYPES: Array<{ id: TileType; label: string; description: string }> = [
+export const FALLBACK_TILE_TYPES: Array<{ id: TileType; label: string; description: string }> = [
   { id: 'flat', label: 'Flat', description: 'Low-profile flat tile' },
   { id: 'spanish', label: 'Spanish', description: 'S-shape, classic curve' },
   { id: 'mission', label: 'Mission', description: 'Half-barrel, hand-laid look' },
 ]
 
-const FALLBACK_TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string }> = [
+export const FALLBACK_TILE_ROOF_COLORS: Array<{ id: string; label: string; color: string }> = [
   { id: 'charcoal', label: 'Charcoal', color: '#3d4147' },
   { id: 'onyx', label: 'Onyx', color: '#1a1a1c' },
   { id: 'slate_grey', label: 'Slate Grey', color: '#7a7d80' },
@@ -40,7 +40,7 @@ const FALLBACK_TILE_ROOF_COLORS: Array<{ id: string; label: string; color: strin
 const TILE_TYPE_DESCRIPTION: Record<string, string> = Object.fromEntries(
   FALLBACK_TILE_TYPES.map((t) => [t.id, t.description])
 )
-const TILE_COLOR_HEX: Record<string, string> = Object.fromEntries(
+export const TILE_COLOR_HEX: Record<string, string> = Object.fromEntries(
   FALLBACK_TILE_ROOF_COLORS.map((c) => [c.id, c.color])
 )
 

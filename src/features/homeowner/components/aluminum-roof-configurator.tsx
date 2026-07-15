@@ -8,7 +8,7 @@ import { useCatalogStore } from '@/stores/catalog-store'
 // PR-#430 — bundled fallback. Same substrate-derive pattern as PR-#428
 // door-configurator; fallback stays byte-identical to pre-rewire so the
 // rendered list does NOT churn on cold open / RLS deny / unauth.
-const FALLBACK_ALUMINUM_ROOF_COLORS = [
+export const FALLBACK_ALUMINUM_ROOF_COLORS = [
   { id: 'charcoal_gray', label: 'Charcoal Gray', color: '#4A4A4A' },
   { id: 'bronze', label: 'Bronze', color: '#7B5E3A' },
   { id: 'white', label: 'White', color: '#F5F5F5' },
@@ -19,7 +19,7 @@ const FALLBACK_ALUMINUM_ROOF_COLORS = [
   { id: 'sandstone', label: 'Sandstone', color: '#C9B58F' },
 ]
 
-const ALUMINUM_COLOR_HEX: Record<string, string> = Object.fromEntries(
+export const ALUMINUM_COLOR_HEX: Record<string, string> = Object.fromEntries(
   FALLBACK_ALUMINUM_ROOF_COLORS.map((c) => [c.id, c.color])
 )
 

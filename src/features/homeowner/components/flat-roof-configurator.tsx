@@ -10,7 +10,7 @@ export type FlatMembraneType = 'tpo' | 'epdm' | 'modified_bitumen'
 // PR-#430 — bundled fallback. Same substrate-derive pattern as PR-#428
 // door-configurator; fallback stays byte-identical to pre-rewire so the
 // rendered list does NOT churn on cold open / RLS deny / unauth.
-const FALLBACK_FLAT_MEMBRANE_TYPES: Array<{ id: FlatMembraneType; label: string; description: string }> = [
+export const FALLBACK_FLAT_MEMBRANE_TYPES: Array<{ id: FlatMembraneType; label: string; description: string }> = [
   { id: 'tpo', label: 'TPO', description: 'Heat-welded thermoplastic, energy-efficient' },
   { id: 'epdm', label: 'EPDM', description: 'Rubber membrane, long-lasting' },
   { id: 'modified_bitumen', label: 'Modified Bitumen', description: 'Asphalt-based, layered system' },

@@ -8,7 +8,7 @@ import { useCatalogStore } from '@/stores/catalog-store'
 // PR-#429 — bundled fallback. Same substrate-derive pattern as PR-#428
 // door-configurator; fallback stays byte-identical to pre-rewire so the
 // rendered list does NOT churn on cold open / RLS deny / unauth.
-const FALLBACK_TIMBERLINE_HDZ_COLORS = [
+export const FALLBACK_TIMBERLINE_HDZ_COLORS = [
   { id: 'barkwood', label: 'Barkwood', color: '#4A3024' },
   { id: 'birchwood', label: 'Birchwood', color: '#B8A082' },
   { id: 'charcoal', label: 'Charcoal', color: '#3A3A3C' },
@@ -21,7 +21,7 @@ const FALLBACK_TIMBERLINE_HDZ_COLORS = [
   { id: 'weathered_wood', label: 'Weathered Wood', color: '#7A6F5F' },
 ]
 
-const SHINGLE_COLOR_HEX: Record<string, string> = Object.fromEntries(
+export const SHINGLE_COLOR_HEX: Record<string, string> = Object.fromEntries(
   FALLBACK_TIMBERLINE_HDZ_COLORS.map((c) => [c.id, c.color])
 )
 
