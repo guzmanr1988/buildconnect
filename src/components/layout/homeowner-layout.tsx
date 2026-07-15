@@ -40,6 +40,7 @@ export function HomeownerLayout() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
   const cancellationRequestsMap = useProjectsStore((s) => s.cancellationRequestsByLead)
+  const projectsHydrated = useProjectsStore((s) => s._sentProjectsHydrated)
   const approvedProjects = sentProjects.filter((p) => p.status === 'approved')
 
   // Arc-32 — read-side catalog realtime. Admin/products + vendor/catalog
@@ -169,9 +170,19 @@ export function HomeownerLayout() {
   // cancel-<leadId>-<status>) mean a status flip creates a new seen-set
   // key → toast fires on the transition. Prevents spam on mount via
   // firstRenderRef.
+  //
+  // Hydration-gate (apollo-diagnosed fresh-login re-fire): notifications
+  // derive from sentProjects, which populates asynchronously via
+  // hydrateFromSupabase after AuthBootstrap resolves. If firstRenderRef
+  // seeds the LS seen-set from the pre-hydrate empty snapshot, the next
+  // effect run (post-hydrate) reads that empty seed back and treats every
+  // already-seen approval as new → "Project Approved!" toast re-fires on
+  // every fresh login. Gate the whole effect on _sentProjectsHydrated so
+  // firstRenderRef always sees the server-truth snapshot.
   const LAST_SEEN_KEY = 'buildconnect-homeowner-last-seen-notification-ids'
   const firstRenderRef = useRef(true)
   useEffect(() => {
+    if (!projectsHydrated) return
     const currentIds = new Set(notifications.map((n) => n.id))
     let seenIds: Set<string>
     try {
@@ -192,7 +203,7 @@ export function HomeownerLayout() {
     if (newOnes.length > 0) {
       localStorage.setItem(LAST_SEEN_KEY, JSON.stringify([...currentIds]))
     }
-  }, [notifications])
+  }, [notifications, projectsHydrated])
 
   return (
     <div className="min-h-screen bg-background">
