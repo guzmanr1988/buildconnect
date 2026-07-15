@@ -2689,7 +2689,23 @@ export function ServiceDetailPage() {
                       (option) =>
                         selected.includes(option.id) &&
                         (option.subGroups?.some((sg) => sg.options.length > 0) ?? false) &&
-                        (subGroupExpanded[option.id] ?? true),
+                        (subGroupExpanded[option.id] ?? true) &&
+                        // Rod voice (2026-07-15) — gutters must NOT enter the
+                        // useExternalConfigurator variant-chip path even when
+                        // hermes gutter_style DDL (activated ~2026-07-14 23:22Z)
+                        // gave the runtime 'gutters' option non-empty subGroups.
+                        // Gutters owns its own consolidated card at L2917 that
+                        // renders floors + drops + inline Traditional/Modern
+                        // via gutterExtras. Without this exclusion, the L2794
+                        // path fires with inlineVariantSelector only (no
+                        // gutterExtras) and the floors + drops UI disappears
+                        // even though the component code retains it. Sibling
+                        // exclusion lives at L2925 for the gutter-extras branch.
+                        !(
+                          serviceId === 'roofing' &&
+                          group.id === 'addons' &&
+                          option.id === 'gutters'
+                        ),
                     )
                     .map((option) => {
                       // PR-#404 — roofing addons fully delegate sub-variant
@@ -2847,7 +2863,20 @@ export function ServiceDetailPage() {
                   if (ROOFING_ADDON_PAIR_CHILD_IDS.has(c.id)) return null
                   const matchingOption = renderOptions.find((o) => o.id === c.id)
                   const hasSubGroups = matchingOption?.subGroups?.some((sg) => sg.options.length > 0) ?? false
-                  if (hasSubGroups) return null
+                  // Rod voice (2026-07-15) — gutters is exempt from the
+                  // hasSubGroups skip. hermes gutter_style DDL (~2026-07-14
+                  // 23:22Z) added a 'gutter_style' sub-group with
+                  // traditional/modern sub-options to the LIVE catalog
+                  // 'gutters' option, so subGroups became non-empty at
+                  // runtime and this guard started skipping the gutter-extras
+                  // configurator — hiding the floors + drops selectors from
+                  // Rod. The style pick is threaded via item.gutterDropsConfig
+                  // .style (cart, not selections['gutters-sub']) and this
+                  // configurator renders its own Traditional/Modern chips
+                  // inline, so gutters stays on this single-card path and
+                  // the L2761 useExternalConfigurator branch is exempted for
+                  // gutters (sibling exclusion there) to avoid double-render.
+                  if (hasSubGroups && c.id !== 'gutters') return null
                   // Pair-parents route selection/open/lin-ft state through
                   // the currently-bound catalog id (soffit_metal if user
                   // toggled Metal, else soffit_wood) so pricing lookup + all
