@@ -1,6 +1,6 @@
 import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
@@ -924,6 +924,81 @@ export function ServiceDetailPage() {
       navigate('/home', { replace: true })
     }
   }, [service, navigate])
+
+  // Rod voice (2026-07-15) — Step 3 (Add-Ons) visibility fix. After Step-2
+  // material/color completion the Add-Ons section sat far below the fold on
+  // wide roofing configs (metal + shingle color palettes push it well past
+  // the viewport), so Rod could not see there IS a Step 3 — which is why
+  // he could not spot the #529 Wood|Metal toggle he'd asked for. The
+  // moment `colorSelected` flips true for the current colorable material,
+  // scroll the `[data-service-section="addons"]` header into view directly
+  // under the sticky header pill (same clearance math as the post-measurement
+  // scrollToFirstConfigSection helper at ~L882 — reused so multi-surface
+  // behavior stays consistent). Roofing-only. Fires once per false→true
+  // transition; ref resets when serviceId leaves 'roofing' or the material
+  // pick regresses (e.g., user unchecks the material) so a re-selection
+  // will scroll again.
+  const roofingAddonsScrollDoneRef = useRef(false)
+  useEffect(() => {
+    if (serviceId !== 'roofing') {
+      roofingAddonsScrollDoneRef.current = false
+      return
+    }
+    const selectedMaterials = selections.material ?? []
+    const MATERIALS_WITH_REQUIRED_PICKER = [
+      'metal',
+      'shingle',
+      'barrel_tile',
+      'terracotta',
+      'aluminum',
+      'flat_roof',
+    ]
+    const hasColorable = selectedMaterials.some((m) =>
+      MATERIALS_WITH_REQUIRED_PICKER.includes(m),
+    )
+    const done =
+      (!selectedMaterials.includes('metal') || !!metalRoofSelection.color) &&
+      (!selectedMaterials.includes('shingle') || !!shingleSelection.color) &&
+      (!selectedMaterials.includes('barrel_tile') ||
+        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+      (!selectedMaterials.includes('terracotta') ||
+        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+      (!selectedMaterials.includes('aluminum') || !!aluminumSelection.color) &&
+      (!selectedMaterials.includes('flat_roof') || !!flatRoofSelection.membraneType)
+    const complete = hasColorable && done
+    if (!complete) {
+      roofingAddonsScrollDoneRef.current = false
+      return
+    }
+    if (roofingAddonsScrollDoneRef.current) return
+    roofingAddonsScrollDoneRef.current = true
+    window.setTimeout(() => {
+      const target = document.querySelector<HTMLElement>(
+        '[data-service-section="addons"]',
+      )
+      if (!target) return
+      const headerEl = document.querySelector<HTMLElement>(
+        '[data-homeowner-desktop-header-pill="true"], [data-homeowner-top-header-pill="true"]',
+      )
+      const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 0
+      const clearance = 16
+      const top =
+        target.getBoundingClientRect().top +
+        window.scrollY -
+        headerBottom -
+        clearance
+      window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' })
+    }, 80)
+  }, [
+    serviceId,
+    selections.material,
+    metalRoofSelection.color,
+    shingleSelection.color,
+    tileSelection.tileType,
+    tileSelection.tileColor,
+    aluminumSelection.color,
+    flatRoofSelection.membraneType,
+  ])
 
   if (!service) {
     return (
