@@ -27,10 +27,11 @@ import { DoorConfigurator, type DoorSelection } from '../components/door-configu
 import { StormFrontConfigurator, type StormFrontSelection } from '../components/storm-front-configurator'
 import { GarageDoorConfigurator, type GarageDoorSelection } from '../components/garage-door-configurator'
 import { MetalRoofConfigurator, type MetalRoofSelection, METAL_ROOF_COLOR_META, FALLBACK_METAL_ROOF_COLORS } from '../components/metal-roof-configurator'
-import { ShingleRoofConfigurator, type ShingleRoofSelection } from '../components/shingle-roof-configurator'
-import { TileRoofConfigurator, type TileRoofSelection, type TileType } from '../components/tile-roof-configurator'
-import { AluminumRoofConfigurator, type AluminumRoofSelection } from '../components/aluminum-roof-configurator'
-import { FlatRoofConfigurator, type FlatRoofSelection } from '../components/flat-roof-configurator'
+import { ShingleRoofConfigurator, type ShingleRoofSelection, FALLBACK_TIMBERLINE_HDZ_COLORS, SHINGLE_COLOR_HEX } from '../components/shingle-roof-configurator'
+import { TileRoofConfigurator, type TileRoofSelection, type TileType, FALLBACK_TILE_TYPES, FALLBACK_TILE_ROOF_COLORS, TILE_COLOR_HEX } from '../components/tile-roof-configurator'
+import { AluminumRoofConfigurator, type AluminumRoofSelection, FALLBACK_ALUMINUM_ROOF_COLORS, ALUMINUM_COLOR_HEX } from '../components/aluminum-roof-configurator'
+import { FlatRoofConfigurator, type FlatRoofSelection, FALLBACK_FLAT_MEMBRANE_TYPES } from '../components/flat-roof-configurator'
+import { MaterialConfigCollapseRow } from '../components/material-config-collapse-row'
 import { AddonLinearFtConfigurator } from '../components/addon-linear-ft-configurator'
 import { PoolFloorSqftConfigurator } from '../components/pool-floor-sqft-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
@@ -369,10 +370,12 @@ export function ServiceDetailPage() {
     const legacyColor = (editItemForService?.shingleColor as string) || ''
     return { color: legacyColor, roofSize: '' }
   })
-  const [shingleConfigOpen, setShingleConfigOpen] = useState(
-    !(editItemForService?.shingleSelection as ShingleRoofSelection | undefined)?.color
-      && !(editItemForService?.shingleColor as string)
-  )
+  // v2-collapse parity (Rod 2026-07-15): match metalRoofConfigOpen's invariant
+  // — all material color/type pickers START COLLAPSED regardless of saved-state.
+  // Cart-restore of a configured item lands with the summary chip populated +
+  // row collapsed; first-mount lands with the required-caption placeholder +
+  // row collapsed. Every open-trigger below flips to keep this invariant.
+  const [shingleConfigOpen, setShingleConfigOpen] = useState(false)
   const [tileSelection, setTileSelection] = useState<TileRoofSelection>(() => {
     const saved = editItemForService?.tileSelection as TileRoofSelection | undefined
     if (saved) return saved
@@ -382,22 +385,15 @@ export function ServiceDetailPage() {
       roofSize: '',
     }
   })
-  const [tileConfigOpen, setTileConfigOpen] = useState(
-    !(editItemForService?.tileSelection as TileRoofSelection | undefined)?.tileType
-      && !(editItemForService?.tileType as string)
-  )
+  const [tileConfigOpen, setTileConfigOpen] = useState(false)
   const [aluminumSelection, setAluminumSelection] = useState<AluminumRoofSelection>(
     (editItemForService?.aluminumSelection as AluminumRoofSelection) || { color: '', roofSize: '' }
   )
-  const [aluminumConfigOpen, setAluminumConfigOpen] = useState(
-    !(editItemForService?.aluminumSelection as AluminumRoofSelection | undefined)?.color
-  )
+  const [aluminumConfigOpen, setAluminumConfigOpen] = useState(false)
   const [flatRoofSelection, setFlatRoofSelection] = useState<FlatRoofSelection>(
     (editItemForService?.flatRoofSelection as FlatRoofSelection) || { membraneType: '', roofSize: '' }
   )
-  const [flatRoofConfigOpen, setFlatRoofConfigOpen] = useState(
-    !(editItemForService?.flatRoofSelection as FlatRoofSelection | undefined)?.membraneType
-  )
+  const [flatRoofConfigOpen, setFlatRoofConfigOpen] = useState(false)
   const [editingItemId, setEditingItemId] = useState<string | null>(
     (editItemForService?.id as string) || null
   )
@@ -552,27 +548,24 @@ export function ServiceDetailPage() {
     const flatSquares = flatSqft > 0
       ? String(Math.max(1, Math.ceil((flatSqft * FLAT_WASTE_FACTOR) / 100)))
       : ''
+    // v2-collapse parity (Rod 2026-07-15): all 5 materials stay collapsed
+    // post-measurement. Squares are stored on selection; the collapsed
+    // summary row is what Rod sees next — he taps it to expand and pick
+    // the color/type/membrane. Was: 4 non-metal materials auto-opened.
     if (result.material === 'metal') {
       setMetalRoofSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
-      // v2-collapse: post-measurement stays collapsed. Squares are stored on
-      // selection; the collapsed summary row is what Rod sees next — he
-      // taps it to expand and pick a color.
     }
     if (result.material === 'shingle') {
       setShingleSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
-      setShingleConfigOpen(true)
     }
     if (result.material === 'barrel_tile') {
       setTileSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
-      setTileConfigOpen(true)
     }
     if (result.material === 'aluminum') {
       setAluminumSelection((prev) => ({ ...prev, roofSize: pitchedSquares }))
-      setAluminumConfigOpen(true)
     }
     if (result.material === 'flat_roof') {
       setFlatRoofSelection((prev) => ({ ...prev, roofSize: flatSquares }))
-      setFlatRoofConfigOpen(true)
     }
     setRoofMeasurement((prev) => ({ ...prev, areaSqft: result.areaSqft, pitch: result.pitch, address: result.address, perimeterFt: result.perimeterFt, pitchedAreaSqft: result.pitchedAreaSqft, flatAreaSqft: result.flatAreaSqft }))
     setWizardOpen(false)
@@ -1072,17 +1065,23 @@ export function ServiceDetailPage() {
   //       shingle/tile/aluminum uniform visual is a separate follow-up.
   //   (2) main "Add to Project" CTA disabled chain — applies to ALL 5
   //       colorable materials regardless of visual surface.
-  const ROOFING_COLORABLE_MATERIALS = ['metal', 'shingle', 'barrel_tile', 'terracotta', 'aluminum']
+  // Material-parity gate (Rod 2026-07-15): every roofing material has a
+  // required picker now. Tile requires BOTH type AND color; flat requires
+  // membrane type (real field — no invented flat-roof colors). Prior
+  // implementation excluded flat_roof entirely and only gated tile on
+  // color, leaving type-without-color partial-selection unblocked.
+  const ROOFING_MATERIALS_WITH_REQUIRED_PICKER = ['metal', 'shingle', 'barrel_tile', 'terracotta', 'aluminum', 'flat_roof']
   const selectedRoofingMaterials = serviceId === 'roofing' ? (selections.material ?? []) : []
   const hasColorableMaterial =
     serviceId === 'roofing' &&
-    selectedRoofingMaterials.some((m) => ROOFING_COLORABLE_MATERIALS.includes(m))
+    selectedRoofingMaterials.some((m) => ROOFING_MATERIALS_WITH_REQUIRED_PICKER.includes(m))
   const colorSelected =
     (!selectedRoofingMaterials.includes('metal') || !!metalRoofSelection.color) &&
     (!selectedRoofingMaterials.includes('shingle') || !!shingleSelection.color) &&
-    (!selectedRoofingMaterials.includes('barrel_tile') || !!tileSelection.tileColor) &&
-    (!selectedRoofingMaterials.includes('terracotta') || !!tileSelection.tileColor) &&
-    (!selectedRoofingMaterials.includes('aluminum') || !!aluminumSelection.color)
+    (!selectedRoofingMaterials.includes('barrel_tile') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+    (!selectedRoofingMaterials.includes('terracotta') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+    (!selectedRoofingMaterials.includes('aluminum') || !!aluminumSelection.color) &&
+    (!selectedRoofingMaterials.includes('flat_roof') || !!flatRoofSelection.membraneType)
   const roofingColorGateBlocks = hasColorableMaterial && !colorSelected
 
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
@@ -1188,13 +1187,13 @@ export function ServiceDetailPage() {
         setMetalRoofSelection({ color: '', roofSize: '' })
         setMetalRoofConfigOpen(false)
         setShingleSelection({ color: '', roofSize: '' })
-        setShingleConfigOpen(true)
+        setShingleConfigOpen(false)
         setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
-        setTileConfigOpen(true)
+        setTileConfigOpen(false)
         setAluminumSelection({ color: '', roofSize: '' })
-        setAluminumConfigOpen(true)
+        setAluminumConfigOpen(false)
         setFlatRoofSelection({ membraneType: '', roofSize: '' })
-        setFlatRoofConfigOpen(true)
+        setFlatRoofConfigOpen(false)
         setAddonLinearFt({})
         setAddonConfigOpen({})
         setSubGroupLinearFt({})
@@ -2118,13 +2117,16 @@ export function ServiceDetailPage() {
                             // The summary row below the material chip is the
                             // affordance now (was: auto-open the configurator).
                           }
+                          // v2-collapse parity (Rod 2026-07-15): first-select
+                          // for all 4 non-metal materials lands COLLAPSED —
+                          // matches metal's v2-collapse invariant above. The
+                          // summary row below the material chip is the
+                          // affordance now (was: auto-open the configurator).
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'shingle') {
                             const wasSelected = selected.includes('shingle')
                             if (wasSelected) {
                               setShingleConfigOpen(false)
                               setShingleSelection({ color: '', roofSize: '' })
-                            } else {
-                              setShingleConfigOpen(true)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && (option.id === 'barrel_tile' || option.id === 'terracotta')) {
@@ -2132,8 +2134,6 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setTileConfigOpen(false)
                               setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
-                            } else {
-                              setTileConfigOpen(true)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'aluminum') {
@@ -2141,8 +2141,6 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setAluminumConfigOpen(false)
                               setAluminumSelection({ color: '', roofSize: '' })
-                            } else {
-                              setAluminumConfigOpen(true)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'flat_roof') {
@@ -2150,8 +2148,6 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setFlatRoofConfigOpen(false)
                               setFlatRoofSelection({ membraneType: '', roofSize: '' })
-                            } else {
-                              setFlatRoofConfigOpen(true)
                             }
                           }
                           if (serviceId === 'windows_doors' && option.id === 'garage_doors') {
@@ -2747,152 +2743,165 @@ export function ServiceDetailPage() {
                     )}
                   </AnimatePresence>
                 ))}
-                {/* Metal Roof Configurator - v2-collapse wrapper.
-                    Summary row (always visible when metal selected) is the
-                    collapsed affordance; AnimatePresence body renders the
-                    unchanged MetalRoofConfigurator when the user taps to
-                    expand. Save inside the configurator collapses back to
-                    the summary row with selection state kept.
-                    Squares/"Configured" chip on the material option (line ~2274)
-                    + cart-item review chips (~3506) already show squares —
-                    this row intentionally shows COLOR ONLY. */}
-                {serviceId === 'roofing' && group.id === 'material' && selected.includes('metal') && (
-                  <div className="mt-4 flex flex-col gap-2" data-testid="metal-color-collapse">
-                    {(() => {
-                      const savedId = metalRoofSelection.color
-                      const meta = savedId ? METAL_ROOF_COLOR_META[savedId] : undefined
-                      const savedEntry = savedId ? FALLBACK_METAL_ROOF_COLORS.find((c) => c.id === savedId) : undefined
-                      const label = savedId
-                        ? (savedEntry?.label ?? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
-                        : 'Choose a color'
-                      const metalNeedsColor = !savedId
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setMetalRoofConfigOpen((prev) => !prev)}
-                            data-testid="metal-color-summary-row"
-                            data-color-collapse-state={metalRoofConfigOpen ? 'expanded' : 'collapsed'}
-                            data-color-selected={savedId || 'none'}
-                            data-color-required={metalNeedsColor ? 'true' : 'false'}
-                            aria-expanded={metalRoofConfigOpen}
-                            aria-controls="metal-color-config-body"
-                            className={cn(
-                              'w-full rounded-xl border bg-background px-3 py-2.5 flex items-center justify-between cursor-pointer text-left',
-                              metalNeedsColor ? 'border-destructive/40' : 'border-muted'
-                            )}
-                          >
-                            <span className="flex items-center min-w-0">
-                              <span
-                                className={cn(
-                                  'h-4 w-4 rounded-full shrink-0 border',
-                                  meta ? 'border-primary/30' : 'border-muted-foreground/20 bg-muted'
-                                )}
-                                style={meta ? { backgroundColor: meta.color } : undefined}
-                                aria-hidden="true"
-                              />
-                              <span className={cn(
-                                'ml-2 text-sm truncate',
-                                savedId ? 'font-medium text-foreground' : 'text-muted-foreground'
-                              )}>
-                                {label}
-                              </span>
-                              {metalNeedsColor && (
-                                <span className="ml-1 text-destructive text-xs shrink-0" aria-hidden="true">*</span>
-                              )}
-                            </span>
-                            <ChevronDown
-                              className={cn(
-                                'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
-                                metalRoofConfigOpen && 'rotate-180'
-                              )}
-                              aria-hidden="true"
-                            />
-                          </button>
-                          {metalNeedsColor && (
-                            <p className="text-xs text-destructive mt-1.5" data-testid="metal-color-required-caption">
-                              Color required to continue.
-                            </p>
-                          )}
-                        </>
-                      )
-                    })()}
-                    <AnimatePresence initial={false}>
-                      {metalRoofConfigOpen && (
-                        <motion.div
-                          key="metal-config-body"
-                          id="metal-color-config-body"
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <MetalRoofConfigurator
-                            selection={metalRoofSelection}
-                            onChange={(updated) => {
-                              setMetalRoofSelection(updated)
-                              // Squares are the source of truth; reverse-derive sqft for pricing engine.
-                              if (updated.roofSize) {
-                                const sq = Number(updated.roofSize)
-                                if (!isNaN(sq) && sq > 0) {
-                                  setRoofMeasurement((prev) => prev
-                                    ? { ...prev, areaSqft: sq * 100 }
-                                    : { areaSqft: sq * 100, pitch: '', address: '' })
-                                }
-                              }
-                            }}
-                            onSave={() => setMetalRoofConfigOpen(false)}
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-                {serviceId === 'roofing' && group.id === 'material' && (
-                  <AnimatePresence>
-                    {selected.includes('shingle') && shingleConfigOpen && (
+                {/* Roofing material summary-row parity wrapper (Rod voice
+                    2026-07-15 dispatch kratos msg 1784139233599). All 5
+                    materials render the IDENTICAL collapsed summary-row +
+                    required-gate + chevron-expand pattern that metal
+                    shipped in v2-collapse. Per-material variation is
+                    props-only (placeholder / required-caption / gated
+                    fields). Squares live on the configurator body and
+                    the "Configured" chip on the material option
+                    (line ~2274) + cart-item review chips (~3506); these
+                    rows intentionally show the picker only.
+                    Test-id prefixes: metal-color, shingle-color,
+                    aluminum-color, tile, flat-membrane. */}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('metal') && (() => {
+                  const savedId = metalRoofSelection.color
+                  const meta = savedId ? METAL_ROOF_COLOR_META[savedId] : undefined
+                  const savedEntry = savedId ? FALLBACK_METAL_ROOF_COLORS.find((c) => c.id === savedId) : undefined
+                  const label = savedEntry?.label ?? (savedId
+                    ? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null)
+                  return (
+                    <MaterialConfigCollapseRow
+                      testIdPrefix="metal-color"
+                      placeholder="Choose a color"
+                      filledLabel={label}
+                      swatchHex={meta?.color}
+                      isRequired={!savedId}
+                      requiredCaption="Color required to continue."
+                      selectedIdForTest={savedId || null}
+                      expanded={metalRoofConfigOpen}
+                      onToggle={() => setMetalRoofConfigOpen((p) => !p)}
+                    >
+                      <MetalRoofConfigurator
+                        selection={metalRoofSelection}
+                        onChange={(updated) => {
+                          setMetalRoofSelection(updated)
+                          // Squares are the source of truth; reverse-derive sqft for pricing engine.
+                          if (updated.roofSize) {
+                            const sq = Number(updated.roofSize)
+                            if (!isNaN(sq) && sq > 0) {
+                              setRoofMeasurement((prev) => prev
+                                ? { ...prev, areaSqft: sq * 100 }
+                                : { areaSqft: sq * 100, pitch: '', address: '' })
+                            }
+                          }
+                        }}
+                        onSave={() => setMetalRoofConfigOpen(false)}
+                      />
+                    </MaterialConfigCollapseRow>
+                  )
+                })()}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('shingle') && (() => {
+                  const savedId = shingleSelection.color
+                  const savedEntry = savedId ? FALLBACK_TIMBERLINE_HDZ_COLORS.find((c) => c.id === savedId) : undefined
+                  const label = savedEntry?.label ?? (savedId
+                    ? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null)
+                  return (
+                    <MaterialConfigCollapseRow
+                      testIdPrefix="shingle-color"
+                      placeholder="Choose a color"
+                      filledLabel={label}
+                      swatchHex={savedId ? SHINGLE_COLOR_HEX[savedId] : undefined}
+                      isRequired={!savedId}
+                      requiredCaption="Color required to continue."
+                      selectedIdForTest={savedId || null}
+                      expanded={shingleConfigOpen}
+                      onToggle={() => setShingleConfigOpen((p) => !p)}
+                    >
                       <ShingleRoofConfigurator
                         selection={shingleSelection}
                         onChange={setShingleSelection}
                         onSave={() => setShingleConfigOpen(false)}
                       />
-                    )}
-                  </AnimatePresence>
-                )}
-                {serviceId === 'roofing' && group.id === 'material' && (
-                  <AnimatePresence>
-                    {(selected.includes('barrel_tile') || selected.includes('terracotta')) && tileConfigOpen && (
+                    </MaterialConfigCollapseRow>
+                  )
+                })()}
+                {serviceId === 'roofing' && group.id === 'material' && (selected.includes('barrel_tile') || selected.includes('terracotta')) && (() => {
+                  const typeId = tileSelection.tileType
+                  const colorId = tileSelection.tileColor
+                  const typeEntry = typeId ? FALLBACK_TILE_TYPES.find((t) => t.id === typeId) : undefined
+                  const colorEntry = colorId ? FALLBACK_TILE_ROOF_COLORS.find((c) => c.id === colorId) : undefined
+                  const bothSaved = !!typeId && !!colorId
+                  const label = bothSaved
+                    ? `${typeEntry?.label ?? typeId} · ${colorEntry?.label ?? colorId}`
+                    : null
+                  const selectedIdForTest = bothSaved ? `${typeId}:${colorId}` : null
+                  return (
+                    <MaterialConfigCollapseRow
+                      testIdPrefix="tile"
+                      placeholder="Choose your tile"
+                      filledLabel={label}
+                      swatchHex={colorId ? TILE_COLOR_HEX[colorId] : undefined}
+                      isRequired={!bothSaved}
+                      requiredCaption="Tile type and color required to continue."
+                      selectedIdForTest={selectedIdForTest}
+                      expanded={tileConfigOpen}
+                      onToggle={() => setTileConfigOpen((p) => !p)}
+                    >
                       <TileRoofConfigurator
                         selection={tileSelection}
                         onChange={setTileSelection}
                         onSave={() => setTileConfigOpen(false)}
                       />
-                    )}
-                  </AnimatePresence>
-                )}
-                {serviceId === 'roofing' && group.id === 'material' && (
-                  <AnimatePresence>
-                    {selected.includes('aluminum') && aluminumConfigOpen && (
+                    </MaterialConfigCollapseRow>
+                  )
+                })()}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('aluminum') && (() => {
+                  const savedId = aluminumSelection.color
+                  const savedEntry = savedId ? FALLBACK_ALUMINUM_ROOF_COLORS.find((c) => c.id === savedId) : undefined
+                  const label = savedEntry?.label ?? (savedId
+                    ? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null)
+                  return (
+                    <MaterialConfigCollapseRow
+                      testIdPrefix="aluminum-color"
+                      placeholder="Choose a color"
+                      filledLabel={label}
+                      swatchHex={savedId ? ALUMINUM_COLOR_HEX[savedId] : undefined}
+                      isRequired={!savedId}
+                      requiredCaption="Color required to continue."
+                      selectedIdForTest={savedId || null}
+                      expanded={aluminumConfigOpen}
+                      onToggle={() => setAluminumConfigOpen((p) => !p)}
+                    >
                       <AluminumRoofConfigurator
                         selection={aluminumSelection}
                         onChange={setAluminumSelection}
                         onSave={() => setAluminumConfigOpen(false)}
                       />
-                    )}
-                  </AnimatePresence>
-                )}
-                {serviceId === 'roofing' && group.id === 'material' && (
-                  <AnimatePresence>
-                    {selected.includes('flat_roof') && flatRoofConfigOpen && (
+                    </MaterialConfigCollapseRow>
+                  )
+                })()}
+                {serviceId === 'roofing' && group.id === 'material' && selected.includes('flat_roof') && (() => {
+                  const savedId = flatRoofSelection.membraneType
+                  const savedEntry = savedId ? FALLBACK_FLAT_MEMBRANE_TYPES.find((m) => m.id === savedId) : undefined
+                  const label = savedEntry?.label ?? (savedId
+                    ? savedId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null)
+                  return (
+                    <MaterialConfigCollapseRow
+                      testIdPrefix="flat-membrane"
+                      placeholder="Choose a membrane"
+                      filledLabel={label}
+                      // Flat roof has no real color data — leave swatch neutral
+                      // rather than invent one (Rod real-data-only rule).
+                      isRequired={!savedId}
+                      requiredCaption="Membrane required to continue."
+                      selectedIdForTest={savedId || null}
+                      expanded={flatRoofConfigOpen}
+                      onToggle={() => setFlatRoofConfigOpen((p) => !p)}
+                    >
                       <FlatRoofConfigurator
                         selection={flatRoofSelection}
                         onChange={setFlatRoofSelection}
                         onSave={() => setFlatRoofConfigOpen(false)}
                       />
-                    )}
-                  </AnimatePresence>
-                )}
+                    </MaterialConfigCollapseRow>
+                  )
+                })()}
                 {/* Payment method note */}
                 {group.id === 'payment' && (
                   <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
