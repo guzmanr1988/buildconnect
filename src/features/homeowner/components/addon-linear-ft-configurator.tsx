@@ -29,6 +29,17 @@ interface AddonLinearFtConfiguratorProps {
     selectedId: string | undefined
     onSelect: (id: string) => void
   }
+  // Rod voice-directive — homeowner-side Soffit/Fascia consolidation:
+  // renders a Wood|Metal radiogroup on the SAME row as the linear-ft input
+  // (right-hand empty space, graceful mobile stack via flex-wrap). Toggle
+  // maps to the underlying priced catalog option id — Soffit+Wood=soffit_wood,
+  // Soffit+Metal=soffit_metal, Fascia same shape. Preserves the lin-ft value
+  // across the flip; the state migration lives in the parent (service-detail).
+  // Mirrors gutterExtras.onStyleChange contract shape.
+  materialToggle?: {
+    current: 'wood' | 'metal'
+    onChange: (next: 'wood' | 'metal') => void
+  }
 }
 
 export function AddonLinearFtConfigurator({
@@ -39,6 +50,7 @@ export function AddonLinearFtConfigurator({
   onSave,
   gutterExtras,
   inlineVariantSelector,
+  materialToggle,
 }: AddonLinearFtConfiguratorProps) {
   const isGutter = id === 'gutters'
   const numericValue = Number(value) || 0
@@ -169,6 +181,39 @@ export function AddonLinearFtConfigurator({
                     )}
                   >
                     {s === 'traditional' ? 'Traditional' : 'Modern'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {materialToggle && (
+            <div
+              className="flex items-center gap-2"
+              role="radiogroup"
+              aria-label="Material"
+              data-testid="material-toggle"
+              data-material-toggle-id={id}
+            >
+              {(['wood', 'metal'] as const).map((m) => {
+                const isSelected = materialToggle.current === m
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    data-chip-id={m}
+                    data-chip-group="addon_material"
+                    data-chip-state={isSelected ? 'active' : 'inactive'}
+                    onClick={() => materialToggle.onChange(m)}
+                    className={cn(
+                      'rounded-xl border px-3 py-2 text-sm text-center transition-all duration-150',
+                      isSelected
+                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 text-primary font-semibold'
+                        : 'border-border hover:border-primary/40 hover:bg-muted text-foreground',
+                    )}
+                  >
+                    {m === 'wood' ? 'Wood' : 'Metal'}
                   </button>
                 )
               })}
