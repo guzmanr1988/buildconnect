@@ -373,6 +373,12 @@ interface ProjectsState {
   removeProject: (id: string) => void
   _supabaseMigrationDone: boolean
   _userUuid: string | null
+  // Transient (not persisted — forced false in merge). Flips true when
+  // hydrateFromSupabase has settled sentProjects from server truth. Consumers
+  // that seed state off the hydrated sentProjects (delta-detection seen-sets)
+  // must gate on this — otherwise they snapshot the empty pre-hydrate array
+  // and clobber a legitimate prior-session seen-set.
+  _sentProjectsHydrated: boolean
   // Surface-2 Supabase hydration — mirrors vendor-catalog pattern.
   // Call once per session after auth resolves. Loads sent_projects rows for
   // this user, merges into local store (Supabase wins on conflict by id),
@@ -389,6 +395,7 @@ export const useProjectsStore = create<ProjectsState>()(
       repAcceptanceByLead: {},
       _supabaseMigrationDone: false,
       _userUuid: null,
+      _sentProjectsHydrated: false,
 
       hydrateFromSupabase: async (userUuid, role) => {
         set({ _userUuid: userUuid })
@@ -661,7 +668,7 @@ export const useProjectsStore = create<ProjectsState>()(
 
         // 4. One-time migration: upsert homeowner localStorage-only rows to Supabase.
         if (role !== 'homeowner' || get()._supabaseMigrationDone) {
-          set({ _supabaseMigrationDone: true })
+          set({ _supabaseMigrationDone: true, _sentProjectsHydrated: true })
           return
         }
 
@@ -707,7 +714,7 @@ export const useProjectsStore = create<ProjectsState>()(
           else console.log(`[projects] migrated ${upsertRows.length} rows to Supabase`)
         }
 
-        set({ _supabaseMigrationDone: true })
+        set({ _supabaseMigrationDone: true, _sentProjectsHydrated: true })
       },
 
       leadStatusOverrides: {},
@@ -1311,6 +1318,12 @@ export const useProjectsStore = create<ProjectsState>()(
           // Preserve migration flag across sessions so one-time upsert doesn't re-fire.
           _supabaseMigrationDone: ps._supabaseMigrationDone ?? currentState._supabaseMigrationDone,
           _userUuid: ps._userUuid ?? currentState._userUuid,
+          // Transient flag: must reset every LS-rehydrate so downstream gates
+          // (delta-detection seen-set seeding) wait for the fresh hydrate to
+          // populate sentProjects from server truth. Otherwise a persisted
+          // `true` from the prior session lets the seed run against the
+          // pre-server-fetch snapshot and clobber a legitimate seen-set.
+          _sentProjectsHydrated: false,
         }
       },
     }
