@@ -1483,7 +1483,20 @@ export function ServiceDetailPage() {
         setAddonLinearFt({})
         setAddonConfigOpen({})
         setSubGroupLinearFt({})
-        setGutterStyle('traditional')
+        // PR #533 add-commit — cascade-clear the three null-init'd gutter
+        // pickers so the must-pick gate stays falsifiable across a
+        // service_type toggle-off → re-pick loop. Prior write of
+        // setGutterStyle('traditional') here re-seeded the exact default
+        // #533 kills (auto-seeded → unpicked state unreachable → gate
+        // vacuous). setGutterFloors + setGutterDrops were entirely absent
+        // from this block — floors/drops held old picks across the cascade.
+        // Together they let Save enable on a re-picked gutter chip without
+        // the homeowner having actively touched any of the three fields.
+        // Top-down UI order (floors → drops → style) matches #533 cue copy
+        // + save-block AND-gate order.
+        setGutterFloors(null)
+        setGutterDrops(null)
+        setGutterStyle(null)
         setFlatOnlyAck(false)
         setRoofMeasurement((prev) =>
           prev
@@ -2561,6 +2574,30 @@ export function ServiceDetailPage() {
                               // from PR-#399 service_type toggle-off.
                               setSubGroupLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
                               setSelections((prev) => { const next = { ...prev }; delete next[`${option.id}-sub`]; return next })
+                              // PR #533 add-commit — the block already
+                              // declares "deselect + clean state" (comment
+                              // above) and wipes addonLinearFt +
+                              // addonConfigOpen + subGroupLinearFt + the
+                              // sub-picks. The three null-init'd gutter
+                              // pickers were missed when the notion widened.
+                              // Without this clear: chip toggle-off →
+                              // toggle-on re-fires the auto-fill effect
+                              // (L806-819) that seeds linear-ft from
+                              // perimeter as soon as `!prev['gutters']` is
+                              // true (which our delete above just made it),
+                              // combined with stale floors/drops/style
+                              // satisfying gutterComplete → Save enables on
+                              // zero re-confirmation. Same vacuous-mandate
+                              // as L1486, more reachable path (chip toggle
+                              // >> Step-1 Service Type deselect). Gutter-
+                              // scoped (option.id === 'gutters') so
+                              // toggling Soffit/Fascia/Downspouts doesn't
+                              // clobber gutter picks unrelated to that tap.
+                              if (option.id === 'gutters') {
+                                setGutterFloors(null)
+                                setGutterDrops(null)
+                                setGutterStyle(null)
+                              }
                             } else {
                               // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
