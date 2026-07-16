@@ -3998,13 +3998,23 @@ export function ServiceDetailPage() {
               Project Details
             </Button>
           )}
+          {/* Cue-host mount condition. LOAD-BEARING INVARIANT: this list must
+              be a superset of the CTA disabled-terms above (modulo `added` /
+              `alreadyInCart`, which are handled by this outer wrapper and by
+              the alreadyInCart alternate message below). Every term that can
+              disable the CTA must also mount this <p>, or gatingReason()
+              never reaches the screen and the homeowner sees a dead button
+              with no explanation of why it is blocked. cueActive => cue on
+              screen. */}
           {!alreadyInCart && !added && (
             !allRequiredDone ||
+            !addressKey ||
             !isProjectPermitValid(projectPermit, projectPermitWaiver) ||
             !isProjectAssociationValid(projectAssociation ?? null) ||
             (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
             (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) ||
-            !pergolasStructuresAllAssigned
+            !pergolasStructuresAllAssigned ||
+            roofingColorGateBlocks
           ) && (
             <p className="text-xs text-muted-foreground text-center">
               {gatingReason()}
