@@ -53,7 +53,7 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         required: false,
         type: 'multi',
         options: [
-          { id: 'gutters', label: 'Gutter Installation' },
+          { id: 'gutters', label: 'Gutters' },
           { id: 'insulation', label: 'Attic Insulation' },
           { id: 'solar_prep', label: 'Solar Panel Prep' },
           { id: 'soffit_wood', label: 'Soffit Wood' },

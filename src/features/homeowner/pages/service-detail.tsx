@@ -1,6 +1,6 @@
 import { PITCHED_WASTE_FACTOR, FLAT_WASTE_FACTOR, GUTTER_DROP_FT_BY_FLOORS, computeGutterTotalLinFt } from '@/lib/roof-pricing'
 import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-math'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
@@ -924,6 +924,187 @@ export function ServiceDetailPage() {
       navigate('/home', { replace: true })
     }
   }, [service, navigate])
+
+  // Rod voice (2026-07-15) — Step 3 (Add-Ons) visibility fix. After Step-2
+  // material/color completion the Add-Ons section sat far below the fold on
+  // wide roofing configs (metal + shingle color palettes push it well past
+  // the viewport), so Rod could not see there IS a Step 3 — which is why
+  // he could not spot the #529 Wood|Metal toggle he'd asked for. The
+  // moment `colorSelected` flips true for the current colorable material,
+  // scroll the `[data-service-section="addons"]` header into view directly
+  // under the sticky header pill (same clearance math as the post-measurement
+  // scrollToFirstConfigSection helper at ~L882 — reused so multi-surface
+  // behavior stays consistent). Roofing-only. Fires once per false→true
+  // transition; ref resets when serviceId leaves 'roofing' or the material
+  // pick regresses (e.g., user unchecks the material) so a re-selection
+  // will scroll again.
+  const roofingAddonsScrollDoneRef = useRef(false)
+  useEffect(() => {
+    if (serviceId !== 'roofing') {
+      roofingAddonsScrollDoneRef.current = false
+      return
+    }
+    const selectedMaterials = selections.material ?? []
+    const MATERIALS_WITH_REQUIRED_PICKER = [
+      'metal',
+      'shingle',
+      'barrel_tile',
+      'terracotta',
+      'aluminum',
+      'flat_roof',
+    ]
+    const hasColorable = selectedMaterials.some((m) =>
+      MATERIALS_WITH_REQUIRED_PICKER.includes(m),
+    )
+    const done =
+      (!selectedMaterials.includes('metal') || !!metalRoofSelection.color) &&
+      (!selectedMaterials.includes('shingle') || !!shingleSelection.color) &&
+      (!selectedMaterials.includes('barrel_tile') ||
+        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+      (!selectedMaterials.includes('terracotta') ||
+        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+      (!selectedMaterials.includes('aluminum') || !!aluminumSelection.color) &&
+      (!selectedMaterials.includes('flat_roof') || !!flatRoofSelection.membraneType)
+    const complete = hasColorable && done
+    if (!complete) {
+      roofingAddonsScrollDoneRef.current = false
+      return
+    }
+    if (roofingAddonsScrollDoneRef.current) return
+    roofingAddonsScrollDoneRef.current = true
+
+    // Rod voice (2026-07-16, apollo rAF-verified drift-at-rest refinement).
+    // First-pass at 80ms lands headerBottom+16 (4px off, apollo t=65ms) but
+    // then RESTS ~247px over-scrolled because the color palette collapses
+    // to its "Barkwood / 18 squares" summary chip on Save Selection,
+    // removing ~240px of height ABOVE the addons section AT t≈439ms —
+    // AFTER the initial scroll. The first-pass target was computed
+    // pre-collapse; post-collapse the section sits higher than intended
+    // vs viewport → sticky nav cuts off the top row of add-on cards.
+    //
+    // Second-pass mechanism (apollo v2 diagnosis catch): a naive 3-frame
+    // stableFrames terminate on document.scrollHeight is DEFEATED here —
+    // layout is briefly stable between settle-loop start (t≈220ms) and
+    // the collapse (t≈439ms), so a stable-only settle criterion trips at
+    // t≈284ms, terminates the loop, and misses the collapse entirely. Fix:
+    //   (a) require at least ONE observed scrollHeight change since baseline
+    //       before allowing the 3-stable-frames termination (guards against
+    //       pre-collapse false-settle);
+    //   (b) drift-correction fires on EVERY rAF tick while drift > 6px —
+    //       not just on final settle — so the collapse frame gets caught
+    //       regardless of when the settle criterion trips;
+    //   (c) hard timeout lifted to 1500ms so we have runway past the
+    //       observed ~440ms collapse fire in case (a) never latches.
+    // Reuses the #517 headerBottom+16 math (scrollToFirstConfigSection
+    // L882-909) via computeAddonsTarget for cross-pass consistency.
+    const HEADER_CLEARANCE = 16
+    const TOLERANCE_PX = 6
+    const NO_DRIFT_FRAMES_REQUIRED = 4
+    const SETTLE_HARD_TIMEOUT_MS = 1500
+    const computeAddonsTarget = (target: HTMLElement) => {
+      const headerEl = document.querySelector<HTMLElement>(
+        '[data-homeowner-desktop-header-pill="true"], [data-homeowner-top-header-pill="true"]',
+      )
+      const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 0
+      return {
+        headerBottom,
+        absoluteTop:
+          target.getBoundingClientRect().top +
+          window.scrollY -
+          headerBottom -
+          HEADER_CLEARANCE,
+      }
+    }
+    const firstPassTimer = window.setTimeout(() => {
+      const target = document.querySelector<HTMLElement>(
+        '[data-service-section="addons"]',
+      )
+      if (!target) return
+      const { absoluteTop } = computeAddonsTarget(target)
+      window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
+    }, 80)
+    let settleRaf: number | null = null
+    let baselineHeight: number | null = null
+    let observedLayoutChange = false
+    let noDriftFrames = 0
+    // Disarm-on-user-input: any wheel / touchstart / keydown during the
+    // settle window immediately aborts the auto-scroll loop so we cannot
+    // fight a genuine user scroll. Combined with the natural disarm
+    // (drift<=6px for 4 consecutive frames post-collapse) and the
+    // 1500ms hard timeout, this gives three independent termination
+    // paths — the auto-scroll never sticks around uninvited.
+    let userInputDetected = false
+    const abortOnUserInput = () => {
+      userInputDetected = true
+    }
+    window.addEventListener('wheel', abortOnUserInput, {
+      passive: true,
+      once: true,
+    })
+    window.addEventListener('touchstart', abortOnUserInput, {
+      passive: true,
+      once: true,
+    })
+    window.addEventListener('keydown', abortOnUserInput, { once: true })
+    const settleTick = (start: number) => {
+      if (userInputDetected) {
+        settleRaf = null
+        return
+      }
+      const target = document.querySelector<HTMLElement>(
+        '[data-service-section="addons"]',
+      )
+      if (!target) {
+        settleRaf = null
+        return
+      }
+      const h = document.documentElement.scrollHeight
+      if (baselineHeight === null) {
+        baselineHeight = h
+      } else if (h !== baselineHeight) {
+        observedLayoutChange = true
+      }
+      const { headerBottom, absoluteTop } = computeAddonsTarget(target)
+      const currentTop = target.getBoundingClientRect().top
+      const desiredTop = headerBottom + HEADER_CLEARANCE
+      const drift = Math.abs(currentTop - desiredTop)
+      if (drift > TOLERANCE_PX) {
+        window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
+        noDriftFrames = 0
+      } else {
+        noDriftFrames++
+      }
+      const elapsed = performance.now() - start
+      const settled =
+        (observedLayoutChange && noDriftFrames >= NO_DRIFT_FRAMES_REQUIRED) ||
+        elapsed >= SETTLE_HARD_TIMEOUT_MS
+      if (!settled) {
+        settleRaf = requestAnimationFrame(() => settleTick(start))
+      } else {
+        settleRaf = null
+      }
+    }
+    const settleStartTimer = window.setTimeout(() => {
+      settleRaf = requestAnimationFrame(() => settleTick(performance.now()))
+    }, 220)
+    return () => {
+      window.clearTimeout(firstPassTimer)
+      window.clearTimeout(settleStartTimer)
+      window.removeEventListener('wheel', abortOnUserInput)
+      window.removeEventListener('touchstart', abortOnUserInput)
+      window.removeEventListener('keydown', abortOnUserInput)
+      if (settleRaf !== null) cancelAnimationFrame(settleRaf)
+    }
+  }, [
+    serviceId,
+    selections.material,
+    metalRoofSelection.color,
+    shingleSelection.color,
+    tileSelection.tileType,
+    tileSelection.tileColor,
+    aluminumSelection.color,
+    flatRoofSelection.membraneType,
+  ])
 
   if (!service) {
     return (
@@ -2006,14 +2187,26 @@ export function ServiceDetailPage() {
                     const roofingAddonSubPickLabel = roofingAddonSubPickId
                       ? resolveSubChoiceLabel(option, roofingAddonSubPickId)
                       : null
+                    // PR #530 addendum — homeowner-only FE override for the
+                    // 'gutters' addon card label. The live Supabase catalog
+                    // (post-hermes 2026-07-14 gutter_style DDL activation)
+                    // hydrates option.label as 'Gutter Installation'; homeowner
+                    // surfaces must show 'Gutters' regardless. Vendor / rep /
+                    // mock-data read option.label directly and are unaffected
+                    // by this override — same live-catalog-trumps-FE class as
+                    // the #531 gutter-menu dispatch bug, patching the label leg.
+                    const homeownerAddonLabelFallback =
+                      serviceId === 'roofing' && group.id === 'addons' && option.id === 'gutters'
+                        ? 'Gutters'
+                        : option.label
                     const optionLabel =
                       serviceId === 'pergolas' && group.id === 'size' && option.id === 'measured'
                         ? (areaMeasurement
                             ? `${areaMeasurement.areaSqft.toLocaleString()} sq ft (measured)`
                             : 'Measure your space first')
                         : roofingAddonPair
-                          ? ROOFING_ADDON_PAIR_PARENT_LABELS[roofingAddonPair.wood] ?? option.label
-                          : roofingAddonSubPickLabel ?? option.label
+                          ? ROOFING_ADDON_PAIR_PARENT_LABELS[roofingAddonPair.wood] ?? homeownerAddonLabelFallback
+                          : roofingAddonSubPickLabel ?? homeownerAddonLabelFallback
                     // PR-#462 — per-option number-input rendering. Vendor/admin
                     // flips an option's inputType to 'number-input' (catalog
                     // column, mapped through service-catalog.ts) and the
