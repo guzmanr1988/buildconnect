@@ -972,23 +972,85 @@ export function ServiceDetailPage() {
     }
     if (roofingAddonsScrollDoneRef.current) return
     roofingAddonsScrollDoneRef.current = true
-    window.setTimeout(() => {
-      const target = document.querySelector<HTMLElement>(
-        '[data-service-section="addons"]',
-      )
-      if (!target) return
+
+    // Rod voice (2026-07-16, apollo rAF-verified drift-at-rest refinement).
+    // First-pass at 80ms lands headerBottom+16 (4px off, apollo t=65ms) but
+    // then RESTS ~247px over-scrolled because the color palette collapses
+    // to its "Barkwood / 18 squares" summary chip on Save Selection,
+    // removing height ABOVE the addons section AFTER the initial scroll.
+    // The first-pass target was computed pre-collapse; post-collapse the
+    // section sits higher than intended vs viewport → sticky nav cuts off
+    // the top row of add-on cards. Second-pass: rAF-poll
+    // document.scrollHeight for a stable window (3 consecutive frames
+    // unchanged) — the moment layout stops shifting — then remeasure the
+    // addons top and re-scroll only if drift exceeds tolerance. Bounded by
+    // a 900ms hard timeout so any downstream animation chain doesn't
+    // rAF-bind forever. Reuses the same #517 headerBottom+16 clearance
+    // math for consistency with scrollToFirstConfigSection (L882-909).
+    const HEADER_CLEARANCE = 16
+    const TOLERANCE_PX = 6
+    const STABLE_FRAMES_REQUIRED = 3
+    const SETTLE_HARD_TIMEOUT_MS = 900
+    const computeAddonsTarget = (target: HTMLElement) => {
       const headerEl = document.querySelector<HTMLElement>(
         '[data-homeowner-desktop-header-pill="true"], [data-homeowner-top-header-pill="true"]',
       )
       const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 0
-      const clearance = 16
-      const top =
-        target.getBoundingClientRect().top +
-        window.scrollY -
-        headerBottom -
-        clearance
-      window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' })
+      return {
+        headerBottom,
+        absoluteTop:
+          target.getBoundingClientRect().top +
+          window.scrollY -
+          headerBottom -
+          HEADER_CLEARANCE,
+      }
+    }
+    const firstPassTimer = window.setTimeout(() => {
+      const target = document.querySelector<HTMLElement>(
+        '[data-service-section="addons"]',
+      )
+      if (!target) return
+      const { absoluteTop } = computeAddonsTarget(target)
+      window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
     }, 80)
+    let settleRaf: number | null = null
+    let lastHeight = 0
+    let stableFrames = 0
+    const settleTick = (start: number) => {
+      const h = document.documentElement.scrollHeight
+      if (h === lastHeight) stableFrames++
+      else {
+        stableFrames = 0
+        lastHeight = h
+      }
+      const elapsed = performance.now() - start
+      const settled =
+        stableFrames >= STABLE_FRAMES_REQUIRED ||
+        elapsed >= SETTLE_HARD_TIMEOUT_MS
+      if (!settled) {
+        settleRaf = requestAnimationFrame(() => settleTick(start))
+        return
+      }
+      settleRaf = null
+      const target = document.querySelector<HTMLElement>(
+        '[data-service-section="addons"]',
+      )
+      if (!target) return
+      const { headerBottom, absoluteTop } = computeAddonsTarget(target)
+      const currentTop = target.getBoundingClientRect().top
+      const desiredTop = headerBottom + HEADER_CLEARANCE
+      if (Math.abs(currentTop - desiredTop) > TOLERANCE_PX) {
+        window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
+      }
+    }
+    const settleStartTimer = window.setTimeout(() => {
+      settleRaf = requestAnimationFrame(() => settleTick(performance.now()))
+    }, 220)
+    return () => {
+      window.clearTimeout(firstPassTimer)
+      window.clearTimeout(settleStartTimer)
+      if (settleRaf !== null) cancelAnimationFrame(settleRaf)
+    }
   }, [
     serviceId,
     selections.material,
