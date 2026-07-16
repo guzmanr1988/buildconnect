@@ -483,17 +483,31 @@ export function ServiceDetailPage() {
     const persisted = (editItemForService?.gutterDropsConfig as { floors?: 1 | 2 } | undefined)?.floors
     return persisted === 1 || persisted === 2 ? persisted : null
   })
-  const [gutterDrops, setGutterDrops] = useState<number>(() => {
+  // Rod-directed mandatory-gate — drops null unless a persisted 1..6 rehydrates.
+  // Clamp WIDENED from 5 to 6 to match the [1,2,3,4,5,6].map UI in
+  // addon-linear-ft-configurator.tsx L118 — pre-fix a 6-pick silently reset to
+  // 2 on reopen (live data loss). Load-bearing null-init: the "must pick" gate
+  // over gutterDrops would be vacuous if a default (was 2) auto-seeded the
+  // value — apollo unpickedStateReachable=true precondition.
+  const [gutterDrops, setGutterDrops] = useState<number | null>(() => {
     const persisted = (editItemForService?.gutterDropsConfig as { drops?: number } | undefined)?.drops
-    return persisted && persisted >= 1 && persisted <= 5 ? persisted : 2
+    return typeof persisted === 'number' && persisted >= 1 && persisted <= 6 ? persisted : null
   })
-  // Gutter style — Traditional (K-style, current default, maps to existing
-  // gutters option_id) vs Modern (half-round, new priceable item pending
-  // hermes catalog-shape landing). FE captures the choice today; pricing
-  // split follows once vendor_option_prices has both option_ids.
-  const [gutterStyle, setGutterStyle] = useState<'traditional' | 'modern'>(() => {
+  // Gutter style — Traditional (K-style, maps to existing gutters option_id)
+  // vs Modern (half-round, new priceable item pending hermes catalog-shape
+  // landing). FE captures the choice today; pricing split follows once
+  // vendor_option_prices has both option_ids.
+  //
+  // Rod-directed mandatory-gate: null unless persisted rehydrates a valid
+  // value. Prior 'traditional' default-on-mount made the required-gate
+  // vacuous (unfalsifiable-true, apollo unpickedStateReachable=false). A
+  // null-style must NEVER leak into gutterDropsConfig or pricing as
+  // 'traditional' — the save block below (L3820+) hard-blocks the write
+  // while style is null, and the pricing comment above says a wrong style
+  // maps to a real option_id.
+  const [gutterStyle, setGutterStyle] = useState<'traditional' | 'modern' | null>(() => {
     const persisted = (editItemForService?.gutterDropsConfig as { style?: 'traditional' | 'modern' } | undefined)?.style
-    return persisted === 'modern' ? 'modern' : 'traditional'
+    return persisted === 'traditional' || persisted === 'modern' ? persisted : null
   })
   // Per-addon configurator open/closed state for the 5 Class A linear-ft
   // addons (gutters / soffit_wood / fascia_wood / soffit_metal / fascia_metal).
@@ -502,6 +516,18 @@ export function ServiceDetailPage() {
   // configurator opens; on Save the configurator collapses and the chip
   // shows an inline lin-ft summary badge.
   const [addonConfigOpen, setAddonConfigOpen] = useState<Record<string, boolean>>({})
+  // Rod voice-directive — Step-3 Add-Ons sibling-lock: while one addon
+  // configurator is open, others are non-tappable until Save Selection
+  // collapses the active one. Enforces "finish this one before you pick
+  // another." O(n) scan is fine (max 5 Class A addons in the map).
+  // Derives a single "open-id" per render; the chip render below applies
+  // isSiblingLocked = (openAddonId != null && openAddonId !== this-chip-id).
+  const openAddonId: string | null = (() => {
+    for (const [id, isOpen] of Object.entries(addonConfigOpen)) {
+      if (isOpen) return id
+    }
+    return null
+  })()
   // Arc-19 — per-pool-floor-option sqft + open/closed configurator state.
   // Single-select group at runtime, but the Record-key-by-option-id shape
   // mirrors the Roofing addon pattern and preserves the entered sqft if the
@@ -1457,7 +1483,20 @@ export function ServiceDetailPage() {
         setAddonLinearFt({})
         setAddonConfigOpen({})
         setSubGroupLinearFt({})
-        setGutterStyle('traditional')
+        // PR #533 add-commit — cascade-clear the three null-init'd gutter
+        // pickers so the must-pick gate stays falsifiable across a
+        // service_type toggle-off → re-pick loop. Prior write of
+        // setGutterStyle('traditional') here re-seeded the exact default
+        // #533 kills (auto-seeded → unpicked state unreachable → gate
+        // vacuous). setGutterFloors + setGutterDrops were entirely absent
+        // from this block — floors/drops held old picks across the cascade.
+        // Together they let Save enable on a re-picked gutter chip without
+        // the homeowner having actively touched any of the three fields.
+        // Top-down UI order (floors → drops → style) matches #533 cue copy
+        // + save-block AND-gate order.
+        setGutterFloors(null)
+        setGutterDrops(null)
+        setGutterStyle(null)
         setFlatOnlyAck(false)
         setRoofMeasurement((prev) =>
           prev
@@ -2307,6 +2346,21 @@ export function ServiceDetailPage() {
                         </div>
                       )
                     }
+                    // Rod voice-directive — Step-3 Add-Ons sibling-lock. When
+                    // any addon's configurator is open, other addon chips are
+                    // non-tappable until Save Selection collapses the active
+                    // one. Applied ONLY to the roofing addons group; other
+                    // verticals unaffected. Effective-id resolution: pair
+                    // parents (Soffit/Fascia) key on roofingAddonBoundId
+                    // which follows the Wood|Metal toggle, non-pair addons
+                    // (gutters) fall through to option.id, non-addon chips
+                    // skip via isRoofingAddonChipForLock guard.
+                    const isRoofingAddonChipForLock = serviceId === 'roofing' && group.id === 'addons'
+                    const effectiveAddonId = roofingAddonBoundId ?? option.id
+                    const isSiblingLocked =
+                      isRoofingAddonChipForLock &&
+                      openAddonId !== null &&
+                      openAddonId !== effectiveAddonId
                     const chipButton = (
                       <button
                         type="button"
@@ -2314,11 +2368,21 @@ export function ServiceDetailPage() {
                         data-chip-group={group.id}
                         data-chip-state={isSelected ? 'active' : 'inactive'}
                         data-chip-locked={isLocked ? 'true' : 'false'}
+                        data-sibling-locked={isSiblingLocked ? 'true' : 'false'}
+                        data-sibling-open-id={isSiblingLocked ? openAddonId : undefined}
                         data-service-type-option={group.id === 'service_type' ? option.id : undefined}
                         data-sub-expanded={(option.subGroups?.some((sg) => sg.options.length > 0) ?? false) ? String(subGroupExpanded[option.id] ?? true) : undefined}
                         aria-expanded={(option.subGroups?.some((sg) => sg.options.length > 0) ?? false) ? (subGroupExpanded[option.id] ?? true) : undefined}
-                        disabled={isLocked}
+                        aria-disabled={isLocked || isSiblingLocked}
+                        disabled={isLocked || isSiblingLocked}
+                        title={isSiblingLocked ? 'Finish and save the open selection above before picking another.' : undefined}
                         onClick={() => {
+                          // Sibling-lock intercept — belt-and-suspenders on the
+                          // browser-native disabled attribute above. Rod: "until
+                          // you finish that configuration and click Save Selection,
+                          // don't allow the homeowner to pick another." Walker
+                          // asserts via data-sibling-locked + this early return.
+                          if (isSiblingLocked) return
                           // SubGroupChoices accordion expand/collapse applies
                           // for every vertical EXCEPT DEDICATED_CONFIGURATOR_SERVICES
                           // (windows_doors), which surface options through
@@ -2510,6 +2574,30 @@ export function ServiceDetailPage() {
                               // from PR-#399 service_type toggle-off.
                               setSubGroupLinearFt((prev) => { const next = { ...prev }; delete next[option.id]; return next })
                               setSelections((prev) => { const next = { ...prev }; delete next[`${option.id}-sub`]; return next })
+                              // PR #533 add-commit — the block already
+                              // declares "deselect + clean state" (comment
+                              // above) and wipes addonLinearFt +
+                              // addonConfigOpen + subGroupLinearFt + the
+                              // sub-picks. The three null-init'd gutter
+                              // pickers were missed when the notion widened.
+                              // Without this clear: chip toggle-off →
+                              // toggle-on re-fires the auto-fill effect
+                              // (L806-819) that seeds linear-ft from
+                              // perimeter as soon as `!prev['gutters']` is
+                              // true (which our delete above just made it),
+                              // combined with stale floors/drops/style
+                              // satisfying gutterComplete → Save enables on
+                              // zero re-confirmation. Same vacuous-mandate
+                              // as L1486, more reachable path (chip toggle
+                              // >> Step-1 Service Type deselect). Gutter-
+                              // scoped (option.id === 'gutters') so
+                              // toggling Soffit/Fascia/Downspouts doesn't
+                              // clobber gutter picks unrelated to that tap.
+                              if (option.id === 'gutters') {
+                                setGutterFloors(null)
+                                setGutterDrops(null)
+                                setGutterStyle(null)
+                              }
                             } else {
                               // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
@@ -2727,7 +2815,7 @@ export function ServiceDetailPage() {
                             shape + bg + text-size). Gutter shows the
                             computed total (perimeter + floor-aware drops);
                             others show the raw input lin-ft. */}
-                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'gutters' && !addonConfigOpen['gutters'] && gutterFloors && Number(addonLinearFt['gutters'] ?? 0) > 0 && (
+                        {serviceId === 'roofing' && group.id === 'addons' && option.id === 'gutters' && !addonConfigOpen['gutters'] && gutterFloors && gutterDrops !== null && Number(addonLinearFt['gutters'] ?? 0) > 0 && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {computeGutterTotalLinFt(Number(addonLinearFt['gutters']) || 0, { floors: gutterFloors, drops: gutterDrops }).toLocaleString()} lin ft
                           </span>
@@ -3486,12 +3574,18 @@ export function ServiceDetailPage() {
               const peri = Number(addonLinearFt['gutters'] ?? 0) || 0
               const total = computeGutterTotalLinFt(
                 peri,
-                gutterFloors ? { floors: gutterFloors, drops: gutterDrops } : undefined,
+                gutterFloors && gutterDrops !== null ? { floors: gutterFloors, drops: gutterDrops } : undefined,
               )
-              const styleLabel = gutterStyle === 'modern' ? 'Modern' : 'Traditional'
-              const sublabel = gutterFloors
-                ? `${styleLabel} · ${peri.toLocaleString()} perimeter + ${gutterDrops} drop${gutterDrops === 1 ? '' : 's'} × ${GUTTER_DROP_FT_BY_FLOORS[gutterFloors]} ft (${gutterFloors === 1 ? '1-story' : '2-story'})`
-                : `${styleLabel} · ${peri.toLocaleString()} perimeter`
+              // Post null-init: gutterStyle can be null while summary
+              // renders (chip selected but configurator unsaved). Only
+              // render the "Modern · " / "Traditional · " prefix when a
+              // real pick is present — no default-to-traditional.
+              const styleLabel =
+                gutterStyle === 'modern' ? 'Modern · ' : gutterStyle === 'traditional' ? 'Traditional · ' : ''
+              const sublabel =
+                gutterFloors && gutterDrops !== null
+                  ? `${styleLabel}${peri.toLocaleString()} perimeter + ${gutterDrops} drop${gutterDrops === 1 ? '' : 's'} × ${GUTTER_DROP_FT_BY_FLOORS[gutterFloors]} ft (${gutterFloors === 1 ? '1-story' : '2-story'})`
+                  : `${styleLabel}${peri.toLocaleString()} perimeter`
               return { id, label, qty: total, unit: 'lin ft', sublabel }
             }
             if (ADDON_LINEAR_FT_IDS.includes(id)) {
@@ -3817,7 +3911,20 @@ export function ServiceDetailPage() {
                     ? { subGroupLinearFt: Object.fromEntries(entries) }
                     : {}
                 })(),
-                ...(serviceId === 'roofing' && (selections['addons'] ?? []).includes('gutters') && gutterFloors && {
+                // Rod-directed mandatory-gate save-block. All three fields
+                // MUST be non-null before we write gutterDropsConfig. Save
+                // Selection is already disabled while any is null (the
+                // addon-linear-ft-configurator gate), so this belt-and-
+                // suspenders check exists to prove the invariant at the
+                // write site — a null style must NEVER leak as 'traditional'
+                // into the persisted config or pricing path. If it ever
+                // did, the pricing.ts comment above L490 says a wrong
+                // style maps to a real option_id (silent mispricing).
+                ...(serviceId === 'roofing' &&
+                  (selections['addons'] ?? []).includes('gutters') &&
+                  gutterFloors !== null &&
+                  gutterDrops !== null &&
+                  gutterStyle !== null && {
                   gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops, style: gutterStyle },
                 }),
                 // Arc-19 — snapshot the entered Pool Floor sqft into the
@@ -4108,9 +4215,13 @@ export function ServiceDetailPage() {
                       const label = addonOpts.find(o => o.id === optId)?.label ?? optId
                       const isLinearFt = ADDON_LINEAR_FT_IDS.includes(optId)
                       const rawLinFt = isLinearFt ? Number(addonLinearFt[optId] ?? 0) || 0 : 0
-                      const isGutter = optId === 'gutters' && isLinearFt && rawLinFt > 0 && gutterFloors !== null
+                      // Post null-init: drops can be null when the summary
+                      // renders (chip selected but configurator unsaved).
+                      // Requiring drops !== null here means the total + per-
+                      // drop breakdown only shows once the pick is real.
+                      const isGutter = optId === 'gutters' && isLinearFt && rawLinFt > 0 && gutterFloors !== null && gutterDrops !== null
                       const totalLinFt = isGutter
-                        ? computeGutterTotalLinFt(rawLinFt, { floors: gutterFloors!, drops: gutterDrops })
+                        ? computeGutterTotalLinFt(rawLinFt, { floors: gutterFloors!, drops: gutterDrops! })
                         : rawLinFt
                       const perFloor = isGutter ? GUTTER_DROP_FT_BY_FLOORS[gutterFloors!] : 0
                       return (

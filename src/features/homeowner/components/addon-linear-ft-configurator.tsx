@@ -11,10 +11,15 @@ interface AddonLinearFtConfiguratorProps {
   value: string
   onChange: (next: string) => void
   onSave: () => void
+  // All three gutter fields are nullable — Rod-directed mandatory-gate: Save
+  // Selection stays disabled until floors && drops && style are ALL non-null.
+  // A default value on any of them would make the required-gate vacuous
+  // (unfalsifiable-true, apollo unpickedStateReachable=false), so null init
+  // is load-bearing. See service-detail.tsx state initializers.
   gutterExtras?: {
     floors: 1 | 2 | null
-    drops: number
-    style: GutterStyle
+    drops: number | null
+    style: GutterStyle | null
     onFloorsChange: (n: 1 | 2) => void
     onDropsChange: (n: number) => void
     onStyleChange: (s: GutterStyle) => void
@@ -55,12 +60,38 @@ export function AddonLinearFtConfigurator({
   const isGutter = id === 'gutters'
   const numericValue = Number(value) || 0
   const inputComplete = value.trim().length > 0 && numericValue > 0
-  const gutterComplete = !isGutter || (gutterExtras && gutterExtras.floors !== null)
+  // gutterComplete gates on ALL THREE fields being non-null (AND). floors alone
+  // was insufficient — drops and style were defaulted-on-mount so a "pick one"
+  // gate on either would be unfalsifiable-true. Null-init on all three is what
+  // makes this gate reachable.
+  const gutterComplete =
+    !isGutter ||
+    (gutterExtras !== undefined &&
+      gutterExtras.floors !== null &&
+      gutterExtras.drops !== null &&
+      gutterExtras.style !== null)
   const variantComplete = !inlineVariantSelector || Boolean(inlineVariantSelector.selectedId)
   const isComplete = inputComplete && gutterComplete && variantComplete
 
+  // Per-field cue naming exactly which required pick is missing, in
+  // top-down UI order (floors → drops → style → linear-ft → variant).
+  // Same discipline as the roofing color gate — name the REAL field, no
+  // omnibus "complete all fields" copy.
+  const missingCue: string | null =
+    isGutter && gutterExtras && gutterExtras.floors === null
+      ? 'Choose how many floors to continue.'
+      : isGutter && gutterExtras && gutterExtras.drops === null
+        ? 'Choose how many downspouts to continue.'
+        : isGutter && gutterExtras && gutterExtras.style === null
+          ? 'Choose Traditional or Modern to continue.'
+          : !inputComplete
+            ? `Enter ${isGutter ? 'gutter perimeter' : 'linear feet'} to continue.`
+            : !variantComplete
+              ? 'Choose a variant to continue.'
+              : null
+
   const gutterTotal =
-    isGutter && gutterExtras && gutterExtras.floors
+    isGutter && gutterExtras && gutterExtras.floors && gutterExtras.drops
       ? computeGutterTotalLinFt(numericValue, {
           floors: gutterExtras.floors,
           drops: gutterExtras.drops,
@@ -254,7 +285,7 @@ export function AddonLinearFtConfigurator({
           )}
         </div>
 
-        {isGutter && gutterExtras && gutterExtras.floors && numericValue > 0 && (
+        {isGutter && gutterExtras && gutterExtras.floors && gutterExtras.drops && numericValue > 0 && (
           <div
             className="rounded-xl border bg-muted/40 p-3 space-y-1"
             data-roofing-gutter-breakdown="true"
@@ -273,17 +304,31 @@ export function AddonLinearFtConfigurator({
         )}
       </div>
 
-      {isComplete && (
-        <div className="mt-4 pt-4 border-t">
-          <Button
-            className="w-full h-10 rounded-xl text-sm font-semibold"
-            onClick={onSave}
-            data-addon-save={id}
+      {/* Save Selection is always rendered — disabled while any required
+          field is missing, with a per-field cue naming the missing pick.
+          The prior render-gate hid the button entirely, which read as
+          "nothing happened" to the homeowner. Explicit disabled + cue
+          makes the gate visible and legible. */}
+      <div className="mt-4 pt-4 border-t space-y-2">
+        <Button
+          className="w-full h-10 rounded-xl text-sm font-semibold"
+          onClick={onSave}
+          disabled={!isComplete}
+          aria-disabled={!isComplete}
+          data-addon-save={id}
+          data-addon-save-blocked={!isComplete ? 'true' : 'false'}
+        >
+          Save Selection
+        </Button>
+        {missingCue && (
+          <p
+            className="text-[11px] text-destructive text-center"
+            data-addon-save-cue={id}
           >
-            Save Selection
-          </Button>
-        </div>
-      )}
+            {missingCue}
+          </p>
+        )}
+      </div>
     </motion.div>
   )
 }
