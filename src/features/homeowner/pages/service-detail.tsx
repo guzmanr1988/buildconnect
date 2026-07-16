@@ -977,20 +977,30 @@ export function ServiceDetailPage() {
     // First-pass at 80ms lands headerBottom+16 (4px off, apollo t=65ms) but
     // then RESTS ~247px over-scrolled because the color palette collapses
     // to its "Barkwood / 18 squares" summary chip on Save Selection,
-    // removing height ABOVE the addons section AFTER the initial scroll.
-    // The first-pass target was computed pre-collapse; post-collapse the
-    // section sits higher than intended vs viewport → sticky nav cuts off
-    // the top row of add-on cards. Second-pass: rAF-poll
-    // document.scrollHeight for a stable window (3 consecutive frames
-    // unchanged) — the moment layout stops shifting — then remeasure the
-    // addons top and re-scroll only if drift exceeds tolerance. Bounded by
-    // a 900ms hard timeout so any downstream animation chain doesn't
-    // rAF-bind forever. Reuses the same #517 headerBottom+16 clearance
-    // math for consistency with scrollToFirstConfigSection (L882-909).
+    // removing ~240px of height ABOVE the addons section AT t≈439ms —
+    // AFTER the initial scroll. The first-pass target was computed
+    // pre-collapse; post-collapse the section sits higher than intended
+    // vs viewport → sticky nav cuts off the top row of add-on cards.
+    //
+    // Second-pass mechanism (apollo v2 diagnosis catch): a naive 3-frame
+    // stableFrames terminate on document.scrollHeight is DEFEATED here —
+    // layout is briefly stable between settle-loop start (t≈220ms) and
+    // the collapse (t≈439ms), so a stable-only settle criterion trips at
+    // t≈284ms, terminates the loop, and misses the collapse entirely. Fix:
+    //   (a) require at least ONE observed scrollHeight change since baseline
+    //       before allowing the 3-stable-frames termination (guards against
+    //       pre-collapse false-settle);
+    //   (b) drift-correction fires on EVERY rAF tick while drift > 6px —
+    //       not just on final settle — so the collapse frame gets caught
+    //       regardless of when the settle criterion trips;
+    //   (c) hard timeout lifted to 1500ms so we have runway past the
+    //       observed ~440ms collapse fire in case (a) never latches.
+    // Reuses the #517 headerBottom+16 math (scrollToFirstConfigSection
+    // L882-909) via computeAddonsTarget for cross-pass consistency.
     const HEADER_CLEARANCE = 16
     const TOLERANCE_PX = 6
-    const STABLE_FRAMES_REQUIRED = 3
-    const SETTLE_HARD_TIMEOUT_MS = 900
+    const NO_DRIFT_FRAMES_REQUIRED = 4
+    const SETTLE_HARD_TIMEOUT_MS = 1500
     const computeAddonsTarget = (target: HTMLElement) => {
       const headerEl = document.querySelector<HTMLElement>(
         '[data-homeowner-desktop-header-pill="true"], [data-homeowner-top-header-pill="true"]',
@@ -1014,33 +1024,64 @@ export function ServiceDetailPage() {
       window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
     }, 80)
     let settleRaf: number | null = null
-    let lastHeight = 0
-    let stableFrames = 0
+    let baselineHeight: number | null = null
+    let observedLayoutChange = false
+    let noDriftFrames = 0
+    // Disarm-on-user-input: any wheel / touchstart / keydown during the
+    // settle window immediately aborts the auto-scroll loop so we cannot
+    // fight a genuine user scroll. Combined with the natural disarm
+    // (drift<=6px for 4 consecutive frames post-collapse) and the
+    // 1500ms hard timeout, this gives three independent termination
+    // paths — the auto-scroll never sticks around uninvited.
+    let userInputDetected = false
+    const abortOnUserInput = () => {
+      userInputDetected = true
+    }
+    window.addEventListener('wheel', abortOnUserInput, {
+      passive: true,
+      once: true,
+    })
+    window.addEventListener('touchstart', abortOnUserInput, {
+      passive: true,
+      once: true,
+    })
+    window.addEventListener('keydown', abortOnUserInput, { once: true })
     const settleTick = (start: number) => {
-      const h = document.documentElement.scrollHeight
-      if (h === lastHeight) stableFrames++
-      else {
-        stableFrames = 0
-        lastHeight = h
-      }
-      const elapsed = performance.now() - start
-      const settled =
-        stableFrames >= STABLE_FRAMES_REQUIRED ||
-        elapsed >= SETTLE_HARD_TIMEOUT_MS
-      if (!settled) {
-        settleRaf = requestAnimationFrame(() => settleTick(start))
+      if (userInputDetected) {
+        settleRaf = null
         return
       }
-      settleRaf = null
       const target = document.querySelector<HTMLElement>(
         '[data-service-section="addons"]',
       )
-      if (!target) return
+      if (!target) {
+        settleRaf = null
+        return
+      }
+      const h = document.documentElement.scrollHeight
+      if (baselineHeight === null) {
+        baselineHeight = h
+      } else if (h !== baselineHeight) {
+        observedLayoutChange = true
+      }
       const { headerBottom, absoluteTop } = computeAddonsTarget(target)
       const currentTop = target.getBoundingClientRect().top
       const desiredTop = headerBottom + HEADER_CLEARANCE
-      if (Math.abs(currentTop - desiredTop) > TOLERANCE_PX) {
+      const drift = Math.abs(currentTop - desiredTop)
+      if (drift > TOLERANCE_PX) {
         window.scrollTo({ top: Math.max(absoluteTop, 0), behavior: 'smooth' })
+        noDriftFrames = 0
+      } else {
+        noDriftFrames++
+      }
+      const elapsed = performance.now() - start
+      const settled =
+        (observedLayoutChange && noDriftFrames >= NO_DRIFT_FRAMES_REQUIRED) ||
+        elapsed >= SETTLE_HARD_TIMEOUT_MS
+      if (!settled) {
+        settleRaf = requestAnimationFrame(() => settleTick(start))
+      } else {
+        settleRaf = null
       }
     }
     const settleStartTimer = window.setTimeout(() => {
@@ -1049,6 +1090,9 @@ export function ServiceDetailPage() {
     return () => {
       window.clearTimeout(firstPassTimer)
       window.clearTimeout(settleStartTimer)
+      window.removeEventListener('wheel', abortOnUserInput)
+      window.removeEventListener('touchstart', abortOnUserInput)
+      window.removeEventListener('keydown', abortOnUserInput)
       if (settleRaf !== null) cancelAnimationFrame(settleRaf)
     }
   }, [
