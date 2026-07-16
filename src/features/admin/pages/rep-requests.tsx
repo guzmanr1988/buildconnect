@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { useRepRequestQueueParams } from '@/hooks/use-rep-request-queue-params'
 import { useRepRequestDetail } from '@/hooks/use-rep-request-detail'
@@ -31,6 +32,7 @@ import {
   APPOINTMENT_STATUS_LABELS,
   STATUS_LABELS,
   STATUS_PILL_CLASSES,
+  parseProjectTypes,
   type RepRequestDetail,
   type RepRequestStatus,
 } from '@/features/admin/rep-requests/rep-request-contract'
@@ -207,7 +209,7 @@ function QueueListPane({
                   <span className="text-sm font-semibold truncate">{r.homeownerName}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{r.age}</span>
                 </div>
-                <p className="text-xs text-muted-foreground truncate w-full">{r.description}</p>
+                <p className="text-xs text-muted-foreground truncate w-full">{parseProjectTypes(r.description).text}</p>
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate w-full">
                   <MapPin className="h-3 w-3 shrink-0" />
                   <span className="truncate">{r.address}</span>
@@ -300,6 +302,10 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
         assignedRepName: selectedRow?.assignedRepName ?? null,
       }
     : null
+  const parsedDescription = useMemo(
+    () => parseProjectTypes(row?.description),
+    [row?.description],
+  )
 
   if (isLoading && !row) {
     return (
@@ -326,7 +332,7 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
       <div className="p-4 border-b bg-muted/30">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-base font-bold font-heading truncate">{row.description || '(no description)'}</h2>
+            <h2 className="text-base font-bold font-heading truncate">{parsedDescription.text || '(no description)'}</h2>
             {row.homeowner ? (
               row.homeownerId ? (
                 <Link
@@ -410,6 +416,29 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
               return r
             }}
           />
+        )}
+
+        {parsedDescription.types.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              Project types
+            </p>
+            <div
+              data-testid="admin-rep-requests-detail-project-types"
+              className="flex flex-wrap gap-1.5"
+            >
+              {parsedDescription.types.map((t, i) => (
+                <Badge
+                  key={`${t}-${i}`}
+                  variant="outline"
+                  data-testid="admin-rep-requests-detail-project-type-chip"
+                  data-type={t}
+                >
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </div>
         )}
 
         {selectedId && (
