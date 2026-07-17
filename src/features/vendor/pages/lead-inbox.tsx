@@ -424,7 +424,7 @@ export default function LeadInbox() {
 
             return (
               <motion.div key={lead.id} variants={item} data-lead-id={lead.id} data-lead-status={lead.status}>
-                <Card className={cn('rounded-3xl bg-card border-0 ring-0 transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.04),_0_8px_32px_rgba(0,0,0,0.08),_inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.35),_0_8px_32px_rgba(0,0,0,0.55),_inset_0_1px_0_rgba(255,255,255,0.05)] pointer-fine:hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),_0_16px_48px_rgba(0,0,0,0.12),_inset_0_1px_0_rgba(255,255,255,0.9)] pointer-fine:dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.45),_0_16px_48px_rgba(0,0,0,0.65),_inset_0_1px_0_rgba(255,255,255,0.05)] pointer-fine:hover:-translate-y-2')}>
+                <Card className={cn('rounded-xl bg-card shadow-sm hover:shadow-md cursor-pointer transition-all duration-200 pointer-fine:hover:-translate-y-2')}>
                   {/* Header - always visible */}
                   <button
                     type="button"
