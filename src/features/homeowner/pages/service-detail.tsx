@@ -1014,15 +1014,21 @@ export function ServiceDetailPage() {
     const hasColorable = selectedMaterials.some((m) =>
       MATERIALS_WITH_REQUIRED_PICKER.includes(m),
     )
+    // Save-gate parity with isRoofingMaterialPickerSatisfied (task_1784277365890_975,
+    // kratos oo1l3): #536 moved the stepper predicate onto the committed booleans
+    // but this scroll effect kept the raw-color-field predicate — the two diverged
+    // and the scroll fired on chip pick while the stepper stayed on Step 2. AND
+    // the same xCommitted flags so the scroll fires on the Save press, matching
+    // Rod's spec: "only move to step three after he presses it".
     const done =
-      (!selectedMaterials.includes('metal') || !!metalRoofSelection.color) &&
-      (!selectedMaterials.includes('shingle') || !!shingleSelection.color) &&
+      (!selectedMaterials.includes('metal') || (!!metalRoofSelection.color && metalRoofCommitted)) &&
+      (!selectedMaterials.includes('shingle') || (!!shingleSelection.color && shingleCommitted)) &&
       (!selectedMaterials.includes('barrel_tile') ||
-        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+        (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
       (!selectedMaterials.includes('terracotta') ||
-        (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
-      (!selectedMaterials.includes('aluminum') || !!aluminumSelection.color) &&
-      (!selectedMaterials.includes('flat_roof') || !!flatRoofSelection.membraneType)
+        (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
+      (!selectedMaterials.includes('aluminum') || (!!aluminumSelection.color && aluminumCommitted)) &&
+      (!selectedMaterials.includes('flat_roof') || (!!flatRoofSelection.membraneType && flatRoofCommitted))
     const complete = hasColorable && done
     if (!complete) {
       roofingAddonsScrollDoneRef.current = false
@@ -1162,6 +1168,11 @@ export function ServiceDetailPage() {
     tileSelection.tileColor,
     aluminumSelection.color,
     flatRoofSelection.membraneType,
+    metalRoofCommitted,
+    shingleCommitted,
+    tileCommitted,
+    aluminumCommitted,
+    flatRoofCommitted,
   ])
 
   if (!service) {
