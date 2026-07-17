@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useSaveButtonVisible } from '@/features/homeowner/hooks/use-save-button-visible'
 
 // PR-#430 — bundled fallback. Same substrate-derive pattern as PR-#428
 // door-configurator; fallback stays byte-identical to pre-rewire so the
@@ -36,6 +37,7 @@ interface AluminumRoofConfiguratorProps {
 
 export function AluminumRoofConfigurator({ selection, onChange, onSave }: AluminumRoofConfiguratorProps) {
   const services = useCatalogStore((s) => s.services)
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
 
   const aluminumColors = useMemo(() => {
     const svc = services.find((s) => s.id === 'roofing')
@@ -55,6 +57,7 @@ export function AluminumRoofConfigurator({ selection, onChange, onSave }: Alumin
 
   const selected = aluminumColors.find((c) => c.id === selection.color)
   const isComplete = !!selection.color && selection.roofSize.trim().length > 0
+  useSaveButtonVisible(saveButtonRef, isComplete)
 
   return (
     <motion.div
@@ -138,6 +141,8 @@ export function AluminumRoofConfigurator({ selection, onChange, onSave }: Alumin
           </div>
           {isComplete && onSave && (
             <Button
+              ref={saveButtonRef}
+              data-save-selection="true"
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
             >

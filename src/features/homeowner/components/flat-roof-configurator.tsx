@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useSaveButtonVisible } from '@/features/homeowner/hooks/use-save-button-visible'
 
 export type FlatMembraneType = 'tpo' | 'epdm' | 'modified_bitumen'
 
@@ -52,6 +53,8 @@ export function FlatRoofConfigurator({ selection, onChange, onSave }: FlatRoofCo
 
   const selected = flatMembraneTypes.find((m) => m.id === selection.membraneType)
   const isComplete = !!selection.membraneType && selection.roofSize.trim().length > 0
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
+  useSaveButtonVisible(saveButtonRef, isComplete)
 
   return (
     <motion.div
@@ -130,6 +133,8 @@ export function FlatRoofConfigurator({ selection, onChange, onSave }: FlatRoofCo
           </div>
           {isComplete && onSave && (
             <Button
+              ref={saveButtonRef}
+              data-save-selection="true"
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
             >
