@@ -41,6 +41,17 @@ function fmtDate(iso: string) {
 }
 
 export default function LeadInbox() {
+  // iris fidelity spec 2026-07-17 — natural-phrasing labels for the
+  // filtered PageHeader subtitle. Sidesteps the "N New Leads projects"
+  // / "N Cancelled Projects projects" redundancy the stage titles
+  // produce when reused verbatim in a "N <label>" template.
+  const STAGE_COUNT_LABEL: Record<LeadStageKey, string> = {
+    new: 'new leads',
+    confirmed: 'scheduled',
+    sold: 'active',
+    completed: 'completed',
+    cancelled: 'cancelled',
+  }
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const repAcceptanceByLead = useProjectsStore((s) => s.repAcceptanceByLead)
@@ -240,8 +251,8 @@ export default function LeadInbox() {
     [leads, activeStage, idsByStage],
   )
   const activeStageMeta = activeStage ? LEAD_STAGES.find((s) => s.key === activeStage) : null
-  const pageDescription = activeStageMeta
-    ? `${visibleLeads.length} ${activeStageMeta.title} projects`
+  const pageDescription = activeStage
+    ? `${visibleLeads.length} ${STAGE_COUNT_LABEL[activeStage]}`
     : `${leads.length} customer projects`
 
   const assigneeMap = useAssigneeMap(VENDOR_ID)
