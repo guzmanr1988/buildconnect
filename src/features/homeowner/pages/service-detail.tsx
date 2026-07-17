@@ -1188,6 +1188,29 @@ export function ServiceDetailPage() {
     !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
   const allRequiredDone = completedRequired === requiredGroups.length
 
+  // Per-material picker-satisfied predicate — single source of truth reused
+  // by (a) colorSelected / roofingColorGateBlocks CTA gate, (b) the step-
+  // wizard state below (getRoofingStepMeta + roofingActiveStep), and (c)
+  // gatingReason's material-picker clause below. Task
+  // task_1784215040324_101 (Rod caught via apollo flat-cue-copy-verify
+  // 2026-07-16): before this factoring, three call sites judged
+  // "material done" on has-selection alone (as built for #524) while the
+  // CTA gate widened via #528 material-parity to per-material picker
+  // satisfaction — the predicates diverged and the wizard could say
+  // "All 3 steps complete" + "Answer the association question to continue."
+  // while the same card blocked with "Membrane required to continue." All
+  // three notions now share this predicate; divergence proof.
+  // Vacuously true on empty `selected` — matches colorSelected's historical
+  // shape (no materials picked → nothing to gate). Callers that also need
+  // "at least one selection" apply that check separately.
+  const isRoofingMaterialPickerSatisfied = (selected: string[]): boolean =>
+    (!selected.includes('metal') || !!metalRoofSelection.color) &&
+    (!selected.includes('shingle') || !!shingleSelection.color) &&
+    (!selected.includes('barrel_tile') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+    (!selected.includes('terracotta') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
+    (!selected.includes('aluminum') || !!aluminumSelection.color) &&
+    (!selected.includes('flat_roof') || !!flatRoofSelection.membraneType)
+
   // Per-step plain-English gating message — names the topmost missing item.
   // Order matches the on-screen group order, then the secondary structural
   // gates (permit / association / pool survey / addon-ack / pergolas assign).
@@ -1196,6 +1219,43 @@ export function ServiceDetailPage() {
       (g) => (selections[g.id]?.length ?? 0) === 0,
     )
     if (missingGroup) return `Pick a ${missingGroup.label.toLowerCase()} to continue.`
+    // Material-picker clause (task_1784215040324_101 site 3). Restores this
+    // function's own contract "names the topmost missing item / order matches
+    // on-screen group order": the material step's per-material picker sits
+    // ABOVE property/association on screen. Before this clause, missingGroup
+    // walked past a picked-but-unsaved material and the ladder surfaced
+    // association/permit/generic while a higher-on-screen picker was still
+    // blocking. Copy names the REAL field per material class — no invented
+    // flat color (real-data-only rule).
+    // LOAD-BEARING INVARIANT: iteration over ROOFING_MATERIALS_WITH_REQUIRED_
+    // PICKER (rather than deriving from the live catalog render order) is
+    // safe because the primary material lock (see hasNonFlatMaterialPicked /
+    // isLocked below in the material chip render — "once ANY non-flat
+    // material is picked, every OTHER non-flat chip becomes unclickable")
+    // restricts selections['material'] to {flat_roof + at most one non-flat}.
+    // Under that constraint at most one non-flat picker is ever unsatisfied
+    // at a time, so no ordered tie-break between pitched materials is
+    // reachable; and flat_roof is last in both the const and the catalog
+    // render order, so a mixed {flat_roof + one pitched} state names the
+    // pitched picker under either iteration order — the two orders agree
+    // on every reachable selection. If that lock is ever relaxed to allow
+    // two non-flat materials simultaneously, this clause must switch to
+    // catalog order so the topmost-on-screen picker gets named first.
+    if (serviceId === 'roofing') {
+      const selectedMaterials = selections['material'] ?? []
+      if (selectedMaterials.length > 0 && !isRoofingMaterialPickerSatisfied(selectedMaterials)) {
+        for (const mat of ROOFING_MATERIALS_WITH_REQUIRED_PICKER) {
+          if (!selectedMaterials.includes(mat)) continue
+          if (mat === 'shingle' && !shingleSelection.color) return 'Choose a color to continue.'
+          if ((mat === 'barrel_tile' || mat === 'terracotta') && (!tileSelection.tileType || !tileSelection.tileColor)) {
+            return 'Choose a tile type and color to continue.'
+          }
+          if (mat === 'metal' && !metalRoofSelection.color) return 'Choose a color to continue.'
+          if (mat === 'aluminum' && !aluminumSelection.color) return 'Choose a color to continue.'
+          if (mat === 'flat_roof' && !flatRoofSelection.membraneType) return 'Choose a membrane to continue.'
+        }
+      }
+    }
     if (!addressKey) {
       return 'Select a property to continue.'
     }
@@ -1265,17 +1325,25 @@ export function ServiceDetailPage() {
     lockedByLabel?: string
   }
   // Numbered-step metadata for a roofing groupId. A required step becomes
-  // 'complete' when it has a selection, 'active' when unselected AND all
-  // prior REQUIRED steps are complete, 'locked' otherwise. Optional steps
-  // (Add-ons, gated repair_materials) never lock — the user can skip them.
+  // 'complete' when it has a selection AND (for `material`) the per-material
+  // picker is satisfied, 'active' when unselected/picker-unsatisfied AND all
+  // prior REQUIRED steps have a selection, 'locked' otherwise. Optional
+  // steps (Add-ons, gated repair_materials) never lock — the user can skip.
+  // HARD GUARD: the `priorBlocker` predicate stays on bare has-selection so
+  // GATE A lock cascade (apollo-verified green on apex today) does not
+  // regress — an unsatisfied picker upstream does not lock downstream steps,
+  // only the upstream step itself stays 'active' with its own required cue.
   const getRoofingStepMeta = (groupId: string): RoofingStepMeta | null => {
     if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
     const total = roofingVisibleGroups.length
     const idx = roofingVisibleGroups.findIndex((g) => g.id === groupId)
     if (idx === -1) return null
     const g = roofingVisibleGroups[idx]
-    const has = (selections[g.id]?.length ?? 0) > 0
-    if (has) return { index: idx + 1, total, status: 'complete' }
+    const selected = selections[g.id] ?? []
+    const isComplete =
+      selected.length > 0 &&
+      (g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected))
+    if (isComplete) return { index: idx + 1, total, status: 'complete' }
     const priorBlocker = roofingVisibleGroups
       .slice(0, idx)
       .find((pg) => pg.required && (selections[pg.id]?.length ?? 0) === 0)
@@ -1292,11 +1360,18 @@ export function ServiceDetailPage() {
   // gate even though Add-to-Project was enabled. Optional steps must never
   // hold the active pointer; once required steps are done, return null so the
   // progress reads "All N steps complete" and no cue/pulse fires.
+  // Symmetric with getRoofingStepMeta's isComplete: the `material` step is
+  // incomplete when the per-material picker is unsatisfied even if a
+  // material was picked, so the pulsing accent + Next cue stay on step 2
+  // until Rod actually finishes the material config.
   const roofingActiveStep = (() => {
     if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
-    const idx = roofingVisibleGroups.findIndex(
-      (g) => g.required && (selections[g.id]?.length ?? 0) === 0,
-    )
+    const idx = roofingVisibleGroups.findIndex((g) => {
+      if (!g.required) return false
+      const selected = selections[g.id] ?? []
+      if (selected.length === 0) return true
+      return g.id === 'material' && !isRoofingMaterialPickerSatisfied(selected)
+    })
     if (idx === -1) return null
     return { group: roofingVisibleGroups[idx], index: idx + 1, total: roofingVisibleGroups.length }
   })()
@@ -1322,13 +1397,10 @@ export function ServiceDetailPage() {
   const hasColorableMaterial =
     serviceId === 'roofing' &&
     selectedRoofingMaterials.some((m) => ROOFING_MATERIALS_WITH_REQUIRED_PICKER.includes(m))
-  const colorSelected =
-    (!selectedRoofingMaterials.includes('metal') || !!metalRoofSelection.color) &&
-    (!selectedRoofingMaterials.includes('shingle') || !!shingleSelection.color) &&
-    (!selectedRoofingMaterials.includes('barrel_tile') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
-    (!selectedRoofingMaterials.includes('terracotta') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
-    (!selectedRoofingMaterials.includes('aluminum') || !!aluminumSelection.color) &&
-    (!selectedRoofingMaterials.includes('flat_roof') || !!flatRoofSelection.membraneType)
+  // Reuses the isRoofingMaterialPickerSatisfied helper hoisted above
+  // gatingReason — same predicate as the step-wizard state and the plain-
+  // English gating clause. Behavior-neutral vs prior inline expansion.
+  const colorSelected = isRoofingMaterialPickerSatisfied(selectedRoofingMaterials)
   const roofingColorGateBlocks = hasColorableMaterial && !colorSelected
 
   const addonsThatNeedConfig = ['spa', 'beach', 'waterfall', 'led', 'bubbler']
@@ -4033,13 +4105,23 @@ export function ServiceDetailPage() {
               Project Details
             </Button>
           )}
+          {/* Cue-host mount condition. LOAD-BEARING INVARIANT: this list must
+              be a superset of the CTA disabled-terms above (modulo `added` /
+              `alreadyInCart`, which are handled by this outer wrapper and by
+              the alreadyInCart alternate message below). Every term that can
+              disable the CTA must also mount this <p>, or gatingReason()
+              never reaches the screen and the homeowner sees a dead button
+              with no explanation of why it is blocked. cueActive => cue on
+              screen. */}
           {!alreadyInCart && !added && (
             !allRequiredDone ||
+            !addressKey ||
             !isProjectPermitValid(projectPermit, projectPermitWaiver) ||
             !isProjectAssociationValid(projectAssociation ?? null) ||
             (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
             (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) ||
-            !pergolasStructuresAllAssigned
+            !pergolasStructuresAllAssigned ||
+            roofingColorGateBlocks
           ) && (
             <p className="text-xs text-muted-foreground text-center">
               {gatingReason()}
