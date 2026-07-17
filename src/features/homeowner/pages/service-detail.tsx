@@ -404,6 +404,19 @@ export function ServiceDetailPage() {
   // "Choose a color" + row collapsed. Every open-trigger below flips to keep
   // this invariant (post-measurement, first-select, reset+open).
   const [metalRoofConfigOpen, setMetalRoofConfigOpen] = useState(false)
+  // Save-gate committed flag (task_1784270428678_346, Rod voice 2026-07-17):
+  // color-pick alone must NOT complete the material step — the user must press
+  // Save Selection. The picker component's onChange commits the value on chip
+  // click; the committed flag distinguishes "value present" from "user pressed
+  // Save". `isRoofingMaterialPickerSatisfied` ANDs this in alongside the field
+  // check so the wizard stepper + CTA gate + gatingReason ladder all treat
+  // "picked-but-not-saved" as still-blocking. Symmetric across all 5 materials
+  // (metal/shingle/tile/aluminum/flat_roof) — the predicate is shared, so
+  // fixing one leaves the same latent bug on the other 4. Initialized true
+  // when editItemForService carries a saved selection (already-saved on edit).
+  const [metalRoofCommitted, setMetalRoofCommitted] = useState<boolean>(() =>
+    !!(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
+  )
   const [shingleSelection, setShingleSelection] = useState<ShingleRoofSelection>(() => {
     const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
     if (saved) return saved
@@ -416,6 +429,11 @@ export function ServiceDetailPage() {
   // row collapsed; first-mount lands with the required-caption placeholder +
   // row collapsed. Every open-trigger below flips to keep this invariant.
   const [shingleConfigOpen, setShingleConfigOpen] = useState(false)
+  const [shingleCommitted, setShingleCommitted] = useState<boolean>(() => {
+    const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
+    if (saved?.color) return true
+    return !!(editItemForService?.shingleColor as string | undefined)
+  })
   const [tileSelection, setTileSelection] = useState<TileRoofSelection>(() => {
     const saved = editItemForService?.tileSelection as TileRoofSelection | undefined
     if (saved) return saved
@@ -426,14 +444,26 @@ export function ServiceDetailPage() {
     }
   })
   const [tileConfigOpen, setTileConfigOpen] = useState(false)
+  const [tileCommitted, setTileCommitted] = useState<boolean>(() => {
+    const saved = editItemForService?.tileSelection as TileRoofSelection | undefined
+    if (saved?.tileType && saved?.tileColor) return true
+    return !!(editItemForService?.tileType as string | undefined)
+      && !!(editItemForService?.tileColor as string | undefined)
+  })
   const [aluminumSelection, setAluminumSelection] = useState<AluminumRoofSelection>(
     (editItemForService?.aluminumSelection as AluminumRoofSelection) || { color: '', roofSize: '' }
   )
   const [aluminumConfigOpen, setAluminumConfigOpen] = useState(false)
+  const [aluminumCommitted, setAluminumCommitted] = useState<boolean>(() =>
+    !!(editItemForService?.aluminumSelection as AluminumRoofSelection | undefined)?.color
+  )
   const [flatRoofSelection, setFlatRoofSelection] = useState<FlatRoofSelection>(
     (editItemForService?.flatRoofSelection as FlatRoofSelection) || { membraneType: '', roofSize: '' }
   )
   const [flatRoofConfigOpen, setFlatRoofConfigOpen] = useState(false)
+  const [flatRoofCommitted, setFlatRoofCommitted] = useState<boolean>(() =>
+    !!(editItemForService?.flatRoofSelection as FlatRoofSelection | undefined)?.membraneType
+  )
   const [editingItemId, setEditingItemId] = useState<string | null>(
     (editItemForService?.id as string) || null
   )
@@ -767,27 +797,29 @@ export function ServiceDetailPage() {
     const gs = legacy.garageDoorSelection as GarageDoorSelection | undefined
     if (gs?.type) { setGarageDoorSelection(gs); setGarageDoorConfigOpen(false) }
     const ms = legacy.metalRoofSelection as MetalRoofSelection | undefined
-    if (ms?.color) { setMetalRoofSelection(ms); setMetalRoofConfigOpen(false) }
+    if (ms?.color) { setMetalRoofSelection(ms); setMetalRoofConfigOpen(false); setMetalRoofCommitted(true) }
     const ss = legacy.shingleSelection as ShingleRoofSelection | undefined
     if (ss?.color) {
-      setShingleSelection(ss); setShingleConfigOpen(false)
+      setShingleSelection(ss); setShingleConfigOpen(false); setShingleCommitted(true)
     } else if (typeof legacy.shingleColor === 'string') {
       setShingleSelection((prev) => ({ ...prev, color: legacy.shingleColor as string }))
+      if (legacy.shingleColor) setShingleCommitted(true)
     }
     const ts = legacy.tileSelection as TileRoofSelection | undefined
     if (ts?.tileType) {
-      setTileSelection(ts); setTileConfigOpen(false)
+      setTileSelection(ts); setTileConfigOpen(false); setTileCommitted(true)
     } else if (typeof legacy.tileType === 'string' || typeof legacy.tileColor === 'string') {
       setTileSelection({
         tileType: (legacy.tileType as TileType) || '',
         tileColor: (legacy.tileColor as string) || '',
         roofSize: '',
       })
+      if (legacy.tileType && legacy.tileColor) setTileCommitted(true)
     }
     const al = legacy.aluminumSelection as AluminumRoofSelection | undefined
-    if (al?.color) { setAluminumSelection(al); setAluminumConfigOpen(false) }
+    if (al?.color) { setAluminumSelection(al); setAluminumConfigOpen(false); setAluminumCommitted(true) }
     const fr = legacy.flatRoofSelection as FlatRoofSelection | undefined
-    if (fr?.membraneType) { setFlatRoofSelection(fr); setFlatRoofConfigOpen(false) }
+    if (fr?.membraneType) { setFlatRoofSelection(fr); setFlatRoofConfigOpen(false); setFlatRoofCommitted(true) }
     if (typeof legacy.id === 'string') setEditingItemId(legacy.id)
     localStorage.removeItem('buildconnect-edit-item')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1203,13 +1235,19 @@ export function ServiceDetailPage() {
   // Vacuously true on empty `selected` — matches colorSelected's historical
   // shape (no materials picked → nothing to gate). Callers that also need
   // "at least one selection" apply that check separately.
+  // Save-gate ANDs the xCommitted flag alongside the field check
+  // (task_1784270428678_346, Rod voice 2026-07-17): color-pick alone commits
+  // the value on chip-click but does NOT complete the material step until the
+  // user presses Save Selection. Symmetric across all 5 materials — the
+  // predicate is shared, so a leg missing the flag would leave the same
+  // color-auto-advance bug on that material's picker.
   const isRoofingMaterialPickerSatisfied = (selected: string[]): boolean =>
-    (!selected.includes('metal') || !!metalRoofSelection.color) &&
-    (!selected.includes('shingle') || !!shingleSelection.color) &&
-    (!selected.includes('barrel_tile') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
-    (!selected.includes('terracotta') || (!!tileSelection.tileType && !!tileSelection.tileColor)) &&
-    (!selected.includes('aluminum') || !!aluminumSelection.color) &&
-    (!selected.includes('flat_roof') || !!flatRoofSelection.membraneType)
+    (!selected.includes('metal') || (!!metalRoofSelection.color && metalRoofCommitted)) &&
+    (!selected.includes('shingle') || (!!shingleSelection.color && shingleCommitted)) &&
+    (!selected.includes('barrel_tile') || (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
+    (!selected.includes('terracotta') || (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
+    (!selected.includes('aluminum') || (!!aluminumSelection.color && aluminumCommitted)) &&
+    (!selected.includes('flat_roof') || (!!flatRoofSelection.membraneType && flatRoofCommitted))
 
   // Per-step plain-English gating message — names the topmost missing item.
   // Order matches the on-screen group order, then the secondary structural
@@ -1544,14 +1582,19 @@ export function ServiceDetailPage() {
         })
         setMetalRoofSelection({ color: '', roofSize: '' })
         setMetalRoofConfigOpen(false)
+        setMetalRoofCommitted(false)
         setShingleSelection({ color: '', roofSize: '' })
         setShingleConfigOpen(false)
+        setShingleCommitted(false)
         setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
         setTileConfigOpen(false)
+        setTileCommitted(false)
         setAluminumSelection({ color: '', roofSize: '' })
         setAluminumConfigOpen(false)
+        setAluminumCommitted(false)
         setFlatRoofSelection({ membraneType: '', roofSize: '' })
         setFlatRoofConfigOpen(false)
+        setFlatRoofCommitted(false)
         setAddonLinearFt({})
         setAddonConfigOpen({})
         setSubGroupLinearFt({})
@@ -2584,6 +2627,7 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setMetalRoofConfigOpen(false)
                               setMetalRoofSelection({ color: '', roofSize: '' })
+                              setMetalRoofCommitted(false)
                             }
                             // v2-collapse: first metal-select lands COLLAPSED.
                             // The summary row below the material chip is the
@@ -2599,6 +2643,7 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setShingleConfigOpen(false)
                               setShingleSelection({ color: '', roofSize: '' })
+                              setShingleCommitted(false)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && (option.id === 'barrel_tile' || option.id === 'terracotta')) {
@@ -2606,6 +2651,7 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setTileConfigOpen(false)
                               setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
+                              setTileCommitted(false)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'aluminum') {
@@ -2613,6 +2659,7 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setAluminumConfigOpen(false)
                               setAluminumSelection({ color: '', roofSize: '' })
+                              setAluminumCommitted(false)
                             }
                           }
                           if (serviceId === 'roofing' && group.id === 'material' && option.id === 'flat_roof') {
@@ -2620,6 +2667,7 @@ export function ServiceDetailPage() {
                             if (wasSelected) {
                               setFlatRoofConfigOpen(false)
                               setFlatRoofSelection({ membraneType: '', roofSize: '' })
+                              setFlatRoofCommitted(false)
                             }
                           }
                           if (serviceId === 'windows_doors' && option.id === 'garage_doors') {
@@ -3326,7 +3374,7 @@ export function ServiceDetailPage() {
                             }
                           }
                         }}
-                        onSave={() => setMetalRoofConfigOpen(false)}
+                        onSave={() => { setMetalRoofCommitted(true); setMetalRoofConfigOpen(false) }}
                       />
                     </MaterialConfigCollapseRow>
                   )
@@ -3352,7 +3400,7 @@ export function ServiceDetailPage() {
                       <ShingleRoofConfigurator
                         selection={shingleSelection}
                         onChange={setShingleSelection}
-                        onSave={() => setShingleConfigOpen(false)}
+                        onSave={() => { setShingleCommitted(true); setShingleConfigOpen(false) }}
                       />
                     </MaterialConfigCollapseRow>
                   )
@@ -3382,7 +3430,7 @@ export function ServiceDetailPage() {
                       <TileRoofConfigurator
                         selection={tileSelection}
                         onChange={setTileSelection}
-                        onSave={() => setTileConfigOpen(false)}
+                        onSave={() => { setTileCommitted(true); setTileConfigOpen(false) }}
                       />
                     </MaterialConfigCollapseRow>
                   )
@@ -3408,7 +3456,7 @@ export function ServiceDetailPage() {
                       <AluminumRoofConfigurator
                         selection={aluminumSelection}
                         onChange={setAluminumSelection}
-                        onSave={() => setAluminumConfigOpen(false)}
+                        onSave={() => { setAluminumCommitted(true); setAluminumConfigOpen(false) }}
                       />
                     </MaterialConfigCollapseRow>
                   )
@@ -3435,7 +3483,7 @@ export function ServiceDetailPage() {
                       <FlatRoofConfigurator
                         selection={flatRoofSelection}
                         onChange={setFlatRoofSelection}
-                        onSave={() => setFlatRoofConfigOpen(false)}
+                        onSave={() => { setFlatRoofCommitted(true); setFlatRoofConfigOpen(false) }}
                       />
                     </MaterialConfigCollapseRow>
                   )
@@ -4054,14 +4102,19 @@ export function ServiceDetailPage() {
               setGarageDoorConfigOpen(true)
               setMetalRoofSelection({ color: '', roofSize: '' })
               setMetalRoofConfigOpen(false) // v2-collapse: reset+open cycle lands COLLAPSED
+              setMetalRoofCommitted(false)
               setShingleSelection({ color: '', roofSize: '' })
               setShingleConfigOpen(true)
+              setShingleCommitted(false)
               setTileSelection({ tileType: '', tileColor: '', roofSize: '' })
               setTileConfigOpen(true)
+              setTileCommitted(false)
               setAluminumSelection({ color: '', roofSize: '' })
               setAluminumConfigOpen(true)
+              setAluminumCommitted(false)
               setFlatRoofSelection({ membraneType: '', roofSize: '' })
               setFlatRoofConfigOpen(true)
+              setFlatRoofCommitted(false)
               setRoofMeasurement(null)
               setRoofPermit(null)
               setAddonLinearFt({})
