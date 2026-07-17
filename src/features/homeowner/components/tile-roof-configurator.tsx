@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useSaveButtonVisible } from '@/features/homeowner/hooks/use-save-button-visible'
 
 export type TileType = 'flat' | 'spanish' | 'mission'
 
@@ -52,6 +53,7 @@ interface TileRoofConfiguratorProps {
 
 export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofConfiguratorProps) {
   const services = useCatalogStore((s) => s.services)
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
 
   const { tileTypes, tileRoofColors } = useMemo(() => {
     const svc = services.find((s) => s.id === 'roofing')
@@ -82,6 +84,7 @@ export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofCo
 
   const selectedColor = tileRoofColors.find((c) => c.id === selection.tileColor)
   const isComplete = !!selection.tileType && !!selection.tileColor && selection.roofSize.trim().length > 0
+  useSaveButtonVisible(saveButtonRef, isComplete)
 
   return (
     <motion.div
@@ -209,6 +212,8 @@ export function TileRoofConfigurator({ selection, onChange, onSave }: TileRoofCo
           </div>
           {isComplete && onSave && (
             <Button
+              ref={saveButtonRef}
+              data-save-selection="true"
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
             >

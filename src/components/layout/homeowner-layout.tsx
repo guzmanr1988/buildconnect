@@ -385,7 +385,10 @@ export function HomeownerLayout() {
           openProjectsCount dot preserved. Tailwind v4 handles the
           -webkit-backdrop-filter prefix automatically for iOS Safari. */}
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-3 safe-area-inset-bottom">
+        <div
+          data-homeowner-bottom-nav-frame="true"
+          className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-3 safe-area-inset-bottom"
+        >
           <nav
             data-homeowner-bottom-nav-pill="true"
             data-homeowner-nav-glass="true"

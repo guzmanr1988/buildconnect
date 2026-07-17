@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCatalogStore } from '@/stores/catalog-store'
+import { useSaveButtonVisible } from '@/features/homeowner/hooks/use-save-button-visible'
 
 // PR-#429 — bundled fallback. Same substrate-derive pattern as PR-#428
 // door-configurator; fallback stays byte-identical to pre-rewire so the
@@ -81,7 +82,9 @@ interface MetalRoofConfiguratorProps {
 
 export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoofConfiguratorProps) {
   const services = useCatalogStore((s) => s.services)
-  const isComplete = selection.color && selection.roofSize.trim().length > 0
+  const isComplete = !!selection.color && selection.roofSize.trim().length > 0
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
+  useSaveButtonVisible(saveButtonRef, isComplete)
 
   const metalRoofColors = useMemo(() => {
     const svc = services.find((s) => s.id === 'roofing')
@@ -199,6 +202,8 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
           </div>
           {isComplete && onSave && (
             <Button
+              ref={saveButtonRef}
+              data-save-selection="true"
               className="w-full h-10 rounded-xl text-sm font-semibold"
               onClick={onSave}
             >
