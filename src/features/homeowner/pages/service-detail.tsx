@@ -1014,22 +1014,17 @@ export function ServiceDetailPage() {
     const hasColorable = selectedMaterials.some((m) =>
       MATERIALS_WITH_REQUIRED_PICKER.includes(m),
     )
-    // Save-gate parity with isRoofingMaterialPickerSatisfied (task_1784277365890_975,
-    // kratos oo1l3): #536 moved the stepper predicate onto the committed booleans
-    // but this scroll effect kept the raw-color-field predicate — the two diverged
-    // and the scroll fired on chip pick while the stepper stayed on Step 2. AND
-    // the same xCommitted flags so the scroll fires on the Save press, matching
-    // Rod's spec: "only move to step three after he presses it".
-    const done =
-      (!selectedMaterials.includes('metal') || (!!metalRoofSelection.color && metalRoofCommitted)) &&
-      (!selectedMaterials.includes('shingle') || (!!shingleSelection.color && shingleCommitted)) &&
-      (!selectedMaterials.includes('barrel_tile') ||
-        (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
-      (!selectedMaterials.includes('terracotta') ||
-        (!!tileSelection.tileType && !!tileSelection.tileColor && tileCommitted)) &&
-      (!selectedMaterials.includes('aluminum') || (!!aluminumSelection.color && aluminumCommitted)) &&
-      (!selectedMaterials.includes('flat_roof') || (!!flatRoofSelection.membraneType && flatRoofCommitted))
-    const complete = hasColorable && done
+    // Route through isRoofingMaterialPickerSatisfied SoT (task_1784277365890_975,
+    // kratos aaeuz/h7eew). L1017 was a fifth copy of a predicate that already
+    // had a single source of truth — #532 shared-SoT-ified 4 sites, #536 Save-
+    // gated the SoT, this site was missed. My first attempt (f38f2d6) AND'd the
+    // committed booleans inline; that preserved the exact drift mechanism that
+    // caused the bug (two hand-synced copies of one predicate). Consuming the
+    // SoT closes the class at this site instead of re-arming the trap.
+    // hasColorable stays as a real separate guard — the SoT doesn't carry
+    // "at least one colorable material picked", so deleting it would fire
+    // the scroll on non-colorable-only selections.
+    const complete = hasColorable && isRoofingMaterialPickerSatisfied(selectedMaterials)
     if (!complete) {
       roofingAddonsScrollDoneRef.current = false
       return
@@ -1159,20 +1154,26 @@ export function ServiceDetailPage() {
       window.removeEventListener('keydown', abortOnUserInput)
       if (settleRaf !== null) cancelAnimationFrame(settleRaf)
     }
+    // TDZ TRAP — do not "fix" this suppression. isRoofingMaterialPickerSatisfied
+    // is a const declared LATER in this component body (~L1250, below this
+    // effect). The effect callback is safe (fires post-render, closure captures
+    // the initialised binding), but the deps array is evaluated INLINE at
+    // render — putting the SoT identifier there throws ReferenceError (TDZ) →
+    // white-screens the page on every mount. react-hooks/exhaustive-deps
+    // autofix WILL suggest adding it. DO NOT ACCEPT. The 13 state slots below
+    // are exactly what the SoT reads (kratos-audited 92dwg). Placement of the
+    // eslint-disable comment matters: only `disable-next-line` on the line
+    // immediately BEFORE `}, [` suppresses this rule; a `disable-line` on the
+    // `])` closing line is decorative (empirically measured 2026-07-17).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     serviceId,
     selections.material,
-    metalRoofSelection.color,
-    shingleSelection.color,
-    tileSelection.tileType,
-    tileSelection.tileColor,
-    aluminumSelection.color,
-    flatRoofSelection.membraneType,
-    metalRoofCommitted,
-    shingleCommitted,
-    tileCommitted,
-    aluminumCommitted,
-    flatRoofCommitted,
+    metalRoofSelection.color, metalRoofCommitted,
+    shingleSelection.color, shingleCommitted,
+    tileSelection.tileType, tileSelection.tileColor, tileCommitted,
+    aluminumSelection.color, aluminumCommitted,
+    flatRoofSelection.membraneType, flatRoofCommitted,
   ])
 
   if (!service) {
@@ -1293,15 +1294,42 @@ export function ServiceDetailPage() {
     if (serviceId === 'roofing') {
       const selectedMaterials = selections['material'] ?? []
       if (selectedMaterials.length > 0 && !isRoofingMaterialPickerSatisfied(selectedMaterials)) {
+        // Inner clauses must test the SAME notion as their guard (kratos h7eew,
+        // task_1784277365890_975 site 3). #536 widened the SoT from raw color
+        // fields to (color && committed), which made the state "color picked,
+        // Save NOT pressed" REACHABLE — and #536's whole point is to make it
+        // the normal path (Rod voice: "only move to step three AFTER he
+        // presses it"). Under that state the guard fires but the old inner
+        // clauses (which check raw color alone) all evaluate false, no clause
+        // returns, control falls through past this block and the ladder names
+        // "Select a property to continue." — a blocker that is not the
+        // blocker. Per material: check missing primary field first (unchanged
+        // copy), then check missing commit (new copy naming the Save Selection
+        // button by the same noun Rod used).
         for (const mat of ROOFING_MATERIALS_WITH_REQUIRED_PICKER) {
           if (!selectedMaterials.includes(mat)) continue
-          if (mat === 'shingle' && !shingleSelection.color) return 'Choose a color to continue.'
-          if ((mat === 'barrel_tile' || mat === 'terracotta') && (!tileSelection.tileType || !tileSelection.tileColor)) {
-            return 'Choose a tile type and color to continue.'
+          if (mat === 'shingle') {
+            if (!shingleSelection.color) return 'Choose a color to continue.'
+            if (!shingleCommitted) return 'Press Save Selection to continue.'
           }
-          if (mat === 'metal' && !metalRoofSelection.color) return 'Choose a color to continue.'
-          if (mat === 'aluminum' && !aluminumSelection.color) return 'Choose a color to continue.'
-          if (mat === 'flat_roof' && !flatRoofSelection.membraneType) return 'Choose a membrane to continue.'
+          if (mat === 'barrel_tile' || mat === 'terracotta') {
+            if (!tileSelection.tileType || !tileSelection.tileColor) {
+              return 'Choose a tile type and color to continue.'
+            }
+            if (!tileCommitted) return 'Press Save Selection to continue.'
+          }
+          if (mat === 'metal') {
+            if (!metalRoofSelection.color) return 'Choose a color to continue.'
+            if (!metalRoofCommitted) return 'Press Save Selection to continue.'
+          }
+          if (mat === 'aluminum') {
+            if (!aluminumSelection.color) return 'Choose a color to continue.'
+            if (!aluminumCommitted) return 'Press Save Selection to continue.'
+          }
+          if (mat === 'flat_roof') {
+            if (!flatRoofSelection.membraneType) return 'Choose a membrane to continue.'
+            if (!flatRoofCommitted) return 'Press Save Selection to continue.'
+          }
         }
       }
     }
