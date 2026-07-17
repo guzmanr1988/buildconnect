@@ -271,6 +271,33 @@ const POOL_FLOOR_SQFT_IDS: string[] = POOL_FLOOR_SQFT_CONFIG.map((c) => c.id)
 // homeowner wizard without per-vertical render branches.
 const DEDICATED_CONFIGURATOR_SERVICES: readonly string[] = ['windows_doors']
 
+// Services that render the numbered step-wizard chrome (progress bar with
+// "Step X of N — <label>", per-group cards with complete / active / locked
+// status). Started with roofing in PR #516; extended to windows_doors per
+// Rod voice via kratos task_1784264733391_196 ("same configuration I did
+// for roof I want to do for windows"). Chrome is data-driven off
+// service.optionGroups so any new service can opt in by adding its id here
+// — no per-service wiring required beyond service-specific filter cases
+// inside wizardVisibleGroups.
+const WIZARD_CHROME_SERVICES: readonly string[] = ['roofing', 'windows_doors']
+const isWizardService = (id: string | null | undefined): boolean =>
+  id != null && WIZARD_CHROME_SERVICES.includes(id)
+
+// windows_doors Step-1 Products tiles: two-line stacked label per Rod voice
+// via kratos task_1784264733391_196 addition ("On the square outside"). Rod
+// verbatim spec: Windows="Impact"/"Windows", Doors="Impact"/"Doors",
+// Garage Doors="Garage"/"Doors". Storm Front="Storm"/"Front" is kratos's
+// row-uniformity call (flagged, one-line revert if Rod corrects). This is a
+// component-level render override — SERVICE_CATALOG labels and vendor
+// join-keys are unchanged, so vendor_option_prices and rep/vendor surfaces
+// keep reading option.label without touching prod Supabase catalog shape.
+const WINDOWS_DOORS_PRODUCT_STACKED_LABELS: Record<string, { top: string; bottom: string }> = {
+  windows: { top: 'Impact', bottom: 'Windows' },
+  doors: { top: 'Impact', bottom: 'Doors' },
+  storm_front: { top: 'Storm', bottom: 'Front' },
+  garage_doors: { top: 'Garage', bottom: 'Doors' },
+}
+
 function isDedicatedConfiguratorService(id: string | undefined): boolean {
   return id != null && DEDICATED_CONFIGURATOR_SERVICES.includes(id)
 }
@@ -942,9 +969,9 @@ export function ServiceDetailPage() {
       if (serviceId === 'roofing') {
         const target =
           document.querySelector<HTMLElement>('[data-testid="roofing-next-cue-banner"]') ||
-          (roofingVisibleGroups[0]
+          (wizardVisibleGroups[0]
             ? document.querySelector<HTMLElement>(
-                `[data-service-section="${roofingVisibleGroups[0].id}"]`,
+                `[data-service-section="${wizardVisibleGroups[0].id}"]`,
               )
             : null)
         if (!target) return
@@ -1377,51 +1404,56 @@ export function ServiceDetailPage() {
     roofMeasurement?.includeMaterialOrder === false &&
     roofMeasurement?.includePerimeter === true
 
-  // Roofing step-wizard: numbered step per visible optionGroup. Iris audit
+  // Step-wizard: numbered step per visible optionGroup. Iris audit
   // (kratos msg 1783993919584) called out the "wall of chip groups" pattern
   // that leaves homeowners scrolling with no signal of what's next. Anchor
-  // stays measurement-first (per feedback_ux_recommendations_must_respect_
-  // per_service_type_logic — roofing measures first because sqft drives the
-  // quote); this only adds numbered chrome around the existing groups so the
-  // step-of-N is legible without changing shape or order. Roofing only for
-  // now — pattern is structured so it can generalize later without a rewrite.
-  const roofingVisibleGroups =
-    serviceId === 'roofing'
-      ? service.optionGroups.filter((g) => {
-          if (!isRevealed(g)) return false
+  // stays measurement-first for roofing (per feedback_ux_recommendations_
+  // must_respect_per_service_type_logic — roofing measures first because
+  // sqft drives the quote); chrome adds numbered wrapper around the existing
+  // groups so step-of-N is legible without changing shape or order. Started
+  // roofing-only in PR #516; generalized here for windows_doors per Rod voice
+  // via kratos task_1784264733391_196. Per-service filter cases stay explicit
+  // inside the filter — any new service opts in via WIZARD_CHROME_SERVICES
+  // and (if needed) its own filter branch.
+  const wizardVisibleGroups = isWizardService(serviceId)
+    ? service.optionGroups.filter((g) => {
+        if (!isRevealed(g)) return false
+        if (serviceId === 'roofing') {
           if (g.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) return false
           if (g.id === 'material' && (selections.service_type ?? []).includes('addons')) return false
-          return true
-        })
-      : []
-  type RoofingStepStatus = 'complete' | 'active' | 'locked'
-  interface RoofingStepMeta {
+        }
+        return true
+      })
+    : []
+  type WizardStepStatus = 'complete' | 'active' | 'locked'
+  interface WizardStepMeta {
     index: number
     total: number
-    status: RoofingStepStatus
+    status: WizardStepStatus
     lockedByLabel?: string
   }
-  // Numbered-step metadata for a roofing groupId. A required step becomes
-  // 'complete' when it has a selection AND (for `material`) the per-material
-  // picker is satisfied, 'active' when unselected/picker-unsatisfied AND all
-  // prior REQUIRED steps have a selection, 'locked' otherwise. Optional
-  // steps (Add-ons, gated repair_materials) never lock — the user can skip.
+  // Numbered-step metadata for a wizard groupId. A required step becomes
+  // 'complete' when it has a selection AND (for roofing `material`) the
+  // per-material picker is satisfied, 'active' when unselected/picker-
+  // unsatisfied AND all prior REQUIRED steps have a selection, 'locked'
+  // otherwise. Optional steps (e.g. roofing Add-ons, gated repair_materials)
+  // never lock — the user can skip.
   // HARD GUARD: the `priorBlocker` predicate stays on bare has-selection so
   // GATE A lock cascade (apollo-verified green on apex today) does not
   // regress — an unsatisfied picker upstream does not lock downstream steps,
   // only the upstream step itself stays 'active' with its own required cue.
-  const getRoofingStepMeta = (groupId: string): RoofingStepMeta | null => {
-    if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
-    const total = roofingVisibleGroups.length
-    const idx = roofingVisibleGroups.findIndex((g) => g.id === groupId)
+  const getWizardStepMeta = (groupId: string): WizardStepMeta | null => {
+    if (!isWizardService(serviceId) || wizardVisibleGroups.length === 0) return null
+    const total = wizardVisibleGroups.length
+    const idx = wizardVisibleGroups.findIndex((g) => g.id === groupId)
     if (idx === -1) return null
-    const g = roofingVisibleGroups[idx]
+    const g = wizardVisibleGroups[idx]
     const selected = selections[g.id] ?? []
     const isComplete =
       selected.length > 0 &&
-      (g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected))
+      (serviceId !== 'roofing' || g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected))
     if (isComplete) return { index: idx + 1, total, status: 'complete' }
-    const priorBlocker = roofingVisibleGroups
+    const priorBlocker = wizardVisibleGroups
       .slice(0, idx)
       .find((pg) => pg.required && (selections[pg.id]?.length ?? 0) === 0)
     if (priorBlocker && g.required) {
@@ -1430,27 +1462,27 @@ export function ServiceDetailPage() {
     return { index: idx + 1, total, status: 'active' }
   }
   // First not-yet-complete REQUIRED step across the visible list — drives the
-  // post-measurement "Next" banner + which card gets the pulsing accent. Rod
-  // caught (#516 post-ship): pointing "active" at an optional step (e.g. the
-  // Add-Ons step 3 of 3) made the whole visual language — 66% progress bar,
-  // "Step 3 of 3 — Add-Ons" label, pulsing accent, "Next" cue — imply a hard
-  // gate even though Add-to-Project was enabled. Optional steps must never
-  // hold the active pointer; once required steps are done, return null so the
-  // progress reads "All N steps complete" and no cue/pulse fires.
-  // Symmetric with getRoofingStepMeta's isComplete: the `material` step is
-  // incomplete when the per-material picker is unsatisfied even if a
-  // material was picked, so the pulsing accent + Next cue stay on step 2
-  // until Rod actually finishes the material config.
-  const roofingActiveStep = (() => {
-    if (serviceId !== 'roofing' || roofingVisibleGroups.length === 0) return null
-    const idx = roofingVisibleGroups.findIndex((g) => {
+  // post-measurement "Next" banner (roofing only) + which card gets the pulsing
+  // accent. Rod caught (#516 post-ship): pointing "active" at an optional step
+  // (e.g. the roofing Add-Ons step 3 of 3) made the whole visual language — 66%
+  // progress bar, "Step 3 of 3 — Add-Ons" label, pulsing accent, "Next" cue —
+  // imply a hard gate even though Add-to-Project was enabled. Optional steps
+  // must never hold the active pointer; once required steps are done, return
+  // null so the progress reads "All N steps complete" and no cue/pulse fires.
+  // Symmetric with getWizardStepMeta's isComplete: the roofing `material` step
+  // is incomplete when the per-material picker is unsatisfied even if a
+  // material was picked, so the pulsing accent + Next cue stay on step 2 until
+  // Rod actually finishes the material config.
+  const wizardActiveStep = (() => {
+    if (!isWizardService(serviceId) || wizardVisibleGroups.length === 0) return null
+    const idx = wizardVisibleGroups.findIndex((g) => {
       if (!g.required) return false
       const selected = selections[g.id] ?? []
       if (selected.length === 0) return true
-      return g.id === 'material' && !isRoofingMaterialPickerSatisfied(selected)
+      return serviceId === 'roofing' && g.id === 'material' && !isRoofingMaterialPickerSatisfied(selected)
     })
     if (idx === -1) return null
-    return { group: roofingVisibleGroups[idx], index: idx + 1, total: roofingVisibleGroups.length }
+    return { group: wizardVisibleGroups[idx], index: idx + 1, total: wizardVisibleGroups.length }
   })()
 
   // Roofing color-mandatory gate (Rule B, task_488). Every SELECTED colorable
@@ -1936,7 +1968,7 @@ export function ServiceDetailPage() {
           is the exact thing Rod flagged"). Roofing only; renders once
           measurement has completed AND a not-yet-complete step exists.
           Auto-clears after 6s (state effect) or on first chip tap. */}
-      {serviceId === 'roofing' && showRoofingNextCue && roofingActiveStep && (
+      {serviceId === 'roofing' && showRoofingNextCue && wizardActiveStep && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1946,11 +1978,11 @@ export function ServiceDetailPage() {
         >
           <div className="flex items-center gap-3">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold shrink-0">
-              {roofingActiveStep.index}
+              {wizardActiveStep.index}
             </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                Next: Step {roofingActiveStep.index} of {roofingActiveStep.total} — {roofingActiveStep.group.label}
+                Next: Step {wizardActiveStep.index} of {wizardActiveStep.total} — {wizardActiveStep.group.label}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Pick below to continue.
@@ -1974,26 +2006,31 @@ export function ServiceDetailPage() {
           Select your preferences below to get matched with the right contractors.
         </p>
 
-        {/* Progress — roofing shows numbered step-of-N with the current
-            step's label so the homeowner never has to scan the list to find
-            where they are. Other services keep the compact "done/total"
-            counter unchanged. */}
-        {serviceId === 'roofing' && roofingVisibleGroups.length > 0 ? (
+        {/* Progress — wizard-chrome services (roofing, windows_doors) show
+            numbered step-of-N with the current step's label so the homeowner
+            never has to scan the list to find where they are. Other services
+            keep the compact "done/total" counter unchanged. Testid is
+            per-service so existing roofing test hooks stay intact and
+            windows_doors gets its own. */}
+        {isWizardService(serviceId) && wizardVisibleGroups.length > 0 ? (
           <div className="mb-6 flex items-center gap-3">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
               <motion.div
                 className="h-full rounded-full bg-primary"
                 initial={{ width: 0 }}
                 animate={{
-                  width: `${roofingActiveStep ? ((roofingActiveStep.index - 1) / roofingActiveStep.total) * 100 : 100}%`,
+                  width: `${wizardActiveStep ? ((wizardActiveStep.index - 1) / wizardActiveStep.total) * 100 : 100}%`,
                 }}
                 transition={{ duration: 0.3 }}
               />
             </div>
-            <span className="text-sm text-muted-foreground whitespace-nowrap font-medium" data-testid="roofing-step-progress-label">
-              {roofingActiveStep
-                ? `Step ${roofingActiveStep.index} of ${roofingActiveStep.total} — ${roofingActiveStep.group.label}`
-                : `All ${roofingVisibleGroups.length} steps complete`}
+            <span
+              className="text-sm text-muted-foreground whitespace-nowrap font-medium"
+              data-testid={`${serviceId}-step-progress-label`}
+            >
+              {wizardActiveStep
+                ? `Step ${wizardActiveStep.index} of ${wizardActiveStep.total} — ${wizardActiveStep.group.label}`
+                : `All ${wizardVisibleGroups.length} steps complete`}
             </span>
           </div>
         ) : requiredGroups.length > 0 && (
@@ -2087,17 +2124,20 @@ export function ServiceDetailPage() {
             const hasSelection = selected.length > 0
             const useAccordion = serviceId === 'wall_paneling'
             const bodyVisible = !useAccordion || isExpanded
-            // Roofing step-wizard metadata (see getRoofingStepMeta above).
-            // Null for non-roofing services — those keep the pre-existing
-            // plain header + body render below.
-            const stepMeta = getRoofingStepMeta(group.id)
-            const isRoofingStep = stepMeta !== null
+            // Wizard step-chrome metadata (see getWizardStepMeta above).
+            // Null for non-wizard services — those keep the pre-existing
+            // plain header + body render below. Pulse fires only for
+            // roofing (measurement-triggered cue); windows_doors has no
+            // measurement anchor, so the standing chrome is the whole
+            // signal — no ephemeral pulse.
+            const stepMeta = getWizardStepMeta(group.id)
+            const isWizardStep = stepMeta !== null
             const isLockedStep = stepMeta?.status === 'locked'
             const isActiveStep = stepMeta?.status === 'active'
             const isCompleteStep = stepMeta?.status === 'complete'
             const pulseThisStep = Boolean(
-              isRoofingStep && isActiveStep && showRoofingNextCue &&
-              roofingActiveStep?.group.id === group.id,
+              isWizardStep && isActiveStep && serviceId === 'roofing' &&
+              showRoofingNextCue && wizardActiveStep?.group.id === group.id,
             )
             return (
               <div
@@ -2108,8 +2148,10 @@ export function ServiceDetailPage() {
                   group.id === 'service_type' ? (selections.service_type?.[0] ?? '') : undefined
                 }
                 data-service-section={group.id}
-                data-roofing-step={stepMeta ? stepMeta.status : undefined}
-                data-roofing-step-index={stepMeta ? stepMeta.index : undefined}
+                data-wizard-step={stepMeta ? stepMeta.status : undefined}
+                data-wizard-step-index={stepMeta ? stepMeta.index : undefined}
+                data-roofing-step={serviceId === 'roofing' && stepMeta ? stepMeta.status : undefined}
+                data-roofing-step-index={serviceId === 'roofing' && stepMeta ? stepMeta.index : undefined}
                 {...(useAccordion
                   ? {
                       'data-group-expanded': isExpanded ? 'true' : 'false',
@@ -2118,10 +2160,10 @@ export function ServiceDetailPage() {
                   : {})}
                 style={useAccordion && isExpanded ? { gridColumn: '1 / -1' } : undefined}
                 className={cn(
-                  isRoofingStep && 'rounded-2xl border p-4 transition-all duration-200',
-                  isRoofingStep && isCompleteStep && 'border-emerald-500/30 bg-emerald-500/5',
-                  isRoofingStep && isActiveStep && 'border-primary/40 bg-primary/[0.04] shadow-sm',
-                  isRoofingStep && isLockedStep && 'border-muted bg-muted/20',
+                  isWizardStep && 'rounded-2xl border p-4 transition-all duration-200',
+                  isWizardStep && isCompleteStep && 'border-emerald-500/30 bg-emerald-500/5',
+                  isWizardStep && isActiveStep && 'border-primary/40 bg-primary/[0.04] shadow-sm',
+                  isWizardStep && isLockedStep && 'border-muted bg-muted/20',
                   pulseThisStep && 'ring-2 ring-primary/70 animate-pulse',
                 )}
               >
@@ -2186,7 +2228,7 @@ export function ServiceDetailPage() {
                     />
                   </span>
                 </button>
-                ) : isRoofingStep ? (
+                ) : isWizardStep ? (
                 <div className="mb-3">
                   <div className="flex items-center gap-3">
                     <span
@@ -2812,6 +2854,36 @@ export function ServiceDetailPage() {
                                 <Check className="h-3 w-3" />
                               </span>
                             )}
+                            {/* windows_doors Products count/marker — right of
+                                the top row, larger than the pre-stack version.
+                                Rod voice via kratos od5e0: the stacked
+                                "Impact/Windows" label collides with the
+                                below-label count in the single flex-col slot,
+                                so surface the count on the empty right slot
+                                of this row instead. Marker is a count for
+                                windows/doors/storm_front; garage_doors keeps
+                                its single/double 'S'/'D' letter. Price-visibility
+                                rule holds — no currency, only integer or S/D. */}
+                            {serviceId === 'windows_doors' && group.id === 'products' && (
+                              (() => {
+                                let content: React.ReactNode = null
+                                if (option.id === 'windows' && windowTotal > 0) content = windowTotal
+                                else if (option.id === 'doors' && doorTotal > 0) content = doorTotal
+                                else if (option.id === 'storm_front' && stormFrontTotal > 0) content = stormFrontTotal
+                                else if (option.id === 'garage_doors' && garageDoorSelection.type) {
+                                  content = garageDoorSelection.type === 'single_garage' ? 'S' : 'D'
+                                }
+                                if (content === null) return null
+                                return (
+                                  <span
+                                    className="ml-auto inline-flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary px-2 text-[14px] font-bold text-primary-foreground"
+                                    data-option-count-badge={option.id}
+                                  >
+                                    {content}
+                                  </span>
+                                )
+                              })()
+                            )}
                           </div>
                         )}
                         {isImageTile && (
@@ -2863,9 +2935,28 @@ export function ServiceDetailPage() {
                         })()}
                         {isCardTile ? (
                           <div className="flex flex-col gap-0.5">
-                            {optionLabel && optionLabel.trim() !== '' && (
-                              <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
-                            )}
+                            {(() => {
+                              const stacked =
+                                serviceId === 'windows_doors' && group.id === 'products'
+                                  ? WINDOWS_DOORS_PRODUCT_STACKED_LABELS[option.id]
+                                  : undefined
+                              if (stacked) {
+                                return (
+                                  <span
+                                    className="flex flex-col leading-tight text-foreground"
+                                    data-option-label-stacked={option.id}
+                                  >
+                                    <span className="text-[15px] font-semibold">{stacked.top}</span>
+                                    <span className="text-[15px] font-semibold">{stacked.bottom}</span>
+                                  </span>
+                                )
+                              }
+                              return (
+                                optionLabel && optionLabel.trim() !== '' && (
+                                  <span className="text-[15px] font-semibold leading-tight text-foreground">{optionLabel}</span>
+                                )
+                              )
+                            })()}
                             {option.description ? (
                               <span className="text-[12px] leading-tight text-muted-foreground">{option.description}</span>
                             ) : null}
@@ -2907,21 +2998,10 @@ export function ServiceDetailPage() {
                             </span>
                           ) : null
                         })()}
-                        {serviceId === 'windows_doors' && option.id === 'windows' && windowTotal > 0 && (
-                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
-                            {windowTotal}
-                          </span>
-                        )}
-                        {serviceId === 'windows_doors' && option.id === 'doors' && doorTotal > 0 && (
-                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
-                            {doorTotal}
-                          </span>
-                        )}
-                        {serviceId === 'windows_doors' && option.id === 'storm_front' && stormFrontTotal > 0 && (
-                          <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
-                            {stormFrontTotal}
-                          </span>
-                        )}
+                        {/* Products count moved to top-row right slot above (Rod voice via kratos od5e0 —
+                            avoids collision with the stacked "Impact/Windows" label). Install-products
+                            counts (install_windows / install_doors / install_storm_front) stay
+                            below-label since Rod only re-specced the Products row. */}
                         {/* Install pills derive their count from the Products selection — no separate stepper. */}
                         {serviceId === 'windows_doors' && option.id === 'install_windows' && windowTotal > 0 && (
                           <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold">
@@ -2938,11 +3018,8 @@ export function ServiceDetailPage() {
                             {stormFrontTotal}
                           </span>
                         )}
-                        {serviceId === 'windows_doors' && option.id === 'garage_doors' && garageDoorSelection.type && (
-                          <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
-                            {garageDoorSelection.type === 'single_garage' ? 'S' : 'D'}
-                          </span>
-                        )}
+                        {/* Garage-doors S/D marker moved to top-row right slot above alongside the
+                            other Products counts. */}
                         {serviceId === 'roofing' && option.id === 'metal' && metalRoofSelection.color && (
                           <span className="ml-1 flex h-5 items-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold">
                             {metalRoofSelection.roofSize ? `${metalRoofDisplaySquares(metalRoofSelection.roofSize)} sq` : 'Configured'}
