@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/shared/page-header'
+import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { ProjectItemsCardGrid } from '@/components/shared/project-items-card-grid'
 import { resolveLeadStatusLabel } from '@/lib/lead-status-label'
+import { useVendorLeadStages, LEAD_STAGES, STAGE_PULSE_BY_KEY, type LeadStageKey } from '@/lib/vendor-lead-stages'
 import { computeWindowsDoorsCatalogTotal } from '@/lib/configurator-catalog-price'
 import { useVendorCatalogStore } from '@/stores/vendor-catalog-store'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -39,6 +41,17 @@ function fmtDate(iso: string) {
 }
 
 export default function LeadInbox() {
+  // iris fidelity spec 2026-07-17 — natural-phrasing labels for the
+  // filtered PageHeader subtitle. Sidesteps the "N New Leads projects"
+  // / "N Cancelled Projects projects" redundancy the stage titles
+  // produce when reused verbatim in a "N <label>" template.
+  const STAGE_COUNT_LABEL: Record<LeadStageKey, string> = {
+    new: 'new leads',
+    confirmed: 'scheduled',
+    sold: 'active',
+    completed: 'completed',
+    cancelled: 'cancelled',
+  }
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const accountRepIdByLead = useProjectsStore((s) => s.accountRepIdByLead)
   const repAcceptanceByLead = useProjectsStore((s) => s.repAcceptanceByLead)
@@ -207,6 +220,41 @@ export default function LeadInbox() {
     })), [sentProjects, VENDOR_ID, vendor, getVendorPrice, profile?.role, profile?.id, accountRepIdByLead])
 
   const leads = homeownerLeads
+
+  // Ship task_1784321818246_001 (iris fidelity spec 2026-07-17) —
+  // pipeline-tile header + in-page stage filter. counts + bucket-
+  // membership come from useVendorLeadStages (same SoT the sidebar
+  // badge + lead-workflow tiles use — reconciles per surface-count-
+  // parity discipline). We reuse this hook rather than deriving
+  // stages locally so a future stage-rule change (e.g. #318 approval
+  // gate) only lives in one place.
+  const { counts: stageCounts, stages: stageBuckets } = useVendorLeadStages()
+  const idsByStage = useMemo(() => {
+    const map: Record<LeadStageKey, Set<string>> = {
+      new: new Set(),
+      confirmed: new Set(),
+      sold: new Set(),
+      completed: new Set(),
+      cancelled: new Set(),
+    }
+    for (const key of Object.keys(stageBuckets) as LeadStageKey[]) {
+      for (const l of stageBuckets[key]) map[key].add(l.id)
+    }
+    return map
+  }, [stageBuckets])
+
+  // null = no filter; a stage key = show only leads in that bucket.
+  // Click a tile to filter; click the same tile again to clear.
+  const [activeStage, setActiveStage] = useState<LeadStageKey | null>(null)
+  const visibleLeads = useMemo(
+    () => (activeStage ? leads.filter((l) => idsByStage[activeStage].has(l.id)) : leads),
+    [leads, activeStage, idsByStage],
+  )
+  const activeStageMeta = activeStage ? LEAD_STAGES.find((s) => s.key === activeStage) : null
+  const pageDescription = activeStage
+    ? `${visibleLeads.length} ${STAGE_COUNT_LABEL[activeStage]}`
+    : `${leads.length} customer projects`
+
   const assigneeMap = useAssigneeMap(VENDOR_ID)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [idPreview, setIdPreview] = useState<{ dataUrl: string; name: string } | null>(null)
@@ -243,13 +291,13 @@ export default function LeadInbox() {
 
   const groupedLeads = useMemo(() => {
     const groups: Record<string, Lead[]> = {}
-    for (const l of leads) {
+    for (const l of visibleLeads) {
       const cat = (l.service_category as unknown as string) ?? 'uncategorized'
       if (!groups[cat]) groups[cat] = []
       groups[cat].push(l)
     }
     return groups
-  }, [leads])
+  }, [visibleLeads])
 
   // Ordered list of category IDs with leads. Sort follows SERVICE_CATALOG
   // ordering so vendor sees categories in the same order as /home +
@@ -292,13 +340,35 @@ export default function LeadInbox() {
 
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 overflow-x-hidden max-w-full">
-      <PageHeader title="Projects" description={`${leads.length} customer projects`}>
+    <motion.div variants={container} initial="hidden" animate="show" className="overflow-x-hidden max-w-full">
+      <PageHeader title="Projects" description={pageDescription}>
         <Badge variant="secondary" className="text-xs">{leads.filter((l) => l.status === 'confirmed').length} active</Badge>
       </PageHeader>
 
-      {leads.length === 0 ? (
-        <EmptyState icon={Package} title="No projects yet" description="Customer projects will appear here once leads are confirmed." />
+      {/* iris fidelity spec 2026-07-17 — horizontal 5-stage pipeline
+          header mirroring Lead Workflow's PipelineStatRow. Click a tile
+          to filter Projects to that stage in-place; click the same tile
+          again (or another) to clear/change. Active tile gets a subtle
+          ring accent (activeKey prop added to PipelineStatRow). 24px
+          gap above (mt-6) inheriting the header→row rhythm from Lead
+          Workflow; 16px gap below (mb-4) before the grouped list per
+          iris. account_rep gets the same 'new' filter as elsewhere. */}
+      <PipelineStatRow
+        stages={LEAD_STAGES.filter((s) => profile?.role !== 'account_rep' || s.key !== 'new')}
+        counts={stageCounts}
+        onStageClick={(key) => setActiveStage((prev) => (prev === key ? null : key))}
+        pulseByKey={STAGE_PULSE_BY_KEY}
+        activeKey={activeStage}
+        testIdPrefix="vendor-projects-pipeline-stage"
+        className="mt-6 mb-4"
+      />
+
+      {visibleLeads.length === 0 ? (
+        <EmptyState
+          icon={Package}
+          title={activeStageMeta ? `No ${activeStageMeta.title.toLowerCase()} yet` : 'No projects yet'}
+          description={activeStageMeta ? 'Try a different stage or clear the filter.' : 'Customer projects will appear here once leads are confirmed.'}
+        />
       ) : (
         <div className="grid gap-6">
           {orderedCategoryIds.map((categoryId) => {
