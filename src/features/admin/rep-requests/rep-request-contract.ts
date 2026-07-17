@@ -239,3 +239,34 @@ export interface RepRequestActions {
   canMarkProjectReady: boolean
   canBuildProject: boolean
 }
+
+// ── Project-type prefix decoder (mirror of intake encoder) ──────────
+// use-rep-request-submit.ts prepends "[Project Types: A, B] " onto the
+// description field at intake (see L200-203 there — FE-only carry until
+// the follow-on wire-column pin). This parser strips that prefix so the
+// admin queue / detail surface the notes text without the tag, and
+// yields the ordered type array for chip rendering. Contract with the
+// encoder: leading marker `[Project Types: `, comma-space delimiter,
+// order preserved. Any deviation (missing bracket, empty content,
+// nothing usable after split) => passthrough (types=[], text=original).
+// Never throws, never half-strips.
+export interface ParsedProjectTypes {
+  types: string[]
+  text: string
+}
+
+export function parseProjectTypes(description: string | null | undefined): ParsedProjectTypes {
+  const src = description ?? ''
+  const match = src.match(/^\[Project Types: ([^\]]*)\]/)
+  if (!match) return { types: [], text: src }
+  const types = match[1]
+    .split(', ')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+  if (types.length === 0) return { types: [], text: src }
+  // Encoder inserts exactly one space between `]` and notes when notes are
+  // present, and no space when notes are empty. Strip that single space so
+  // notes render clean; any other leading whitespace is preserved as-is.
+  const remainder = src.slice(match[0].length).replace(/^ /, '')
+  return { types, text: remainder }
+}
