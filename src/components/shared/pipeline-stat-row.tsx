@@ -37,6 +37,12 @@ export interface PipelineStatRowProps {
   hrefForStage?: (key: LeadStageKey) => string
   onStageClick?: (key: LeadStageKey) => void
   pulseByKey?: Record<LeadStageKey, boolean>
+  // Active-tile accent — subtle ring on the tile whose key matches
+  // activeKey. Added for vendor/projects in-page filter (iris fidelity
+  // spec 2026-07-17): PipelineStatRow has no built-in active state, so
+  // this optional prop lets a consumer surface a selected-tile cue
+  // without forking the component. undefined/null = no active tile.
+  activeKey?: LeadStageKey | null
   className?: string
   // testid namespace for downstream walker assertions (admin uses
   // data-workflow-stage; vendor uses data-vendor-pipeline-stage).
@@ -49,6 +55,7 @@ export function PipelineStatRow({
   hrefForStage,
   onStageClick,
   pulseByKey,
+  activeKey,
   className,
   testIdPrefix = 'pipeline-stage',
 }: PipelineStatRowProps) {
@@ -58,11 +65,13 @@ export function PipelineStatRow({
         const StageIcon = stage.icon
         const count = counts[stage.key] ?? 0
         const pulse = pulseByKey ? pulseByKey[stage.key] : stage.pulse
+        const isActive = !!activeKey && activeKey === stage.key
         const cardClass = cn(
           'flex-1 rounded-xl border p-2 sm:p-2.5 text-center transition',
           stage.bgColor,
           stage.borderColor,
           (hrefForStage || onStageClick) && 'hover:shadow-md cursor-pointer',
+          isActive && 'ring-1 ring-offset-1 ring-primary/60',
         )
         const cardInner = (
           <>
