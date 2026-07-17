@@ -3,7 +3,7 @@ import { computeRoofTotal, evalPitchedOmittedTriggered } from '@/lib/roof-area-m
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall } from 'lucide-react'
+import { ArrowLeft, Check, ShoppingCart, Plus, Home, Wind, Droplets, Car, Tent, Thermometer, UtensilsCrossed, Bath, PanelTop, Hammer, PaintRoller, FileText, Blinds, Ruler, Fence, RefreshCw, Wrench, Layers, Sun, Square, Triangle, Cog, TreePine, Grid3X3, DoorOpen, CircleDot, AlignJustify, Waves, Lightbulb, Flame, Gauge, Sparkles, Palette, Building2, DoorClosed, Briefcase, ArrowUpDown, Move3D, ChevronsUp, MoveDiagonal, Sailboat, Layers3, ScanLine, ZoomIn, ChevronDown, BrickWall, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -89,9 +89,20 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
   },
   windows_doors: {
     products: { windows: PanelTop, doors: DoorOpen, storm_front: Wind, garage_doors: Car },
-    installation: { new_construction: Home, retrofit: RefreshCw },
+    // installation/payment key drift fix (kratos-initiated, not Rod-asked —
+    // spotted while touching the same tiles). Prior keys (new_construction /
+    // retrofit / financing) were authored for a different option set and
+    // never matched the live catalog ids (install / no_install / financed),
+    // so those three tiles rendered without icons and the label collapsed
+    // into the icon slot. Icons picked by iris for semantic fit (avoiding
+    // the RefreshCw-on-No-Install trap that would read as install-adjacent):
+    //   install     -> Wrench   (professional installation / service)
+    //   no_install  -> Package  (product only / DIY handles install)
+    //   cash        -> Briefcase (upfront, unchanged)
+    //   financed    -> Building2 (financial institution — distinct from Cash)
+    installation: { install: Wrench, no_install: Package },
     install_products: { glass: Layers, frames: Square, both: Layers3 },
-    payment: { cash: Briefcase, financing: Briefcase },
+    payment: { cash: Briefcase, financed: Building2 },
   },
   pool: {
     // Arc-19 — icon-set realigned to constants.ts option_ids (the prior
