@@ -39,7 +39,7 @@ interface RepRequestRow {
   created_by: string
   assigned_rep_id: string | null
   project_id: string | null
-  address: { line1: string; line2?: string | null; city: string; state: string; zip: string }
+  address: { line1: string; line2?: string | null; city: string; state: string; zip: string | null }
   contact_phone: string
   requested_visit_times: Array<{
     window_start_utc: string
@@ -76,7 +76,8 @@ const TERMINAL_STATUSES: ReadonlySet<RepRequestStatus> = new Set<RepRequestStatu
 
 function formatAddress(a: RepRequestRow['address']): string {
   const line2 = a.line2 ? `, ${a.line2}` : ''
-  return `${a.line1}${line2}, ${a.city}, ${a.state} ${a.zip}`
+  const zipSuffix = a.zip ? ` ${a.zip}` : ''
+  return `${a.line1}${line2}, ${a.city}, ${a.state}${zipSuffix}`
 }
 
 function mapRow(row: RepRequestRow): RepRequestDetail {
