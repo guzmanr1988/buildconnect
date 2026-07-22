@@ -53,7 +53,7 @@ export function CardSlideWizard({
   const pct = ((step - 1) / (totalSteps - 1)) * 100
 
   return (
-    <div className="flex flex-col gap-0 max-w-xl mx-auto min-h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-0 max-w-xl md:max-w-none mx-auto min-h-[calc(100vh-8rem)]">
       {/* Progress + back header */}
       <div className="flex items-center gap-3 mb-5">
         <button

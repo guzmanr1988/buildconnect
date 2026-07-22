@@ -1771,7 +1771,7 @@ export function ServiceDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl mx-auto">
+    <div className="flex flex-col gap-8 max-w-3xl md:max-w-none mx-auto">
       {/* Back button */}
       <motion.div
         initial={{ opacity: 0, x: -10 }}
