@@ -2301,7 +2301,7 @@ export function ServiceDetailPage() {
                 >
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
-                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3'
                     : 'flex flex-wrap gap-2'
                 )}>
                   {renderOptions.map((option) => {
