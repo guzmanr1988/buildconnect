@@ -2273,7 +2273,7 @@ export function ServiceDetailPage() {
                   </div>
                   {isLockedStep && stepMeta!.lockedByLabel && (
                     <p className="text-xs text-muted-foreground mt-2 ml-11">
-                      Select a {stepMeta!.lockedByLabel.toLowerCase()} to continue.
+                      Select a {stepMeta!.lockedByLabel.toLowerCase().replace(/s$/, '')} to continue.
                     </p>
                   )}
                 </div>
@@ -2301,7 +2301,7 @@ export function ServiceDetailPage() {
                 >
                 <div className={cn(
                   isTileModeGroup(serviceId, group.id)
-                    ? 'grid grid-cols-2 sm:grid-cols-3 gap-3'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'
                     : 'flex flex-wrap gap-2'
                 )}>
                   {renderOptions.map((option) => {
@@ -3618,7 +3618,7 @@ export function ServiceDetailPage() {
                 {/* Payment method note */}
                 {group.id === 'payment' && (
                   <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
-                    Payment method selected will let the selected contractor know how to move forward about your project.
+                    This tells your selected contractor how to proceed with your project.
                   </p>
                 )}
                 {/* Waterfall configurator */}

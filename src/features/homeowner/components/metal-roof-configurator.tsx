@@ -120,7 +120,7 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
         {/* Colors by group */}
         <div>
           <span className="text-xs font-medium text-muted-foreground mb-3 block">Color</span>
-          <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {colorGroups.map((group) => {
               const colors = metalRoofColors.filter((c) => c.group === group)
               return (
