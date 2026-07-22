@@ -128,7 +128,7 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
                   <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider mb-1.5 block">
                     {group}
                   </span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-2">
                     {colors.map((c) => (
                       <button
                         key={c.id}
