@@ -2271,11 +2271,15 @@ export function ServiceDetailPage() {
                       </span>
                     </div>
                   </div>
-                  {isLockedStep && stepMeta!.lockedByLabel && (
-                    <p className="text-xs text-muted-foreground mt-2 ml-11">
-                      Select a {stepMeta!.lockedByLabel.toLowerCase().replace(/s$/, '')} to continue.
-                    </p>
-                  )}
+                  {isLockedStep && stepMeta!.lockedByLabel && (() => {
+                    const noun = stepMeta!.lockedByLabel.toLowerCase().replace(/s$/, '')
+                    const article = /^[aeiou]/.test(noun) ? 'an' : 'a'
+                    return (
+                      <p className="text-xs text-muted-foreground mt-2 ml-11">
+                        Select {article} {noun} to continue.
+                      </p>
+                    )
+                  })()}
                 </div>
                 ) : (
                 <div className="mb-3 flex items-center gap-2">
