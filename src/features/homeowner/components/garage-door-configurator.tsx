@@ -164,9 +164,9 @@ export function GarageDoorConfigurator({ selection, onChange, onSave }: GarageDo
             no internal whitespace between Color trigger right-edge and Glass label/trigger left-edge.
             PR-#434 used w-48 fixed slots which trapped ~73px of unused space inside each slot. */}
         <div className="flex flex-wrap items-end gap-3">
-          {/* Color */}
+          {/* Frame Color */}
           <div className="w-fit">
-            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Color</span>
+            <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Frame Color</span>
             <Select
               value={selection.color}
               onValueChange={(v) => onChange({ ...selection, color: v ?? '' })}
