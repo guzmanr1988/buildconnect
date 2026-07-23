@@ -33,6 +33,7 @@ import { AluminumRoofConfigurator, type AluminumRoofSelection, FALLBACK_ALUMINUM
 import { FlatRoofConfigurator, type FlatRoofSelection, FALLBACK_FLAT_MEMBRANE_TYPES } from '../components/flat-roof-configurator'
 import { MaterialConfigCollapseRow } from '../components/material-config-collapse-row'
 import { AddonLinearFtConfigurator } from '../components/addon-linear-ft-configurator'
+import { AddonSubQuestionConfigurator, type DropdownOption } from '../components/addon-sub-question-configurator'
 import { PoolFloorSqftConfigurator } from '../components/pool-floor-sqft-configurator'
 import { RoofMeasurementWizard, type RoofWizardResult, type RoofMaterialKey } from '../components/roof-measurement-wizard'
 import { SubGroupChoices } from '../components/sub-group-choices'
@@ -218,6 +219,23 @@ const ADDON_LINEAR_FT_CONFIG = [
   { id: 'fascia_metal', label: 'Fascia linear feet' },
 ] as const
 const ADDON_LINEAR_FT_IDS: string[] = ADDON_LINEAR_FT_CONFIG.map((c) => c.id)
+
+// Roofing addons that reveal a required sub-question (not linear-ft based).
+// Rod-directed mandatory-gate: panel/sheet count null-init, Save locked until answered.
+const ADDON_SUB_QUESTION_IDS = ['solar_prep', 'extra_plywood'] as const
+type AddonSubQuestionId = typeof ADDON_SUB_QUESTION_IDS[number]
+
+// Solar panel count options for the sub-question dropdown.
+// Range: 1-20 individual + step values to 50. Covers all residential solar installs.
+const SOLAR_PANEL_OPTIONS: DropdownOption[] = [
+  ...(Array.from({ length: 20 }, (_, i) => i + 1).map((n) => ({ value: n, label: `${n} panel${n === 1 ? '' : 's'}` }))),
+  { value: 25, label: '25 panels' },
+  { value: 30, label: '30 panels' },
+  { value: 35, label: '35 panels' },
+  { value: 40, label: '40 panels' },
+  { value: 45, label: '45 panels' },
+  { value: 50, label: '50 panels' },
+]
 
 // Rod voice-directive — homeowner-side Soffit/Fascia consolidation. The
 // vendor/contractor pricing surface keeps all FOUR keys as independently
@@ -576,6 +594,16 @@ export function ServiceDetailPage() {
   const [gutterStyle, setGutterStyle] = useState<'traditional' | 'modern' | null>(() => {
     const persisted = (editItemForService?.gutterDropsConfig as { style?: 'traditional' | 'modern' } | undefined)?.style
     return persisted === 'traditional' || persisted === 'modern' ? persisted : null
+  })
+  // Rod-directed mandatory sub-question counts. Null-init: Save locked until a
+  // positive number is picked. Rehydrate from roofAddonSubQty on edit flows only.
+  const [solarPanelCount, setSolarPanelCount] = useState<number | null>(() => {
+    const p = (editItemForService?.roofAddonSubQty as Record<string, number> | undefined)?.solar_prep
+    return typeof p === 'number' && p > 0 ? p : null
+  })
+  const [plywoodSheetCount, setPlywoodSheetCount] = useState<number | null>(() => {
+    const p = (editItemForService?.roofAddonSubQty as Record<string, number> | undefined)?.extra_plywood
+    return typeof p === 'number' && p > 0 ? p : null
   })
   // Per-addon configurator open/closed state for the 5 Class A linear-ft
   // addons (gutters / soffit_wood / fascia_wood / soffit_metal / fascia_metal).
@@ -1710,6 +1738,8 @@ export function ServiceDetailPage() {
         setGutterFloors(null)
         setGutterDrops(null)
         setGutterStyle(null)
+        setSolarPanelCount(null)
+        setPlywoodSheetCount(null)
         setFlatOnlyAck(false)
         setRoofMeasurement((prev) =>
           prev
@@ -2671,6 +2701,21 @@ export function ServiceDetailPage() {
                               return
                             }
                           }
+                          // Sub-question addon re-tap preempt (solar_prep /
+                          // extra_plywood). Same contract as ADDON_LINEAR_FT
+                          // preempt above: re-tap of a saved (collapsed) chip
+                          // reopens its configurator without deselecting.
+                          if (
+                            serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            ADDON_SUB_QUESTION_IDS.includes(option.id as AddonSubQuestionId)
+                          ) {
+                            const wasOpen = addonConfigOpen[option.id] ?? false
+                            if (isSelected && !wasOpen) {
+                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                              return
+                            }
+                          }
                           // Arc-19 — pool_floor re-tap preempt. Re-tapping the
                           // already-selected floor with the configurator
                           // collapsed re-opens it for edit instead of letting
@@ -2833,6 +2878,27 @@ export function ServiceDetailPage() {
                             } else {
                               // First tap → add + seed perimeter + open config.
                               setAddonLinearFt((prev) => ({ ...prev, [option.id]: String(roofMeasurement?.perimeterFt ?? '') }))
+                              setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
+                            }
+                          }
+                          // Sub-question addon tap-handler (solar_prep / extra_plywood).
+                          // Mirrors ADDON_LINEAR_FT handler above. wasSelected &&
+                          // wasOpen = tap-during-active-edit → deselect + clear count.
+                          // !wasSelected = first tap → open configurator. The preempt
+                          // block above handles the wasSelected && !wasOpen (re-open)
+                          // case (returns early before reaching here).
+                          if (
+                            serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            ADDON_SUB_QUESTION_IDS.includes(option.id as AddonSubQuestionId)
+                          ) {
+                            const wasSelected = selected.includes(option.id)
+                            const wasOpen = addonConfigOpen[option.id] ?? false
+                            if (wasSelected && wasOpen) {
+                              setAddonConfigOpen((prev) => { const next = { ...prev }; delete next[option.id]; return next })
+                              if (option.id === 'solar_prep') setSolarPanelCount(null)
+                              if (option.id === 'extra_plywood') setPlywoodSheetCount(null)
+                            } else if (!wasSelected) {
                               setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
                             }
                           }
@@ -3458,6 +3524,47 @@ export function ServiceDetailPage() {
                   </AnimatePresence>
                   )
                 })}
+                {/* Solar Panel Prep + Extra Sheet Plywood sub-question cards.
+                    Rendered when the chip is selected AND addonConfigOpen is
+                    true. Same AnimatePresence pattern as ADDON_LINEAR_FT.
+                    Pricing NOT wired on FE: quantities stored in roofAddonSubQty
+                    on the cart item for the pricing layer to consume once
+                    vendor_option_prices has the per-unit rates. */}
+                {serviceId === 'roofing' && group.id === 'addons' && (
+                  <>
+                    <AnimatePresence>
+                      {selected.includes('solar_prep') && addonConfigOpen['solar_prep'] && (
+                        <AddonSubQuestionConfigurator
+                          key="solar_prep"
+                          id="solar_prep"
+                          label="Solar Panel Prep"
+                          questionLabel="How many panels?"
+                          type="dropdown"
+                          dropdownOptions={SOLAR_PANEL_OPTIONS}
+                          value={solarPanelCount}
+                          onChange={setSolarPanelCount}
+                          onSave={() => setAddonConfigOpen((prev) => ({ ...prev, solar_prep: false }))}
+                          requiredCaption="Choose how many panels to continue."
+                        />
+                      )}
+                    </AnimatePresence>
+                    <AnimatePresence>
+                      {selected.includes('extra_plywood') && addonConfigOpen['extra_plywood'] && (
+                        <AddonSubQuestionConfigurator
+                          key="extra_plywood"
+                          id="extra_plywood"
+                          label="Extra Sheet Plywood"
+                          questionLabel="How many sheets?"
+                          type="number"
+                          value={plywoodSheetCount}
+                          onChange={setPlywoodSheetCount}
+                          onSave={() => setAddonConfigOpen((prev) => ({ ...prev, extra_plywood: false }))}
+                          requiredCaption="Enter how many sheets to continue."
+                        />
+                      )}
+                    </AnimatePresence>
+                  </>
+                )}
                 {/* Arc-19 — Pool Floor sqft configurator dispatch. One
                     AnimatePresence per sqft-eligible floor; only the
                     selected option's configurator renders since pool_floor
@@ -4017,7 +4124,7 @@ export function ServiceDetailPage() {
               added && 'bg-green-600 hover:bg-green-700',
               roofingColorGateBlocks && 'opacity-50 pointer-events-none cursor-not-allowed'
             )}
-            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks}
+            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null)}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -4194,6 +4301,16 @@ export function ServiceDetailPage() {
                   gutterStyle !== null && {
                   gutterDropsConfig: { floors: gutterFloors, drops: gutterDrops, style: gutterStyle },
                 }),
+                // Sub-question quantities for solar_prep + extra_plywood.
+                // Pricing NOT wired on FE (flag for backend): stored here so
+                // vendor inbox + quote engine can read them once per-unit rates land.
+                ...(serviceId === 'roofing' && (() => {
+                  const addons = selections['addons'] ?? []
+                  const subQty: Record<string, number> = {}
+                  if (addons.includes('solar_prep') && solarPanelCount !== null) subQty.solar_prep = solarPanelCount
+                  if (addons.includes('extra_plywood') && plywoodSheetCount !== null) subQty.extra_plywood = plywoodSheetCount
+                  return Object.keys(subQty).length > 0 ? { roofAddonSubQty: subQty } : {}
+                })()),
                 // Arc-19 — snapshot the entered Pool Floor sqft into the
                 // canonical customSizeSqft map (keyed by option_id) at add-
                 // to-project time, matching the pool-wizard.tsx persistence

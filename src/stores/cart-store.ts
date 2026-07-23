@@ -78,6 +78,10 @@ export interface CartItem {
   // `style` captured for pricing/vendor-menu split (Traditional vs Modern). Optional
   // for widen-reads: legacy items treated as 'traditional' on read.
   gutterDropsConfig?: { floors: 1 | 2; drops: number; style?: 'traditional' | 'modern' }
+  // Sub-question quantities for roofing addons that reveal a required count picker
+  // (solar_prep: panel count, extra_plywood: sheet count). Stored here so the
+  // vendor inbox + pricing layer can read them once pricing is wired.
+  roofAddonSubQty?: Record<string, number>
   addonQuantities?: AddonQuantities
   // Which property this line item applies to. Phase B2: primary OR one of
   // profile.additional_addresses, selected at add-to-project time. Optional

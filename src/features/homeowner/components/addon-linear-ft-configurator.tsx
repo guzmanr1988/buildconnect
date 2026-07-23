@@ -111,6 +111,12 @@ export function AddonLinearFtConfigurator({
       transition={{ duration: 0.25 }}
       className="mt-3 rounded-xl border bg-background p-4 overflow-hidden"
       data-addon-configurator={id}
+      data-gutter-floors-required={isGutter && gutterExtras ? (gutterExtras.floors === null ? 'true' : 'false') : undefined}
+      data-gutter-floors-selected={isGutter && gutterExtras ? (gutterExtras.floors !== null ? String(gutterExtras.floors) : 'null') : undefined}
+      data-gutter-drops-required={isGutter && gutterExtras ? (gutterExtras.drops === null ? 'true' : 'false') : undefined}
+      data-gutter-drops-selected={isGutter && gutterExtras ? (gutterExtras.drops !== null ? String(gutterExtras.drops) : 'null') : undefined}
+      data-gutter-style-required={isGutter && gutterExtras ? (gutterExtras.style === null ? 'true' : 'false') : undefined}
+      data-gutter-style-selected={isGutter && gutterExtras ? (gutterExtras.style ?? 'null') : undefined}
     >
       <h4 className="text-sm font-semibold text-foreground mb-3">{label}</h4>
 
@@ -324,6 +330,7 @@ export function AddonLinearFtConfigurator({
           <p
             className="text-[11px] text-destructive text-center"
             data-addon-save-cue={id}
+            data-testid={isGutter ? 'gutter-required-caption' : undefined}
           >
             {missingCue}
           </p>
