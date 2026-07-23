@@ -1464,6 +1464,22 @@ export function ServiceDetailPage() {
       selected.length > 0 &&
       (serviceId !== 'roofing' || g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected))
     if (isComplete) return { index: idx + 1, total, status: 'complete' }
+    // Roofing add-ons must be locked until the material+color step is fully
+    // satisfied (Rod directive: "you can't pick add-ons without finishing color").
+    // Add-ons is optional (g.required===false) so the generic priorBlocker gate
+    // below never fires for it — this branch handles it explicitly.
+    if (serviceId === 'roofing' && groupId === 'addons') {
+      const materialSel = selections['material'] ?? []
+      if (materialSel.length === 0 || !isRoofingMaterialPickerSatisfied(materialSel)) {
+        const materialGroup = wizardVisibleGroups.find((pg) => pg.id === 'material')
+        return {
+          index: idx + 1,
+          total,
+          status: 'locked',
+          lockedByLabel: materialGroup?.label ?? 'material',
+        }
+      }
+    }
     const priorBlocker = wizardVisibleGroups
       .slice(0, idx)
       .find((pg) => pg.required && (selections[pg.id]?.length ?? 0) === 0)
