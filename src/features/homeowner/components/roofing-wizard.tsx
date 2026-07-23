@@ -703,14 +703,6 @@ export function RoofingWizard({
               selection={metalRoofSelection}
               onChange={(updated) => {
                 setMetalRoofSelection(updated)
-                if (updated.roofSize) {
-                  const sq = Number(updated.roofSize)
-                  if (!isNaN(sq) && sq > 0) {
-                    setRoofMeasurement((prev) => prev
-                      ? { ...prev, areaSqft: sq * 100 }
-                      : { areaSqft: sq * 100, pitch: '', address: '' })
-                  }
-                }
               }}
             />
           </AnimatePresence>

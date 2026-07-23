@@ -1,7 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCatalogStore } from '@/stores/catalog-store'
 import { useSaveButtonVisible } from '@/features/homeowner/hooks/use-save-button-visible'
@@ -166,19 +165,6 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
           </div>
         </div>
 
-        {/* Roof size input */}
-        <div>
-          <span className="text-xs font-medium text-muted-foreground mb-0.5 block">Roof Size (Squares)</span>
-          <span className="text-[10px] text-muted-foreground/70 mb-1.5 block">1 square = 100 sqft</span>
-          <Input
-            type="number"
-            min="0"
-            placeholder="e.g. 18"
-            value={selection.roofSize}
-            onChange={(e) => onChange({ ...selection, roofSize: e.target.value })}
-            className="h-10"
-          />
-        </div>
       </div>
 
       {/* Summary + Save */}
@@ -186,16 +172,16 @@ export function MetalRoofConfigurator({ selection, onChange, onSave }: MetalRoof
         <div className="mt-4 pt-4 border-t">
           <div className="flex flex-wrap gap-1.5 mb-3">
             {selectedColor && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary px-3.5 py-1.5 text-sm font-medium">
                 <span
-                  className="w-3 h-3 rounded-full border border-primary/30"
+                  className="w-4 h-4 rounded-full border border-primary/30 shrink-0"
                   style={{ backgroundColor: selectedColor.color }}
                 />
                 {selectedColor.label}
               </span>
             )}
             {selection.roofSize && (
-              <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-medium">
+              <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3.5 py-1.5 text-sm font-medium">
                 {Number(selection.roofSize).toLocaleString()} squares
               </span>
             )}
