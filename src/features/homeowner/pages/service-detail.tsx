@@ -1502,9 +1502,19 @@ export function ServiceDetailPage() {
     // satisfied (Rod directive: "you can't pick add-ons without finishing color").
     // Add-ons is optional (g.required===false) so the generic priorBlocker gate
     // below never fires for it — this branch handles it explicitly.
+    // Arc-32 (Rod 2026-07-24 voice, live repro) — this gate MUST be skipped in
+    // the add-ons-only flow (Service Type = Add-ons), where the `material` step
+    // is hidden from wizardVisibleGroups (L1468) and no material is ever picked.
+    // Without `materialInFlow`, materialSel stays empty → the Add-Ons step is
+    // marked 'locked' → the step card gets pointer-events-none (L2354) → every
+    // add-on chip is dead (disabled/aria-disabled/data-chip-locked all false;
+    // the lock is the ancestor's pointer-events, not the chip). Result: you can
+    // pick Add-ons as the service type but cannot tap any add-on. When material
+    // is not part of the flow there is nothing to finish, so don't lock.
     if (serviceId === 'roofing' && groupId === 'addons') {
+      const materialInFlow = wizardVisibleGroups.some((pg) => pg.id === 'material')
       const materialSel = selections['material'] ?? []
-      if (materialSel.length === 0 || !isRoofingMaterialPickerSatisfied(materialSel)) {
+      if (materialInFlow && (materialSel.length === 0 || !isRoofingMaterialPickerSatisfied(materialSel))) {
         const materialGroup = wizardVisibleGroups.find((pg) => pg.id === 'material')
         return {
           index: idx + 1,
