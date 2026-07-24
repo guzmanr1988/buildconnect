@@ -7,6 +7,7 @@ import { useActivityLogStore } from './activity-log-store'
 import { useAdminModerationStore } from './admin-moderation-store'
 import { MOCK_VENDORS } from '@/lib/mock-data'
 import { supabase } from '@/lib/supabase'
+import { isWalkerProject } from '@/lib/walker-exclusion'
 import { reconcileLines, reconcileLinesEquivalent } from '@/lib/reconcile-lines'
 import { buildRoofingBaseLines, sumRoofingBaseLines } from '@/lib/roofing-base-lines'
 import { getVendorPriceMap, getVendorPermitMap, type VendorPriceMap, type VendorPermitMap } from '@/lib/api/pricing'
@@ -506,7 +507,20 @@ export const useProjectsStore = create<ProjectsState>()(
         }
 
         // 2. Map DB rows to SentProject shape.
-        const rows = (dbRows ?? []) as unknown as Record<string, unknown>[]
+        // Admin hydrate is unscoped (no tenant filter) so it sees walker
+        // rows during an active verification-walker fire. Structural
+        // exclusion via isWalkerProject drops any row whose
+        // contractor.{name,company} or homeowner_name starts with
+        // __walker__. Tenant-scoped roles (homeowner/vendor/account_rep)
+        // don't apply the filter — their walker's own login legitimately
+        // needs to see the walker rows it just created.
+        const dbRowsScoped = role === 'admin'
+          ? (dbRows ?? []).filter((r: any) => !isWalkerProject({
+              contractor: r.contractor,
+              homeowner_name: r.homeowner_name,
+            }))
+          : (dbRows ?? [])
+        const rows = dbRowsScoped as unknown as Record<string, unknown>[]
         const dbProjects: SentProject[] = rows.map((row: any) => ({
           id:              row.id,
           item:            row.item as CartItem,

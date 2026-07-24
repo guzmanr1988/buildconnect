@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { DEMO_VENDOR_UUID_BY_MOCK_ID } from '@/lib/demo-vendor-ids'
+import { isWalkerVendor } from '@/lib/walker-exclusion'
 import { deriveInitials } from '@/lib/initials'
 import type { Vendor, ServiceCategory } from '@/types'
 
@@ -21,6 +22,7 @@ export function useRealVendors(includeUuids?: Set<string>): Vendor[] {
         const mapped: Vendor[] = data
           .filter((row) => !DEMO_UUIDS.has(row.id as string) || !!includeUuids?.has(row.id as string))
           .filter((row) => !!(row.company as string | null))
+          .filter((row) => !isWalkerVendor({ name: row.name as string | null, company: row.company as string | null }))
           .map((row) => ({
             id: row.id as string,
             email: row.email as string,
