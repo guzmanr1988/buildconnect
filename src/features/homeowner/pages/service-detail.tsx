@@ -2185,9 +2185,15 @@ export function ServiceDetailPage() {
                 : group.label
             const renderOptions =
               isRoofingPerimeterOnly && group.id === 'addons'
+                // Add-ons-only (isRoofingPerimeterOnly) surfaces the perimeter
+                // linear-ft add-ons (gutters/soffit/fascia) PLUS attic insulation
+                // (Rod 2026-07-24 voice: attic insulation is a valid standalone
+                // service). solar_prep + extra_plywood stay hidden here — they are
+                // re-decking operations that only make sense during a full roof
+                // replacement.
                 ? group.options.filter(
                     (o) =>
-                      ADDON_LINEAR_FT_IDS.includes(o.id) &&
+                      (ADDON_LINEAR_FT_IDS.includes(o.id) || o.id === 'insulation') &&
                       !ROOFING_ADDON_PAIR_CHILD_IDS.has(o.id),
                   )
                 : serviceId === 'roofing' && group.id === 'addons'
