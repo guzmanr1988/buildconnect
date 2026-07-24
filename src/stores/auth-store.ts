@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
           'noncircumvention_agreement_version', 'noncircumvention_agreement_text_snapshot',
           'noncircumvention_agreement_signature_metadata',
           'account_rep_for_vendor_id',
+          'financing_available',
         ])
         const dbPatch = Object.fromEntries(
           Object.entries(patch).filter(([k]) => PROFILE_DB_COLUMNS.has(k)),
