@@ -14,6 +14,10 @@ export type ActivityEventType =
   | 'work_started'
   | 'review_set'
   | 'review_reset'
+  // Migration 114 — contractor-proposed configuration revision lifecycle.
+  | 'revision_proposed'
+  | 'revision_accepted'
+  | 'revision_declined'
 
 export interface ActivityLogEntry {
   id: string

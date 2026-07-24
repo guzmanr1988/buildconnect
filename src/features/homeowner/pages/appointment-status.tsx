@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass } from 'lucide-react'
+import { Calendar, MapPin, Phone, Mail, Clock, FileText, Shield, ChevronLeft, UserCheck, RefreshCw, Check, X, DollarSign, AlertTriangle, Circle, Hourglass, PencilLine } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -120,6 +120,8 @@ export function AppointmentStatusPage() {
   const counterReschedule = useProjectsStore((s) => s.counterReschedule)
   const rejectReschedule = useProjectsStore((s) => s.rejectReschedule)
   const updateBooking = useProjectsStore((s) => s.updateBooking)
+  // Migration 114 — contractor-proposed configuration revision response.
+  const respondToRevision = useProjectsStore((s) => s.respondToRevision)
 
   // Ship #191 — dialog open-state. Separate flags for request (pre-
   // approval simple update OR post-approval homeowner propose) and
@@ -511,6 +513,114 @@ export function AppointmentStatusPage() {
           </Button>
         </div>
       )}
+
+      {/* Migration 114 — contractor-proposed configuration revision. When the
+          contractor corrects the config, the homeowner sees the reason, a
+          clear before/after price, and the key config changes, then accepts
+          (revised config becomes active) or declines (original kept). */}
+      {matchedSentProject?.revisionRequest?.status === 'pending' && (() => {
+        const rev = matchedSentProject.revisionRequest!
+        const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString()}`
+        const deltaCents = rev.revisedPriceCents - rev.originalPriceCents
+        // Key config changes: total sqft + add-on linear ft deltas.
+        const changes: string[] = []
+        const oSqft = rev.originalItem.roofMeasurement?.areaSqft
+        const nSqft = rev.revisedItem.roofMeasurement?.areaSqft
+        if (oSqft !== undefined && nSqft !== undefined && oSqft !== nSqft) {
+          changes.push(`Roof area: ${oSqft.toLocaleString()} → ${nSqft.toLocaleString()} sq ft`)
+        }
+        const oAddons = rev.originalItem.roofAddonLinearFt ?? {}
+        const nAddons = rev.revisedItem.roofAddonLinearFt ?? {}
+        for (const key of new Set([...Object.keys(oAddons), ...Object.keys(nAddons)])) {
+          const before = oAddons[key] ?? 0
+          const after = nAddons[key] ?? 0
+          if (before !== after) {
+            const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+            changes.push(`${label}: ${before} → ${after} ln ft`)
+          }
+        }
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
+            <Card className="border-sky-300/60 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-700/40">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-400">
+                    <PencilLine className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Your contractor suggested changes to this project
+                    </p>
+                    {rev.reason && (
+                      <p className="mt-1.5 text-xs text-muted-foreground italic">"{rev.reason}"</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Before / after price */}
+                <div className="rounded-lg bg-background/60 border p-3 space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Current price</span>
+                    <span className="font-medium">{money(rev.originalPriceCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">New price</span>
+                    <span className="text-lg font-bold">{money(rev.revisedPriceCents)}</span>
+                  </div>
+                  {deltaCents !== 0 && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Change</span>
+                      <span className={deltaCents > 0 ? 'font-medium text-red-600 dark:text-red-400' : 'font-medium text-emerald-600 dark:text-emerald-400'}>
+                        {deltaCents > 0 ? '+' : '−'}{money(Math.abs(deltaCents))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Key config changes */}
+                {changes.length > 0 && (
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <p className="font-medium text-foreground">What changed</p>
+                    {changes.map((c) => (
+                      <p key={c}>• {c}</p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      respondToRevision(matchedSentProject.id, 'accept')
+                      toast.success('Changes accepted — your project is updated.')
+                    }}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Accept changes
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      respondToRevision(matchedSentProject.id, 'decline')
+                      toast.success('Changes declined — your original stays as-is.')
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Decline
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )
+      })()}
 
       {financingEnabled === true && matchedSentProject && !lead.financing && !homeownerHasFinancing && (
         <Card data-testid="homeowner-project-financing-cta" data-financing-project-cta>
