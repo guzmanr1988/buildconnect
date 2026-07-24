@@ -7,6 +7,7 @@ import {
   Phone, Mail, Ruler, FileCheck, CreditCard, CalendarClock,
   Check, X, RotateCcw, Clock, ChevronDown, ChevronUp, Handshake, Archive,
   UserCheck, Pencil, Info, Upload, FileText, Send, DollarSign, AlertCircle, Bell, Download, Hammer,
+  PencilLine, Hourglass,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,8 @@ import { AvatarInitials } from '@/components/shared/avatar-initials'
 import { ReschedulePickerDialog } from '@/components/shared/reschedule-picker-dialog'
 import { useAuthStore } from '@/stores/auth-store'
 import { useProjectsStore } from '@/stores/projects-store'
+import type { SentProject } from '@/stores/projects-store'
+import { ConfigRevisionDialog } from '@/features/vendor/components/config-revision-dialog'
 import { useVendorLeadStages, LEAD_STAGES, STAGE_COLOR_BY_KEY, STAGE_PULSE_BY_KEY } from '@/lib/vendor-lead-stages'
 import type { LeadStageKey, LeadExt } from '@/lib/vendor-lead-stages'
 import { PipelineStatRow } from '@/components/shared/pipeline-stat-row'
@@ -275,6 +278,11 @@ export default function VendorLeadWorkflow() {
   // (not full destructive-four-refinement) since the action is
   // acceleration of automatic 90d transition, not destruction.
   const [completedDialogOpen, setCompletedDialogOpen] = useState(false)
+  // Migration 114 — contractor-proposed configuration revision. Editor dialog
+  // opens on a deep clone of the selected project's item; captures the target
+  // sent_project so the dialog is decoupled from the racy `selected` state.
+  const [configRevisionOpen, setConfigRevisionOpen] = useState(false)
+  const [configRevisionSp, setConfigRevisionSp] = useState<SentProject | null>(null)
   // Ship #312 — separate lead-state for the Project Completed flow,
   // independent from `selected`. Reason: Layer-5 bulletproof-close
   // useEffect (line 224-230) wipes `selected` whenever sheetOpen
@@ -1717,6 +1725,46 @@ export default function VendorLeadWorkflow() {
               </div>
               </div>
               </div>
+              {/* Migration 114 — contractor-proposed configuration revision.
+                  "Suggest changes" opens the focused editor on a clone of the
+                  homeowner's config; while a revision is pending homeowner
+                  approval, show the waiting state instead. Available on
+                  pending + confirmed (approved) leads. */}
+              {(() => {
+                const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
+                if (!sp?.item) return null
+                const rev = sp.revisionRequest
+                if (rev?.status === 'pending') {
+                  return (
+                    <div className="rounded-lg border border-sky-300/60 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-700/40 p-3 flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-400">
+                        <Hourglass className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-foreground">Revision pending homeowner approval</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          You proposed a new quote of ${Math.round(rev.revisedPriceCents / 100).toLocaleString()} (was ${Math.round(rev.originalPriceCents / 100).toLocaleString()}). Waiting for the homeowner to accept or decline.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
+                if (selected.status === 'pending' || selected.status === 'confirmed') {
+                  return (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setConfigRevisionSp(sp)
+                        setConfigRevisionOpen(true)
+                      }}
+                    >
+                      <PencilLine className="h-4 w-4 mr-1.5" /> Suggest changes
+                    </Button>
+                  )
+                }
+                return null
+              })()}
               {/* Arc-35: Full-width per-card configurator selections grid
                   with vendor per-unit catalog pricing + section $Total
                   badges. Shared component mirrors appointment-status. */}
@@ -1739,6 +1787,18 @@ export default function VendorLeadWorkflow() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Migration 114 — contractor config-revision editor */}
+      {configRevisionSp && (
+        <ConfigRevisionDialog
+          open={configRevisionOpen}
+          onOpenChange={(o) => {
+            setConfigRevisionOpen(o)
+            if (!o) setConfigRevisionSp(null)
+          }}
+          sentProject={configRevisionSp}
+        />
+      )}
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>

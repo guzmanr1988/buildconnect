@@ -5,6 +5,7 @@ import { useCartStore } from './cart-store'
 import type { VendorRep, PriceLineItem } from '@/types'
 import { useActivityLogStore } from './activity-log-store'
 import { useAdminModerationStore } from './admin-moderation-store'
+import { MOCK_VENDORS } from '@/lib/mock-data'
 import { supabase } from '@/lib/supabase'
 import { reconcileLines, reconcileLinesEquivalent } from '@/lib/reconcile-lines'
 import { buildRoofingBaseLines, sumRoofingBaseLines } from '@/lib/roofing-base-lines'
@@ -194,6 +195,12 @@ export interface SentProject {
   // constraint so the gate stays UI-only (matches the Y/N flow's
   // pattern). NULL pre-start; timestamptz post-start.
   workStartedAt?: string
+  // Migration 114 — contractor-proposed configuration revision. Present when
+  // the contractor has suggested changes to the homeowner's config. status
+  // 'pending' = awaiting homeowner; 'accepted' = revised config merged into
+  // item/priceLineItems/quotedPriceCents above; 'declined' = original kept.
+  // Undefined for the vast majority of projects (no revision proposed).
+  revisionRequest?: RevisionRequest
 }
 
 // Ship #171 (task_1776662387601_014): 'cancelled' split from 'rejected'.
@@ -229,6 +236,45 @@ export interface RescheduleRequest {
   reason?: string
   // Set when the request resolves — approved/rejected.
   resolvedAt?: string
+}
+
+// Contractor-proposed configuration revision. The homeowner's original config
+// is wrong; the contractor corrects a COPY and sends it back. Price + platform
+// commission are recomputed off the revised clone (never hand-entered) and the
+// original item/price/commission are snapshotted here at propose-time so the
+// audit trail survives an accept. Stored as a revision_request jsonb column on
+// sent_projects (migration 114), mirroring cancellation_request. v1: vendor is
+// the only requesting party.
+export interface RevisionRequest {
+  status: 'pending' | 'accepted' | 'declined'
+  requestedBy: 'vendor'
+  // Contractor's note on what was wrong / what changed. Shown on the
+  // homeowner's revision banner. Required at propose-time.
+  reason: string
+  // Immutable snapshots frozen at propose-time (freeze-at-write). originalItem
+  // is the config the homeowner sent; revisedItem is the contractor's
+  // corrected clone. The live sent_project.item stays === originalItem until
+  // the homeowner accepts.
+  originalItem: CartItem
+  revisedItem: CartItem
+  // Price + commission both recomputed via the shared pricing helpers on the
+  // revised clone (buildRoofingBaseLines → sumRoofingBaseLines). Cents.
+  originalPriceCents: number
+  revisedPriceCents: number
+  originalCommissionCents: number
+  revisedCommissionCents: number
+  // Effective commission % used for BOTH sides (admin override ?? vendor
+  // default). Snapshotted so the audit record is self-describing.
+  commissionPct: number
+  createdAt: string
+  // Set when the homeowner accepts or declines.
+  resolvedAt?: string
+  // Internal — the recomputed revised line-item breakdown. Applied verbatim to
+  // sent_project.priceLineItems on accept so the homeowner gets exactly the
+  // breakdown that was computed + shown at propose-time (no second fetch /
+  // drift). Not part of the homeowner-facing before/after; display reads the
+  // *PriceCents fields above.
+  revisedPriceLineItems?: PriceLineItem[]
 }
 
 export interface CancellationRequest {
@@ -300,6 +346,17 @@ interface ProjectsState {
   // projectAssociation='yes') lives in lead-workflow.tsx; this action
   // doesn't re-check the gate (writes assume caller already gated).
   markWorkStarted: (id: string) => void
+  // Migration 114 — contractor proposes a revision to the homeowner's config.
+  // Deep-cloned revisedItem is priced via the shared roofing helpers; platform
+  // commission is recomputed off the revised total (admin override ?? vendor
+  // default). Original item/price/commission are snapshotted into
+  // revision_request (status 'pending') so the audit trail survives an accept.
+  // The live sent_project.item stays untouched until the homeowner accepts.
+  proposeRevision: (sentProjectId: string, revisedItem: CartItem, reason: string) => Promise<void>
+  // Homeowner responds. 'accept' overwrites item / priceLineItems /
+  // quotedPriceCents with the revised values and flips status to 'accepted';
+  // 'decline' flips status to 'declined' and leaves the original untouched.
+  respondToRevision: (sentProjectId: string, action: 'accept' | 'decline') => void
   // Ship #311 — lead-id-keyed manual-completion override map. Mirrors
   // existing leadStatusOverrides / leadConfirmedAtByLead patterns so
   // MOCK_LEADS without sentProject backing still get the manual-
@@ -435,7 +492,7 @@ export const useProjectsStore = create<ProjectsState>()(
           'cancellation_request, applied_financing_amount_cents, ' +
           'applied_financing_application_id, project_permit, ' +
           'project_permit_waiver, project_association, pool_survey, ' +
-          'work_started_at'
+          'work_started_at, revision_request'
         )
         if (role === 'homeowner')     query = query.eq('homeowner_id', userUuid)
         else if (role === 'vendor')   query = query.eq('vendor_id', userUuid)
@@ -487,6 +544,7 @@ export const useProjectsStore = create<ProjectsState>()(
           projectAssociation:   row.project_association ?? undefined,
           poolSurvey:           row.pool_survey ?? undefined,
           workStartedAt:        row.work_started_at ?? undefined,
+          revisionRequest:      row.revision_request as RevisionRequest | undefined,
         }))
 
         const dbById = new Map(dbProjects.map((p) => [p.id, p]))
@@ -930,6 +988,123 @@ export const useProjectsStore = create<ProjectsState>()(
         }))
         logEvent({ eventType: 'work_started', projectId: id })
         updateProject(id, { work_started_at: workStartedAt })
+      },
+
+      proposeRevision: async (sentProjectId, revisedItem, reason) => {
+        const sp = get().sentProjects.find((p) => p.id === sentProjectId)
+        if (!sp) {
+          console.error('[projects] proposeRevision: sent_project not found:', sentProjectId)
+          return
+        }
+        const vendorUuid = sp.vendor_id ?? sp.contractor?.vendor_id
+
+        // Original price snapshot — mirror the display-priority chain the
+        // homeowner/vendor surfaces use: quotedPriceCents → sum(priceLineItems).
+        const sumLineCents = (lines?: PriceLineItem[]) =>
+          lines && lines.length > 0
+            ? Math.round(lines.reduce((s, l) => s + (l.amount ?? 0), 0) * 100)
+            : 0
+        const originalPriceCents = sp.quotedPriceCents ?? sumLineCents(sp.priceLineItems)
+
+        // Recompute the REVISED price off the clone via the shared roofing
+        // helpers — same math as booking-time write + vendor-compare quote so
+        // the breakdown can't drift. Never hand-entered (recalc guarantee).
+        let revisedPriceCents = originalPriceCents
+        let revisedPriceLineItems: PriceLineItem[] | undefined
+        if (vendorUuid && revisedItem.serviceId === 'roofing') {
+          try {
+            const [priceMap, permitMap] = await Promise.all([
+              getVendorPriceMap(vendorUuid),
+              getVendorPermitMap(vendorUuid),
+            ])
+            const baseLines = buildRoofingBaseLines(revisedItem, sp.projectPermit, priceMap, permitMap)
+            if (baseLines) {
+              revisedPriceLineItems = baseLines
+              revisedPriceCents = Math.round(sumRoofingBaseLines(baseLines) * 100)
+            }
+          } catch (err) {
+            console.warn('[projects] proposeRevision price recompute failed:', err)
+          }
+        }
+
+        // Platform commission — admin per-vendor override, else the vendor's
+        // default commission_pct (default 12). Applied to BOTH sides so the
+        // before/after delta is commission-consistent.
+        const defaultPct = MOCK_VENDORS.find((v) => v.id === vendorUuid)?.commission_pct ?? 12
+        const commissionPct = useAdminModerationStore.getState().getVendorCommission(vendorUuid ?? '', defaultPct)
+        const originalCommissionCents = Math.round((originalPriceCents * commissionPct) / 100)
+        const revisedCommissionCents = Math.round((revisedPriceCents * commissionPct) / 100)
+
+        const revisionRequest: RevisionRequest = {
+          status: 'pending',
+          requestedBy: 'vendor',
+          reason,
+          originalItem: sp.item,
+          revisedItem,
+          originalPriceCents,
+          revisedPriceCents,
+          originalCommissionCents,
+          revisedCommissionCents,
+          commissionPct,
+          createdAt: new Date().toISOString(),
+          ...(revisedPriceLineItems ? { revisedPriceLineItems } : {}),
+        }
+
+        set((state) => ({
+          sentProjects: state.sentProjects.map((p) =>
+            p.id === sentProjectId ? { ...p, revisionRequest } : p
+          ),
+        }))
+        logEvent({ eventType: 'revision_proposed', projectId: sentProjectId, meta: { revisedPriceCents, originalPriceCents } })
+        updateProject(sentProjectId, { revision_request: revisionRequest })
+      },
+
+      respondToRevision: (sentProjectId, action) => {
+        const sp = get().sentProjects.find((p) => p.id === sentProjectId)
+        const rev = sp?.revisionRequest
+        if (!sp || !rev || rev.status !== 'pending') {
+          console.warn('[projects] respondToRevision: no pending revision for', sentProjectId)
+          return
+        }
+        const resolvedAt = new Date().toISOString()
+
+        if (action === 'accept') {
+          // Merge the revised clone into the live record. priceLineItems come
+          // from the frozen revised breakdown (applied verbatim so the
+          // homeowner gets exactly what was shown); fall back to the current
+          // lines when none were recomputed (non-roofing / unpriced vendor).
+          const nextLineItems = rev.revisedPriceLineItems ?? sp.priceLineItems
+          const nextRevision: RevisionRequest = { ...rev, status: 'accepted', resolvedAt }
+          set((state) => ({
+            sentProjects: state.sentProjects.map((p) =>
+              p.id === sentProjectId
+                ? {
+                    ...p,
+                    item: rev.revisedItem,
+                    ...(nextLineItems ? { priceLineItems: nextLineItems } : {}),
+                    quotedPriceCents: rev.revisedPriceCents,
+                    revisionRequest: nextRevision,
+                  }
+                : p
+            ),
+          }))
+          logEvent({ eventType: 'revision_accepted', projectId: sentProjectId, meta: { revisedPriceCents: rev.revisedPriceCents } })
+          updateProject(sentProjectId, {
+            item: rev.revisedItem,
+            price_line_items: nextLineItems ?? null,
+            quoted_price_cents: rev.revisedPriceCents,
+            revision_request: nextRevision,
+          })
+        } else {
+          const nextRevision: RevisionRequest = { ...rev, status: 'declined', resolvedAt }
+          set((state) => ({
+            sentProjects: state.sentProjects.map((p) =>
+              p.id === sentProjectId ? { ...p, revisionRequest: nextRevision } : p
+            ),
+          }))
+          logEvent({ eventType: 'revision_declined', projectId: sentProjectId })
+          updateProject(sentProjectId, { revision_request: nextRevision })
+        }
       },
 
       setLeadCompletedAt: (leadId, completedAt) => {

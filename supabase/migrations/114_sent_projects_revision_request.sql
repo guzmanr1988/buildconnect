@@ -1,0 +1,49 @@
+-- 114_sent_projects_revision_request.sql
+-- Contractor-proposed configuration revision.
+--
+-- A homeowner builds a project config in the configurator, picks a contractor,
+-- and sends a request (a sent_projects row). When the homeowner's config is
+-- wrong, the contractor corrects a COPY of it and sends it back for the
+-- homeowner to accept or decline. Price AND platform commission recalculate
+-- automatically off the revised clone; the ORIGINAL item / price / commission
+-- stay immutable until the homeowner accepts (audit / no-disputes).
+--
+-- v1: NO new table. A nullable revision_request jsonb column on sent_projects,
+-- mirroring the existing cancellation_request column (migration 018). The
+-- store snapshots the original + revised item/price/commission into this
+-- column at propose-time (freeze-at-write); an accept overwrites item /
+-- price_line_items / quoted_price_cents on the row with the revised values and
+-- flips revision_request.status to 'accepted'. A decline only flips status to
+-- 'declined' and leaves the original untouched.
+--
+-- revision_request shape (jsonb):
+--   {
+--     status: 'pending' | 'accepted' | 'declined',
+--     requestedBy: 'vendor',
+--     reason: string,
+--     originalItem: CartItem,
+--     revisedItem: CartItem,
+--     originalPriceCents: number,
+--     revisedPriceCents: number,
+--     originalCommissionCents: number,
+--     revisedCommissionCents: number,
+--     commissionPct: number,
+--     createdAt: string,
+--     resolvedAt?: string,
+--     -- internal: the recomputed revised breakdown, applied verbatim to
+--     -- price_line_items on accept so the homeowner gets exactly what was
+--     -- shown at propose-time (no second recompute / drift).
+--     revisedPriceLineItems?: PriceLineItem[]
+--   }
+--
+-- Additive + nullable + backward-safe: old bundle ignores the new column, new
+-- bundle reads/writes it. Prod-first deploy (apply before promoting the
+-- bundle) so the new client never writes a column the schema doesn't have.
+-- Idempotent via IF NOT EXISTS so re-apply on environments that received it
+-- out-of-band is a no-op. No status-transition guard change is needed: the
+-- accept path UPDATEs item / price_line_items / quoted_price_cents on a
+-- pending or approved project via the existing update path, and those columns
+-- carry no DB-level state machine.
+
+alter table public.sent_projects
+  add column if not exists revision_request jsonb;
