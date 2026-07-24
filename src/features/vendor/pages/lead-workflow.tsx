@@ -1728,8 +1728,13 @@ export default function VendorLeadWorkflow() {
               {/* Migration 114 — contractor-proposed configuration revision.
                   "Suggest changes" opens the focused editor on a clone of the
                   homeowner's config; while a revision is pending homeowner
-                  approval, show the waiting state instead. Available on
-                  pending + confirmed (approved) leads. */}
+                  approval, show the waiting state instead.
+                  Rod 2026-07-24 — SCHEDULED leads only (status==='confirmed'),
+                  NOT new leads (status 'pending'/'rescheduled' → New Leads tile,
+                  see vendor-lead-stages.ts:237-238). Contractors revise after
+                  they've scheduled/met the customer, not before. The pending-
+                  waiting block below stays unconditional so a contractor always
+                  sees a revision they already initiated. */}
               {(() => {
                 const sp = sentProjects.find((p) => `L-${p.id.slice(0, 4).toUpperCase()}` === selected.id)
                 if (!sp?.item) return null
@@ -1749,7 +1754,7 @@ export default function VendorLeadWorkflow() {
                     </div>
                   )
                 }
-                if (selected.status === 'pending' || selected.status === 'confirmed') {
+                if (selected.status === 'confirmed') {
                   return (
                     <Button
                       variant="outline"
