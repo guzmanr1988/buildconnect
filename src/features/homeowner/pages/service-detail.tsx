@@ -1466,6 +1466,14 @@ export function ServiceDetailPage() {
         if (serviceId === 'roofing') {
           if (g.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) return false
           if (g.id === 'material' && (selections.service_type ?? []).includes('addons')) return false
+          // Repair flow renders the `repair_materials` sub-group INSTEAD of the
+          // full `material` picker (see roofing-wizard.tsx S4 comment). This is
+          // the wizard-gate (drops material from the numbered steps); it MUST be
+          // paired with the render-gate in the main chip loop below (search
+          // "Arc-34") or the picker still paints unnumbered and re-seeds
+          // selections.material. Both together keep selections.material empty in
+          // repair, so buildRoofingBaseLines prices repair_materials only.
+          if (g.id === 'material' && (selections.service_type ?? []).includes('repair')) return false
         }
         return true
       })
@@ -2157,6 +2165,30 @@ export function ServiceDetailPage() {
               serviceId === 'roofing' &&
               group.id === 'material' &&
               (selections.service_type ?? []).includes('addons')
+            ) {
+              return false
+            }
+            // Arc-34 — the whole-roof Material picker is hidden in Repair too.
+            // Repair renders `repair_materials` INSTEAD of `material` (roofing-
+            // wizard.tsx S4). A conditionally-hidden group needs BOTH a wizard-
+            // gate (wizardVisibleGroups, L1476) AND this render-gate — the addons
+            // and repair_materials siblings each carry both. The arc-34 first cut
+            // added only the wizard-gate, so Repair kept painting an UNNUMBERED
+            // "Roofing Material" picker at the old Step-2 slot (Rod 2026-07-24
+            // voice: "step two is basically identical as step four for repairs —
+            // makes no sense"). Worse, picking it seeded selections.material →
+            // buildRoofingBaseLines emitted a whole-roof `roofing-material-*` line
+            // ON TOP OF the `roofing-repair-*` line = double count, and the
+            // material-order color gate (getBlockerReason L1366, guarded on
+            // material.length>0) disabled Add-to-Project. Hiding the picker keeps
+            // selections.material empty for repair → only the repair line prices
+            // (resolveRepairAreaSqft basis), the color gate self-skips, and
+            // includeMaterialOrder is left ON so isRoofingPerimeterOnly (add-ons-
+            // only detection) is unaffected.
+            if (
+              serviceId === 'roofing' &&
+              group.id === 'material' &&
+              (selections.service_type ?? []).includes('repair')
             ) {
               return false
             }
