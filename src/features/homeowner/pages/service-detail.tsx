@@ -605,6 +605,12 @@ export function ServiceDetailPage() {
     const p = (editItemForService?.roofAddonSubQty as Record<string, number> | undefined)?.extra_plywood
     return typeof p === 'number' && p > 0 ? p : null
   })
+  // Rod live-directive: Attic Insulation sqft input. Null-init — Save locked
+  // until a positive sqft is entered. Rehydrate from customSizeSqft on edit flows.
+  const [atticInsulationSqft, setAtticInsulationSqft] = useState<number | null>(() => {
+    const p = (editItemForService?.customSizeSqft as Record<string, number> | undefined)?.insulation
+    return typeof p === 'number' && p > 0 ? p : null
+  })
   // Per-addon configurator open/closed state for the 5 Class A linear-ft
   // addons (gutters / soffit_wood / fascia_wood / soffit_metal / fascia_metal).
   // Mirrors the xConfigOpen pattern used by ShingleRoofConfigurator and
@@ -2716,6 +2722,20 @@ export function ServiceDetailPage() {
                               return
                             }
                           }
+                          // Attic Insulation re-tap preempt. Same contract as
+                          // solar/plywood: re-tap of a saved (collapsed) chip
+                          // re-opens the sqft configurator without deselecting.
+                          if (
+                            serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            option.id === 'insulation'
+                          ) {
+                            const wasOpen = addonConfigOpen['insulation'] ?? false
+                            if (isSelected && !wasOpen) {
+                              setAddonConfigOpen((prev) => ({ ...prev, insulation: true }))
+                              return
+                            }
+                          }
                           // Arc-19 — pool_floor re-tap preempt. Re-tapping the
                           // already-selected floor with the configurator
                           // collapsed re-opens it for edit instead of letting
@@ -2902,6 +2922,25 @@ export function ServiceDetailPage() {
                               setAddonConfigOpen((prev) => ({ ...prev, [option.id]: true }))
                             }
                           }
+                          // Attic Insulation tap-handler. Mirrors the
+                          // solar/plywood sub-question pattern. wasSelected &&
+                          // wasOpen = tap-during-active-edit → deselect + clear.
+                          // !wasSelected = first tap → open configurator.
+                          // wasSelected && !wasOpen handled by preempt above.
+                          if (
+                            serviceId === 'roofing' &&
+                            group.id === 'addons' &&
+                            option.id === 'insulation'
+                          ) {
+                            const wasSelected = selected.includes('insulation')
+                            const wasOpen = addonConfigOpen['insulation'] ?? false
+                            if (wasSelected && wasOpen) {
+                              setAddonConfigOpen((prev) => { const next = { ...prev }; delete next.insulation; return next })
+                              setAtticInsulationSqft(null)
+                            } else if (!wasSelected) {
+                              setAddonConfigOpen((prev) => ({ ...prev, insulation: true }))
+                            }
+                          }
                           // Arc-19 — pool_floor tap-handler. POOL_FLOOR_SQFT_IDS
                           // excludes 'na' so tapping N/A short-circuits to a
                           // plain selection with no configurator. First tap on
@@ -3070,6 +3109,36 @@ export function ServiceDetailPage() {
                                 data-option-card-linear-ft-value={roofingAddonBoundId}
                               >
                                 {roofingAddonBoundLinFt.toLocaleString()} lin ft
+                              </span>
+                            )}
+                            {/* In-card count mirrors: solar panel count + plywood
+                                sheet count surface inside the chip card once the
+                                configurator is saved (collapsed). Matches the
+                                Soffit "229 lin ft" precedent. Rod: "I want the
+                                selected panels to be inside the square, just
+                                like the Soffit." */}
+                            {serviceId === 'roofing' && group.id === 'addons' && option.id === 'solar_prep' && solarPanelCount !== null && !addonConfigOpen['solar_prep'] && (
+                              <span
+                                className="text-[12px] leading-tight font-medium text-foreground/80"
+                                data-option-card-sub-qty="solar_prep"
+                              >
+                                {solarPanelCount} {solarPanelCount === 1 ? 'panel' : 'panels'}
+                              </span>
+                            )}
+                            {serviceId === 'roofing' && group.id === 'addons' && option.id === 'extra_plywood' && plywoodSheetCount !== null && !addonConfigOpen['extra_plywood'] && (
+                              <span
+                                className="text-[12px] leading-tight font-medium text-foreground/80"
+                                data-option-card-sub-qty="extra_plywood"
+                              >
+                                {plywoodSheetCount} {plywoodSheetCount === 1 ? 'sheet' : 'sheets'}
+                              </span>
+                            )}
+                            {serviceId === 'roofing' && group.id === 'addons' && option.id === 'insulation' && atticInsulationSqft !== null && !addonConfigOpen['insulation'] && (
+                              <span
+                                className="text-[12px] leading-tight font-medium text-foreground/80"
+                                data-option-card-sub-qty="insulation"
+                              >
+                                {atticInsulationSqft.toLocaleString()} sqft
                               </span>
                             )}
                             {serviceId === 'kitchen' && group.label.toLowerCase().includes('stone') && (option.subGroups?.length ?? 0) === 0 && Number(subGroupLinearFt[option.id] ?? 0) > 0 && (
@@ -3560,6 +3629,22 @@ export function ServiceDetailPage() {
                           onChange={setPlywoodSheetCount}
                           onSave={() => setAddonConfigOpen((prev) => ({ ...prev, extra_plywood: false }))}
                           requiredCaption="Enter how many sheets to continue."
+                        />
+                      )}
+                    </AnimatePresence>
+                    <AnimatePresence>
+                      {selected.includes('insulation') && addonConfigOpen['insulation'] && (
+                        <AddonSubQuestionConfigurator
+                          key="insulation"
+                          id="insulation"
+                          label="Attic Insulation"
+                          questionLabel="How many sq ft?"
+                          type="number"
+                          numberPlaceholder="e.g. 800"
+                          value={atticInsulationSqft}
+                          onChange={setAtticInsulationSqft}
+                          onSave={() => setAddonConfigOpen((prev) => ({ ...prev, insulation: false }))}
+                          requiredCaption="Enter square footage to continue."
                         />
                       )}
                     </AnimatePresence>
@@ -4124,7 +4209,7 @@ export function ServiceDetailPage() {
               added && 'bg-green-600 hover:bg-green-700',
               roofingColorGateBlocks && 'opacity-50 pointer-events-none cursor-not-allowed'
             )}
-            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null)}
+            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -4323,6 +4408,13 @@ export function ServiceDetailPage() {
                   if (!(n > 0)) return {}
                   return { customSizeSqft: { [floorId]: n } }
                 })()),
+                // Attic Insulation sqft — persisted in customSizeSqft keyed by
+                // 'insulation' so the pricing layer (priceUnit:'sqft') can read it.
+                ...(serviceId === 'roofing' &&
+                  (selections['addons'] ?? []).includes('insulation') &&
+                  atticInsulationSqft !== null && {
+                  customSizeSqft: { insulation: atticInsulationSqft },
+                }),
                 ...(addonQuantities && { addonQuantities }),
                 ...(itemAddress && { address: itemAddress }),
                 ...(projectLat !== undefined && projectLng !== undefined && { projectLat, projectLng }),

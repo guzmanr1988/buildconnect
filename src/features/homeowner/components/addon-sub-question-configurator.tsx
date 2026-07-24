@@ -20,6 +20,7 @@ interface AddonSubQuestionConfiguratorProps {
   onChange: (n: number | null) => void
   onSave: () => void
   requiredCaption: string
+  numberPlaceholder?: string
 }
 
 export function AddonSubQuestionConfigurator({
@@ -32,8 +33,15 @@ export function AddonSubQuestionConfigurator({
   onChange,
   onSave,
   requiredCaption,
+  numberPlaceholder = 'e.g. 20',
 }: AddonSubQuestionConfiguratorProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  // Overflow is hidden during entry/exit animation (so height:0 clips content)
+  // but switched to visible after entry completes so the absolute dropdown
+  // list can escape the container without being clipped. Rod feedback: the
+  // dropdown was rendering as a cramped overlapping scroll box because
+  // overflow:hidden on the wrapper clipped the absolute-positioned list.
+  const [overflowHidden, setOverflowHidden] = useState(true)
   const isComplete = value !== null && value > 0
   const selectedOption = type === 'dropdown' ? (dropdownOptions?.find((o) => o.value === value) ?? null) : null
 
@@ -43,7 +51,12 @@ export function AddonSubQuestionConfigurator({
       animate={{ opacity: 1, height: 'auto' }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ duration: 0.25 }}
-      className="mt-3 rounded-xl border bg-background p-4 overflow-hidden"
+      onAnimationStart={() => setOverflowHidden(true)}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onAnimationComplete={(def: any) => {
+        if (def?.opacity === 1) setOverflowHidden(false)
+      }}
+      className={cn('mt-3 rounded-xl border bg-background p-4', overflowHidden && 'overflow-hidden')}
       data-addon-configurator={id}
       data-addon-sub-question-required={value === null ? 'true' : 'false'}
       data-addon-sub-question-selected={value !== null ? String(value) : 'null'}
@@ -77,7 +90,7 @@ export function AddonSubQuestionConfigurator({
                 />
               </button>
               {dropdownOpen && (
-                <div className="absolute z-50 top-full left-0 mt-1 w-full bg-popover border border-border rounded-lg shadow-md overflow-auto max-h-52 py-1">
+                <div className="absolute z-50 top-full left-0 mt-1 w-full bg-popover border border-border rounded-lg shadow-md overflow-auto max-h-72 py-1">
                   {dropdownOptions.map((opt) => (
                     <button
                       key={opt.value}
@@ -105,7 +118,7 @@ export function AddonSubQuestionConfigurator({
               type="number"
               inputMode="numeric"
               min={1}
-              placeholder="e.g. 20"
+              placeholder={numberPlaceholder}
               value={value ?? ''}
               onChange={(e) => {
                 const raw = e.target.value
