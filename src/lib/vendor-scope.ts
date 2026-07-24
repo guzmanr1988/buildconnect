@@ -174,7 +174,7 @@ function profileToVendor(p: Profile): Vendor {
     rating: 0,
     response_time: '—',
     verified: false,
-    financing_available: false,
+    financing_available: p.financing_available ?? false,
     total_reviews: 0,
     // Ship #290 — Rodolfo-direct: platform-default commission for new
     // vendor signups. pin-28: 10% -> 12% (Rod task_1781160469050_489).
