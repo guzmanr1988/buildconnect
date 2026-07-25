@@ -237,7 +237,7 @@ export function HomeownerLayout() {
                 <NavLink key={to} to={to} end={to === '/home'}>
                   {({ isActive }) => (
                     <div className="relative">
-                      <Button variant={isActive ? 'secondary' : 'ghost'} className={cn('rounded-full px-3 xl:px-5', isActive && 'bg-primary/10 text-primary font-medium')}>
+                      <Button variant={isActive ? 'secondary' : 'ghost'} className={cn('rounded-full px-3 xl:px-5', isActive && 'bg-secondary text-foreground font-medium')}>
                         {label}
                       </Button>
                       {label === 'Projects' && openProjectsCount > 0 && (
@@ -402,7 +402,7 @@ export function HomeownerLayout() {
                       <motion.div
                         layoutId="homeowner-bottom-nav-active-pill"
                         data-homeowner-nav-active-pill="true"
-                        className="absolute inset-0 rounded-2xl bg-primary/10"
+                        className="absolute inset-0 rounded-2xl bg-secondary"
                         transition={{ type: 'spring', stiffness: 500, damping: 38 }}
                       />
                     )}
@@ -411,7 +411,7 @@ export function HomeownerLayout() {
                         <Icon
                           className={cn(
                             'h-5 w-5 landscape:h-4 landscape:w-4 transition-colors',
-                            isActive ? 'text-primary' : 'text-foreground',
+                            isActive ? 'text-foreground' : 'text-muted-foreground',
                           )}
                         />
                         {label === 'Projects' && openProjectsCount > 0 && (
@@ -427,7 +427,7 @@ export function HomeownerLayout() {
                       <span
                         className={cn(
                           'text-[10px] leading-tight transition-colors',
-                          isActive ? 'text-primary font-semibold' : 'text-foreground font-medium',
+                          isActive ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium',
                         )}
                       >
                         {label}
