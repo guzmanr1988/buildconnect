@@ -680,7 +680,8 @@ function Step1({
 
   function selectSecondary(addr: SecondaryAddress) {
     const state = addr.state ?? ''
-    const display = `${addr.street}, ${addr.city}, ${state} ${addr.zip}`.trim()
+    const zip = addr.zip ?? ''
+    const display = `${addr.street}, ${addr.city}, ${state} ${zip}`.trim()
     setForm({
       ...form,
       address: display,
@@ -688,7 +689,7 @@ function Step1({
         line1: addr.street,
         city: addr.city,
         state,
-        zip: addr.zip,
+        zip,
       },
     })
     setAddressEdit(false)
@@ -785,7 +786,7 @@ function Step1({
               </option>
               {usableSecondaries.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.label}: {a.street}, {a.city}, {a.state} {a.zip}
+                  {a.label}: {a.street}, {a.city}, {a.state ?? ''} {a.zip ?? ''}
                 </option>
               ))}
             </select>

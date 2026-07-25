@@ -308,7 +308,7 @@ export function HomeownerProfilePage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground truncate">{addr.label}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {addr.street}, {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.zip}
+                          {addr.street}, {addr.city}{addr.state ? `, ${addr.state}` : ''}{addr.zip ? ` ${addr.zip}` : ''}
                         </p>
                       </div>
                     </div>
