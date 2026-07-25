@@ -62,7 +62,7 @@ interface RepVisitRow {
   charge_status: RepRequestChargeStatus
   homeowner_id: string
   assigned_rep_id: string | null
-  address: { line1: string; line2?: string | null; city: string; state: string; zip: string }
+  address: { line1: string; line2?: string | null; city: string; state: string; zip: string | null }
   requested_visit_at: string | null
   appointment_status: RepRequestAppointmentStatus | null
   proposed_visit_at: string | null
@@ -77,7 +77,8 @@ const VISIT_SELECT =
 
 function formatAddress(a: RepVisitRow['address']): string {
   const line2 = a.line2 ? `, ${a.line2}` : ''
-  return `${a.line1}${line2}, ${a.city}, ${a.state} ${a.zip}`
+  const zipSuffix = a.zip ? ` ${a.zip}` : ''
+  return `${a.line1}${line2}, ${a.city}, ${a.state}${zipSuffix}`
 }
 
 // FLAG-B: single derived effective-visit-time. When admin counter-proposed

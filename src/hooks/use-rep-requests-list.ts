@@ -47,7 +47,7 @@ interface RepRequestListRowRaw {
   charge_status: RepRequestChargeStatus
   homeowner_id: string
   assigned_rep_id: string | null
-  address: { line1: string; line2?: string | null; city: string; state: string; zip: string }
+  address: { line1: string; line2?: string | null; city: string; state: string; zip: string | null }
   description: string | null
   created_at: string
   homeowner: { name: string | null } | null
@@ -56,7 +56,8 @@ interface RepRequestListRowRaw {
 
 function formatAddress(a: RepRequestListRowRaw['address']): string {
   const line2 = a.line2 ? `, ${a.line2}` : ''
-  return `${a.line1}${line2}, ${a.city}, ${a.state} ${a.zip}`
+  const zipSuffix = a.zip ? ` ${a.zip}` : ''
+  return `${a.line1}${line2}, ${a.city}, ${a.state}${zipSuffix}`
 }
 
 // Compact age label aligned with the QueueRow synth fixtures
