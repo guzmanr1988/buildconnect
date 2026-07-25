@@ -449,19 +449,30 @@ export default function VendorDashboard() {
         </motion.div>
       )}
 
-      {/* KPI Row */}
-      <div className="kpi-grid grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
-        <motion.div variants={item} data-kpi="active-leads" data-kpi-value={activeLeads.length}>
-          <KpiCard title="Active Leads" value={String(activeLeads.length)} change="+12% vs last month" trend="up" icon={Inbox} iconColor="bg-primary" />
+      {/* KPI Row — 2-col x 2-row stacked pairs (Rod ask task_975):
+          COL-1 Active Leads / Pipeline Value stacked, COL-2 Booked This
+          Month / Win Rate stacked. grid-flow-col fills column-first so
+          DOM order 1/2/3/4 lands (col1-row1)/(col1-row2)/(col2-row1)/
+          (col2-row2). Fixed 2x2 at all breakpoints so both mobile
+          portrait and desktop show the same paired-column visual —
+          matches Rod's slim single-layout intent. Tiles use dense
+          variant (surface-scoped, admin consumers of KpiCard keep
+          their p-3.5 default; kratos guard 1). Overflow guard
+          (kratos guard 2 / task_116-adjacent): min-w-0 on grid cell,
+          truncate on value inside KpiCard already handles narrow
+          viewports; gap-2 keeps 2 tiles readable on ~340px screens. */}
+      <div className="kpi-grid grid grid-cols-2 grid-rows-2 grid-flow-col gap-2 sm:gap-3">
+        <motion.div variants={item} className="min-w-0" data-kpi="active-leads" data-kpi-value={activeLeads.length}>
+          <KpiCard dense title="Active Leads" value={String(activeLeads.length)} change="+12% vs last month" trend="up" icon={Inbox} iconColor="bg-primary" />
         </motion.div>
-        <motion.div variants={item} data-kpi="pipeline-value" data-kpi-value={pipelineValue}>
-          <KpiCard title="Pipeline Value" value={fmt(pipelineValue)} change="+8% vs last month" trend="up" icon={DollarSign} iconColor="bg-amber-500" />
+        <motion.div variants={item} className="min-w-0" data-kpi="pipeline-value" data-kpi-value={pipelineValue}>
+          <KpiCard dense title="Pipeline Value" value={fmt(pipelineValue)} change="+8% vs last month" trend="up" icon={DollarSign} iconColor="bg-amber-500" />
         </motion.div>
-        <motion.div variants={item} data-kpi="booked-this-month" data-kpi-value={bookedThisMonth}>
-          <KpiCard title="Booked This Month" value={String(bookedThisMonth)} change="+2 from last week" trend="up" icon={CalendarCheck} iconColor="bg-emerald-500" />
+        <motion.div variants={item} className="min-w-0" data-kpi="booked-this-month" data-kpi-value={bookedThisMonth}>
+          <KpiCard dense title="Booked This Month" value={String(bookedThisMonth)} change="+2 from last week" trend="up" icon={CalendarCheck} iconColor="bg-emerald-500" />
         </motion.div>
-        <motion.div variants={item} data-kpi="win-rate" data-kpi-value={winRate}>
-          <KpiCard title="Win Rate" value={`${winRate}%`} change="+5pp vs last quarter" trend="up" icon={Target} iconColor="bg-violet-500" />
+        <motion.div variants={item} className="min-w-0" data-kpi="win-rate" data-kpi-value={winRate}>
+          <KpiCard dense title="Win Rate" value={`${winRate}%`} change="+5pp vs last quarter" trend="up" icon={Target} iconColor="bg-violet-500" />
         </motion.div>
       </div>
 

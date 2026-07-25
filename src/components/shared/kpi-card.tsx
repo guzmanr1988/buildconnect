@@ -11,25 +11,26 @@ interface KpiCardProps {
   icon: LucideIcon
   iconColor?: string
   className?: string
+  dense?: boolean
 }
 
-export function KpiCard({ title, value, change, trend, icon: Icon, iconColor, className }: KpiCardProps) {
+export function KpiCard({ title, value, change, trend, icon: Icon, iconColor, className, dense }: KpiCardProps) {
   return (
     <Card className={cn('relative overflow-hidden bg-[oklch(0.968_0.020_255)] dark:bg-[oklch(0.205_0.020_258)] shadow-sm transition-shadow hover:shadow-md', className)}>
-      <CardContent className="p-3.5">
+      <CardContent className={cn(dense ? 'p-2.5' : 'p-3.5')}>
         <div className="flex items-center justify-between gap-2">
-          <div className="space-y-0.5 min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground truncate">{title}</p>
-            <p translate="no" className="notranslate text-2xl font-medium tracking-tight font-heading text-foreground">{value}</p>
+          <div className={cn('min-w-0', dense ? 'space-y-0' : 'space-y-0.5')}>
+            <p className={cn('font-medium text-muted-foreground truncate', dense ? 'text-[11px] leading-snug' : 'text-[11px]')}>{title}</p>
+            <p translate="no" className={cn('notranslate font-medium tracking-tight font-heading text-foreground', dense ? 'text-xl leading-tight' : 'text-2xl')}>{value}</p>
             {change && (
-              <div translate="no" className={cn('notranslate flex items-center gap-1 text-[10px] font-medium', trend === 'up' ? 'text-success' : 'text-destructive')}>
+              <div translate="no" className={cn('notranslate flex items-center gap-1 font-medium', dense ? 'text-[10px] leading-snug' : 'text-[10px]', trend === 'up' ? 'text-success' : 'text-destructive')}>
                 {trend === 'up' ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                 {change}
               </div>
             )}
           </div>
-          <div className={cn('rounded-lg p-2 shrink-0', iconColor || 'bg-primary/10')}>
-            <Icon className={cn('h-4 w-4', iconColor ? 'text-white' : 'text-primary')} />
+          <div className={cn('rounded-lg shrink-0', dense ? 'p-1.5' : 'p-2', iconColor || 'bg-primary/10')}>
+            <Icon className={cn(dense ? 'h-3.5 w-3.5' : 'h-4 w-4', iconColor ? 'text-white' : 'text-primary')} />
           </div>
         </div>
       </CardContent>
