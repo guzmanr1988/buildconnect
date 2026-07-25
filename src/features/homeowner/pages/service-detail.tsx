@@ -1312,6 +1312,18 @@ export function ServiceDetailPage() {
     serviceId === 'roofing' &&
     (selections['addons']?.length ?? 0) >= 1 &&
     !(selections['material'] ?? []).some((m) => m !== 'flat_roof')
+  // task_414 — repair is per-material (repair_materials prices repair_shingle,
+  // barrel_tile, etc. independently); the whole-roof pitched-omit warning +
+  // gate + cart-strip do not apply. SoT-at-raw-layer: pitchedOmitApplies is
+  // the policy-aware view of pitchedOmittedTriggered — every downstream
+  // gating / banner / cart-strip / display consumer reads THIS, never the
+  // raw fact, so the carve-out cannot drift across the 7 sites (kratos-spec
+  // "shouldGatePitchedOmit" renamed since consumers include inverse-form
+  // and banner-render, not just gate-blocks).
+  const isRepairMode =
+    serviceId === 'roofing' &&
+    (selections.service_type ?? []).includes('repair')
+  const pitchedOmitApplies = pitchedOmittedTriggered && !isRepairMode
   const allRequiredDone = completedRequired === requiredGroups.length
 
   // Per-material picker-satisfied predicate — single source of truth reused
@@ -1427,7 +1439,7 @@ export function ServiceDetailPage() {
     if (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) {
       return 'Complete the pool survey to continue.'
     }
-    if (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) {
+    if (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) {
       return 'Acknowledge the flat-only order to continue.'
     }
     if (!pergolasStructuresAllAssigned) {
@@ -1919,11 +1931,13 @@ export function ServiceDetailPage() {
         // with a shingle placeholder so post-Save returns to a sensible
         // display instead of the misleading "0 sqft + Pitched NOT INCLUDED"
         // shape. The placeholder only affects breakdown DISPLAY props on
-        // this card; pitchedOmittedTriggered remains the real value at the
-        // page level so the Add to Project gate (line ~1491) and warning
-        // banner (line ~1441) still fire correctly until chip-tap is done.
+        // this card; pitchedOmitApplies remains the real value at the page
+        // level so the Add to Project gate and warning banner still fire
+        // correctly until chip-tap is done (except in repair mode, where
+        // pitchedOmitApplies is always false — repair is per-material and
+        // the whole-roof pitched-omit policy does not apply).
         const noChipTapYet = dominantMaterial === null && !hasFlatSection
-        const previewPitchedOmittedTriggered = noChipTapYet ? false : pitchedOmittedTriggered
+        const previewPitchedOmittedTriggered = noChipTapYet ? false : pitchedOmitApplies
         return (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -4215,7 +4229,7 @@ export function ServiceDetailPage() {
             Display-truth peer lives in the wizard Step 2 Pitched row (RED).
             Per banked project_buildconnect_quote_top_of_real (under-detection
             is launch-blocker — quotes err HIGH not LOW). */}
-        {pitchedOmittedTriggered && !alreadyInCart && !isAddonOnlyMode && (
+        {pitchedOmitApplies && !alreadyInCart && !isAddonOnlyMode && (
           <div
             data-pitched-not-included="true"
             role="alert"
@@ -4267,7 +4281,7 @@ export function ServiceDetailPage() {
               added && 'bg-green-600 hover:bg-green-700',
               roofingColorGateBlocks && 'opacity-50 pointer-events-none cursor-not-allowed'
             )}
-            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)}
+            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
@@ -4331,7 +4345,7 @@ export function ServiceDetailPage() {
                 // Chip=flat-only with explicit ack: strip pitched (user opted-out via ack toggle).
                 // SoT-of-strip moved here from wizard handleComplete so the under-quote gate
                 // evaluator can read raw pitched on its read path.
-                if (pitchedOmittedTriggered && (flatOnlyAck || isAddonOnlyMode)) {
+                if (pitchedOmitApplies && (flatOnlyAck || isAddonOnlyMode)) {
                   const flatOnly = roofMeasurement.flatAreaSqft ?? 0
                   return { ...roofMeasurement, areaSqft: flatOnly, pitchedAreaSqft: 0 }
                 }
@@ -4393,7 +4407,7 @@ export function ServiceDetailPage() {
                   },
                 }),
                 ...(serviceId === 'roofing' && cartRoofMeasurement && { roofMeasurement: cartRoofMeasurement }),
-                ...(serviceId === 'roofing' && pitchedOmittedTriggered && (flatOnlyAck || isAddonOnlyMode) && { pitchedExcludedAck: true }),
+                ...(serviceId === 'roofing' && pitchedOmitApplies && (flatOnlyAck || isAddonOnlyMode) && { pitchedExcludedAck: true }),
                 ...((['driveways', 'pergolas'] as string[]).includes(serviceId ?? '') && areaMeasurement && { areaSqft: areaMeasurement.areaSqft }),
                 ...(serviceId === 'fencing' && areaMeasurement?.perimeterFt != null && { perimeterFt: areaMeasurement.perimeterFt }),
                 ...(areaMeasurement?.mapUrl && { measurementMapUrl: areaMeasurement.mapUrl }),
@@ -4586,7 +4600,7 @@ export function ServiceDetailPage() {
             !isProjectPermitValid(projectPermit, projectPermitWaiver) ||
             !isProjectAssociationValid(projectAssociation ?? null) ||
             (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
-            (pitchedOmittedTriggered && !flatOnlyAck && !isAddonOnlyMode) ||
+            (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) ||
             !pergolasStructuresAllAssigned ||
             roofingColorGateBlocks
           ) && (
