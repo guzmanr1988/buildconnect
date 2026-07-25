@@ -1277,7 +1277,17 @@ export function ServiceDetailPage() {
     return true
   }
 
-  const requiredGroups = service.optionGroups.filter((g) => g.required && isRevealed(g))
+  const requiredGroups = service.optionGroups.filter((g) => {
+    if (!g.required || !isRevealed(g)) return false
+    if (
+      serviceId === 'roofing' &&
+      g.id === 'material' &&
+      ((selections.service_type ?? []).includes('repair') ||
+        (selections.service_type ?? []).includes('addons'))
+    )
+      return false
+    return true
+  })
   const completedRequired = requiredGroups.filter(
     (g) => (selections[g.id]?.length ?? 0) > 0
   ).length
