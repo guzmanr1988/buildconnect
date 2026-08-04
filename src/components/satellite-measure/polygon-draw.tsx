@@ -663,12 +663,12 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         </div>
       )}
 
-      {/* Satellite map — mobile: 62vh so the map dominates the viewport for drawing;
-          sm+: aspect-square capped at 580×580. Always in DOM once shown so mapRef stays stable. */}
+      {/* Satellite map — mobile: 62vh + 580px cap so the map dominates the viewport for drawing;
+          sm: aspect-square capped at 580px; md+: fills card width, height constrained to 600px. Always in DOM once shown so mapRef stays stable. */}
       <div
         ref={mapDivRef}
         className={cn(
-          'w-full rounded-xl overflow-hidden border h-[62vh] max-h-[580px] sm:h-auto sm:aspect-square max-w-[580px] mx-auto',
+          'w-full rounded-xl overflow-hidden border h-[62vh] max-h-[580px] sm:h-auto sm:aspect-square sm:max-w-[580px] sm:mx-auto md:aspect-auto md:max-w-none md:mx-0 md:max-h-none md:h-[600px]',
           !showMap && 'hidden',
         )}
         data-polygon-map={serviceCategory}
@@ -676,7 +676,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Main drawing instructions */}
       {phase === 'drawing' && !addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <p className="text-xs text-muted-foreground text-center">
             {vertexCount === 0
               ? 'Tap the map to place your first point'
@@ -698,7 +698,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Extra area drawing instructions */}
       {addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <p className="text-xs font-medium" style={{ color: EXTRA_COLORS[extraPolygons.length % EXTRA_COLORS.length] }}>
             Drawing area {extraPolygons.length + 2} — {extraVertexCount === 0
               ? 'tap the map to place your first point'
@@ -715,7 +715,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Post-draw result + controls */}
       {phase === 'done' && result && !addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <div
             className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-3 space-y-2"
             data-measurement-result="live"
@@ -805,7 +805,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
           locked. Single "Re-measure" link drops back to drawing phase. */}
       {phase === 'confirmed' && result && (
         <div
-          className="space-y-2 max-w-[580px] mx-auto"
+          className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none"
           data-measurement-phase="confirmed"
           data-measurement-sqft={serviceCategory === 'fencing' ? 0 : displayTotal}
           data-measurement-perimeter={result.perimeterFt}
