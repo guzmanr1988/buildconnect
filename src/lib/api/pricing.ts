@@ -509,6 +509,26 @@ export function computeVendorTotal(
       // single unit (quantity = 1 implicit).
       accumulateSubOpts('garage_doors', [gd.type, gd.size, gd.color, gd.glass], 1)
     }
+
+    // Kitchen sub-options (Cabinet and Stone materials). PR-#412 collision
+    // hazard prevents widening resolveOptionPriceKey to scan all subGroups
+    // universally; kitchen handles sub-option pricing explicitly here instead
+    // of through the main option-lookup path. Parallel to windows/doors
+    // accumulateSubOpts pattern, decoupled to match kitchen's architectural
+    // separation (selections stored separately, sub_options optional by design).
+    if (item.serviceId === 'kitchen') {
+      const cabinetSubId = item.selections?.['cabinet-sub']?.[0]
+      const stoneSubId = item.selections?.['stone-sub']?.[0]
+      // Cabinet and Stone are parent options; each holds a single selected
+      // sub-option (radio-button semantics, stored under parentOptionId-sub).
+      // Quantity is always 1 for material selections.
+      if (cabinetSubId) {
+        accumulateSubOpts('cabinet', [cabinetSubId], 1)
+      }
+      if (stoneSubId) {
+        accumulateSubOpts('stone', [stoneSubId], 1)
+      }
+    }
   }
 
   // Mig 068 — measurement-driven services (remodel + bathroom). These cart
