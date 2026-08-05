@@ -201,13 +201,10 @@ export function DoorConfigurator({ selections, onChange, onSave }: DoorConfigura
               return (
                 <div key={size} className="flex flex-col">
                   {/* Size row - add button */}
-                  <div className={cn(
-                    'flex items-center justify-between px-2 py-2 rounded-lg min-h-[44px]',
-                    hasEntries && 'bg-primary/5'
-                  )}>
+                  <div className="flex items-center justify-between px-2 py-2 min-h-[44px]">
                     <span className={cn(
-                      'text-xl font-semibold',
-                      hasEntries ? 'text-foreground' : 'text-muted-foreground'
+                      'text-xl font-semibold px-2 py-1 rounded-md',
+                      hasEntries ? 'text-foreground bg-primary/5' : 'text-muted-foreground'
                     )}>
                       {size.replace('x', '" × ')}"
                     </span>
