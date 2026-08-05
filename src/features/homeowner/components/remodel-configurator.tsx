@@ -339,8 +339,12 @@ export function RemodelConfigurator() {
         nextDisabledReason = 'Answer the association question to continue.'
       } else if (!projectPermit) {
         nextDisabledReason = 'Choose a permit option to continue.'
-      } else if (projectPermit === 'no' && !isProjectPermitValid(projectPermit, projectPermitWaiver)) {
-        nextDisabledReason = 'Print your full name on the waiver to continue.'
+      } else if (projectPermit === 'no') {
+        if (!projectPermitWaiver?.acknowledged) {
+          nextDisabledReason = 'Acknowledge the waiver to continue.'
+        } else if (!projectPermitWaiver?.signedName || projectPermitWaiver.signedName.trim().length < 2) {
+          nextDisabledReason = 'Print your full name on the waiver to continue.'
+        }
       }
     }
   }
