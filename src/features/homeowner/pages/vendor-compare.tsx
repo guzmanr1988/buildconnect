@@ -376,10 +376,9 @@ export function VendorComparePage() {
           } else if (apexHasGap) {
             priceText = formatPriceCents(result.totalCents)
             priceTone = 'strong'
-          } else if (isApex && vendorOffersAllCartServices && result.totalCents > 0) {
-            // Apex offers every cart-service (Active toggle OR any priced row)
-            // but some sub-options unpriced → show partial total clean (no
-            // gap-badge, no "Contact for quote").
+          } else if (isApex && vendorOffersAllCartServices && result.totalCents > 0
+                     && result.missingOptionKeys.length === 0 && result.missingSubOptionKeys.length === 0) {
+            // Apex offers every cart-service with ALL options priced
             priceText = formatPriceCents(result.totalCents)
             priceTone = 'strong'
           } else if (
