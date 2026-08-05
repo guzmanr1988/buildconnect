@@ -317,8 +317,9 @@ export function RepRequestIntakePage() {
   // writes the parsed {line1,city,state,zip} into form.structuredAddress so
   // submit() can hand the edge fn a structured payload without re-parsing.
   // ref-setter re-binds on step unmount/remount (Step1 only mounts when step===1).
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
   const setAddressInputRef = usePlacesAutocomplete(
-    !!MAPS_KEY,
+    gmpEnabled && !!MAPS_KEY,
     MAPS_KEY,
     (formatted) =>
       setForm((prev) => ({ ...prev, address: formatted })),
