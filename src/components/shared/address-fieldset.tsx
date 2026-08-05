@@ -19,6 +19,7 @@ interface AddressFieldsetProps {
   labelSize?: 'default' | 'sm'
   errors?: Partial<Record<keyof AddressFields, string>>
   className?: string
+  setInputRefStreet?: (el: HTMLInputElement | null) => void
 }
 
 /**
@@ -42,6 +43,7 @@ export function AddressFieldset({
   labelSize = 'default',
   errors,
   className,
+  setInputRefStreet,
 }: AddressFieldsetProps) {
   const labelClass = labelSize === 'sm' ? 'text-xs' : ''
   const update = (patch: Partial<AddressFields>) => onChange({ ...value, ...patch })
@@ -52,6 +54,7 @@ export function AddressFieldset({
       <div className="space-y-1.5">
         <Label htmlFor={`${idPrefix}-street`} className={labelClass}>Street Address {req}</Label>
         <Input
+          ref={setInputRefStreet}
           id={`${idPrefix}-street`}
           value={value.street}
           onChange={(e) => update({ street: e.target.value })}
