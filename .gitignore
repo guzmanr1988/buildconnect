@@ -9,3 +9,7 @@ dist
 supabase/.branches
 supabase/.temp
 tmp/
+auth.state.json
+test-results/
+test-*.mjs
+walk-*.mjs

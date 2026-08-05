@@ -487,13 +487,12 @@ export function ServiceDetailPage() {
     !!(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
   )
   // Per-step committed flags for wizard-chrome services. Tracks explicit
-  // Save button press per wizard step (groupId) — changes step-complete from
-  // "has selection" to "has selection AND Save pressed". Enables Rod's
-  // confirmation UX ("That save button per step should be in every single
-  // configuration"). Key is groupId (e.g. 'material', 'addons'), not serviceId.
-  // Keyed by groupId so each wizard step can track its own Save state
-  // independently across services.
-  const [stepCommitted, setStepCommitted] = useState<Record<string, boolean>>({})
+  // Save button press per wizard step (groupId) via selection fingerprint —
+  // changes step-complete from "has selection" to "has selection AND Save
+  // pressed". Enables Rod's confirmation UX. Fingerprint is JSON.stringify of
+  // sorted selections, so any selection change breaks the match (staleness
+  // structurally impossible). Key is groupId (e.g. 'material', 'addons').
+  const [stepCommitted, setStepCommitted] = useState<Record<string, string>>({})
   const [shingleSelection, setShingleSelection] = useState<ShingleRoofSelection>(() => {
     const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
     if (saved) return saved
@@ -1638,10 +1637,11 @@ export function ServiceDetailPage() {
     if (idx === -1) return null
     const g = wizardVisibleGroups[idx]
     const selected = selections[g.id] ?? []
+    const currentFingerprint = JSON.stringify([...selected].sort())
     const isComplete =
       selected.length > 0 &&
       (serviceId !== 'roofing' || g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected)) &&
-      stepCommitted[g.id] === true
+      stepCommitted[g.id] === currentFingerprint
     if (isComplete) return { index: idx + 1, total, status: 'complete' }
     // Roofing add-ons must be locked until the material+color step is fully
     // satisfied (Rod directive: "you can't pick add-ons without finishing color").
@@ -4238,7 +4238,7 @@ export function ServiceDetailPage() {
                     <Button
                       size="sm"
                       className="w-full h-9 rounded-xl text-sm font-semibold"
-                      onClick={() => setStepCommitted((prev) => ({ ...prev, [group.id]: true }))}
+                      onClick={() => setStepCommitted((prev) => ({ ...prev, [group.id]: JSON.stringify([...selected].sort()) }))}
                       variant={isCompleteStep ? 'default' : 'outline'}
                     >
                       {isCompleteStep ? 'Saved' : 'Save Selection'}
