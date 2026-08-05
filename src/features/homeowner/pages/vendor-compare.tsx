@@ -265,8 +265,9 @@ export function VendorComparePage() {
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
       : null
-    const highestRated = displayVendors.length > 0
-      ? displayVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+    const ratedVendors = displayVendors.filter((v) => v.total_reviews > 0)
+    const highestRated = ratedVendors.length > 0
+      ? ratedVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
       : null
     return { bestPrice, highestRated }
   }, [totalsByVendor, displayVendors])
@@ -437,29 +438,31 @@ export function VendorComparePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 5 }).map((_, starIdx) => (
-                        <Star
-                          key={starIdx}
-                          className={cn(
-                            'h-4 w-4',
-                            starIdx < Math.floor(vendor.rating)
-                              ? 'fill-amber-400 text-amber-400'
-                              : starIdx < vendor.rating
-                                ? 'fill-amber-400/50 text-amber-400'
-                                : 'fill-muted text-muted'
-                          )}
-                        />
-                      ))}
+                  {vendor.total_reviews > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, starIdx) => (
+                          <Star
+                            key={starIdx}
+                            className={cn(
+                              'h-4 w-4',
+                              starIdx < Math.floor(vendor.rating)
+                                ? 'fill-amber-400 text-amber-400'
+                                : starIdx < vendor.rating
+                                  ? 'fill-amber-400/50 text-amber-400'
+                                  : 'fill-muted text-muted'
+                            )}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm font-medium text-foreground">
+                        {vendor.rating}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({vendor.total_reviews} reviews)
+                      </span>
                     </div>
-                    <span className="text-sm font-medium text-foreground">
-                      {vendor.rating}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({vendor.total_reviews} reviews)
-                    </span>
-                  </div>
+                  )}
 
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
