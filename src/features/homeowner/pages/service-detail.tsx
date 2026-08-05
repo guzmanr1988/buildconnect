@@ -319,6 +319,7 @@ const WIZARD_CHROME_SERVICES: readonly string[] = [
   'wall_paneling',
   'garage',
   'house_painting',
+  'kitchen',
   'blinds',
 ]
 const isWizardService = (id: string | null | undefined): boolean =>
