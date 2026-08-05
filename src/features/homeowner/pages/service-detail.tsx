@@ -3252,7 +3252,7 @@ export function ServiceDetailPage() {
                                 {atticInsulationSqft.toLocaleString()} sqft
                               </span>
                             )}
-                            {serviceId === 'kitchen' && group.label.toLowerCase().includes('stone') && (option.subGroups?.length ?? 0) === 0 && Number(subGroupLinearFt[option.id] ?? 0) > 0 && (
+                            {serviceId === 'kitchen' && option.priceUnit === 'linear_ft' && !(option.subGroups?.some((sg) => sg.options.length > 0) ?? false) && Number(subGroupLinearFt[option.id] ?? 0) > 0 && (
                               <span
                                 className="text-[12px] leading-tight font-medium text-foreground/80"
                                 data-option-card-linear-ft-value={option.id}
@@ -3417,20 +3417,41 @@ export function ServiceDetailPage() {
                     return <div key={option.id} className="contents">{chipButton}</div>
                   })}
                 </div>
-                {/* Stone-scoped Linear feet input (Kitchen vertical only).
+                {/* Linear feet input (Kitchen vertical only).
                     Vertical-gated to serviceId==='kitchen' at consumer call-site
                     per feedback_rod_vertical_scoped_changes_never_bleed so a
-                    future non-kitchen vertical with a label-match 'stone' group
-                    cannot inherit the Linear feet input. Group identified by
-                    label match within the kitchen vertical since group_id is
-                    DB-seeded and not stable enough to hardcode. */}
+                    future non-kitchen vertical cannot inherit the Linear feet
+                    input.
+
+                    Gated on the option's OWN priceUnit rather than on a
+                    group-label match. The previous `group.label.includes('stone')`
+                    gate rendered the input for exactly the Stone group, which is
+                    why Granite/Quartz/Quartzite got a Linear feet box while
+                    Cabinet Installation, Stone Installation (group 'Installation')
+                    and Under-Cabinet Lighting (group 'Add-ons') did not — all
+                    three are priced linear_ft with live vendor rates, so they
+                    contributed 0 to every quote and the kitchen total rendered as
+                    a partial sum. priceUnit is the field resolveOptionQty already
+                    dispatches on (resolve-option-qty.ts: non-roofing linear_ft →
+                    addonLinearFt ?? subGroupLinearFt ?? 0), so gating the input on
+                    the same field makes renderer and pricer agree by construction
+                    instead of by a label convention that has to be maintained.
+
+                    Sub-option predicate: `subGroups.some(sg => sg.options.length > 0)`
+                    — "has a sub-group that actually offers choices" — NOT
+                    `subGroups.length === 0`. Cabinet Installation and Stone
+                    Installation each carry 2 EMPTY sub_groups (0 sub_options), so
+                    the length-based test excluded them even though they present no
+                    sub-choices to the user. This is the same predicate already used
+                    for the sub-choice render paths in this file, so the two cannot
+                    disagree. */}
                 {serviceId === 'kitchen' &&
-                  group.label.toLowerCase().includes('stone') &&
                   renderOptions
                     .filter(
                       (option) =>
                         selected.includes(option.id) &&
-                        (option.subGroups?.length ?? 0) === 0,
+                        option.priceUnit === 'linear_ft' &&
+                        !(option.subGroups?.some((sg) => sg.options.length > 0) ?? false),
                     )
                     .map((option) => (
                       <div
