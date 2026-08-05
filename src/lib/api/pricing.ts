@@ -371,17 +371,27 @@ export function computeVendorTotal(
           totalCents += basePrice * sqft
         } else if (meta.priceUnit === 'linear_ft') {
           // Resolve linear ft source: roofAddonLinearFt (existing roofing
-          // addons, with gutter drops math) OR addonLinearFt (generic
-          // non-roofing addons like pool_fence). Roof perimeter add-ons gate
-          // on includePerimeter — when the section toggle is OFF, no
-          // gutter/fascia/soffit line items reach the quote.
+          // addons, with gutter drops math) OR subGroupLinearFt (option-scoped
+          // linear feet — the kitchen linear_ft input writes this) OR
+          // addonLinearFt (generic non-roofing addons like pool_fence). Roof
+          // perimeter add-ons gate on includePerimeter — when the section
+          // toggle is OFF, no gutter/fascia/soffit line items reach the quote.
+          //
+          // subGroupLinearFt is NOT optional here. It is the ONLY key the
+          // kitchen linear-feet input writes (service-detail.tsx cart-write is
+          // vertical-gated to kitchen), and addonLinearFt is roofing-only state
+          // — see the comment at service-detail.tsx: "addonLinearFt is
+          // roofing-only state, so addonLinearFt[parentId] is undefined". Before
+          // this line existed, every kitchen linear_ft option resolved to 0 no
+          // matter what the homeowner typed, so the kitchen quote was a partial
+          // sum even for Stone, whose input has worked since PR-289.
           const roofLinFt = item.roofAddonLinearFt?.[optionId]
           const isRoofPerimeterAddon = roofLinFt !== undefined
           const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
           if (isRoofPerimeterAddon && !includePerimeterOpt) {
             // Zero contribution — perimeter toggle excluded this line item.
           } else {
-            const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
+            const linFt = roofLinFt ?? item.subGroupLinearFt?.[optionId] ?? item.addonLinearFt?.[optionId] ?? 0
             const effectiveLinFt = optionId === 'gutters'
               ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
               : linFt
