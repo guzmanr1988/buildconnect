@@ -265,8 +265,10 @@ export function VendorComparePage() {
     const bestPrice = eligible.length > 0
       ? eligible.reduce((a, b) => (totalsByVendor[a.id].totalCents < totalsByVendor[b.id].totalCents ? a : b)).id
       : null
-    const highestRated = displayVendors.length > 0
-      ? displayVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
+    // Highest rated: require at least 1 review to prevent 0-star vendors from earning the badge
+    const ratedVendors = displayVendors.filter((v) => v.total_reviews > 0)
+    const highestRated = ratedVendors.length > 0
+      ? ratedVendors.reduce((a, b) => (a.rating > b.rating ? a : b)).id
       : null
     return { bestPrice, highestRated }
   }, [totalsByVendor, displayVendors])
