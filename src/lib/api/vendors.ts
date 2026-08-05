@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { geocodeVendorAddress } from '@/lib/api/geocode'
+import { isWalkerVendor } from '@/lib/walker-exclusion'
 import type { Vendor } from '@/types'
 
 export async function getVendors() {
@@ -9,7 +10,7 @@ export async function getVendors() {
     .eq('role', 'vendor')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as Vendor[]
+  return (data as Vendor[]).filter((v) => !isWalkerVendor({ name: v.name, company: v.company }))
 }
 
 export async function getVendorProfile(id: string) {

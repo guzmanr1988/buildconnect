@@ -507,7 +507,12 @@ function DetailPane({ selectedId, selectedRow, refetchList }: DetailPaneProps) {
               // stamp). Default service_id='roofing' covers the dev
               // walkthrough; a proper service-picker ships in the iris
               // detail-pane follow-on alongside photo/availability UX.
-              const scope = row.description || 'Concierge-built project'
+              // Strip the intake-encoded "[Project Types: A, B] " prefix
+              // (use-rep-request-submit.ts:202) so the created project's
+              // stored scope is the notes text only, never the raw
+              // bracket tag. Empty-after-strip falls back to the same
+              // "Concierge-built project" placeholder as no-description.
+              const scope = parseProjectTypes(row.description).text || 'Concierge-built project'
               const build = await m.buildProjectOnBehalf({
                 serviceId: 'roofing',
                 scope,

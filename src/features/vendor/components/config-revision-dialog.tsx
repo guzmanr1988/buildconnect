@@ -27,6 +27,23 @@ const fmt = (cents: number) =>
 const titleCase = (id: string) =>
   id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
+// Parse an "X/12" pitch string to the integer rise. Returns null when the
+// stored pitch is empty/absent/malformed so callers can gate the rescale off
+// (empty-pitch legacy items: pitch becomes editable but non-driving).
+function parsePitchRise(pitch: string | undefined): number | null {
+  if (!pitch) return null
+  const m = /^\s*(\d+)\s*\/\s*12\s*$/.exec(pitch)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+// Standard roofing pitch multiplier — actual sloped surface area for a given
+// horizontal footprint at rise/12. sqrt(12^2 + rise^2)/12. rise=0 (flat) → 1.
+function pitchMultiplier(rise: number): number {
+  return Math.sqrt(144 + rise * rise) / 12
+}
+
 /**
  * Contractor-facing editor: correct a COPY of the homeowner's config and send
  * it back for the homeowner to accept or decline. v1 focused editor — edits
@@ -56,6 +73,14 @@ export function ConfigRevisionDialog({
   const [priceMap, setPriceMap] = useState<VendorPriceMap | null>(null)
   const [permitMap, setPermitMap] = useState<VendorPermitMap | undefined>(undefined)
   const [mapsLoading, setMapsLoading] = useState(false)
+  // Snapshot the pitch + pitched/total area AS OF dialog-open so the pitch-edit
+  // rescale derives horizontal footprint off the original values, not a value
+  // already rescaled by a prior edit in this session.
+  const [pitchSnap, setPitchSnap] = useState<{
+    origRise: number
+    origPitched?: number
+    origArea: number
+  } | null>(null)
 
   // Reset the draft + reason each time the dialog opens on a (possibly new)
   // project, and fetch the vendor's price/permit maps for the live recompute.
@@ -63,6 +88,17 @@ export function ConfigRevisionDialog({
     if (!open) return
     setDraft(cloneItem(sentProject.item))
     setReason('')
+    const rmOpen = sentProject.item.roofMeasurement
+    const origRiseOpen = parsePitchRise(rmOpen?.pitch)
+    setPitchSnap(
+      origRiseOpen != null && rmOpen
+        ? {
+            origRise: origRiseOpen,
+            origPitched: rmOpen.pitchedAreaSqft,
+            origArea: rmOpen.areaSqft ?? 0,
+          }
+        : null,
+    )
     if (!vendorUuid || !isRoofing) return
     let cancelled = false
     setMapsLoading(true)
@@ -116,6 +152,39 @@ export function ConfigRevisionDialog({
       roofMeasurement: { ...(d.roofMeasurement ?? { areaSqft: 0, pitch: '', address: '' }), [field]: value },
     }))
   }
+  // Editing the pitch rescales pitched-section area (or total area when there
+  // is no split) off the snapshot captured at dialog open — never off the last
+  // edited value, so repeated edits stay idempotent and rounding does not
+  // compound. Flat section is pitch-independent and never rescaled. Legacy
+  // items with no baseline pitch: pitch becomes editable but does NOT drive
+  // area (contractor keeps adjusting area manually as today).
+  const setPitchRise = (newRise: number) => {
+    const clamped = Math.max(0, Math.min(24, Math.round(newRise || 0)))
+    setDraft((d) => {
+      const cur = d.roofMeasurement ?? { areaSqft: 0, pitch: '', address: '' }
+      const nextPitchStr = `${clamped}/12`
+      if (!pitchSnap) {
+        return { ...d, roofMeasurement: { ...cur, pitch: nextPitchStr } }
+      }
+      const ratio = pitchMultiplier(clamped) / pitchMultiplier(pitchSnap.origRise)
+      if (pitchSnap.origPitched !== undefined) {
+        const newPitched = Math.round(pitchSnap.origPitched * ratio)
+        const flat = cur.flatAreaSqft ?? 0
+        return {
+          ...d,
+          roofMeasurement: {
+            ...cur,
+            pitch: nextPitchStr,
+            pitchedAreaSqft: newPitched,
+            areaSqft: newPitched + flat,
+          },
+        }
+      }
+      const newArea = Math.round(pitchSnap.origArea * ratio)
+      return { ...d, roofMeasurement: { ...cur, pitch: nextPitchStr, areaSqft: newArea } }
+    })
+  }
+  const currentRise = parsePitchRise(rm?.pitch)
 
   const addonKeys = Object.keys(draft.roofAddonLinearFt ?? {})
   const setAddonLinearFt = (key: string, value: number) => {
@@ -185,13 +254,37 @@ export function ConfigRevisionDialog({
                 <div className="grid grid-cols-1 gap-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm text-muted-foreground">Total area (sq ft)</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="h-9 w-32 text-right"
-                      value={rm?.areaSqft ?? 0}
-                      onChange={(e) => setMeasure('areaSqft', Number(e.target.value) || 0)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-9 w-20 flex-col items-center justify-center rounded-md border bg-muted/40 px-2">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">Squares</span>
+                        <span className="text-sm font-medium tabular-nums leading-tight">
+                          {Math.round((rm?.areaSqft ?? 0) / 100)}
+                        </span>
+                      </div>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-9 w-32 text-right"
+                        value={rm?.areaSqft ?? 0}
+                        onChange={(e) => setMeasure('areaSqft', Number(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Pitch</span>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={24}
+                        step={1}
+                        className="h-9 w-16 text-right tabular-nums"
+                        value={currentRise ?? ''}
+                        placeholder="—"
+                        onChange={(e) => setPitchRise(Number(e.target.value))}
+                      />
+                      <span className="text-sm text-muted-foreground tabular-nums">/12</span>
+                    </div>
                   </div>
                   {rm?.pitchedAreaSqft !== undefined && (
                     <div className="flex items-center justify-between gap-3">

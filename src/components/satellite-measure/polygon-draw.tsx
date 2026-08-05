@@ -70,7 +70,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   // tool controls. User taps Re-measure to drop back into 'drawing'.
   // Per Rod 2026-05-12 17:43Z directive — map persists as a visual
   // anchor through the rest of the configurator flow.
-  const [phase, setPhase] = useState<'input' | 'drawing' | 'done' | 'confirmed'>('input')
+  const [phase, setPhase] = useState<'input' | 'verifying' | 'drawing' | 'done' | 'confirmed'>('input')
   const [result, setResult] = useState<PolygonResult | null>(null)
   const [vertexCount, setVertexCount] = useState(0)
   const [editedSqft, setEditedSqft] = useState('')
@@ -137,19 +137,19 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
       return
     }
     setLoading(false)
-    // Re-entering 'drawing' with an existing map (user changed address): recenter
+    // Re-entering 'verifying' with an existing map (user changed address): recenter
     // and re-zoom to property scale instead of leaving the map wherever they panned.
     if (mapRef.current) {
       mapRef.current.panTo({ lat: geo.lat, lng: geo.lng })
       mapRef.current.setZoom(MAP_ZOOM)
       fetchAndDrawParcel(geo.lat, geo.lng)
     }
-    setPhase('drawing')
+    setPhase('verifying')
   }
 
-  // Init map after phase flips to 'drawing'
+  // Init map after phase flips to 'verifying' (verification gate) or 'drawing' (re-entry after verification)
   useEffect(() => {
-    if (phase !== 'drawing' || !mapDivRef.current || mapRef.current || !geoRef.current) return
+    if ((phase !== 'verifying' && phase !== 'drawing') || !mapDivRef.current || mapRef.current || !geoRef.current) return
     const { lat, lng } = geoRef.current
 
     const map = new google.maps.Map(mapDivRef.current, {
@@ -614,7 +614,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
     startAddingExtra()
   }
 
-  const showMap = phase === 'drawing' || phase === 'done' || phase === 'confirmed'
+  const showMap = phase === 'verifying' || phase === 'drawing' || phase === 'done' || phase === 'confirmed'
   const isDriveways = serviceCategory === 'driveways'
   const isPergolas = serviceCategory === 'pergolas'
   const totalPolygonCount = 1 + extraPolygons.length
@@ -663,20 +663,54 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         </div>
       )}
 
-      {/* Satellite map — mobile: 62vh so the map dominates the viewport for drawing;
-          sm+: aspect-square capped at 580×580. Always in DOM once shown so mapRef stays stable. */}
+      {/* Satellite map — mobile: 62vh + 580px cap so the map dominates the viewport for drawing;
+          sm: aspect-square capped at 580px; md+: fills card width, height constrained to 600px. Always in DOM once shown so mapRef stays stable. */}
       <div
         ref={mapDivRef}
         className={cn(
-          'w-full rounded-xl overflow-hidden border h-[62vh] max-h-[580px] sm:h-auto sm:aspect-square max-w-[580px] mx-auto',
+          'w-full rounded-xl overflow-hidden border h-[62vh] max-h-[580px] sm:h-auto sm:aspect-square sm:max-w-[580px] sm:mx-auto md:aspect-auto md:max-w-none md:mx-0 md:max-h-none md:h-[600px]',
           !showMap && 'hidden',
         )}
         data-polygon-map={serviceCategory}
       />
 
+      {/* Address verification gate — mandatory confirmation before drawing allowed */}
+      {phase === 'verifying' && (
+        <div className="space-y-3 sm:max-w-[580px] sm:mx-auto md:max-w-none">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-4 space-y-3">
+            <p className="text-sm font-medium text-foreground">
+              Is this the right house?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Please verify that the map is showing the property you want to measure.
+            </p>
+            <div className="flex gap-2 justify-start">
+              <Button
+                size="sm"
+                onClick={() => setPhase('drawing')}
+                data-measure-action="verify-yes"
+              >
+                Yes
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAddress('')
+                  setPhase('input')
+                }}
+                data-measure-action="verify-no"
+              >
+                No
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main drawing instructions */}
       {phase === 'drawing' && !addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <p className="text-xs text-muted-foreground text-center">
             {vertexCount === 0
               ? 'Tap the map to place your first point'
@@ -698,7 +732,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Extra area drawing instructions */}
       {addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <p className="text-xs font-medium" style={{ color: EXTRA_COLORS[extraPolygons.length % EXTRA_COLORS.length] }}>
             Drawing area {extraPolygons.length + 2} — {extraVertexCount === 0
               ? 'tap the map to place your first point'
@@ -715,7 +749,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
 
       {/* Post-draw result + controls */}
       {phase === 'done' && result && !addingExtra && (
-        <div className="space-y-2 max-w-[580px] mx-auto">
+        <div className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <div
             className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 p-3 space-y-2"
             data-measurement-result="live"
@@ -805,7 +839,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
           locked. Single "Re-measure" link drops back to drawing phase. */}
       {phase === 'confirmed' && result && (
         <div
-          className="space-y-2 max-w-[580px] mx-auto"
+          className="space-y-2 sm:max-w-[580px] sm:mx-auto md:max-w-none"
           data-measurement-phase="confirmed"
           data-measurement-sqft={serviceCategory === 'fencing' ? 0 : displayTotal}
           data-measurement-perimeter={result.perimeterFt}

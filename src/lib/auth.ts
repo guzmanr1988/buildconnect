@@ -93,6 +93,7 @@ const PROFILE_LITE_COLUMNS = [
   'noncircumvention_agreement_signed_at',
   'noncircumvention_agreement_signed_name',
   'noncircumvention_agreement_version',
+  'financing_available',
 ].join(', ')
 
 export type ProfileLite = Omit<Profile, typeof PROFILE_BLOAT_COLUMNS[number]>

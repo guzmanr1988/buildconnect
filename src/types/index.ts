@@ -99,6 +99,13 @@ export interface Profile {
   initials?: string
   status: 'active' | 'pending' | 'suspended'
   created_at: string
+  // task_1784926281856_457 — contractor opt-in flag for the homeowner-facing
+  // "Financing Available" badge on vendor-compare. Physical column landed in
+  // migration 115 as NOT NULL DEFAULT false; optional here because non-vendor
+  // roles never read it and legacy in-memory Profile constructions (mocks,
+  // synthesized-from-auth) may not carry it. Vendor.financing_available
+  // (required) narrows for surfaces that need a guaranteed boolean.
+  financing_available?: boolean
   // Ship #270 — Non-circumvention agreement signature audit. Profile-
   // level (not Vendor-level) per banked widen-reads-narrow-writes:
   // future role-specific agreements (e.g. homeowner ToS Phase 2) reuse
