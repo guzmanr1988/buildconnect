@@ -694,20 +694,21 @@ export function ServiceDetailPage() {
       full: [a.street, a.city, a.state, a.zip].filter(Boolean).join(', '),
     })),
   ]
-  // Property selector starts empty — user must actively pick before Add-to-Project.
-  // Edit mode restores the previously-saved address so updates don't lose it.
-  // Roofing anti-redundancy: solo-property auto-preselects on mount so the
-  // homeowner is not asked "which property?" when their profile only lists
-  // one — the measure-my-roof step above already established which. Multi-
-  // property carry-forward happens in handleWizardComplete post-measure.
+  // Property selector: preselects primary address for all services when populated.
+  // Edit mode takes precedence — restores previously-saved address so updates
+  // don't lose it. Primary preselector guard (Rod 2026-08-05): preselect only
+  // when primary.full is non-empty; if primary address is unpopulated on the
+  // profile, fall through to '' so user must actively pick or add an address
+  // (preserves validation, does not delete it). User can override selection.
   const [addressKey, setAddressKey] = useState<string>(() => {
     const edit = editItemForService?.address as CartItemAddress | undefined
     if (edit) {
       const match = addressOptions.find((o) => o.label === edit.label)
       if (match) return match.key
     }
-    if (serviceId === 'roofing' && addressOptions.length === 1) {
-      return addressOptions[0].key
+    const primary = addressOptions.find((o) => o.key === 'primary')
+    if (primary?.full?.trim()) {
+      return primary.key
     }
     return ''
   })
