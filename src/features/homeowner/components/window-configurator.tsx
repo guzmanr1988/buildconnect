@@ -256,20 +256,17 @@ export function WindowConfigurator({ selections, onChange, onSave }: WindowConfi
             <div className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider px-2 pt-3 pb-1">
               {width}" Width
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-2">
+            <div className="flex flex-col">
             {sizes.map((size) => {
               const entries = getEntries(size)
               const hasEntries = entries.length > 0
               return (
-                <div key={size} className={cn('flex flex-col', hasEntries && 'md:col-span-2')}>
+                <div key={size} className="flex flex-col">
                   {/* Size row - add button */}
-                  <div className={cn(
-                    'flex items-center justify-between px-2 py-2 rounded-lg min-h-[44px]',
-                    hasEntries && 'bg-primary/5'
-                  )}>
+                  <div className="flex items-center justify-between px-2 py-2 min-h-[44px]">
                     <span className={cn(
-                      'text-xl font-semibold',
-                      hasEntries ? 'text-foreground' : 'text-muted-foreground'
+                      'text-xl font-semibold px-2 py-1 rounded-md',
+                      hasEntries ? 'text-foreground bg-primary/5' : 'text-muted-foreground'
                     )}>
                       {size.replace('x', '" × ')}"
                     </span>
