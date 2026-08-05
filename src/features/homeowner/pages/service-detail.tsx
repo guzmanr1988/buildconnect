@@ -486,6 +486,14 @@ export function ServiceDetailPage() {
   const [metalRoofCommitted, setMetalRoofCommitted] = useState<boolean>(() =>
     !!(editItemForService?.metalRoofSelection as MetalRoofSelection | undefined)?.color
   )
+  // Per-step committed flags for wizard-chrome services. Tracks explicit
+  // Save button press per wizard step (groupId) — changes step-complete from
+  // "has selection" to "has selection AND Save pressed". Enables Rod's
+  // confirmation UX ("That save button per step should be in every single
+  // configuration"). Key is groupId (e.g. 'material', 'addons'), not serviceId.
+  // Keyed by groupId so each wizard step can track its own Save state
+  // independently across services.
+  const [stepCommitted, setStepCommitted] = useState<Record<string, boolean>>({})
   const [shingleSelection, setShingleSelection] = useState<ShingleRoofSelection>(() => {
     const saved = editItemForService?.shingleSelection as ShingleRoofSelection | undefined
     if (saved) return saved
@@ -1632,7 +1640,8 @@ export function ServiceDetailPage() {
     const selected = selections[g.id] ?? []
     const isComplete =
       selected.length > 0 &&
-      (serviceId !== 'roofing' || g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected))
+      (serviceId !== 'roofing' || g.id !== 'material' || isRoofingMaterialPickerSatisfied(selected)) &&
+      stepCommitted[g.id] === true
     if (isComplete) return { index: idx + 1, total, status: 'complete' }
     // Roofing add-ons must be locked until the material+color step is fully
     // satisfied (Rod directive: "you can't pick add-ons without finishing color").
@@ -4215,6 +4224,26 @@ export function ServiceDetailPage() {
                   </>
                 )}
                 </div>
+                )}
+                {/* Wizard step-chrome footer: Save button (Rod 961). Visible on
+                    active/complete steps when a selection exists. Clicking Save
+                    sets the committed flag, marking the step as explicitly saved.
+                    Changes isComplete from "has selection" to "has selection +
+                    committed", giving Rod visual confirmation his selection was
+                    captured. The Save button changes step status visually but does
+                    not block the CTA gate (completedRequired reads selections
+                    independently, per kratos guidance). */}
+                {isWizardStep && selected.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <Button
+                      size="sm"
+                      className="w-full h-9 rounded-xl text-sm font-semibold"
+                      onClick={() => setStepCommitted((prev) => ({ ...prev, [group.id]: true }))}
+                      variant={isCompleteStep ? 'default' : 'outline'}
+                    >
+                      {isCompleteStep ? 'Saved' : 'Save Selection'}
+                    </Button>
+                  </div>
                 )}
               </div>
             )
