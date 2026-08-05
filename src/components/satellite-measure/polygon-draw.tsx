@@ -679,7 +679,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
         <div className="space-y-3 sm:max-w-[580px] sm:mx-auto md:max-w-none">
           <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-4 space-y-3">
             <p className="text-sm font-medium text-foreground">
-              Is this the right house?
+              Is this your property?
             </p>
             <p className="text-xs text-muted-foreground">
               Please verify that the map is showing the property you want to measure.
