@@ -371,17 +371,18 @@ export function computeVendorTotal(
           totalCents += basePrice * sqft
         } else if (meta.priceUnit === 'linear_ft') {
           // Resolve linear ft source: roofAddonLinearFt (existing roofing
-          // addons, with gutter drops math) OR addonLinearFt (generic
-          // non-roofing addons like pool_fence). Roof perimeter add-ons gate
-          // on includePerimeter — when the section toggle is OFF, no
-          // gutter/fascia/soffit line items reach the quote.
+          // addons, with gutter drops math) OR subGroupLinearFt (group-scoped
+          // linear feet like kitchen stone) OR addonLinearFt (generic non-roofing
+          // addons like pool_fence). Roof perimeter add-ons gate on includePerimeter
+          // — when the section toggle is OFF, no gutter/fascia/soffit line items
+          // reach the quote.
           const roofLinFt = item.roofAddonLinearFt?.[optionId]
           const isRoofPerimeterAddon = roofLinFt !== undefined
           const includePerimeterOpt = item.roofMeasurement?.includePerimeter !== false
           if (isRoofPerimeterAddon && !includePerimeterOpt) {
             // Zero contribution — perimeter toggle excluded this line item.
           } else {
-            const linFt = roofLinFt ?? item.addonLinearFt?.[optionId] ?? 0
+            const linFt = roofLinFt ?? item.subGroupLinearFt?.[optionId] ?? item.addonLinearFt?.[optionId] ?? 0
             const effectiveLinFt = optionId === 'gutters'
               ? computeGutterTotalLinFt(linFt, item.gutterDropsConfig)
               : linFt
