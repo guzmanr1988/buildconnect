@@ -1446,8 +1446,12 @@ export function ServiceDetailPage() {
     if (!isProjectAssociationValid(projectAssociation ?? null)) {
       return 'Answer the association question to continue.'
     }
-    if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+    // Permit gate: distinguish between permit-not-chosen vs waiver-not-signed.
+    if (!projectPermit) {
       return 'Choose a permit option to continue.'
+    }
+    if (projectPermit === 'no' && !isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+      return 'Print your full name on the waiver to continue.'
     }
     if (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) {
       return 'Complete the pool survey to continue.'

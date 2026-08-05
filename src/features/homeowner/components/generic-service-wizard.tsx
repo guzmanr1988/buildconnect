@@ -166,9 +166,13 @@ export function GenericServiceWizard({
   if (nextDisabled) {
     const cfg = steps[step - 1]
     if (cfg?.groupId === PERMIT_STEP_GROUP_ID) {
-      nextDisabledReason = !isProjectAssociationValid(projectAssociation ?? null)
-        ? 'Answer the association question to continue.'
-        : 'Choose a permit option to continue.'
+      if (!isProjectAssociationValid(projectAssociation ?? null)) {
+        nextDisabledReason = 'Answer the association question to continue.'
+      } else if (!projectPermit) {
+        nextDisabledReason = 'Choose a permit option to continue.'
+      } else if (projectPermit === 'no' && !isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+        nextDisabledReason = 'Print your full name on the waiver to continue.'
+      }
     } else if (cfg) {
       const group = service.optionGroups.find((g) => g.id === cfg.groupId)
       const label = (group?.label ?? cfg.title ?? 'option').toLowerCase()
