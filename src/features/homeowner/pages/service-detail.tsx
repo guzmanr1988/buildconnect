@@ -3546,6 +3546,39 @@ export function ServiceDetailPage() {
                         )
                       }
 
+                      // Cabinet (kitchen) has no sub-groups by design — Rod removed
+                      // material options (plywood/mdf/etc) as too complicated. Show
+                      // linear-feet input when parent is selected, not behind a sub-pick.
+                      const subGroups = option.subGroups ?? []
+                      if (subGroups.length === 0) {
+                        return (
+                          <div key={`${group.id}-${option.id}-subgroups-wrap`}>
+                            <div className="ml-2 sm:ml-4 mt-2 border-l-2 border-primary/20 pl-3 sm:pl-4">
+                              <div className="mt-3 flex items-center gap-2">
+                                <label
+                                  htmlFor={`sub-linear-feet-${option.id}`}
+                                  className="text-sm font-medium text-foreground"
+                                >
+                                  Linear feet
+                                </label>
+                                <Input
+                                  id={`sub-linear-feet-${option.id}`}
+                                  data-testid="config-sub-linear-feet-input"
+                                  data-parent-option-id={option.id}
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  placeholder="0"
+                                  value={subGroupLinearFt[option.id] ?? ''}
+                                  onChange={(e) => handleSubLinearFeetChange(option.id, e.target.value)}
+                                  className="h-9 w-24"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+
                       return (
                         <div key={`${group.id}-${option.id}-subgroups-wrap`}>
                           <SubGroupChoices
