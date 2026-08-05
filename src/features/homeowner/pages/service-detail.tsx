@@ -1510,6 +1510,10 @@ export function ServiceDetailPage() {
           // repair, so buildRoofingBaseLines prices repair_materials only.
           if (g.id === 'material' && (selections.service_type ?? []).includes('repair')) return false
         }
+        // Pergolas structure is picked per measurement square (draw-then-assign
+        // in polygon-draw), not via top chip group. The wizard chrome must match
+        // the render-gate that hides it (L2242) so step count is accurate.
+        if (serviceId === 'pergolas' && g.id === 'structure') return false
         return true
       })
     : []
