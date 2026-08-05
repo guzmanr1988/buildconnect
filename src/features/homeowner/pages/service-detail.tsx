@@ -1012,6 +1012,15 @@ export function ServiceDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const services = useCatalogStore((s) => s.services)
+  // task_869: guards + render precondition read hydratedThisSession, NOT
+  // hasHydrated. hasHydrated is persisted and rehydrates true from the
+  // last session, so a returning-visitor deep-link would evict against a
+  // stale snapshot before this session's fetch resolves. hydratedThisSession
+  // is in-memory-only (excluded from partialize) and flips true only after
+  // hydrateFromServer succeeds during THIS browser session.
+  const hydratedThisSession = useCatalogStore((s) => s.hydratedThisSession)
+  const lastFetchError = useCatalogStore((s) => s.lastFetchError)
+  const hydrateFromServer = useCatalogStore((s) => s.hydrateFromServer)
   const service = services.find((s) => s.id === serviceId)
 
   // Rod caught (#517 post-ship): for roofing, scrollIntoView({block:'start'})
@@ -1063,10 +1072,20 @@ export function ServiceDetailPage() {
   useDocumentTitle(service?.name)
 
   useEffect(() => {
+    // task_869: gate the status-guard on hydratedThisSession. Without
+    // this the guard runs against the bundled SERVICE_CATALOG (kitchen
+    // status='draft', PR gap while DB moved to 'live') or a persisted-
+    // from-last-session snapshot, and cold deep-links bounce permanently
+    // — navigate() unmounts the component so the corrected `service` ref
+    // arriving 200-800ms later has no mounted effect to re-run against.
+    // Skip until this session's hydrate has settled (or errored — the
+    // render branch below shows retry-UI in the error case, so the guard
+    // must not race the render).
+    if (!hydratedThisSession) return
     if (service && service.status !== 'live') {
       navigate('/home', { replace: true })
     }
-  }, [service, navigate])
+  }, [service, navigate, hydratedThisSession])
 
   // Rod voice (2026-07-15) — Step 3 (Add-Ons) visibility fix. After Step-2
   // material/color completion the Add-Ons section sat far below the fold on
@@ -1261,6 +1280,56 @@ export function ServiceDetailPage() {
     flatRoofSelection.membraneType, flatRoofCommitted,
   ])
 
+  // task_869: precondition ladder — hydration authority before service authority.
+  //
+  // Rendering IS acting on unconfirmed data. Before this session's
+  // hydrateFromServer has settled we must not render the configurator
+  // (which reads shape) and must not run the not-found branch (which
+  // reads absence-from-shape) — both are downstream of the same
+  // authority. Skeleton while pending, retry-UI on error, then service-
+  // shape decisions. Folds in the `if (!service)` cousin at former :1264
+  // so the one-tick "Service not found" flash on cold deep-link of a
+  // DB-present-but-bundle-absent service is closed in the same change.
+  if (!hydratedThisSession && !lastFetchError) {
+    return (
+      <div
+        data-testid="service-detail-hydrating"
+        className="flex flex-col items-center justify-center py-20 gap-4"
+      >
+        <div
+          className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+          aria-hidden="true"
+        />
+        <p className="text-muted-foreground">Loading service…</p>
+      </div>
+    )
+  }
+  if (!hydratedThisSession && lastFetchError) {
+    return (
+      <div
+        data-testid="service-detail-hydrate-error"
+        className="flex flex-col items-center justify-center py-20 gap-4"
+        role="alert"
+      >
+        <p className="text-muted-foreground">
+          We couldn&apos;t load this service. Please retry.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              void hydrateFromServer()
+            }}
+          >
+            Retry
+          </Button>
+          <Button variant="ghost" onClick={() => navigate('/home')}>
+            Go back
+          </Button>
+        </div>
+      </div>
+    )
+  }
   if (!service) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">

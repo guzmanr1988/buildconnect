@@ -56,6 +56,10 @@ interface CatalogState {
   services: ServiceConfig[]
   isHydrating: boolean
   hasHydrated: boolean
+  // In-memory-only flag, EXCLUDED from partialize. Flips true when
+  // hydrateFromServer succeeds *in this browser session*. Used by route
+  // guards that must not act on persisted-from-last-session shape (task_869).
+  hydratedThisSession: boolean
   lastFetchError: string | null
 
   // Staged mutations for batch-commit Save Changes (PR-#425)
@@ -753,6 +757,7 @@ export const useCatalogStore = create<CatalogState>()(
       services: SERVICE_CATALOG,
       isHydrating: false,
       hasHydrated: false,
+      hydratedThisSession: false,
       lastFetchError: null,
       _pendingDeletes: [],
       _pendingEdits: [],
@@ -766,22 +771,50 @@ export const useCatalogStore = create<CatalogState>()(
           // because nothing locally re-fills the catalog from bundled defaults
           // after fetch. SERVICE_CATALOG remains only as an offline-bootstrap
           // fallback (initial state on first load before hydrate fires).
-          const fresh = await api.fetchServiceCatalog()
+          //
+          // task_869: race the fetch against a 10s timeout. Without this a
+          // hung supabase call leaves hydratedThisSession false forever, and
+          // downstream skeleton/retry-UI branches never flip — user sits on
+          // a permanent spinner with no affordance. 10s is generous vs a
+          // healthy p99 catalog fetch (~600ms observed) and short enough
+          // that a genuinely-broken network surfaces retry-UI within one
+          // patience window.
+          const HYDRATE_TIMEOUT_MS = 10_000
+          const fresh = await Promise.race([
+            api.fetchServiceCatalog(),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`hydrate timed out after ${HYDRATE_TIMEOUT_MS}ms`)),
+                HYDRATE_TIMEOUT_MS,
+              ),
+            ),
+          ])
           // PR-#425 — overlay any in-flight pending edits on top of the fresh
           // server payload so realtime refetch doesn't visually clobber staged-
           // but-uncommitted user changes. Pending-deletes stay marker-only.
           const withPending = applyPendingEditsToServices(fresh, get()._pendingEdits)
-          set({ services: withPending, hasHydrated: true, isHydrating: false })
+          set({
+            services: withPending,
+            hasHydrated: true,
+            hydratedThisSession: true,
+            isHydrating: false,
+          })
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'fetchServiceCatalog failed'
           // Keep existing local services (bundled fallback or cached) — do NOT blank out on fetch failure.
+          // hydratedThisSession stays false so guards keep gating on skeleton/retry-UI, not persisted shape.
           set({ isHydrating: false, lastFetchError: msg })
           console.error('[catalog-store] hydrateFromServer failed:', msg)
         }
       },
 
       resetToBundled: () => {
-        set({ services: SERVICE_CATALOG, hasHydrated: false, lastFetchError: null })
+        set({
+          services: SERVICE_CATALOG,
+          hasHydrated: false,
+          hydratedThisSession: false,
+          lastFetchError: null,
+        })
       },
 
       addService: async (service) => {
@@ -1648,7 +1681,11 @@ export const useCatalogStore = create<CatalogState>()(
       // fallback for cold opens before hydrate fires.
       version: 18,
       // Persist only the services array and the hasHydrated flag; transient
-      // state (isHydrating, lastFetchError) stays in-memory only.
+      // state (isHydrating, hydratedThisSession, lastFetchError) stays
+      // in-memory only. hasHydrated is kept in the persisted shape purely
+      // for v18 shape stability post task_869 — it has zero live consumers
+      // now that route guards read hydratedThisSession instead (removing
+      // it would force a version bump + migrate blast to every user).
       partialize: (state) => ({
         services: state.services,
         hasHydrated: state.hasHydrated,
