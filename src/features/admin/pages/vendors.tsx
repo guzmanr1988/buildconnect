@@ -520,15 +520,20 @@ export default function VendorsPage() {
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{vendor.address}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                    <span>
-                      {vendor.total_reviews > 0
-                        ? `${vendor.rating} · ${vendor.total_reviews} reviews · `
-                        : ''}
-                      joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                    </span>
-                  </div>
+                  {vendor.total_reviews > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      <span>
+                        {vendor.rating} · {vendor.total_reviews} reviews · joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span>
+                        joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Stats */}
