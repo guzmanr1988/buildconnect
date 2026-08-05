@@ -1495,6 +1495,13 @@ export function ServiceDetailPage() {
   // via kratos task_1784264733391_196. Per-service filter cases stay explicit
   // inside the filter — any new service opts in via WIZARD_CHROME_SERVICES
   // and (if needed) its own filter branch.
+
+  // Pergolas structure gate: shared predicate for both count filter
+  // (wizardVisibleGroups) and render gate (main chip loop below).
+  // Gates on whether measurement polygons exist — if none, the top
+  // Structure Type group shows; if any polygons, per-square picker handles it.
+  const hasPolygons = (areaMeasurement?.polygons?.length ?? 0) >= 1
+
   const wizardVisibleGroups = isWizardService(serviceId)
     ? service.optionGroups.filter((g) => {
         if (!isRevealed(g)) return false
@@ -1510,6 +1517,13 @@ export function ServiceDetailPage() {
           // repair, so buildRoofingBaseLines prices repair_materials only.
           if (g.id === 'material' && (selections.service_type ?? []).includes('repair')) return false
         }
+        // Pergolas structure is picked per measurement square (draw-then-assign
+        // in service-detail per-square breakdown), not via top chip group.
+        // Gate on hasPolygons to match the render-gate. When polygons exist,
+        // the per-square picker in the Size breakdown handles structure selection,
+        // so this top group is hidden. When no polygons (custom-size), the top
+        // group shows and satisfies the structure requirement.
+        if (serviceId === 'pergolas' && g.id === 'structure' && hasPolygons) return false
         return true
       })
     : []
@@ -2239,10 +2253,13 @@ export function ServiceDetailPage() {
               return false
             }
             // PR-223 Option B — pergolas structure is picked PER measurement
-            // square (draw-then-assign), not via this top chip group. The
-            // group's options still feed the per-square chip-row inside the
-            // Size group breakdown, but the top-level group is hidden.
-            if (serviceId === 'pergolas' && group.id === 'structure') {
+            // square (draw-then-assign), not via this top chip group when
+            // polygons exist. Gate on hasPolygons: if no polygons, the top
+            // group shows; if polygons, the per-square picker in the Size
+            // breakdown handles it. The group's options still feed the
+            // per-square chip-row, but the top-level group is hidden only when
+            // polygons.length >= 1.
+            if (serviceId === 'pergolas' && group.id === 'structure' && hasPolygons) {
               return false
             }
             return true
