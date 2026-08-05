@@ -308,7 +308,19 @@ const DEDICATED_CONFIGURATOR_SERVICES: readonly string[] = ['windows_doors']
 // service.optionGroups so any new service can opt in by adding its id here
 // — no per-service wiring required beyond service-specific filter cases
 // inside wizardVisibleGroups.
-const WIZARD_CHROME_SERVICES: readonly string[] = ['roofing', 'windows_doors']
+const WIZARD_CHROME_SERVICES: readonly string[] = [
+  'roofing',
+  'windows_doors',
+  'pool',
+  'driveways',
+  'fencing',
+  'pergolas',
+  'air_conditioning',
+  'wall_paneling',
+  'garage',
+  'house_painting',
+  'blinds',
+]
 const isWizardService = (id: string | null | undefined): boolean =>
   id != null && WIZARD_CHROME_SERVICES.includes(id)
 
