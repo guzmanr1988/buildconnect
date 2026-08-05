@@ -881,6 +881,9 @@ export function ServiceDetailPage() {
       return 'Answer the association question to continue.'
     }
     if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+      if (projectPermit === 'no' && (!projectPermitWaiver?.signedName || projectPermitWaiver.signedName.trim().length < 2)) {
+        return 'Print your full name to continue.'
+      }
       return 'Choose a permit option to continue.'
     }
     if (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) {

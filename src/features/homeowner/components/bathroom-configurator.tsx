@@ -475,9 +475,15 @@ export function BathroomConfigurator() {
   if (step === 'permit') {
     nextDisabled = !permitValid
     if (nextDisabled) {
-      nextDisabledReason = !isProjectAssociationValid(projectAssociation ?? null)
-        ? 'Answer the association question to continue.'
-        : 'Choose a permit option to continue.'
+      if (!isProjectAssociationValid(projectAssociation ?? null)) {
+        nextDisabledReason = 'Answer the association question to continue.'
+      } else if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+        if (projectPermit === 'no' && (!projectPermitWaiver?.signedName || projectPermitWaiver.signedName.trim().length < 2)) {
+          nextDisabledReason = 'Print your full name to continue.'
+        } else {
+          nextDisabledReason = 'Choose a permit option to continue.'
+        }
+      }
     }
   }
   if (step === 'address') {

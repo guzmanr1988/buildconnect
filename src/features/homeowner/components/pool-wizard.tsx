@@ -578,7 +578,13 @@ export function PoolWizard({
     }
     else if (step === 7) {
       if (!isProjectAssociationValid(projectAssociation ?? null)) nextDisabledReason = 'Answer the association question to continue.'
-      else if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) nextDisabledReason = 'Choose a permit option to continue.'
+      else if (!isProjectPermitValid(projectPermit, projectPermitWaiver)) {
+        if (projectPermit === 'no' && (!projectPermitWaiver?.signedName || projectPermitWaiver.signedName.trim().length < 2)) {
+          nextDisabledReason = 'Print your full name to continue.'
+        } else {
+          nextDisabledReason = 'Choose a permit option to continue.'
+        }
+      }
       else if (!isPoolSurveyValid(poolSurvey ?? null)) nextDisabledReason = 'Complete the pool survey to continue.'
     }
   }
