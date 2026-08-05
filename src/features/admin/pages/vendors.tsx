@@ -522,7 +522,12 @@ export default function VendorsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                    <span>{vendor.rating} · {vendor.total_reviews} reviews · joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                    <span>
+                      {vendor.total_reviews > 0
+                        ? `${vendor.rating} · ${vendor.total_reviews} reviews · `
+                        : ''}
+                      joined {new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    </span>
                   </div>
                 </div>
 

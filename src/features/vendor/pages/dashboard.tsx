@@ -477,8 +477,9 @@ export default function VendorDashboard() {
       </div>
 
       {/* Performance Stats — hidden for account_rep (vendor-wide metrics
-          like rating + total_reviews can't be rep-scoped; MATH IS GOD). */}
-      {profile?.role !== 'account_rep' && (
+          like rating + total_reviews can't be rep-scoped; MATH IS GOD).
+          Also hidden when total_reviews is 0 (data doesn't exist; unbuilt feature). */}
+      {profile?.role !== 'account_rep' && vendor.total_reviews > 0 && (
       <motion.div variants={item}>
         <Card className="rounded-xl">
           <CardHeader>
