@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import { usePlacesAutocomplete, type StructuredAddress } from '@/hooks/use-places-autocomplete'
 
 export interface AddressFields {
@@ -55,9 +56,10 @@ export function AddressFieldset({
   const req = required ? <span className="text-destructive">*</span> : null
 
   const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
 
   const setStreetInputRef = usePlacesAutocomplete(
-    enableAddressAutocomplete && !!MAPS_KEY,
+    enableAddressAutocomplete && gmpEnabled && !!MAPS_KEY,
     MAPS_KEY,
     (formatted) => update({ street: formatted }),
     (parts: StructuredAddress) =>
