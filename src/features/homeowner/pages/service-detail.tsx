@@ -1544,6 +1544,18 @@ export function ServiceDetailPage() {
     if (!pergolasStructuresAllAssigned) {
       return 'Assign a structure to each measured area to continue.'
     }
+    if (serviceId === 'roofing') {
+      const addons = selections['addons'] ?? []
+      if (addons.includes('solar_prep') && solarPanelCount === null) {
+        return 'Enter the number of solar panels to continue.'
+      }
+      if (addons.includes('extra_plywood') && plywoodSheetCount === null) {
+        return 'Enter the number of plywood sheets to continue.'
+      }
+      if (addons.includes('insulation') && atticInsulationSqft === null) {
+        return 'Enter the attic insulation square footage to continue.'
+      }
+    }
     return 'Complete all required selections to continue.'
   }
 
@@ -4761,7 +4773,10 @@ export function ServiceDetailPage() {
             (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) ||
             (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) ||
             !pergolasStructuresAllAssigned ||
-            roofingColorGateBlocks
+            roofingColorGateBlocks ||
+            (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) ||
+            (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) ||
+            (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)
           ) && (
             <p className="text-xs text-muted-foreground text-center">
               {gatingReason()}
