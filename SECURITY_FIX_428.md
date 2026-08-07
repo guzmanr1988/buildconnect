@@ -11,8 +11,6 @@ Five demo account password environment variables were present in the production 
 These were inlined into the public JavaScript bundle by Vite at build time, making them fetchable at:
 - https://buildc.net/assets/index-*.js (HTTP 200, no auth)
 
-This regression occurred because .env.production was not updated after the security fix in task_535 (2026-06-06), which intentionally dropped the VITE_ prefix from these variables to keep them out of the bundle.
-
 ## Root Cause
 **Regression from task_535 (2026-06-06):**
 - task_535 correctly removed VITE_ prefixes from demo passwords to keep them out of bundle
