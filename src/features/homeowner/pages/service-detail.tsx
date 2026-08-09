@@ -310,10 +310,12 @@ const DEDICATED_CONFIGURATOR_SERVICES: readonly string[] = ['windows_doors']
 // inside wizardVisibleGroups.
 // Services that render as numbered-step wizards. This is the root source of truth
 // for which services show wizard chrome vs inline configurators.
-// Services NOT here use inline configurators (windows_doors, kitchen) or dedicated
-// configurators (remodel, bathroom). Garage uses inline configurator path (L4340+).
+// Services can have BOTH dedicated configurators AND wizard chrome (e.g. windows_doors).
+// Dedicated configurator = how options are surfaced; wizard chrome = step-of-N progress bar.
+// kitchen is NOT here (inline configurator only); garage may be here but hard-redirects elsewhere (TBD).
 const WIZARD_CHROME_SERVICES: readonly string[] = [
   'roofing',
+  'windows_doors',
   'pool',
   'driveways',
   'fencing',
@@ -1361,6 +1363,70 @@ export function ServiceDetailPage() {
     return true
   }
 
+  // Single source of truth for which optionGroups are visible. Used by both
+  // wizardVisibleGroups (for step count) and render loop (for actual rendering).
+  // Ensures step count always matches rendered groups (fixes pergolas/pool/wall_paneling).
+  const getVisibleOptionGroups = (groups: OptionGroup[]): OptionGroup[] => {
+    return groups.filter((group) => {
+      // Generic conditional reveal — e.g., windows_doors install_preference
+      // waits on `scope` (Permit/No Permit) being answered first.
+      if (!isRevealed(group)) return false
+
+      // Pool addon sub-menus: hide spa_size unless Attached Spa is selected and it's the active menu
+      if (group.id === 'spa_size') {
+        if (!(selections['addons'] ?? []).includes('spa')) return false
+        if (activeAddonMenu !== 'spa') return false
+      }
+      // Hide beach_size unless Beach is selected and it's the active menu
+      if (group.id === 'beach_size') {
+        if (!(selections['addons'] ?? []).includes('beach')) return false
+        if (activeAddonMenu !== 'beach') return false
+      }
+
+      // Hide old garage door option groups - now handled by GarageDoorConfigurator
+      if (group.id === 'garage_door_type' || group.id === 'garage_door_size' || group.id === 'garage_door_color' || group.id === 'garage_door_glass') {
+        return false
+      }
+
+      // Repair Materials only renders when service_type=repair.
+      if (group.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) {
+        return false
+      }
+
+      // Material section hidden when service_type=addons (Arc-31).
+      if (
+        serviceId === 'roofing' &&
+        group.id === 'material' &&
+        (selections.service_type ?? []).includes('addons')
+      ) {
+        return false
+      }
+
+      // Arc-34 — Material picker hidden in Repair. Repair renders repair_materials INSTEAD.
+      if (
+        serviceId === 'roofing' &&
+        group.id === 'material' &&
+        (selections.service_type ?? []).includes('repair')
+      ) {
+        return false
+      }
+
+      // Hide water_feature_units chip group on homeowner side (Pool).
+      // The canonical UI is the count-stepper waterfall configurator further down.
+      if (group.id === 'water_feature_units') {
+        return false
+      }
+
+      // Pergolas structure is picked PER measurement square (draw-then-assign), not via
+      // this top chip group when polygons exist. Gate on hasPolygons to match render.
+      if (serviceId === 'pergolas' && group.id === 'structure' && hasPolygons) {
+        return false
+      }
+
+      return true
+    })
+  }
+
   const requiredGroups = service.optionGroups.filter((g) => {
     if (!g.required || !isRevealed(g)) return false
     if (
@@ -1582,30 +1648,10 @@ export function ServiceDetailPage() {
   // Structure Type group shows; if any polygons, per-square picker handles it.
   const hasPolygons = (areaMeasurement?.polygons?.length ?? 0) >= 1
 
+  // Wizard step groups. Uses unified getVisibleOptionGroups so step count always
+  // matches rendered groups (fixes pergolas/pool/wall_paneling step mismatches).
   const wizardVisibleGroups = isWizardService(serviceId)
-    ? service.optionGroups.filter((g) => {
-        if (!isRevealed(g)) return false
-        if (serviceId === 'roofing') {
-          if (g.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) return false
-          if (g.id === 'material' && (selections.service_type ?? []).includes('addons')) return false
-          // Repair flow renders the `repair_materials` sub-group INSTEAD of the
-          // full `material` picker (see roofing-wizard.tsx S4 comment). This is
-          // the wizard-gate (drops material from the numbered steps); it MUST be
-          // paired with the render-gate in the main chip loop below (search
-          // "Arc-34") or the picker still paints unnumbered and re-seeds
-          // selections.material. Both together keep selections.material empty in
-          // repair, so buildRoofingBaseLines prices repair_materials only.
-          if (g.id === 'material' && (selections.service_type ?? []).includes('repair')) return false
-        }
-        // Pergolas structure is picked per measurement square (draw-then-assign
-        // in service-detail per-square breakdown), not via top chip group.
-        // Gate on hasPolygons to match the render-gate. When polygons exist,
-        // the per-square picker in the Size breakdown handles structure selection,
-        // so this top group is hidden. When no polygons (custom-size), the top
-        // group shows and satisfies the structure requirement.
-        if (serviceId === 'pergolas' && g.id === 'structure' && hasPolygons) return false
-        return true
-      })
+    ? getVisibleOptionGroups(service.optionGroups)
     : []
   type WizardStepStatus = 'complete' | 'active' | 'locked'
   interface WizardStepMeta {
@@ -2263,87 +2309,10 @@ export function ServiceDetailPage() {
           </div>
         )}
 
-        {/* Option groups */}
+        {/* Option groups — use unified getVisibleOptionGroups filter so render
+            matches wizardVisibleGroups step count (fixes pergolas/pool/wall_paneling). */}
         <div className={serviceId === 'wall_paneling' ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-6'}>
-          {service.optionGroups.filter((group) => {
-            // Generic conditional reveal — e.g., windows_doors install_preference
-            // waits on `scope` (Permit/No Permit) being answered first.
-            if (!isRevealed(group)) return false
-            // Hide spa_size unless Attached Spa is selected and it's the active menu
-            if (group.id === 'spa_size') {
-              if (!(selections['addons'] ?? []).includes('spa')) return false
-              if (activeAddonMenu !== 'spa') return false
-            }
-            // Hide beach_size unless Beach is selected and it's the active menu
-            if (group.id === 'beach_size') {
-              if (!(selections['addons'] ?? []).includes('beach')) return false
-              if (activeAddonMenu !== 'beach') return false
-            }
-            // Hide old garage door option groups - now handled by GarageDoorConfigurator
-            if (group.id === 'garage_door_type' || group.id === 'garage_door_size' || group.id === 'garage_door_color' || group.id === 'garage_door_glass') {
-              return false
-            }
-            // PR-241 — Repair Materials only renders when service_type=repair.
-            // Rod 2026-05-14 15:11Z: "only show repair materials if on service
-            // type repair is selected". Render-gate not lock-gate.
-            if (group.id === 'repair_materials' && !(selections.service_type ?? []).includes('repair')) {
-              return false
-            }
-            // Arc-31 — Material section hidden when service_type=addons. Add-ons
-            // mode skips the material-order step (M=false, P=true, F=false) so
-            // the material chooser is moot. Render-gate per sibling-pattern above.
-            if (
-              serviceId === 'roofing' &&
-              group.id === 'material' &&
-              (selections.service_type ?? []).includes('addons')
-            ) {
-              return false
-            }
-            // Arc-34 — the whole-roof Material picker is hidden in Repair too.
-            // Repair renders `repair_materials` INSTEAD of `material` (roofing-
-            // wizard.tsx S4). A conditionally-hidden group needs BOTH a wizard-
-            // gate (wizardVisibleGroups, L1476) AND this render-gate — the addons
-            // and repair_materials siblings each carry both. The arc-34 first cut
-            // added only the wizard-gate, so Repair kept painting an UNNUMBERED
-            // "Roofing Material" picker at the old Step-2 slot (Rod 2026-07-24
-            // voice: "step two is basically identical as step four for repairs —
-            // makes no sense"). Worse, picking it seeded selections.material →
-            // buildRoofingBaseLines emitted a whole-roof `roofing-material-*` line
-            // ON TOP OF the `roofing-repair-*` line = double count, and the
-            // material-order color gate (getBlockerReason L1366, guarded on
-            // material.length>0) disabled Add-to-Project. Hiding the picker keeps
-            // selections.material empty for repair → only the repair line prices
-            // (resolveRepairAreaSqft basis), the color gate self-skips, and
-            // includeMaterialOrder is left ON so isRoofingPerimeterOnly (add-ons-
-            // only detection) is unaffected.
-            if (
-              serviceId === 'roofing' &&
-              group.id === 'material' &&
-              (selections.service_type ?? []).includes('repair')
-            ) {
-              return false
-            }
-            // Hide water_feature_units chip group on homeowner side; the
-            // canonical UI is the count-stepper waterfall configurator
-            // (Laminar Jets + Waterfalls counts) further down. The
-            // optionGroup stays in SERVICE_CATALOG because vendor catalog
-            // page consumes it for per-unit pricing (laminar_jet /
-            // waterfall_unit). Sibling of garage_door_* exclusion above.
-            if (group.id === 'water_feature_units') {
-              return false
-            }
-            // PR-223 Option B — pergolas structure is picked PER measurement
-            // square (draw-then-assign), not via this top chip group when
-            // polygons exist. Gate on hasPolygons: if no polygons, the top
-            // group shows; if polygons, the per-square picker in the Size
-            // breakdown handles it. The group's options still feed the
-            // per-square chip-row, but the top-level group is hidden only when
-            // polygons.length >= 1.
-            if (serviceId === 'pergolas' && group.id === 'structure' && hasPolygons) {
-              return false
-            }
-            return true
-          }).map((group) => {
+          {getVisibleOptionGroups(service.optionGroups).map((group) => {
             const selected = selections[group.id] ?? []
             const groupLabel =
               isRoofingPerimeterOnly && group.id === 'material'
