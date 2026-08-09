@@ -308,18 +308,19 @@ const DEDICATED_CONFIGURATOR_SERVICES: readonly string[] = ['windows_doors']
 // service.optionGroups so any new service can opt in by adding its id here
 // — no per-service wiring required beyond service-specific filter cases
 // inside wizardVisibleGroups.
+// Services that render as numbered-step wizards. This is the root source of truth
+// for which services show wizard chrome vs inline configurators.
+// Services NOT here use inline configurators (windows_doors, kitchen) or dedicated
+// configurators (remodel, bathroom). Garage uses inline configurator path (L4340+).
 const WIZARD_CHROME_SERVICES: readonly string[] = [
   'roofing',
-  'windows_doors',
   'pool',
   'driveways',
   'fencing',
   'pergolas',
   'air_conditioning',
   'wall_paneling',
-  'garage',
   'house_painting',
-  'kitchen',
   'blinds',
 ]
 const isWizardService = (id: string | null | undefined): boolean =>
