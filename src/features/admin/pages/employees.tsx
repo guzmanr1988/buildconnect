@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
 import {
   Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar, KeyRound, RefreshCw,
 } from 'lucide-react'
@@ -133,6 +135,14 @@ export default function EmployeesPage() {
   const [provisioningLogin, setProvisioningLogin] = useState(false)
   const [deactivateTarget, setDeactivateTarget] = useState<Employee | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
+
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
+  const addressRef = usePlacesAutocomplete(
+    !!(gmpEnabled && apiKey),
+    apiKey,
+    (formatted) => setForm({ ...form, address: formatted }),
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -596,7 +606,7 @@ export default function EmployeesPage() {
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs font-semibold">Address</Label>
-                  <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm" />
+                  <Input ref={addressRef} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm" />
                 </div>
               </div>
             </section>

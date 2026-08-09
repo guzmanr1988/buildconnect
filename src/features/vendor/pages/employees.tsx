@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
 import {
   Search, Plus, Users, Mail, Phone, MapPin, Landmark, Shield, Pencil, UserX, UserCheck, Trash2, Briefcase, Calendar, DollarSign,
 } from 'lucide-react'
@@ -135,6 +137,14 @@ export default function VendorEmployeesPage() {
   const [form, setForm] = useState<VendorEmployeeInput>(blankEmployee())
   const [deactivateTarget, setDeactivateTarget] = useState<VendorEmployee | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<VendorEmployee | null>(null)
+
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
+  const addressRef = usePlacesAutocomplete(
+    !!(gmpEnabled && apiKey),
+    apiKey,
+    (formatted) => setForm({ ...form, address: formatted }),
+  )
 
   // Ship #22 — Pay Account Rep flow. Two-step dialog (amount + review →
   // confirm) mirroring /vendor/banking Pay Commission shape. On confirm,
@@ -612,7 +622,7 @@ export default function VendorEmployeesPage() {
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs font-semibold">Address</Label>
-                  <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm" />
+                  <Input ref={addressRef} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm" />
                 </div>
               </div>
             </section>
