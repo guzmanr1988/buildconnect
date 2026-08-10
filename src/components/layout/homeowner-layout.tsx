@@ -339,8 +339,16 @@ export function HomeownerLayout() {
         </div>
       )}
 
-      {/* Main content */}
-      <main className={cn('mx-auto max-w-7xl px-4 sm:px-6 overflow-x-hidden', isMobile ? 'pt-24 landscape:pt-20 pb-28 landscape:pb-28' : 'pt-28 pb-6')}>
+      {/* Main content. Mobile padding must clear the fixed top pill AND the
+          fixed bottom-nav pill including iOS safe-area insets. Prior fixed
+          pt-24 / pb-28 assumed a zero safe-area — on Dynamic Island / notched
+          iPhones the header pill's outer wrapper adds env(safe-area-inset-top)
+          (~44px) + pt-3 (12px) + h-16 (64px) ≈ 120px, exceeding pt-24 (96px)
+          by ~24px and pulling the first paint of page content behind the
+          translucent pill. Same math on the bottom nav vs pb-28. Rod voice
+          2026-08-08 task_1786199078887_917 D1+D3. Desktop path (else branch)
+          unchanged — safe-area evaluates to 0 there so no regression risk. */}
+      <main className={cn('mx-auto max-w-7xl px-4 sm:px-6 overflow-x-hidden', isMobile ? 'pt-[calc(env(safe-area-inset-top)+6rem)] landscape:pt-[calc(env(safe-area-inset-top)+5rem)] pb-[calc(env(safe-area-inset-bottom)+7.5rem)] landscape:pb-[calc(env(safe-area-inset-bottom)+7rem)]' : 'pt-28 pb-6')}>
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
