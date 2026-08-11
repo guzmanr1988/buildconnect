@@ -36,6 +36,57 @@ export function SubGroupChoices({
   // implicit section).
   const isMultiSectionMode = subGroups.every((sg) => sg.options.length === 0)
 
+  // Handle Cabinet Install case: empty subGroups should render as labeled choices
+  if (isMultiSectionMode && subGroups.length > 0) {
+    return (
+      <div
+        className="ml-2 sm:ml-4 mt-2 border-l-2 border-primary/20 pl-3 sm:pl-4"
+        data-testid="config-sub-menu-group"
+        data-parent-option-id={parentOption.id}
+        data-sub-group-count={subGroups.length}
+        data-multi-section-mode="true"
+        role="radiogroup"
+      >
+        <div className="flex flex-wrap gap-2" data-testid="config-sub-menu-section">
+          {subGroups.map((sg) => {
+            const selectedChoiceId = selections[`${parentOption.id}-sub`]?.[0]
+            const isSelected = selectedChoiceId === sg.id
+            return (
+              <button
+                key={sg.id}
+                type="button"
+                role="radio"
+                data-testid="config-sub-menu-choice"
+                data-choice-id={sg.id}
+                data-choice-name={sg.label}
+                data-sub-menu-id={sg.id}
+                data-chip-state={isSelected ? 'active' : 'inactive'}
+                aria-checked={isSelected}
+                onClick={() => onSelect(parentOption.id, sg.id)}
+                className={cn(
+                  'inline-flex max-w-[220px] flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150',
+                  isSelected
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+                    : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted',
+                )}
+              >
+                <span className="font-medium">{sg.label}</span>
+                {sg.description && (
+                  <span
+                    data-testid="config-sub-menu-choice-desc"
+                    className={cn('text-xs', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')}
+                  >
+                    {sg.description}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // Radio-across semantics: ONE selected choiceId per parent option, stored
   // under key `${parentOption.id}-sub`. Tapping a chip in any section switches
   // the pick. Tapping the same chip again toggles it off (handler-side).
