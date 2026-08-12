@@ -48,6 +48,14 @@ const APEX_REAL_UUID = '3e0821aa-89e7-4140-bff8-c4f7f985f561'
 
 export function VendorComparePage() {
   const navigate = useNavigate()
+  // task_501: session-scoped hydration authority (mirrors task_869 gate on
+  // service-detail). displayVendors filtering and the empty-state
+  // discriminator both read shape that resolves from hydrateFromServer;
+  // rendering before this session's hydrate has settled would flash the
+  // "no contractors" empty state or a stale-shaped total.
+  const hydratedThisSession = useCatalogStore((s) => s.hydratedThisSession)
+  const lastFetchError = useCatalogStore((s) => s.lastFetchError)
+  const hydrateFromServer = useCatalogStore((s) => s.hydrateFromServer)
   const cartItems = useCartStore((s) => s.items)
   // pin-31 — homeowner permit choice drives the permit-line gate in
   // computeVendorTotal so vendor-compare totals match the eventual
@@ -272,6 +280,52 @@ export function VendorComparePage() {
     return { bestPrice, highestRated }
   }, [totalsByVendor, displayVendors])
 
+  // task_501: precondition ladder — hydration authority before any
+  // vendor-render decision. displayVendors + empty-state discriminator
+  // both read shape downstream of hydrateFromServer; a cold refresh
+  // that renders before hydration would either flash empty (persisted
+  // snapshot with zero vendors) or misclassify state B vs C.
+  if (!hydratedThisSession && !lastFetchError) {
+    return (
+      <div
+        data-testid="vendor-compare-hydrating"
+        className="flex flex-col items-center justify-center py-20 gap-4"
+      >
+        <div
+          className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+          aria-hidden="true"
+        />
+        <p className="text-muted-foreground">Loading contractors…</p>
+      </div>
+    )
+  }
+  if (!hydratedThisSession && lastFetchError) {
+    return (
+      <div
+        data-testid="vendor-compare-hydrate-error"
+        className="flex flex-col items-center justify-center py-20 gap-4"
+        role="alert"
+      >
+        <p className="text-muted-foreground">
+          We couldn&apos;t load the contractor catalog. Please retry.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              void hydrateFromServer()
+            }}
+          >
+            Retry
+          </Button>
+          <Button variant="ghost" onClick={() => navigate('/home')}>
+            Go back
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -289,22 +343,44 @@ export function VendorComparePage() {
         </div>
       )}
 
-      {/* Ship #246 — empty-state when geo+category filter yields zero.
-          Differentiates the "no coverage in your area" case from a generic
-          "no vendors" state so the homeowner knows to adjust radius (via
-          admin) or pick a different project category. */}
+      {/* 3-state empty-state discriminator. Universal rule (Rod restated
+          2026-08-12): a contractor appears only if priced for the whole
+          cart. When displayVendors is empty the CAUSE drives the remedy:
+          (A) !hasHomeownerCoord → cannot match on geography at all
+          (B) featuredVendors.length === 0 → true radius miss
+          (C) featuredVendors > 0 && displayVendors === 0 → contractors
+              in radius exist but none priced every cart service
+              (post-hydration coversAllServices && totalCents > 0 zero).
+          Headline in state C is Rod-approved 2026-08-12; body adopted
+          from phaethon fa157e0 draft (agnostic on cause). States A and
+          B keep the geo headline because in those states the cause IS
+          geographic. Predicate expressed in the vars that drive render
+          so states are mutually exclusive. */}
       {displayVendors.length === 0 && (
         <div className="rounded-xl border border-dashed p-8 text-center space-y-2">
-          <p className="text-base font-semibold text-foreground">No contractors in your area</p>
-          {hasHomeownerCoord ? (
-            <p className="text-sm text-muted-foreground">
-              No contractors within {matchRadiusMiles} miles of your address match the selected services.
-              Try expanding the radius in admin Settings or adjusting the services in your project.
-            </p>
+          {!hasHomeownerCoord ? (
+            <>
+              <p className="text-base font-semibold text-foreground">No contractors in your area</p>
+              <p className="text-sm text-muted-foreground">
+                Add your address to your profile so we can match you with local contractors.
+              </p>
+            </>
+          ) : featuredVendors.length === 0 ? (
+            <>
+              <p className="text-base font-semibold text-foreground">No contractors in your area</p>
+              <p className="text-sm text-muted-foreground">
+                No contractors within {matchRadiusMiles} miles of your address.
+                Try expanding the radius in admin Settings.
+              </p>
+            </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Add your address to your profile so we can match you with local contractors.
-            </p>
+            <>
+              <p className="text-base font-semibold text-foreground">No contractors match for your build</p>
+              <p className="text-sm text-muted-foreground">
+                {featuredVendors.length} contractor{featuredVendors.length === 1 ? '' : 's'} near you, but none cover every part of your project.
+                Try adjusting your selections or removing add-ons.
+              </p>
+            </>
           )}
         </div>
       )}
@@ -314,55 +390,13 @@ export function VendorComparePage() {
           const result = totalsByVendor[vendor.id]
           const isBestPrice = vendor.id === highlights.bestPrice
           const isHighestRated = vendor.id === highlights.highestRated
-          const isApex = vendor.id === APEX_REAL_UUID
-          // Arc-32 close — vendor offers a cart-service when its profile toggles
-          // Active for the category (vendor.service_categories) OR at least one
-          // priced VOP/VSOP row exists for that vendor+service. Vendor-offers
-          // gates the availability-gap UX: when the vendor offers EVERY
-          // cart-service, partial pricing is informational (show the total, no
-          // gap-badge, no IWD line-through). True-gap = at least one
-          // cart-service has neither Active toggle nor any priced row.
-          const offeredServices = new Set<string>(vendor.service_categories ?? [])
-          const vendorPriceMap = priceMaps[vendor.id]
-          if (vendorPriceMap) {
-            for (const key of vendorPriceMap.keys()) {
-              const m = key.match(/^(?:opt|subopt):([^|]+)\|/)
-              if (m) offeredServices.add(m[1])
-            }
-          }
-          const vendorOffersAllCartServices =
-            cartCategories.size === 0
-            || [...cartCategories].every((sid) => offeredServices.has(sid))
-          // Availability-gap: Apex priced some-but-not-all cart services AND
-          // does NOT offer at least one of the unpriced services. Vendor-offers
-          // suppresses the badge so Active-toggle-on + partial-row-pricing
-          // shows a clean total. computeVendorTotal already excludes
-          // missingOptionKeys from totalCents (per-row total preserved).
-          const apexHasGap =
-            isApex &&
-            !!result &&
-            result.hasSelections &&
-            !vendorOffersAllCartServices &&
-            (!result.coversAllServices
-              || result.missingOptionKeys.length > 0
-              || result.missingSubOptionKeys.length > 0) &&
-            result.totalCents > 0
-          // Arc-42 — priceKey/subOptionPriceKey carry an 'opt:'/'subopt:' prefix
-          // post-Arc-41; strip before splitting so services.find() resolves the
-          // raw service id (not 'opt:windows_doors'). Arc-32 close — filter to
-          // services Apex does NOT offer (true gap-services only).
-          const gapServiceNames = apexHasGap
-            ? Array.from(
-                new Set(
-                  [...result.missingOptionKeys, ...result.missingSubOptionKeys]
-                    .map((k) => k.replace(/^(opt|subopt):/, '').split('|')[0]),
-                ),
-              )
-                .filter((sid) => !offeredServices.has(sid))
-                .map(
-                  (sid) => services.find((s) => s.id === sid)?.name ?? sid,
-                )
-            : []
+          // task_501: isApex carve-outs (former apexHasGap + partial-total
+          // branch + "Apex doesn't price ..." gap note) removed. Rod
+          // restated 2026-08-12 the universal rule "if contractors appear
+          // is because they have prices" applies to every vendor incl.
+          // Apex; the displayVendors filter (coversAllServices &&
+          // totalCents > 0) already enforces it, and Apex reaching this
+          // map means it passed that filter. No per-vendor exceptions.
 
           // Decide what to render in the Price slot.
           let priceText: string
@@ -373,15 +407,6 @@ export function VendorComparePage() {
           } else if (!result || !result.hasSelections) {
             priceText = 'Configure to see price'
             priceTone = 'muted'
-          } else if (apexHasGap) {
-            priceText = formatPriceCents(result.totalCents)
-            priceTone = 'strong'
-          } else if (isApex && vendorOffersAllCartServices && result.totalCents > 0) {
-            // Apex offers every cart-service (Active toggle OR any priced row)
-            // but some sub-options unpriced → show partial total clean (no
-            // gap-badge, no "Contact for quote").
-            priceText = formatPriceCents(result.totalCents)
-            priceTone = 'strong'
           } else if (
             !result.coversAllServices
             || result.missingOptionKeys.length > 0
@@ -473,19 +498,10 @@ export function VendorComparePage() {
                   <div
                     className="rounded-lg bg-muted/50 p-3"
                     data-vendor-price={result?.totalCents ?? 0}
-                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : apexHasGap ? 'apex-gap-deducted' : isApex && vendorOffersAllCartServices && (result?.totalCents ?? 0) > 0 ? 'quoted' : !result.coversAllServices || result.missingOptionKeys.length > 0 ? 'contact-quote' : 'quoted'}
+                    data-price-state={loading ? 'loading' : !result?.hasSelections ? 'no-selection' : !result.coversAllServices || result.missingOptionKeys.length > 0 || result.totalCents === 0 ? 'contact-quote' : 'quoted'}
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">Price</p>
-                      {apexHasGap && (
-                        <span
-                          data-availability-gap="true"
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-900 dark:text-amber-200"
-                        >
-                          <AlertCircle className="h-3 w-3" />
-                          Some services unpriced
-                        </span>
-                      )}
                     </div>
                     <p className={cn(
                       'text-lg font-bold font-heading',
@@ -493,21 +509,6 @@ export function VendorComparePage() {
                     )}>
                       {priceText}
                     </p>
-                    {apexHasGap && (
-                      <p
-                        data-availability-gap-note="true"
-                        className="mt-1 text-[10px] leading-snug text-muted-foreground"
-                      >
-                        Apex doesn’t price{' '}
-                        {gapServiceNames.map((n, idx) => (
-                          <span key={n}>
-                            <span className="line-through">{n}</span>
-                            {idx < gapServiceNames.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                        {' '}— total excludes those. They may be covered as more contractors join.
-                      </p>
-                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
@@ -527,16 +528,14 @@ export function VendorComparePage() {
 
                   {(() => {
                     // Stage B booking-block: vendor must have pricing configured for
-                    // every service in the cart before homeowner can book.
-                    // Apex availability-gap exception: when Apex prices a subset,
-                    // homeowner can still book against the deducted total; the
-                    // unpriced services are surfaced via the gap badge + note.
+                    // every service in the cart before homeowner can book. task_501
+                    // dropped the isApex carve-outs (partial-total + apexHasGap
+                    // exception) — the universal rule Rod restated 2026-08-12
+                    // applies uniformly.
                     const unconfigured =
                       result != null
                       && result.hasSelections
                       && !result.coversAllServices
-                      && !apexHasGap
-                      && !(isApex && vendorOffersAllCartServices && result.totalCents > 0)
                     const btn = (
                       <Button
                         size="lg"
