@@ -21,10 +21,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { fetchAllTransactions } from '@/lib/api/analytics'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useCommissionPaymentsStore, type CommissionPayment } from '@/stores/commission-payments-store'
-import { MOCK_TRANSACTIONS, MOCK_VENDORS } from '@/lib/mock-data'
-import { useEffectiveMockLeads, useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { ProjectDetailDialog } from '@/components/shared/project-detail-dialog'
 import { TransactionDetailDialog, formatTransactionId } from '@/components/shared/transaction-detail-dialog'
 import type { Transaction, TransactionType, TransactionStatus } from '@/types'
@@ -71,9 +68,7 @@ const CATEGORIES: { key: SectionKey; type: TransactionType; title: string; icon:
 ]
 
 function saleIdFromTxId(txId: string): string | null {
-  if (txId.startsWith('mock-cs-tx-')) return txId.slice('mock-cs-tx-'.length)
-  if (txId.startsWith('mock-tx-')) return `live-${txId.slice('mock-tx-'.length)}`
-  return null
+  return txId
 }
 
 interface AdminCommissionPaymentsDialogProps {
@@ -185,9 +180,6 @@ function AdminCommissionPaymentsDialog({ open, onOpenChange, tx, payments }: Adm
 }
 
 export default function TransactionsPage() {
-  // Ship #250 — effective-fixture hook honors the demoDataHidden flag.
-  const mockLeads = useEffectiveMockLeads()
-  const mockClosedSales = useEffectiveMockClosedSales()
   // Phase 5: transactions fetched from Supabase at mount.
   const [transactions, setTransactions] = useState<Transaction[]>([])
   // In-place project-detail Dialog (ship #140): opens on same surface
@@ -216,8 +208,6 @@ export default function TransactionsPage() {
   const [monthFilter, setMonthFilter] = useState<string>('all')
 
   // Ship #196 — year+month popover picker state + month-label helper.
-  // availableYears derivation lives below mockSoldTransactions since
-  // it depends on that memo (tsc caught the ordering at write-time).
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerYear, setPickerYear] = useState<number>(() => new Date().getFullYear())
 
@@ -257,68 +247,14 @@ export default function TransactionsPage() {
   const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
   useRefetchOnFocus(rehydrateProjects)
 
-  // Ship #235 — admin commission-% override propagation on mock-synthesized
-  // transaction rows. Previously hardcoded 0.15 (15%) regardless of the
-  // per-vendor override. Matches admin/overview resolveCommissionPct pattern.
-  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
-
-  const mockSoldTransactions = useMemo<Transaction[]>(() => {
-    return sentProjects
-      .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
-      .map((p): Transaction => {
-        const vendorId = p.contractor?.vendor_id
-        const vendor = vendorId
-          ? MOCK_VENDORS.find((v) => v.id === vendorId)
-          : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-        const effectivePct = vendor
-          ? (vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct)
-          : 12
-        return {
-          id: `mock-tx-${p.id}`,
-          type: 'commission' as TransactionType,
-          status: 'paid' as TransactionStatus,
-          vendor_id: p.contractor?.vendor_id ?? '',
-          company: p.contractor?.company ?? 'Unknown vendor',
-          detail: p.item.serviceName,
-          customer: p.homeowner?.name ?? '',
-          amount: Math.round((p.saleAmount ?? 0) * (effectivePct / 100)),
-          date: p.soldAt!,
-        }
-      })
-  }, [sentProjects, vendorCommissionOverrides])
-
-  // Synthesize commission rows from fixture closed sales (MOCK_CLOSED_SALES)
-  // so seed data appears even before any live markSold flow runs.
-  // Uses closedSale.commission (already 10% post-#360). Shares shape with
-  // mockSoldTransactions — see feedback_format_sot_shared_helper for future
-  // extraction if synthesis logic grows beyond these two paths.
-  const mockFixtureCommissions = useMemo<Transaction[]>(() => {
-    return mockClosedSales.map((cs) => ({
-      id: `mock-cs-tx-${cs.id}`,
-      type: 'commission' as TransactionType,
-      status: 'paid' as TransactionStatus,
-      vendor_id: cs.vendor_id ?? '',
-      company: MOCK_VENDORS.find((v) => v.id === cs.vendor_id)?.company ?? 'Unknown vendor',
-      detail: cs.project?.split('—')[0].trim() ?? '',
-      customer: cs.homeowner_name ?? '',
-      amount: cs.commission,
-      date: cs.closed_at,
-    }))
-  }, [mockClosedSales])
-
-  // Ship #196 — all years that have at least one transaction (merged
-  // mock + real + MOCK_TRANSACTIONS fixture), always includes the
-  // current year so Rodolfo can select forward-looking months even
-  // before any data lands. Sorted ascending.
+  // Ship #196 — all years that have at least one transaction, always includes the
+  // current year so Rodolfo can select forward-looking months even before any data lands.
   const availableYears = useMemo(() => {
     const years = new Set<number>()
     years.add(new Date().getFullYear())
     for (const tx of transactions) years.add(new Date(tx.date).getFullYear())
-    for (const tx of mockSoldTransactions) years.add(new Date(tx.date).getFullYear())
-    for (const tx of mockFixtureCommissions) years.add(new Date(tx.date).getFullYear())
-    for (const tx of MOCK_TRANSACTIONS) years.add(new Date(tx.date).getFullYear())
     return Array.from(years).sort((a, b) => a - b)
-  }, [transactions, mockSoldTransactions, mockFixtureCommissions])
+  }, [transactions])
 
   const grouped = useMemo(() => {
     const result: Record<SectionKey, Transaction[]> = {
@@ -327,23 +263,7 @@ export default function TransactionsPage() {
       membership: [],
       payout: [],
     }
-    // Dedupe: if Supabase fetch returned a row with id matching our mock synth,
-    // prefer the Supabase row (it's the authoritative version once the Tranche-2
-    // closed_sales→transactions write path lands).
-    // Also merge MOCK_TRANSACTIONS payouts (ship #144): Supabase has membership
-    // + commission seeds but zero payout seeds, so the Payouts category would
-    // render empty without this fallback. Memberships untouched (Supabase owns
-    // the authoritative amounts).
-    const supabaseIds = new Set(transactions.map((t) => t.id))
-    const mockPayouts = MOCK_TRANSACTIONS.filter(
-      (t) => t.type === 'payout' && !supabaseIds.has(t.id),
-    )
-    const unified = [
-      ...transactions,
-      ...mockSoldTransactions.filter((t) => !supabaseIds.has(t.id)),
-      ...mockFixtureCommissions.filter((t) => !supabaseIds.has(t.id)),
-      ...mockPayouts,
-    ]
+    const unified = transactions
     for (const tx of unified) {
       if (tx.type === 'commission') {
         // Rodolfo spec: each payment entry becomes its own row in Commissions Paid.
@@ -392,7 +312,7 @@ export default function TransactionsPage() {
       }
     }
     return result
-  }, [transactions, mockSoldTransactions, mockFixtureCommissions, monthFilter, commissionPaymentsBySale])
+  }, [transactions, monthFilter, commissionPaymentsBySale])
 
   const sectionTotals = useMemo(() => ({
     commission_paid: grouped.commission_paid.reduce((s, t) => s + t.amount, 0),
@@ -639,60 +559,17 @@ export default function TransactionsPage() {
                         let projectId: string | null = null
                         let resolvedAddress: string | null = null
                         if (tx.type === 'commission') {
-                          if (tx.id.startsWith('mock-tx-')) {
-                            projectId = tx.id.slice('mock-tx-'.length)
-                            const sp = sentProjects.find((p) => p.id === projectId)
-                            resolvedAddress = sp?.homeowner?.address ?? null
-                          } else {
-                            // Tier 2: sentProjects name+vendor_id match
-                            // Ship #165: prefer contractor.vendor_id FK over
-                            // company-name match; fall back to company for
-                            // pre-#165 persisted entries.
-                            const sp = sentProjects.find(
-                              (p) =>
-                                p.homeowner?.name === tx.customer &&
-                                (p.contractor?.vendor_id
-                                  ? p.contractor.vendor_id === tx.vendor_id
-                                  : p.contractor?.company === tx.company),
-                            )
-                            if (sp) {
-                              projectId = sp.id
-                              resolvedAddress = sp.homeowner?.address ?? null
-                            } else {
-                              // Tier 3: MOCK_LEADS homeowner_name+vendor_id match
-                              // Ship #165: prefer tx.vendor_id FK.
-                              const vendor = tx.vendor_id
-                                ? MOCK_VENDORS.find((v) => v.id === tx.vendor_id)
-                                : MOCK_VENDORS.find((v) => v.company === tx.company)
-                              const lead = mockLeads.find(
-                                (l) =>
-                                  l.homeowner_name === tx.customer &&
-                                  (vendor ? l.vendor_id === vendor.id : true),
-                              )
-                              if (lead) {
-                                projectId = lead.id
-                                resolvedAddress = lead.address
-                              } else if (tx.detail) {
-                                // Tier 4 (ship #148): detail-string match
-                                // against MOCK_LEADS.project. Apollo's dump
-                                // showed Supabase seed has tx.customer=null
-                                // so name-based tiers fail; tx.detail
-                                // carries the project description. Strip
-                                // "Commission on " prefix + fuzzy-match
-                                // against the full project-name field.
-                                const stripped = tx.detail.replace(/^Commission on /i, '').trim()
-                                const leadByDetail = mockLeads.find(
-                                  (l) =>
-                                    l.project === stripped ||
-                                    l.project.includes(stripped) ||
-                                    stripped.includes(l.project.split('—')[0].trim()),
-                                )
-                                if (leadByDetail) {
-                                  projectId = leadByDetail.id
-                                  resolvedAddress = leadByDetail.address
-                                }
-                              }
-                            }
+                          // Match commission row to a local sentProject via homeowner name + vendor_id.
+                          const sp = sentProjects.find(
+                            (p) =>
+                              p.homeowner?.name === tx.customer &&
+                              (p.contractor?.vendor_id
+                                ? p.contractor.vendor_id === tx.vendor_id
+                                : p.contractor?.company === tx.company),
+                          )
+                          if (sp) {
+                            projectId = sp.id
+                            resolvedAddress = sp.homeowner?.address ?? null
                           }
                         }
                         // Ship #148: commission rows ALWAYS open

@@ -30,7 +30,7 @@ export async function getTransactions() {
 }
 
 const APP_SETTINGS_PUBLIC_COLS =
-  'id, maintenance_mode, ar_mode, phase2_enabled, financing_enabled, updated_at'
+  'id, maintenance_mode, ar_mode, phase2_enabled, financing_enabled, subscription_fee, revenue_share_pct, payout_day, updated_at'
 
 export async function getSettings() {
   const { data, error } = await supabase

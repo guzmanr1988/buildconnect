@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion, type Variants } from 'framer-motion'
@@ -33,16 +33,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { PageHeader } from '@/components/shared/page-header'
 import { KpiCard } from '@/components/shared/kpi-card'
-import {
-  MOCK_VENDORS,
-  MOCK_HOMEOWNERS,
-  MOCK_SETTINGS,
-} from '@/lib/mock-data'
-import { fetchAllClosedSales, fetchAllTransactions } from '@/lib/api/analytics'
+import { fetchAllClosedSales, fetchAllTransactions, fetchProfileCounts } from '@/lib/api/analytics'
+import { getSettings } from '@/lib/api/admin'
 import { useRefetchOnFocus } from '@/lib/hooks/use-refetch-on-focus'
-import { useEffectiveMockClosedSales } from '@/lib/mock-data-effective'
 import { useProjectsStore } from '@/stores/projects-store'
-import { useAdminModerationStore } from '@/stores/admin-moderation-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
 import { getAdminFinancingStats } from '@/lib/api/financing'
@@ -75,24 +69,25 @@ const fadeUp = {
   }),
 } satisfies Variants
 
-// Vendors + homeowners still mock-backed — Phase 5 scope is analytics aggregation
-// against real closed_sales + transactions + leads, NOT vendor/homeowner profile
-// wiring (that's a separate per-feature Tranche 2 item).
-const subscriptionRevenue = MOCK_VENDORS.length * MOCK_SETTINGS.subscription_fee
-const activeVendors = MOCK_VENDORS.filter((v) => v.status === 'active').length
-const activeHomeowners = MOCK_HOMEOWNERS.filter((h) => h.status === 'active').length
-
 export default function OverviewPage() {
   const navigate = useNavigate()
   const profile = useAuthStore((s) => s.profile)
   const isAdminEmployee = profile?.role === 'admin_employee'
   const financingEnabled = useFeatureFlag('financing_enabled')
-  const [settings, setSettings] = useState<AppSettings>({ ...MOCK_SETTINGS })
+  const [settings, setSettings] = useState<AppSettings>({
+    revenue_share_pct: 12,
+    subscription_fee: 0,
+    payout_day: 15,
+    maintenance_mode: false,
+    ar_mode: false,
+    phase2_enabled: false,
+    financing_enabled: false,
+  })
+  const [activeVendors, setActiveVendors] = useState(0)
+  const [totalVendors, setTotalVendors] = useState(0)
+  const [activeHomeowners, setActiveHomeowners] = useState(0)
+  const [totalHomeowners, setTotalHomeowners] = useState(0)
 
-  // Phase 5: admin analytics fetched from Supabase at mount (seeded by
-  // scripts/seed-phase5-analytics.mjs). Fall back to empty arrays on
-  // fetch failure so the page still renders — admin sees zeros-everywhere
-  // instead of a blank page, matching "honest about DB state" posture.
   const [closedSales, setClosedSales] = useState<ClosedSale[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const refreshAnalytics = () => {
@@ -105,103 +100,30 @@ export default function OverviewPage() {
   }
   useEffect(() => {
     refreshAnalytics()
+    getSettings()
+      .then(setSettings)
+      .catch((err) => console.error('[admin/overview] settings fetch failed:', err))
+    fetchProfileCounts()
+      .then(({ activeVendors: av, totalVendors: tv, activeHomeowners: ah, totalHomeowners: th }) => {
+        setActiveVendors(av)
+        setTotalVendors(tv)
+        setActiveHomeowners(ah)
+        setTotalHomeowners(th)
+      })
+      .catch((err) => console.error('[admin/overview] profile counts fetch failed:', err))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useRefetchOnFocus(refreshAnalytics)
 
-  // Mock-side merge: QA persona Mark-Sold writes to sentProjects (zustand,
-  // not Supabase). Include mock-originated sold projects in GMV/App-Revenue
-  // and synthesize commission rows for the transaction-totals card. Phase 2b
-  // admin-SoT per kratos msg 1776725252468.
-  const sentProjects = useProjectsStore((s) => s.sentProjects)
-  const mockClosedSales = useEffectiveMockClosedSales()
-  // Ship #192 — admin visibility of reschedule activity. Selector
-  // returns the raw map (stable reference under reducer writes);
-  // derivation into sorted list happens in render body.
+  // Ship #192 — admin visibility of reschedule activity.
   const rescheduleRequestsMap = useProjectsStore((s) => s.rescheduleRequestsByLead)
-  const rehydrateProjects = useCallback(() => useProjectsStore.persist.rehydrate(), [])
-  useRefetchOnFocus(rehydrateProjects)
 
-  // Per-vendor commission % override (ship #130).
-  const vendorCommissionOverrides = useAdminModerationStore((s) => s.vendorCommissionOverrides)
-  const rehydrateModeration = useCallback(() => useAdminModerationStore.persist.rehydrate(), [])
-  useRefetchOnFocus(rehydrateModeration)
-  const resolveCommissionPct = useCallback(
-    (id: string, defaultPct: number) => vendorCommissionOverrides[id] ?? defaultPct,
-    [vendorCommissionOverrides],
+  const totalGMV = useMemo(() => closedSales.reduce((s, c) => s + c.sale_amount, 0), [closedSales])
+  const appRevenue = useMemo(() => closedSales.reduce((s, c) => s + c.commission, 0), [closedSales])
+  const subscriptionRevenue = useMemo(
+    () => transactions.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0),
+    [transactions],
   )
-
-  const mockSoldSales = useMemo(() => {
-    return sentProjects.filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0 && p.soldAt)
-  }, [sentProjects])
-
-  const totalGMV = useMemo(() => {
-    const supabaseGMV = closedSales.reduce((s, c) => s + c.sale_amount, 0)
-    const mockGMV = mockSoldSales.reduce((s, p) => s + (p.saleAmount ?? 0), 0)
-    const fixtureGMV = mockClosedSales.reduce((s, c) => s + c.sale_amount, 0)
-    return supabaseGMV + mockGMV + fixtureGMV
-  }, [closedSales, mockSoldSales, mockClosedSales])
-  const appRevenue = useMemo(() => {
-    const supabaseComm = closedSales.reduce((s, c) => s + c.commission, 0)
-    // Use each vendor's effective commission_pct (admin override or default);
-    // fall back to 12% if the vendor can't be resolved by company name
-    // (pin-28 platform default).
-    const mockComm = mockSoldSales.reduce((s, p) => {
-      // Ship #165: prefer contractor.vendor_id FK over company-name match.
-      const vendor = p.contractor?.vendor_id
-        ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
-        : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 12) / 100
-      return s + Math.round((p.saleAmount ?? 0) * pct)
-    }, 0)
-    const fixtureComm = mockClosedSales.reduce((s, c) => s + c.commission, 0)
-    return supabaseComm + mockComm + fixtureComm
-  }, [closedSales, mockSoldSales, mockClosedSales, resolveCommissionPct])
-
-  // Synthesize mock commission rows for the transaction-totals card so
-  // Paid-Commissions + GMV stay visually aligned. Effective commission_pct
-  // honored per vendor.
-  const mockCommissions = useMemo<Transaction[]>(() => {
-    return mockSoldSales.map((p): Transaction => {
-      // Ship #165: prefer contractor.vendor_id FK over company-name match.
-      const vendor = p.contractor?.vendor_id
-        ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
-        : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 12) / 100
-      return {
-        id: `mock-tx-${p.id}`,
-        type: 'commission',
-        status: 'paid',
-        vendor_id: p.contractor?.vendor_id ?? vendor?.id ?? '',
-        company: p.contractor?.company ?? 'Unknown vendor',
-        detail: p.item.serviceName,
-        customer: p.homeowner?.name ?? '',
-        amount: Math.round((p.saleAmount ?? 0) * pct),
-        date: p.soldAt!,
-      }
-    })
-  }, [mockSoldSales, resolveCommissionPct])
-  const fixtureCommissions = useMemo<Transaction[]>(() => {
-    return mockClosedSales.map((cs) => ({
-      id: `mock-cs-tx-${cs.id}`,
-      type: 'commission' as Transaction['type'],
-      status: 'paid' as Transaction['status'],
-      vendor_id: cs.vendor_id ?? '',
-      company: MOCK_VENDORS.find((v) => v.id === cs.vendor_id)?.company ?? 'Unknown vendor',
-      detail: cs.project?.split('—')[0].trim() ?? '',
-      customer: cs.homeowner_name ?? '',
-      amount: cs.commission,
-      date: cs.closed_at,
-    }))
-  }, [mockClosedSales])
-  const MOCK_TRANSACTIONS = useMemo(() => {
-    const supabaseIds = new Set(transactions.map((t) => t.id))
-    return [
-      ...transactions,
-      ...mockCommissions.filter((t) => !supabaseIds.has(t.id)),
-      ...fixtureCommissions.filter((t) => !supabaseIds.has(t.id)),
-    ]
-  }, [transactions, mockCommissions, fixtureCommissions])
 
   const toggles: { key: keyof AppSettings; label: string; icon: React.ElementType }[] = [
     { key: 'maintenance_mode', label: 'Maintenance Mode', icon: Wrench },
@@ -239,7 +161,7 @@ export default function OverviewPage() {
         const t = new Date(iso).getTime()
         return t >= d.getTime() && t < end.getTime()
       }
-      const monthTxs = MOCK_TRANSACTIONS.filter((t) => inRange(t.date))
+      const monthTxs = transactions.filter((t) => inRange(t.date))
       months.push({
         month: d.toLocaleDateString('en-US', { month: 'short' }),
         commissionsPaid: monthTxs.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
@@ -249,7 +171,7 @@ export default function OverviewPage() {
       })
     }
     return months
-  }, [MOCK_TRANSACTIONS])
+  }, [transactions])
 
   const transactionCategoryTotals = useMemo(() => {
     const allTotal = transactionChartData.reduce((s, m) => s + m.commissionsPaid + m.pendingCommissions + m.memberships + m.payouts, 0)
@@ -286,7 +208,7 @@ export default function OverviewPage() {
             {
               title: 'Active Vendors',
               value: activeVendors.toString(),
-              change: `${MOCK_VENDORS.length} total`,
+              change: `${totalVendors} total`,
               trend: 'up' as const,
               icon: Users,
               iconColor: 'bg-violet-500',
@@ -295,7 +217,7 @@ export default function OverviewPage() {
             {
               title: 'Active Homeowners',
               value: activeHomeowners.toString(),
-              change: `${MOCK_HOMEOWNERS.length} total`,
+              change: `${totalHomeowners} total`,
               trend: 'up' as const,
               icon: Home,
               iconColor: 'bg-cyan-500',
@@ -344,7 +266,7 @@ export default function OverviewPage() {
           {
             title: 'Subscription Revenue',
             value: `$${subscriptionRevenue.toLocaleString()}`,
-            change: `${MOCK_VENDORS.length} vendors`,
+            change: `${totalVendors} vendors`,
             trend: 'up' as const,
             icon: CreditCard,
             iconColor: 'bg-blue-500',
@@ -352,7 +274,7 @@ export default function OverviewPage() {
           {
             title: 'Active Vendors',
             value: activeVendors.toString(),
-            change: `${MOCK_VENDORS.length} total`,
+            change: `${totalVendors} total`,
             trend: 'up' as const,
             icon: Users,
             iconColor: 'bg-violet-500',
@@ -361,7 +283,7 @@ export default function OverviewPage() {
           {
             title: 'Active Homeowners',
             value: activeHomeowners.toString(),
-            change: `${MOCK_HOMEOWNERS.length} total`,
+            change: `${totalHomeowners} total`,
             trend: 'up' as const,
             icon: Home,
             iconColor: 'bg-cyan-500',
@@ -507,8 +429,8 @@ export default function OverviewPage() {
               {[
                 {
                   label: 'Paid Commissions',
-                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
-                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'paid').length,
+                  total: transactions.filter((t) => t.type === 'commission' && t.status === 'paid').reduce((s, t) => s + t.amount, 0),
+                  count: transactions.filter((t) => t.type === 'commission' && t.status === 'paid').length,
                   color: 'text-emerald-700 dark:text-emerald-400',
                   bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40',
                   icon: CheckCircle2,
@@ -516,8 +438,8 @@ export default function OverviewPage() {
                 },
                 {
                   label: 'Pending Commissions',
-                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').reduce((s, t) => s + t.amount, 0),
-                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'commission' && t.status === 'pending').length,
+                  total: transactions.filter((t) => t.type === 'commission' && t.status === 'pending').reduce((s, t) => s + t.amount, 0),
+                  count: transactions.filter((t) => t.type === 'commission' && t.status === 'pending').length,
                   color: 'text-amber-700 dark:text-amber-400',
                   bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
                   icon: Clock,
@@ -525,8 +447,8 @@ export default function OverviewPage() {
                 },
                 {
                   label: 'Memberships',
-                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0),
-                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'membership').length,
+                  total: transactions.filter((t) => t.type === 'membership').reduce((s, t) => s + t.amount, 0),
+                  count: transactions.filter((t) => t.type === 'membership').length,
                   color: 'text-blue-600 dark:text-blue-400',
                   bg: 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/40',
                   icon: CreditCard,
@@ -534,8 +456,8 @@ export default function OverviewPage() {
                 },
                 {
                   label: 'Payouts',
-                  total: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0),
-                  count: MOCK_TRANSACTIONS.filter((t) => t.type === 'payout').length,
+                  total: transactions.filter((t) => t.type === 'payout').reduce((s, t) => s + t.amount, 0),
+                  count: transactions.filter((t) => t.type === 'payout').length,
                   color: 'text-amber-700 dark:text-amber-400',
                   bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40',
                   icon: Banknote,

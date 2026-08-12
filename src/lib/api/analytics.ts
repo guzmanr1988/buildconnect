@@ -156,3 +156,23 @@ export async function fetchAllTransactions(): Promise<Transaction[]> {
   if (error) throw new Error(`fetchAllTransactions: ${error.message}`)
   return (data ?? []).map(transactionFromRow)
 }
+
+export async function fetchProfileCounts(): Promise<{
+  activeVendors: number
+  totalVendors: number
+  activeHomeowners: number
+  totalHomeowners: number
+}> {
+  const [tv, av, th, ah] = await Promise.all([
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor').eq('status', 'active'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'homeowner'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'homeowner').eq('status', 'active'),
+  ])
+  return {
+    totalVendors: tv.count ?? 0,
+    activeVendors: av.count ?? 0,
+    totalHomeowners: th.count ?? 0,
+    activeHomeowners: ah.count ?? 0,
+  }
+}
