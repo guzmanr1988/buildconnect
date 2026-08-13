@@ -36,7 +36,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 // while we test the chain end-to-end before opening to other vendors.
 // Flip APEX_ONLY_MODE to false to restore multi-vendor matching with no
 // other code changes (the guards below collapse to no-ops).
-const APEX_ONLY_MODE = false
+const APEX_ONLY_MODE = true
 // PR-#437 — swap from fc0d8ff3 (suspended "(legacy)" apex profile) to
 // 3e0821aa (active canonical apex). useRealVendors filters status='active'
 // so the legacy UUID never returned a row; APEX_ONLY guard at L101 then
