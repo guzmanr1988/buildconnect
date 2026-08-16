@@ -43,6 +43,26 @@ jobs:
           # public (clickable button with no entry) — no security cost.
           VITE_DEMO_EMPLOYEE_PW: 'demo-employee-Spring2026!'
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          # 2026-08-16 — Stripe publishable key. Until today this var was NOT in
+          # this env block at all, so every production build shipped with an
+          # EMPTY key: the served bundle carried pk_live x0 AND pk_test x0
+          # (positive control 'stripe' x83, negative control 0). Card payments
+          # have therefore never worked on the apex, in either mode. An earlier
+          # note recorded the bundle as carrying "pk_test x1" — that count was
+          # the @stripe/stripe-js library's own /^pk_test/ validation regex, not
+          # a key, so this is a FIRST wiring rather than a test->live cutover.
+          #
+          # Publishable keys are designed to ship to browsers, so VITE_ prefix
+          # is correct here. The SECRET key must never appear in this block:
+          # every VITE_ var in it is emitted into the public bundle whether or
+          # not any source reads it (that is how the five demo passwords above
+          # leaked — see PR #578). STRIPE_SECRET_KEY goes to Supabase edge-fn
+          # secrets via `supabase secrets set`, and nowhere else.
+          #
+          # Source reads VITE_STRIPE_PUBLISHABLE_KEY first, falling back to
+          # VITE_STRIPE_PUBLIC_KEY (src/lib/stripe-client.ts) — set the
+          # PUBLISHABLE spelling.
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
