@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, FileText, ArrowRight, Home, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -87,11 +87,32 @@ export function BookingConfirmationPage() {
   const sentProjects = useProjectsStore((s) => s.sentProjects)
   const profile = useAuthStore((s) => s.profile)
   const addDoc = useHomeownerDocsStore((s) => s.addDoc)
+  // task_501: session-scoped hydration authority (mirrors task_869 gate on
+  // service-detail). The roofing branch at L~170 reads
+  // useCatalogStore.getState().services and feeds it to
+  // buildRoofingLineItems — a cold refresh or deep-link landing here with
+  // a persisted-from-last-session catalog would compute line items against
+  // stale option shape and stamp the sent project with wrong money. Wait
+  // until this session's hydrateFromServer resolves (or errors, in which
+  // case buildRoofingLineItems' internal catch falls back to preset)
+  // before firing the send flow.
+  const hydratedThisSession = useCatalogStore((s) => s.hydratedThisSession)
+  const lastFetchError = useCatalogStore((s) => s.lastFetchError)
+  const firedRef = useRef(false)
   const [details, setDetails] = useState<BookingDetails | null>(null)
   const [state, setState] = useState<ConfirmationState>('loading')
   const [cashOnlyProject, setCashOnlyProject] = useState<string | null>(null) // service name when permit=no
 
   useEffect(() => {
+    // task_501: single-fire guard + hydration gate. Effect deps include
+    // hydratedThisSession + lastFetchError so it re-runs when the store
+    // flips from unhydrated → hydrated/errored; firedRef ensures the
+    // send flow (which consumes LS keys and calls sendProject) fires
+    // exactly once even across multiple store-triggered re-renders.
+    if (firedRef.current) return
+    if (!hydratedThisSession && !lastFetchError) return
+    firedRef.current = true
+
     const pendingItemStr = localStorage.getItem('buildconnect-pending-item')
     const contractorStr = localStorage.getItem('buildconnect-selected-contractor')
     const bookingStr = localStorage.getItem('buildconnect-selected-booking')
@@ -318,7 +339,7 @@ export function BookingConfirmationPage() {
       })
       setState('incomplete')
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hydratedThisSession, lastFetchError]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ship #213 — explicit error state when preconditions are missing
   // AND there's no recent successful send to fall back to. Prior code
@@ -347,6 +368,35 @@ export function BookingConfirmationPage() {
             Browse services
           </Button>
         </div>
+      </div>
+    )
+  }
+
+  // task_501: while catalog hydration is in flight AND LS preconditions
+  // suggest a booking is in progress, render a proper "finalizing" state
+  // instead of the "No booking in progress" fallback below. Without this,
+  // a cold refresh of /home/booking flashes the empty-state page for
+  // 200-800ms during hydration — reads as "your booking was lost".
+  if (
+    !details &&
+    state === 'loading' &&
+    !hydratedThisSession &&
+    !lastFetchError &&
+    typeof window !== 'undefined' &&
+    !!localStorage.getItem('buildconnect-pending-item') &&
+    !!localStorage.getItem('buildconnect-selected-contractor') &&
+    !!localStorage.getItem('buildconnect-selected-booking')
+  ) {
+    return (
+      <div
+        data-testid="booking-confirmation-hydrating"
+        className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center gap-4"
+      >
+        <div
+          className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+          aria-hidden="true"
+        />
+        <p className="text-muted-foreground">Finalizing your booking…</p>
       </div>
     )
   }
