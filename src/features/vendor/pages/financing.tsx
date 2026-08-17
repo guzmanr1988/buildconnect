@@ -48,11 +48,12 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useVendorSettingsStore } from '@/stores/vendor-settings-store'
 import { Link } from 'react-router-dom'
 
-type LenderCategory =
-  | 'contractor_pos'
-  | 'personal_loans'
-  | 'solar_hi_specialty'
-  | 'pace'
+import {
+  type LenderCategory,
+  MASTER_KEY,
+  CATEGORY_KEYS,
+  CATEGORY_LABELS,
+} from '@/lib/financing/lender-categories'
 
 type Lender = {
   id: string
@@ -73,26 +74,12 @@ type VendorLender = {
 
 type FeatureFlag = { key: string; enabled: boolean }
 
-const MASTER_KEY = 'financing_enabled'
-const CATEGORY_KEYS: Record<LenderCategory, string> = {
-  contractor_pos: 'financing_category_contractor_pos',
-  personal_loans: 'financing_category_personal_loans',
-  solar_hi_specialty: 'financing_category_solar_hi_specialty',
-  pace: 'financing_category_pace',
-}
-
-const CATEGORY_LABELS: Record<LenderCategory, string> = {
-  contractor_pos: 'Contractor POS',
-  personal_loans: 'Personal Loans',
-  solar_hi_specialty: 'Solar & HI Specialty',
-  pace: 'PACE Financing',
-}
-
 const CATEGORY_TONE: Record<LenderCategory, string> = {
   contractor_pos: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   personal_loans: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
   solar_hi_specialty: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   pace: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+  credit_unions: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
 }
 
 const fadeUp = {
