@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
+import { useFinancingReachable } from '@/lib/financing/hooks/use-financing-reachable'
 import { adapterDisplayName } from '@/lib/financing/display'
 import type { FinancingApplicationStatus } from '@/lib/financing/adapters/_contract'
 
@@ -172,6 +173,7 @@ export function FinancingCard() {
   const profile = useAuthStore((s) => s.profile)
   const navigate = useNavigate()
   const enabled = useFeatureFlag('financing_enabled')
+  const reachable = useFinancingReachable()
   const [app, setApp] = useState<LatestApplication | null>(null)
   const [cfp, setCfp] = useState<FinancingProfile | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -222,6 +224,21 @@ export function FinancingCard() {
 
   const state = resolveState(cfp, app)
   if (state === 'approved' || state === 'terms_accepted') return null
+
+  // Reachability gate — only for CTA-visible states with no user data. If the
+  // user has an in-flight/denied application (has an app row) the card must
+  // still render so they can reach their status. Post-approval invariant per
+  // Rod PR #252 already handled by the approved/terms_accepted early-return
+  // above. never-applied + expired are the "dead-door" branches — they route
+  // the user to /home/financing/apply and MUST hide when no lender category
+  // is reachable, or apply.tsx renders "coming soon" as a dead end.
+  //
+  // reachable === undefined = hook still loading; don't flash the CTA before
+  // we know whether it should show.
+  const isCtaOnlyState = state === 'never-applied' || state === 'expired'
+  if (isCtaOnlyState && reachable === undefined) return null
+  if (isCtaOnlyState && reachable === false) return null
+
   const spec = specForState(state, app, cfp)
 
   return (
