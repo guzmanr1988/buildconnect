@@ -7,8 +7,12 @@ import { supabase } from '@/lib/supabase'
 import { useFeatureFlagOnce } from '@/lib/financing/hooks/use-feature-flag'
 import { listRegisteredAdapters } from '@/lib/financing/adapters'
 import { FinancingAdapterDialog } from '@/features/financing/components/financing-adapter-dialog'
-
-type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty' | 'pace'
+import {
+  type LenderCategory,
+  CATEGORY_LABELS,
+  CATEGORY_KEYS,
+  HOMEOWNER_CATEGORY_ORDER,
+} from '@/lib/financing/lender-categories'
 
 type Lender = {
   id: string
@@ -22,27 +26,6 @@ type Lender = {
   active: boolean
   deleted_at: string | null
 }
-
-const CATEGORY_LABELS: Record<LenderCategory, string> = {
-  contractor_pos: 'Contractor POS',
-  personal_loans: 'Personal Loans',
-  solar_hi_specialty: 'Solar & HI Specialty',
-  pace: 'PACE Financing',
-}
-
-const CATEGORY_FLAGS: Record<LenderCategory, string> = {
-  contractor_pos: 'financing_category_contractor_pos',
-  personal_loans: 'financing_category_personal_loans',
-  solar_hi_specialty: 'financing_category_solar_hi_specialty',
-  pace: 'financing_category_pace',
-}
-
-const CATEGORY_ORDER: LenderCategory[] = [
-  'contractor_pos',
-  'personal_loans',
-  'solar_hi_specialty',
-  'pace',
-]
 
 function lenderSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -122,8 +105,8 @@ export function FinancingApplyPage() {
     return <Navigate to="/login" replace />
   }
 
-  const sections = CATEGORY_ORDER.map((category) => {
-    const flagOn = flags[CATEGORY_FLAGS[category]] === true
+  const sections = HOMEOWNER_CATEGORY_ORDER.map((category) => {
+    const flagOn = flags[CATEGORY_KEYS[category]] === true
     const rows = lenders.filter((l) => l.category === category)
     return { category, flagOn, rows }
   }).filter((s) => s.flagOn && s.rows.length > 0)

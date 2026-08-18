@@ -101,12 +101,16 @@ import {
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared/page-header'
 import { matchesSearch } from '@/lib/search-match'
+import {
+  type LenderCategory,
+  MASTER_KEY,
+  CATEGORY_LABELS,
+  CATEGORY_KEYS,
+} from '@/lib/financing/lender-categories'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-type LenderCategory = 'contractor_pos' | 'personal_loans' | 'solar_hi_specialty' | 'pace' | 'credit_unions'
 
 type Lender = {
   id: string
@@ -127,24 +131,6 @@ type FeatureFlag = { key: string; enabled: boolean }
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 type CategoryFilter = LenderCategory | 'all'
-
-const CATEGORY_LABELS: Record<LenderCategory, string> = {
-  contractor_pos: 'Contractor POS',
-  personal_loans: 'Personal Loans',
-  solar_hi_specialty: 'Solar & HI Specialty',
-  pace: 'PACE Financing',
-  credit_unions: 'Credit Unions',
-}
-
-const CATEGORY_KEYS: Record<LenderCategory, string> = {
-  contractor_pos: 'financing_category_contractor_pos',
-  personal_loans: 'financing_category_personal_loans',
-  solar_hi_specialty: 'financing_category_solar_hi_specialty',
-  pace: 'financing_category_pace',
-  credit_unions: 'financing_category_credit_unions',
-}
-
-const MASTER_KEY = 'financing_enabled'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },

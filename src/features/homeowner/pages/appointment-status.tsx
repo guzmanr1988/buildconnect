@@ -17,6 +17,7 @@ import { useProjectsStore } from '@/stores/projects-store'
 import { useHomeownerDocsStore } from '@/stores/homeowner-documents-store'
 import { AssociationDocActionCard } from '@/features/homeowner/components/association-doc-action-card'
 import { useFeatureFlag } from '@/lib/financing/hooks/use-feature-flag'
+import { useFinancingReachable } from '@/lib/financing/hooks/use-financing-reachable'
 import { ApplyFinancingDialog } from '@/features/financing/components/apply-financing-dialog'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth-store'
@@ -36,6 +37,7 @@ const statusPulse: Record<string, string> = {
 export function AppointmentStatusPage() {
   const { id } = useParams<{ id: string }>()
   const financingEnabled = useFeatureFlag('financing_enabled')
+  const financingReachable = useFinancingReachable()
   const profile = useAuthStore((s) => s.profile)
   // Homeowner-level financing state — if cfp shows an active envelope OR
   // any in-flight application, suppress the per-project Apply-CTA so the
@@ -622,7 +624,16 @@ export function AppointmentStatusPage() {
         )
       })()}
 
-      {financingEnabled === true && matchedSentProject && !lead.financing && !homeownerHasFinancing && (
+      {/* Reachability gate — this branch renders the "Apply for financing"
+          CTA for a homeowner who has no existing financing on this appointment
+          (!lead.financing) and no envelope elsewhere (!homeownerHasFinancing).
+          It is a CTA-only surface: click routes to /home/financing/apply. When
+          no lender category is reachable the apply page renders "coming soon",
+          so this CTA must hide to avoid the dead-door Rod flagged 2026-08-17.
+          The three sibling branches below (allocation-blocked, apply-dialog
+          openers) all key on approvedAppId — user-data-present — so they stay
+          master-only per post-approval invariant PR #252. */}
+      {financingEnabled === true && financingReachable === true && matchedSentProject && !lead.financing && !homeownerHasFinancing && (
         <Card data-testid="homeowner-project-financing-cta" data-financing-project-cta>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
