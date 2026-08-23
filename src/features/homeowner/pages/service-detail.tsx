@@ -1414,7 +1414,15 @@ export function ServiceDetailPage() {
     serviceId === 'roofing' &&
     (selections.service_type ?? []).includes('repair')
   const pitchedOmitApplies = pitchedOmittedTriggered && !isRepairMode
-  const allRequiredDone = completedRequired === requiredGroups.length
+  // task_839: Vacuous-truth guard for all-optional services (zero required groups).
+  // When a service has no required groups (wall_paneling: 11 optional, 0 required),
+  // allRequiredDone would be true before any selections. This breaks:
+  //   (1) Progress bar shows "All N steps complete" with zero selections
+  //   (2) Add-to-Project button enables with zero selections
+  // FIX: Require at least one selection when requiredGroups is empty.
+  // If there ARE required groups, existing logic applies (completedRequired must match count).
+  const allRequiredDone = completedRequired === requiredGroups.length &&
+    (requiredGroups.length > 0 || Object.keys(selections).length > 0)
 
   // Per-material picker-satisfied predicate — single source of truth reused
   // by (a) colorSelected / roofingColorGateBlocks CTA gate, (b) the step-
@@ -2262,7 +2270,9 @@ export function ServiceDetailPage() {
             >
               {wizardActiveStep
                 ? `Step ${wizardActiveStep.index} of ${wizardActiveStep.total} — ${wizardActiveStep.group.label}`
-                : `All ${wizardVisibleGroups.length} steps complete`}
+                : allRequiredDone
+                  ? `All ${wizardVisibleGroups.length} steps complete`
+                  : 'Choose items to continue'}
             </span>
           </div>
         ) : requiredGroups.length > 0 && (
