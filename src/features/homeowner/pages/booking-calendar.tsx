@@ -19,10 +19,23 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay()
 }
 
+// task_643 — pick the earliest available-slot date so the calendar opens on
+// a month that actually contains selectable days. Falls back to today's month
+// when the slot set is empty so nav still works. String compare on ISO
+// YYYY-MM-DD is total-ordered, no Date parsing needed to pick the min.
+function pickInitialViewDate(): Date {
+  const firstAvailable = MOCK_AVAILABLE_SLOTS.reduce<string | null>(
+    (min, s) => (min === null || s.date < min ? s.date : min),
+    null,
+  )
+  if (!firstAvailable) return new Date()
+  return new Date(firstAvailable + 'T12:00:00')
+}
+
 export function BookingCalendarPage() {
   const navigate = useNavigate()
-  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth())
-  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear())
+  const [currentMonth, setCurrentMonth] = useState(() => pickInitialViewDate().getMonth())
+  const [currentYear, setCurrentYear] = useState(() => pickInitialViewDate().getFullYear())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
