@@ -13,26 +13,49 @@
 // app_settings row; PLATFORM_COMMISSION_PCT=10 in financing) are unmoved —
 // kratos flagged the quantity-mixing trap: three separate percentages exist,
 // only the 12 named by Rod should have moved.
+//
+// 2026-08-31 hardening (kratos bxt2p): tenth commission-12% site survived the
+// initial sweep because it sits in a MULTI-LINE ternary
+// (transactions.tsx:273-275) and every previous pattern was line-oriented.
+// Section 3 was rewritten to walk the whole file text for `:\s*12\b` and
+// classify by commission/_pct proximity in the preceding ~200 chars. Also
+// added an optional dist/ bundle sweep (Section 4): the minifier collapses
+// multi-line ternaries onto one line, which turns the flattened output into
+// a normalizing rail — text patterns that fail against source succeed
+// against the build artifact. Vendor-id label bug (Section 1) fixed at the
+// same time.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname, resolve, join } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
 
 // ---- 1. Extract commission_pct values from mock-data.ts source, tie each
-//        one to the enclosing vendor id, and re-run the lead-workflow
-//        render expressions against them.
+//        one to the enclosing VENDOR id (not a nested rep id — vendor blocks
+//        contain `reps: [{ id: 'v-N-rep-M', ... }]` and the previous
+//        `{\s*id:\s*'...'...commission_pct:` regex captured whichever `id:`
+//        appeared before `commission_pct:` in text order, which for vendors
+//        with non-empty reps is the PREVIOUS vendor's rep id, not the
+//        current vendor). Kratos-flagged label bug: correct pct values, wrong
+//        labels — fixed here by iterating commission_pct occurrences and
+//        walking backward for the nearest enclosing vendor id (v-... without
+//        -rep-).
 const mockDataSrc = readFileSync(resolve(ROOT, 'src/lib/mock-data.ts'), 'utf8')
 
-// Match every { … commission_pct: N, … } vendor object literal by walking
-// forward from each `commission_pct:` occurrence and extracting the id.
-const vendorRe = /\{\s*id:\s*'([^']+)'[\s\S]*?commission_pct:\s*(\d+)/g
 const vendors = []
-let m
-while ((m = vendorRe.exec(mockDataSrc)) !== null) {
-  vendors.push({ id: m[1], commission_pct: Number(m[2]) })
+const pctRe = /commission_pct:\s*(\d+)/g
+let pctMatch
+while ((pctMatch = pctRe.exec(mockDataSrc)) !== null) {
+  const before = mockDataSrc.slice(0, pctMatch.index)
+  const idMatches = [...before.matchAll(/id:\s*'(v-[^']*)'/g)].filter(
+    (m) => !m[1].includes('-rep-'),
+  )
+  const nearest = idMatches[idMatches.length - 1]
+  if (nearest) {
+    vendors.push({ id: nearest[1], commission_pct: Number(pctMatch[1]) })
+  }
 }
 if (vendors.length === 0) throw new Error('parsed 0 vendors from mock-data.ts')
 
@@ -51,7 +74,6 @@ const EXPECTED_SHARE_$ = Math.round(SAMPLE_SALE * (1 - EXPECTED_PCT / 100))     
 
 let failed = 0
 for (const v of vendors) {
-  // Render exactly as lead-workflow.tsx does:
   const rendered = {
     yourShareLabel: `Your Share (${100 - v.commission_pct}%)`,
     yourShareAmount: `$${Math.round(SAMPLE_SALE * (1 - v.commission_pct / 100)).toLocaleString()}`,
@@ -87,13 +109,6 @@ if (!platformMatch) {
   console.log(`PASS PLATFORM_COMMISSION_PCT=10 (financing draw fee, unmoved)`)
 }
 
-// Mock app_settings row carries revenue_share_pct — separate quantity from
-// vendor commission_pct. Kratos noted prod DB has 15 for this field; the
-// mock currently has 10. Either way, the important assertion for this PR is
-// "did not move from whatever it was" — capture the current value and prove
-// nothing changed. Since we did not touch it in this change, any non-6 is
-// fine here; the guard is just that the field still exists and did not get
-// swept up in the mock-data rewrite.
 const revShareMatch = mockDataSrc.match(/revenue_share_pct:\s*(\d+)/)
 if (!revShareMatch) {
   console.log('FAIL: revenue_share_pct mock row missing')
@@ -105,35 +120,101 @@ if (!revShareMatch) {
   console.log(`PASS revenue_share_pct=${revShareMatch[1]} in mock (unmoved; separate quantity)`)
 }
 
-// ---- 3. Sweep for stale 12% literals in commission context.
+// ---- 3. Multi-line-aware sweep for stale 12 literals in commission context.
+//        Previous line-oriented sweep missed transactions.tsx:275 because the
+//        `: 12` fallback sat on its own line at the tail of a multi-line
+//        ternary; there was no single line matching `: 12) / 100` or
+//        `?? 12`. Kratos discipline: walk every `:\s*12\b` occurrence in the
+//        raw file text and classify by whether the preceding ~200 chars
+//        mention commission/_pct. Reports true positives AND leaves benign
+//        matches (framer-motion `y: 12` offsets) visible — a sweep that
+//        returns only true positives is a sweep tuned onto known cases.
 const filesToSweep = [
   'src/features/admin/pages/reports.tsx',
   'src/features/admin/pages/overview.tsx',
   'src/features/admin/pages/banking.tsx',
+  'src/features/admin/pages/transactions.tsx',
+  'src/features/admin/pages/settings.tsx',
   'src/features/vendor/components/config-revision-dialog.tsx',
   'src/stores/projects-store.ts',
-  'src/features/admin/pages/settings.tsx',
   'src/lib/vendor-scope.ts',
 ]
+
+const LOOKBACK = 200
+const COMMISSION_RE = /commission|_pct\b|commission_pct/i
+
 for (const rel of filesToSweep) {
   const src = readFileSync(resolve(ROOT, rel), 'utf8')
-  // Look for the two shapes I edited: `: 12) / 100`  and  `?? 12` in a
-  // commission-adjacent line, and commission_pct: 12.
-  const lines = src.split('\n')
-  const stale = []
-  lines.forEach((ln, i) => {
-    if (/commission_pct:\s*12\b/.test(ln)) stale.push(`${rel}:${i + 1}: ${ln.trim()}`)
-    if (/:\s*12\)\s*\/\s*100/.test(ln)) stale.push(`${rel}:${i + 1}: ${ln.trim()}`)
-    if (/\?\?\s*12\b/.test(ln) && /commission|pct|vendor/i.test(ln)) stale.push(`${rel}:${i + 1}: ${ln.trim()}`)
-    if (/defaultCommission:\s*12\b/.test(ln)) stale.push(`${rel}:${i + 1}: ${ln.trim()}`)
-  })
-  if (stale.length) {
-    console.log(`FAIL stale 12 literal(s) in ${rel}:`)
-    stale.forEach((s) => console.log('  ' + s))
-    failed += stale.length
+  const twelveRe = /:\s*12\b/g
+  let hit
+  const commissionScoped = []
+  const otherScoped = []
+  while ((hit = twelveRe.exec(src)) !== null) {
+    const start = Math.max(0, hit.index - LOOKBACK)
+    const context = src.slice(start, hit.index)
+    const lineNum = src.slice(0, hit.index).split('\n').length
+    const snippet = src.slice(Math.max(0, hit.index - 40), hit.index + 20).replace(/\n/g, '\\n')
+    if (COMMISSION_RE.test(context)) {
+      commissionScoped.push(`${rel}:${lineNum}: …${snippet}…`)
+    } else {
+      otherScoped.push(`${rel}:${lineNum}: …${snippet}…`)
+    }
+  }
+  // Also catch the explicit shapes even outside the commission-context test —
+  // `commission_pct: 12` and `defaultCommission: 12` are always red flags.
+  const explicit = []
+  const explicitRe = /(commission_pct|defaultCommission):\s*12\b/g
+  let e
+  while ((e = explicitRe.exec(src)) !== null) {
+    const lineNum = src.slice(0, e.index).split('\n').length
+    explicit.push(`${rel}:${lineNum}: ${e[0]}`)
+  }
+
+  if (commissionScoped.length || explicit.length) {
+    console.log(`FAIL stale 12 literal(s) in commission context in ${rel}:`)
+    commissionScoped.forEach((s) => console.log('  ' + s))
+    explicit.forEach((s) => console.log('  ' + s))
+    failed += commissionScoped.length + explicit.length
+  }
+  if (otherScoped.length) {
+    console.log(`  INFO ${rel}: ${otherScoped.length} non-commission ':\s*12' occurrence(s) (left visible; do not over-tighten filter):`)
+    otherScoped.forEach((s) => console.log('    ' + s))
   }
 }
-console.log('sweep: no stale 12 literals in commission scope')
+console.log('sweep (multi-line-aware): no stale 12 literals in commission scope')
+
+// ---- 4. Bundle sweep — the minifier collapses multi-line ternaries onto one
+//        line, so the built bundle is a NORMALIZING rail: text patterns that
+//        fail against source can succeed against dist/assets/*.js. Kratos
+//        confirmed this rail is what caught transactions.tsx:275 in the
+//        first place. Runs only if dist/ exists; otherwise prints a hint.
+const distAssets = resolve(ROOT, 'dist/assets')
+if (existsSync(distAssets)) {
+  const jsFiles = readdirSync(distAssets).filter((f) => f.endsWith('.js'))
+  let bundleHits = 0
+  for (const f of jsFiles) {
+    const src = readFileSync(join(distAssets, f), 'utf8')
+    // Flattened commission-context patterns in minified output.
+    const flatRe = /commission_pct:12\b|\?\?12(?=[,)\s])|:12\)\s*\/\s*100/g
+    let m
+    const hits = []
+    while ((m = flatRe.exec(src)) !== null) {
+      const snippet = src.slice(Math.max(0, m.index - 60), m.index + 40)
+      hits.push(`  ${f}@${m.index}: …${snippet}…`)
+    }
+    if (hits.length) {
+      console.log(`FAIL bundle sweep found flattened 12 in ${f}:`)
+      hits.forEach((s) => console.log(s))
+      bundleHits += hits.length
+      failed += hits.length
+    }
+  }
+  if (bundleHits === 0) {
+    console.log(`bundle sweep (${jsFiles.length} file(s) in dist/assets): no flattened 12 in commission scope`)
+  }
+} else {
+  console.log('bundle sweep: SKIPPED (dist/assets not present — run `npm run build` first for the normalizing-rail check)')
+}
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} check(s) FAILED`)
 process.exit(failed === 0 ? 0 : 1)
