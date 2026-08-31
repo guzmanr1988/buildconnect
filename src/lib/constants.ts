@@ -40,11 +40,11 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         required: true,
         type: 'multi',
         options: [
-          { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan' },
-          { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan' },
-          { id: 'metal', label: 'Standing Seam Metal', description: 'Maximum durability, 50+ years' },
-          { id: 'aluminum', label: 'Aluminum', description: 'Lightweight, corrosion-resistant' },
-          { id: 'flat_roof', label: 'Flat Roof', description: 'Commercial-style flat roofing system' },
+          { id: 'shingle', label: 'Architectural Shingle', description: 'Most affordable, 25-30 year lifespan', image_url: '/catalog/roofing/materials/shingle.jpg' },
+          { id: 'barrel_tile', label: 'Barrel Tile', description: 'Classic Florida look, 50+ year lifespan', image_url: '/catalog/roofing/materials/barrel_tile.jpg' },
+          { id: 'metal', label: 'Standing Seam Metal', description: 'Maximum durability, 50+ years', image_url: '/catalog/roofing/materials/metal.jpg' },
+          { id: 'aluminum', label: 'Aluminum', description: 'Lightweight, corrosion-resistant', image_url: '/catalog/roofing/materials/aluminum.jpg' },
+          { id: 'flat_roof', label: 'Flat Roof', description: 'Commercial-style flat roofing system', image_url: '/catalog/roofing/materials/flat_roof.jpg' },
         ],
       },
       {
