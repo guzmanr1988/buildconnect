@@ -65,7 +65,6 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     material: {
       shingle: Layers,
       barrel_tile: Triangle,
-      terracotta: Triangle,
       metal: Cog,
       aluminum: PanelTop,
       flat_roof: Square,
