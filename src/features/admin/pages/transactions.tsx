@@ -272,7 +272,7 @@ export default function TransactionsPage() {
           : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
         const effectivePct = vendor
           ? (vendorCommissionOverrides[vendor.id] ?? vendor.commission_pct)
-          : 12
+          : 6
         return {
           id: `mock-tx-${p.id}`,
           type: 'commission' as TransactionType,
