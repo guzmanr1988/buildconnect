@@ -52,7 +52,7 @@ export default function SettingsPage() {
     contactEmail: 'admin@buildconnect.com',
     supportPhone: '(305) 555-9999',
     serviceArea: 'Miami-Dade, Broward, Palm Beach',
-    defaultCommission: 12, // Ship #290 + pin-28 — platform-default commission for new vendor signups (Rodolfo directive; 10->12)
+    defaultCommission: 6, // Platform-default commission for new vendor signups (Rodolfo directive 2026-08-31; history 10->12->6). Note: editor removed (see comment ~L182-187), so this local-state value is unreferenced; kept in sync for consistency only.
     minPayoutThreshold: 100,
     leadExpiryHours: 48,
     vendorResponseLimit: 24,

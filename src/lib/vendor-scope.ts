@@ -181,7 +181,7 @@ function profileToVendor(p: Profile): Vendor {
     // Read live at runtime, so 10->12 applies to ALL real vendors w/o
     // a vendorCommissionOverrides entry. Admin per-vendor override via
     // setVendorCommission still takes precedence.
-    commission_pct: 12,
+    commission_pct: 6,
   }
 }
 

@@ -125,7 +125,7 @@ export default function BankingPage() {
       .filter((p) => p.status === 'sold' && p.saleAmount && p.saleAmount > 0)
       .reduce((s, p) => {
         const v = MOCK_VENDORS.find((x) => x.company === p.contractor?.company)
-        const pct = (v ? (vendorCommissionOverrides[v.id] ?? v.commission_pct) : 12) / 100
+        const pct = (v ? (vendorCommissionOverrides[v.id] ?? v.commission_pct) : 6) / 100
         return s + Math.round((p.saleAmount ?? 0) * pct)
       }, 0)
   }, [sentProjects, vendorCommissionOverrides])

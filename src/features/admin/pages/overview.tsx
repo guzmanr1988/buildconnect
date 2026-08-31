@@ -144,14 +144,14 @@ export default function OverviewPage() {
   const appRevenue = useMemo(() => {
     const supabaseComm = closedSales.reduce((s, c) => s + c.commission, 0)
     // Use each vendor's effective commission_pct (admin override or default);
-    // fall back to 12% if the vendor can't be resolved by company name
-    // (pin-28 platform default).
+    // fall back to 6% if the vendor can't be resolved by company name
+    // (platform default; Rod directive 2026-08-31, prior default was 12%).
     const mockComm = mockSoldSales.reduce((s, p) => {
       // Ship #165: prefer contractor.vendor_id FK over company-name match.
       const vendor = p.contractor?.vendor_id
         ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
         : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 12) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 6) / 100
       return s + Math.round((p.saleAmount ?? 0) * pct)
     }, 0)
     const fixtureComm = mockClosedSales.reduce((s, c) => s + c.commission, 0)
@@ -167,7 +167,7 @@ export default function OverviewPage() {
       const vendor = p.contractor?.vendor_id
         ? MOCK_VENDORS.find((v) => v.id === p.contractor!.vendor_id)
         : MOCK_VENDORS.find((v) => v.company === p.contractor?.company)
-      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 12) / 100
+      const pct = (vendor ? resolveCommissionPct(vendor.id, vendor.commission_pct) : 6) / 100
       return {
         id: `mock-tx-${p.id}`,
         type: 'commission',
