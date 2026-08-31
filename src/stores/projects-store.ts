@@ -1042,9 +1042,9 @@ export const useProjectsStore = create<ProjectsState>()(
         }
 
         // Platform commission — admin per-vendor override, else the vendor's
-        // default commission_pct (default 12). Applied to BOTH sides so the
+        // default commission_pct (default 6). Applied to BOTH sides so the
         // before/after delta is commission-consistent.
-        const defaultPct = MOCK_VENDORS.find((v) => v.id === vendorUuid)?.commission_pct ?? 12
+        const defaultPct = MOCK_VENDORS.find((v) => v.id === vendorUuid)?.commission_pct ?? 6
         const commissionPct = useAdminModerationStore.getState().getVendorCommission(vendorUuid ?? '', defaultPct)
         const originalCommissionCents = Math.round((originalPriceCents * commissionPct) / 100)
         const revisedCommissionCents = Math.round((revisedPriceCents * commissionPct) / 100)

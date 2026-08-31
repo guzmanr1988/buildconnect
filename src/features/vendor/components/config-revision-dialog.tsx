@@ -118,7 +118,7 @@ export function ConfigRevisionDialog({
   }, [open, sentProject.id, sentProject.item, vendorUuid, isRoofing])
 
   const commissionPct = useMemo(() => {
-    const defaultPct = MOCK_VENDORS.find((v) => v.id === vendorUuid)?.commission_pct ?? 12
+    const defaultPct = MOCK_VENDORS.find((v) => v.id === vendorUuid)?.commission_pct ?? 6
     return getVendorCommission(vendorUuid ?? '', defaultPct)
   }, [vendorUuid, getVendorCommission])
 
