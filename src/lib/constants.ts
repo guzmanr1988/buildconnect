@@ -53,13 +53,21 @@ export const SERVICE_CATALOG: ServiceConfig[] = [
         required: false,
         type: 'multi',
         options: [
-          { id: 'gutters', label: 'Gutters' },
-          { id: 'insulation', label: 'Attic Insulation' },
-          { id: 'solar_prep', label: 'Solar Panel Prep' },
-          { id: 'soffit_wood', label: 'Soffit Wood' },
-          { id: 'fascia_wood', label: 'Fascia Wood' },
+          { id: 'gutters', label: 'Gutters', image_url: '/catalog/roofing/addons/gutters.jpg' },
+          { id: 'insulation', label: 'Attic Insulation', image_url: '/catalog/roofing/addons/insulation.jpg' },
+          { id: 'solar_prep', label: 'Solar Panel Prep', image_url: '/catalog/roofing/addons/solar_prep.jpg' },
+          { id: 'soffit_wood', label: 'Soffit Wood', image_url: '/catalog/roofing/addons/soffit_wood.jpg' },
+          { id: 'fascia_wood', label: 'Fascia Wood', image_url: '/catalog/roofing/addons/fascia_wood.jpg' },
+          // soffit_metal / fascia_metal are pair CHILDREN: ROOFING_ADDON_PAIR_CHILD_IDS
+          // (service-detail.tsx) filters them out of renderOptions, so they never render
+          // as tiles and an image_url here would be dead. The parent wood tile carries the
+          // photo for the pair. Assets exist (iris) if the filter is ever lifted.
           { id: 'soffit_metal', label: 'Soffit Metal' },
           { id: 'fascia_metal', label: 'Fascia Metal' },
+          // extra_plywood intentionally has NO image_url — it keeps its icon. The subject is
+          // roof decking mid-tear-off; two search passes found no shot with the right framing
+          // that was also free of identifiable workers. isImageTile is per-option, so this
+          // tile falls back to TileIcon on its own.
           { id: 'extra_plywood', label: 'Extra Sheet Plywood' },
         ],
       },
