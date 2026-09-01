@@ -2606,8 +2606,21 @@ export function ServiceDetailPage() {
                       roofingAddonPair
                         ? getRoofingAddonMaterial(roofingAddonPair, selected)
                         : null
+                    // task_168 — tile image must follow the toggled pair member.
+                    // Parent tile renders under the wood option (metal children are
+                    // filtered out of renderOptions at L2385), so option.image_url
+                    // is the wood asset. When the homeowner flips Wood→Metal, the
+                    // bound catalog id becomes *_metal and its own image_url is the
+                    // metal photo — look it up in group.options and render that
+                    // instead. Falls back to option.image_url (parent/wood) when
+                    // there is no pair or the bound id is not present in options.
+                    const boundOption =
+                      roofingAddonPair && roofingAddonBoundId
+                        ? group.options.find((o) => o.id === roofingAddonBoundId) ?? option
+                        : option
+                    const boundImageUrl = boundOption.image_url ?? option.image_url
                     const isCardTile = isTileModeGroup(serviceId, group.id)
-                    const isImageTile = isCardTile && !!option.image_url
+                    const isImageTile = isCardTile && !!boundImageUrl
                     const TileIcon = isCardTile && !isImageTile
                       ? SERVICE_TILE_ICONS[serviceId ?? '']?.[group.id]?.[option.id]
                       : undefined
@@ -3226,7 +3239,7 @@ export function ServiceDetailPage() {
                         {isImageTile && (
                           <div className="relative w-full">
                             <img
-                              src={option.image_url}
+                              src={boundImageUrl}
                               alt={option.label || 'Design'}
                               loading="lazy"
                               className="w-full aspect-video rounded-lg object-cover bg-muted"
@@ -3237,16 +3250,16 @@ export function ServiceDetailPage() {
                               aria-label={`Zoom ${option.label || 'design'} image`}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                if (option.image_url) {
-                                  setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                if (boundImageUrl) {
+                                  setLightboxImage({ src: boundImageUrl, alt: option.label || 'Design' })
                                 }
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault()
                                   e.stopPropagation()
-                                  if (option.image_url) {
-                                    setLightboxImage({ src: option.image_url, alt: option.label || 'Design' })
+                                  if (boundImageUrl) {
+                                    setLightboxImage({ src: boundImageUrl, alt: option.label || 'Design' })
                                   }
                                 }
                               }}
