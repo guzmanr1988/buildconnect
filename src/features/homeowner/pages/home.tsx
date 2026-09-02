@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Phone, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, UserCheck } from 'lucide-react'
+import { MapPin, Phone, Hash, CalendarDays, ChevronRight, ChevronDown, ChevronUp, Hammer, CheckCircle2, Clock, XCircle, Gift, X, CheckCircle, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AvatarInitials } from '@/components/shared/avatar-initials'
@@ -295,6 +295,17 @@ export function HomeownerHome() {
                 <Phone className="h-3 w-3 md:h-4 md:w-4" />
                 {profile.phone}
               </span>
+              {/* Task_793 — Miami-Dade property FOLIO, populated fire-and-forget
+                  on address save (src/lib/api/folio.ts). Silent-degrade: the
+                  entire span hides when folio is null (Broward, ambiguous
+                  match, parser reject, or never-attempted). No 'Folio: —',
+                  no 'not found' — the row simply does not exist. */}
+              {profile.folio ? (
+                <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground md:text-sm md:gap-1.5">
+                  <Hash className="h-3 w-3 md:h-4 md:w-4" />
+                  Folio {profile.folio}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

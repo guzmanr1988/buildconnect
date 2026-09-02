@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
 import { geocodeVendorAddress } from '@/lib/api/geocode'
+import { resolveHomeownerFolio } from '@/lib/api/folio'
 import type { Profile, UserRole } from '@/types'
 
 interface AuthState {
@@ -58,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
           'noncircumvention_agreement_signature_metadata',
           'account_rep_for_vendor_id',
           'financing_available',
+          'folio', 'folio_checked_at', 'folio_source',
         ])
         const dbPatch = Object.fromEntries(
           Object.entries(patch).filter(([k]) => PROFILE_DB_COLUMNS.has(k)),
@@ -75,6 +77,17 @@ export const useAuthStore = create<AuthState>()(
           && profileAfter?.role === 'vendor'
         ) {
           void geocodeVendorAddress(profileId, patch.address)
+        }
+        // Task_793 — Miami-Dade folio lookup fires on homeowner address save.
+        // Silent-degrade at every step (parser reject, ArcGIS 0 or >1
+        // features, HTTP fail): folio_checked_at is always written to
+        // stop retry loops, folio is written only on exact-1 resolve.
+        if (
+          typeof patch.address === 'string'
+          && patch.address.trim()
+          && profileAfter?.role === 'homeowner'
+        ) {
+          void resolveHomeownerFolio(profileId, patch.address)
         }
       },
       clearLocalSession: () =>
