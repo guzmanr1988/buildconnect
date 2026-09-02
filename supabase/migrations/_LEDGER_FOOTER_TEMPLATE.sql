@@ -1,0 +1,54 @@
+-- ============================================================================
+-- LEDGER FOOTER TEMPLATE — required as the last statement of every migration
+-- inside the migration's own transaction (before commit;). Applying the file
+-- IS recording it; the two cannot drift because there is no moment at which
+-- one has happened and the other has not. Migrations that omit this footer
+-- run without leaving a ledger row and are indistinguishable from never-ran
+-- from the consumer's perspective — that is the defect this closes.
+--
+-- HARD INVARIANTS for every migration from 127 forward:
+--   (a) file starts with `begin;` and ends with `commit;`
+--   (b) file ends with exactly this footer block, verbatim except for
+--       <filename> and <content_sha256>
+--   (c) applier POST body prepends `set app.agent_id = '<agent>';` (session-
+--       scoped GUC read by current_setting inside the file; measured on prod
+--       to not leak across POSTs, kratos 2026-09-02T21:3xZ)
+--
+-- HOW TO USE:
+--
+--   1. Write the migration body between `begin;` and this footer.
+--   2. Commit the file (git add + git commit) with a PLACEHOLDER sha in the
+--      values line so the file is at its final shape on disk.
+--   3. Compute the sha on the committed file, using origin/main as the ref
+--      (permanent first-parent — do NOT use HEAD, which moves per checkout,
+--      and do NOT use a squash-source branch SHA, which may be pruned in a
+--      fresh clone):
+--
+--        git show origin/main:supabase/migrations/<filename> | \
+--          awk '/^-- LEDGER FOOTER BOUNDARY BELOW/{exit}{print}' | \
+--          shasum -a 256 | cut -d ' ' -f1
+--
+--      The awk strips the boundary marker line and everything below (this
+--      footer), so the sha represents the migration BODY only, not the sha
+--      of the sha. Producer and checker MUST run the exact same command —
+--      a hash differing by a trailing newline reads as drift on a byte-
+--      identical file. Do NOT substitute `shasum -a 256 <filename>` (hashes
+--      working tree, may differ from origin/main by editor whitespace).
+--
+--   4. Amend the file with the computed sha in place of the placeholder,
+--      amend the commit (or add a fixup commit). The body sha is unchanged
+--      because the footer edit is stripped from the canonicalization.
+--
+--   5. Apply via mgmt-api with body:
+--
+--        set app.agent_id = '<agent>';
+--        <migration file contents>
+--
+--      current_setting inside the migration reads the GUC. Missing SET
+--      raises SQLSTATE 42704 "unrecognized configuration parameter" LOUD;
+--      empty string trips the length(applied_by) > 0 check. Both roll back —
+--      apply and record fall together.
+-- ============================================================================
+-- LEDGER FOOTER BOUNDARY BELOW
+insert into public.applied_migrations (filename, content_sha256, applied_by, provenance)
+values ('<NNN>_<slug>.sql', '<content_sha256_hex>', current_setting('app.agent_id'), 'apply');
