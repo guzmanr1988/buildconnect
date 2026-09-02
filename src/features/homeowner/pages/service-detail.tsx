@@ -101,7 +101,7 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     //   cash        -> Briefcase (upfront, unchanged)
     //   financed    -> Building2 (financial institution — distinct from Cash)
     installation: { install: Wrench, no_install: Package },
-    install_products: { glass: Layers, frames: Square, both: Layers3 },
+    install_products: { install_windows: PanelTop, install_doors: DoorOpen, install_storm_front: Wind },
     payment: { cash: Briefcase, financed: Building2 },
   },
   pool: {
@@ -123,6 +123,7 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
       cement_floor: Square,
       square_concrete: Square,
       artificial_turf: TreePine,
+      na: Sparkles,
     },
     addons: {
       spa: Waves,
@@ -136,7 +137,7 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     water_feature_units: { laminar_jet: Droplets, waterfall_unit: Waves },
   },
   driveways: {
-    scope: { full: RefreshCw, overlay: Layers, repair: Wrench },
+    scope: { full: RefreshCw, overlay: Layers, repair: Wrench, addons: Plus },
     surface: { pavers: Grid3X3, stamped: Square, asphalt: Square, stone: Triangle, square_concrete: Square },
     addons: { border: Square, lighting: Lightbulb, drainage: Droplets },
   },
@@ -185,6 +186,13 @@ const SERVICE_TILE_ICONS: Record<string, Record<string, Record<string, typeof Pl
     control: { cordless: Sparkles, traditional_cord: AlignJustify, wand: AlignJustify, motorized: Cog },
     mount: { inside_mount: Square, outside_mount: PanelTop },
     light_control: { blackout: Square, room_darkening: Layers, light_filtering: Sun, sheer: Sparkles },
+  },
+  kitchen: {
+    Cabinets: { 'Cabinet Install': Package },
+    Stone: { 'Stone Install': Grid3X3, Granite: Triangle, Quartzite: Sparkles },
+    Installation: { 'Cabinet Installation': Wrench, 'Stone Installation': Layers },
+    'Add-ons': { 'Under-Cabinet Lighting': Lightbulb, 'Pot Filler': Droplets },
+    'Extra Services': { 'Kitchen Demolition': Hammer, 'Kitchen Plumbing': Waves },
   },
 }
 
