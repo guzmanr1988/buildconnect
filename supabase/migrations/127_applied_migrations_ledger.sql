@@ -99,6 +99,6 @@ comment on column public.applied_migrations.provenance is
 
 -- LEDGER FOOTER BOUNDARY BELOW
 insert into public.applied_migrations (filename, content_sha256, applied_by, provenance)
-values ('127_applied_migrations_ledger.sql', '<SHA_COMPUTED_AT_COMMIT_TIME>', current_setting('app.agent_id'), 'apply');
+values ('127_applied_migrations_ledger.sql', '18d0072af47858b1699d7745e23752d858dd285bc3e0e182253ed616d7b6b96e', current_setting('app.agent_id'), 'apply');
 
 commit;

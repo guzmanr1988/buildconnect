@@ -146,6 +146,6 @@ on conflict (filename) do nothing;
 
 -- LEDGER FOOTER BOUNDARY BELOW
 insert into public.applied_migrations (filename, content_sha256, applied_by, provenance)
-values ('128_applied_migrations_backfill_seed.sql', '<SHA_COMPUTED_AT_COMMIT_TIME>', current_setting('app.agent_id'), 'apply');
+values ('128_applied_migrations_backfill_seed.sql', '937e21d90813ac05cb13b54b49f4b907405fe7f8f1e38f00fc1f8e6c9a9607d9', current_setting('app.agent_id'), 'apply');
 
 commit;
