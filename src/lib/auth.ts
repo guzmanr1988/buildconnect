@@ -94,6 +94,22 @@ const PROFILE_LITE_COLUMNS = [
   'noncircumvention_agreement_signed_name',
   'noncircumvention_agreement_version',
   'financing_available',
+  // task_1788368804760_842. Added to LITE (NOT bloat) because these are
+  // three small scalar columns (text, timestamptz, text) — the #475
+  // MB-payload rationale does not apply, and folio is a first-paint
+  // render on /home. Omitted here originally in PR 595, which shipped
+  // the render conditional and the write path but not the read filter,
+  // so getProfileLite returned profile.folio=undefined and the DOM
+  // gated to blank. Worse than a first-paint omission: every subsequent
+  // lite hydrate (SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED via
+  // AuthBootstrap) also lacked folio and CLOBBERED an already-populated
+  // store value — apollo network-trace 09-02 measured folio going
+  // 3060180330340 → null on a /home → /home/profile → /home nav.
+  // Fixing the SELECT here fixes both the initial blank and the clobber
+  // cycle in one place.
+  'folio',
+  'folio_checked_at',
+  'folio_source',
 ].join(', ')
 
 export type ProfileLite = Omit<Profile, typeof PROFILE_BLOAT_COLUMNS[number]>
