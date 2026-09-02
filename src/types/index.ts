@@ -68,6 +68,14 @@ export interface Profile {
   // address selector. Zustand-only / mock-bridged for now — Supabase JSONB
   // column + RLS land in Tranche-2 (Phase B3).
   additional_addresses?: SecondaryAddress[]
+  // Miami-Dade property FOLIO cache. Populated fire-and-forget on address
+  // save via resolveHomeownerFolio (src/lib/api/folio.ts). Null when never
+  // attempted, when the parser rejects, when the ArcGIS lookup returns 0
+  // or >1 features, or when the homeowner sits outside Miami-Dade. Distinguish
+  // never-attempted from attempted-no-match via folio_checked_at.
+  folio?: string | null
+  folio_checked_at?: string | null
+  folio_source?: string | null
   company?: string
   avatar_color: string
   // Base64 data URL for uploaded avatar image. Legacy v1 path (ship #115).
