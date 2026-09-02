@@ -67,6 +67,50 @@ interface ParsedAddress {
   zip: string
 }
 
+// Extracted house-number + street-name normalizer. Shared between the
+// unstructured `profiles.address` parser and the structured
+// `additional_addresses[].street` parser. Returns null on ambiguity —
+// silent-degrade contract, not best-effort. Rejects unknown street types
+// rather than guessing (task_1788368314603_757 fixture case:
+// unmapped street types pass through the abbrev map; unknown = reject).
+function parseHouseAndStreet(streetLine: string): { hseNum: string; sname: string } | null {
+  if (!streetLine || typeof streetLine !== 'string') return null
+  const trimmed = streetLine.trim()
+  if (!trimmed) return null
+
+  // House number: leading integer.
+  const hseMatch = trimmed.match(/^(\d+)\s+(.+)$/)
+  if (!hseMatch) return null
+  const hseNum = hseMatch[1]
+  const streetBody = hseMatch[2].trim().toUpperCase()
+
+  // Strip trailing unit designators (APT, UNIT, #123) — not part of SNAME.
+  const streetNoUnit = streetBody
+    .replace(/\s+(APT|UNIT|SUITE|STE|#)\s*\S+.*$/i, '')
+    .trim()
+
+  const tokens = streetNoUnit.split(/\s+/)
+  if (tokens.length < 2) return null
+
+  const lastToken = tokens[tokens.length - 1]
+  const abbrevSuffix = STREET_TYPE_ABBREV[lastToken] ?? lastToken
+  const knownAbbrevs = new Set(Object.values(STREET_TYPE_ABBREV))
+  if (!knownAbbrevs.has(abbrevSuffix)) return null
+
+  const middle = tokens.slice(0, -1).map((tok) => {
+    if (/^\d+$/.test(tok)) {
+      const n = parseInt(tok, 10)
+      return `${n}${ordinalSuffix(n)}`
+    }
+    return tok
+  })
+
+  const sname = [...middle, abbrevSuffix].join(' ')
+  if (!sname) return null
+
+  return { hseNum, sname }
+}
+
 // Strict parser for the unstructured profiles.address text field. Rejects
 // (returns null) on any ambiguity — the fail path is silent-degrade, not
 // best-effort. Sample that must parse: "10990 SW 225 Terrace, Miami, FL 33170"
@@ -85,44 +129,28 @@ export function parseAddressForFolio(raw: string): ParsedAddress | null {
   const firstSegment = trimmed.split(',')[0]?.trim()
   if (!firstSegment) return null
 
-  // House number: leading integer.
-  const hseMatch = firstSegment.match(/^(\d+)\s+(.+)$/)
-  if (!hseMatch) return null
-  const hseNum = hseMatch[1]
-  const streetBody = hseMatch[2].trim().toUpperCase()
+  const parsed = parseHouseAndStreet(firstSegment)
+  if (!parsed) return null
 
-  // Normalise: strip trailing unit designators (APT, UNIT, #123) — these
-  // are not part of SNAME in MDC's schema.
-  const streetNoUnit = streetBody
-    .replace(/\s+(APT|UNIT|SUITE|STE|#)\s*\S+.*$/i, '')
-    .trim()
+  return { ...parsed, zip }
+}
 
-  // Tokenise; the last token is expected to be a street type (TER/DR/...).
-  const tokens = streetNoUnit.split(/\s+/)
-  if (tokens.length < 2) return null
+// Structured entry point for additional_addresses (task_1788368314603_757).
+// SecondaryAddress arrives as {street, city, state, zip} — no unstructured
+// text parsing needed. Uses the same house+street normalizer so both paths
+// share one code path and one fixture table.
+export function parseStructuredAddressForFolio(
+  addr: { street: string; zip: string },
+): ParsedAddress | null {
+  if (!addr?.street || !addr?.zip) return null
+  const zipMatch = addr.zip.trim().match(/^(\d{5})(?:-\d{4})?$/)
+  if (!zipMatch) return null
+  const zip = zipMatch[1]
 
-  const lastToken = tokens[tokens.length - 1]
-  const abbrevSuffix = STREET_TYPE_ABBREV[lastToken] ?? lastToken
-  // If lastToken is not a known long form AND not already a known abbrev,
-  // we conservatively reject rather than guess.
-  const knownAbbrevs = new Set(Object.values(STREET_TYPE_ABBREV))
-  if (!knownAbbrevs.has(abbrevSuffix)) return null
+  const parsed = parseHouseAndStreet(addr.street)
+  if (!parsed) return null
 
-  // Middle tokens (between directional/prefix and suffix) — add ordinal to
-  // any bare integer that has no ordinal already (225 → 225TH). Do not touch
-  // tokens that already carry an ordinal, letters, or other punctuation.
-  const middle = tokens.slice(0, -1).map((tok) => {
-    if (/^\d+$/.test(tok)) {
-      const n = parseInt(tok, 10)
-      return `${n}${ordinalSuffix(n)}`
-    }
-    return tok
-  })
-
-  const sname = [...middle, abbrevSuffix].join(' ')
-  if (!sname) return null
-
-  return { hseNum, sname, zip }
+  return { ...parsed, zip }
 }
 
 interface ArcGisFeature {
@@ -185,5 +213,32 @@ export async function resolveHomeownerFolio(
   } catch (err) {
     // Swallow — silent-degrade. Next save re-attempts the write.
     console.error('[folio] update failed:', err)
+  }
+}
+
+export interface FolioLookupResult {
+  folio: string | null
+  folio_checked_at: string
+  folio_source: string
+}
+
+// Entry point for additional_addresses (task_1788368314603_757 Phase 2).
+// Returns folio values for the caller to merge into the jsonb entry —
+// does NOT persist directly, since a single write must land the whole
+// updated additional_addresses array (partial writes to jsonb entries
+// have no atomic story in the auth-store update path). folio_checked_at
+// is written unconditionally on completed lookup (success OR no-match)
+// so the "attempted, no-match" branch stops re-querying on next edit.
+// On completed no-match, folio is null + folio_checked_at set — same
+// three-value discriminator as the top-level Profile folio (types.ts).
+export async function lookupAdditionalAddressFolio(
+  addr: { street: string; zip: string },
+): Promise<FolioLookupResult> {
+  const parsed = parseStructuredAddressForFolio(addr)
+  const folio = parsed ? await queryMiamiDadeFolio(parsed) : null
+  return {
+    folio,
+    folio_checked_at: new Date().toISOString(),
+    folio_source: 'mdc_arcgis',
   }
 }
