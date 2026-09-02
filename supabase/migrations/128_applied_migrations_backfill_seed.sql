@@ -145,6 +145,28 @@ insert into public.applied_migrations (filename, content_sha256, applied_by, pro
 on conflict (filename) do nothing;
 
 -- LEDGER FOOTER BOUNDARY BELOW
+-- CORRECTION 2026-09-03 (kratos msg 3a82t): the aggregate re-derivation
+-- command in this file's docblock (above the boundary) is deterministically
+-- broken from the moment this file was merged. It enumerates from the working
+-- tree while reading a pinned ref, so the 3 files the recording merge itself
+-- added (127, 128, _LEDGER_FOOTER_TEMPLATE) fail `git show` and hash their
+-- empty stdout to e3b0c442...b855 -- appended as extra TSV rows, producing a
+-- non-matching aggregate. Line 40 of the docblock reads "Non-matching aggregate
+-- = canonicalization drift; do NOT apply until resolved" -- that combination
+-- makes this file a FALSE STOP-WORK ORDER for whoever authors mig 129. Do NOT
+-- halt on the mismatch; the docblock command is wrong, not the ledger.
+--
+-- Correct command lives with the consumer, tracked as task_1788386329858_278
+-- (state/migration-apply-check.sh, kratos). Follow the pointer; do not copy a
+-- corrected command back into this file -- a command written into an artifact
+-- has a shelf life ending at its own merge, and replacing it only resets the
+-- clock. Location, not procedure.
+--
+-- This notice is below the LEDGER FOOTER BOUNDARY, so it is excluded from
+-- content_sha256 canonicalization and does not drift the recorded
+-- 937e21d90813ac05cb13b54b49f4b907405fe7f8f1e38f00fc1f8e6c9a9607d9 sha.
+-- Verified two-way on 2026-09-02: append below = sha unchanged, edit above =
+-- sha moves. Both rails (hephaestus + kratos) independent invocations.
 insert into public.applied_migrations (filename, content_sha256, applied_by, provenance)
 values ('128_applied_migrations_backfill_seed.sql', '937e21d90813ac05cb13b54b49f4b907405fe7f8f1e38f00fc1f8e6c9a9607d9', current_setting('app.agent_id'), 'apply');
 
