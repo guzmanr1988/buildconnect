@@ -42,6 +42,17 @@ export interface SecondaryAddress {
   city: string
   state?: string
   zip: string
+  // Miami-Dade property FOLIO cache per entry (task_1788368314603_757 Phase 2).
+  // Same three-value discriminator as the top-level Profile folio:
+  //   all three absent            = never attempted
+  //   folio_checked_at set, folio null = attempted, no match (do NOT retry)
+  //   folio set                    = resolved
+  // Populated on address save via lookupAdditionalAddressFolio (3s soft cap
+  // in profile.tsx handleSaveAddress). Backfill script for pre-existing rows
+  // ships in same PR (scripts/backfill-additional-addresses-folio.mjs).
+  folio?: string | null
+  folio_checked_at?: string | null
+  folio_source?: string | null
 }
 
 export interface Profile {

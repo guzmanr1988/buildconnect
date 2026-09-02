@@ -27,6 +27,7 @@ import { formatPhoneNumber, composeAddress } from '@/lib/format-helpers'
 import { AddressFieldset, type AddressFields } from '@/components/shared/address-fieldset'
 import { HomeownerBankingPayoutsSquare } from '@/features/homeowner/components/banking-payouts-square'
 import { MyReferralsCard } from '@/features/homeowner/components/my-referrals-card'
+import { lookupAdditionalAddressFolio, type FolioLookupResult } from '@/lib/api/folio'
 
 type AddressFormData = Omit<SecondaryAddress, 'id'>
 const emptyAddressForm: AddressFormData = { label: '', street: '', city: '', state: '', zip: '' }
@@ -44,6 +45,7 @@ export function HomeownerProfilePage() {
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
   const [addressForm, setAddressForm] = useState<AddressFormData>(emptyAddressForm)
   const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null)
+  const [savingAddress, setSavingAddress] = useState(false)
 
   // Profile self-edit (ship Phase B per kratos msg 1776719583850). Edit button
   // toggles form-mode on the primary profile card; save commits name/phone/
@@ -125,7 +127,7 @@ export function HomeownerProfilePage() {
     setAddressDialogOpen(true)
   }
 
-  const handleSaveAddress = () => {
+  const handleSaveAddress = async () => {
     const trimmed = {
       label: addressForm.label.trim(),
       street: addressForm.street.trim(),
@@ -137,10 +139,26 @@ export function HomeownerProfilePage() {
       toast.error('Label, street, city, and zip are required')
       return
     }
+    // Miami-Dade folio lookup with 3s soft cap (task_1788368314603_757).
+    // On resolve → entry saves with folio/checked_at/source populated.
+    // On timeout (>3s) → entry saves WITHOUT folio_* keys, so next edit
+    // re-attempts. On no-match within cap → checked_at set + folio null,
+    // next edit skips re-query (three-value discriminator, matches folio.ts
+    // top-level contract). No mid-turn orphan risk: single updateProfile call.
+    setSavingAddress(true)
+    const FOLIO_UI_CAP_MS = 3000
+    const folioResult = await Promise.race<FolioLookupResult | null>([
+      lookupAdditionalAddressFolio({ street: trimmed.street, zip: trimmed.zip }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), FOLIO_UI_CAP_MS)),
+    ])
+    const enriched: Omit<SecondaryAddress, 'id'> = folioResult
+      ? { ...trimmed, ...folioResult }
+      : trimmed
     const next: SecondaryAddress[] = editingAddressId
-      ? additionalAddresses.map((a) => (a.id === editingAddressId ? { id: a.id, ...trimmed } : a))
-      : [...additionalAddresses, { id: crypto.randomUUID(), ...trimmed }]
+      ? additionalAddresses.map((a) => (a.id === editingAddressId ? { id: a.id, ...enriched } : a))
+      : [...additionalAddresses, { id: crypto.randomUUID(), ...enriched }]
     updateProfile({ additional_addresses: next })
+    setSavingAddress(false)
     setAddressDialogOpen(false)
     toast.success(editingAddressId ? 'Address updated' : 'Address added')
   }
@@ -310,6 +328,9 @@ export function HomeownerProfilePage() {
                         <p className="text-xs text-muted-foreground truncate">
                           {addr.street}, {addr.city}{addr.state ? `, ${addr.state}` : ''}{addr.zip ? ` ${addr.zip}` : ''}
                         </p>
+                        {addr.folio && (
+                          <p className="text-xs text-muted-foreground truncate">Folio {addr.folio}</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
@@ -434,11 +455,11 @@ export function HomeownerProfilePage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddressDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setAddressDialogOpen(false)} disabled={savingAddress}>
               Cancel
             </Button>
-            <Button onClick={handleSaveAddress}>
-              {editingAddressId ? 'Save Changes' : 'Add Property'}
+            <Button onClick={handleSaveAddress} disabled={savingAddress}>
+              {savingAddress ? 'Saving…' : editingAddressId ? 'Save Changes' : 'Add Property'}
             </Button>
           </DialogFooter>
         </DialogContent>
