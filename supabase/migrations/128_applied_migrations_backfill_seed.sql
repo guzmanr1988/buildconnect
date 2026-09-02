@@ -145,7 +145,7 @@ insert into public.applied_migrations (filename, content_sha256, applied_by, pro
 on conflict (filename) do nothing;
 
 -- LEDGER FOOTER BOUNDARY BELOW
--- CORRECTION 2026-09-03 (kratos msg 3a82t): the aggregate re-derivation
+-- CORRECTION 2026-09-02 (kratos msg 3a82t): the aggregate re-derivation
 -- command in this file's docblock (above the boundary) is deterministically
 -- broken from the moment this file was merged. It enumerates from the working
 -- tree while reading a pinned ref, so the 3 files the recording merge itself
@@ -166,7 +166,8 @@ on conflict (filename) do nothing;
 -- content_sha256 canonicalization and does not drift the recorded
 -- 937e21d90813ac05cb13b54b49f4b907405fe7f8f1e38f00fc1f8e6c9a9607d9 sha.
 -- Verified two-way on 2026-09-02: append below = sha unchanged, edit above =
--- sha moves. Both rails (hephaestus + kratos) independent invocations.
+-- sha moves. ONE RAIL (same substrate, same awk+shasum method), invoked
+-- independently by two authors with different negative-control mutations.
 insert into public.applied_migrations (filename, content_sha256, applied_by, provenance)
 values ('128_applied_migrations_backfill_seed.sql', '937e21d90813ac05cb13b54b49f4b907405fe7f8f1e38f00fc1f8e6c9a9607d9', current_setting('app.agent_id'), 'apply');
 
