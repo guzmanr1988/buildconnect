@@ -139,10 +139,10 @@ declare
   ];
   pre_target_count      int;
   pre_null_count        int;
-  pre_roofing_material_count int;
-  updated_count         int;
-  post_null_count       int;
-  post_roofing_material_count int;
+  roofing_untouched_ctrl_before int;  -- counts group_id IN (material,addons) only; repair_materials excluded
+  updated_count                 int;
+  post_null_count               int;
+  roofing_untouched_ctrl_after  int;  -- same narrow query post-UPDATE; proves those 13 rows were not touched
 begin
   -- Pre-verify 1: all 72 target rows exist.
   select count(*) into pre_target_count
@@ -165,17 +165,20 @@ begin
       pre_null_count;
   end if;
 
-  -- Positive control: 13 existing roofing rows (5 material + 8 addons) still populated.
-  select count(*) into pre_roofing_material_count
+  -- Untouched-rows control: the 13 roofing rows in group_id IN (material, addons) must be
+  -- non-null before and after. This UPDATE does NOT touch them — it only sets repair_materials
+  -- rows (group_id = 'repair_materials'). After apply, roofing WITH_PHOTO across ALL groups
+  -- becomes 18 (13 + 5 new repair_materials); this narrower query stays 13 both ways.
+  select count(*) into roofing_untouched_ctrl_before
   from public.options o
   join public.option_groups og on og.id = o.option_group_id
   where og.service_id = 'roofing'
     and og.group_id in ('material', 'addons')
     and image_url is not null;
-  if pre_roofing_material_count <> 13 then
+  if roofing_untouched_ctrl_before <> 13 then
     raise exception
-      'Migration 121 pre-check: expected 13 roofing material+addons rows with image_url (positive control), found %',
-      pre_roofing_material_count;
+      'Migration 121 pre-check: expected 13 roofing material+addons rows with image_url (untouched control), found %',
+      roofing_untouched_ctrl_before;
   end if;
 
   -- === UPDATE all 72 rows ===
@@ -294,22 +297,24 @@ begin
       post_null_count;
   end if;
 
-  -- Post-verify 2: roofing positive control rows unchanged (still 13).
-  select count(*) into post_roofing_material_count
+  -- Post-verify 2: narrow control unchanged — proves the UPDATE did not accidentally
+  -- touch any of the 13 roofing/material+addons rows. Expected to equal 13 both before
+  -- and after (repair_materials updates are excluded from this query by group_id filter).
+  select count(*) into roofing_untouched_ctrl_after
   from public.options o
   join public.option_groups og on og.id = o.option_group_id
   where og.service_id = 'roofing'
     and og.group_id in ('material', 'addons')
     and image_url is not null;
-  if post_roofing_material_count <> 13 then
+  if roofing_untouched_ctrl_after <> 13 then
     raise exception
-      'Migration 121 post-check: roofing material+addons control moved (expected 13, got %)',
-      post_roofing_material_count;
+      'Migration 121 post-check: roofing material+addons untouched control moved (expected 13, got %)',
+      roofing_untouched_ctrl_after;
   end if;
 
   raise notice
-    'Migration 121 applied: updated=% target_null_after=% roofing_control_after=%',
-    updated_count, post_null_count, post_roofing_material_count;
+    'Migration 121 applied: updated=% target_null_after=% roofing_untouched_control_after=%',
+    updated_count, post_null_count, roofing_untouched_ctrl_after;
 end;
 $$;
 
