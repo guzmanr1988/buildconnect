@@ -1,6 +1,8 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
+import { usePlacesAutocomplete, type StructuredAddress } from '@/hooks/use-places-autocomplete'
 
 export interface AddressFields {
   street: string
@@ -19,6 +21,7 @@ interface AddressFieldsetProps {
   labelSize?: 'default' | 'sm'
   errors?: Partial<Record<keyof AddressFields, string>>
   className?: string
+  enableAddressAutocomplete?: boolean
 }
 
 /**
@@ -32,6 +35,10 @@ interface AddressFieldsetProps {
  * helper (single-string stores) OR persists the structured shape
  * directly (Tranche-2 structured-address migration).
  *
+ * Google Places autocomplete is enabled by default on the street field via
+ * usePlacesAutocomplete hook (tied to VITE_GOOGLE_MAPS_API_KEY). When a place
+ * is selected, all 4 fields are populated from the structured address parts.
+ *
  * Ship #113 per kratos msg 1776720207707 + 1776720256016.
  */
 export function AddressFieldset({
@@ -42,21 +49,40 @@ export function AddressFieldset({
   labelSize = 'default',
   errors,
   className,
+  enableAddressAutocomplete = true,
 }: AddressFieldsetProps) {
   const labelClass = labelSize === 'sm' ? 'text-xs' : ''
   const update = (patch: Partial<AddressFields>) => onChange({ ...value, ...patch })
   const req = required ? <span className="text-destructive">*</span> : null
+
+  const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
+  const gmpEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
+
+  const setStreetInputRef = usePlacesAutocomplete(
+    enableAddressAutocomplete && gmpEnabled && !!MAPS_KEY,
+    MAPS_KEY,
+    (formatted) => update({ street: formatted }),
+    (parts: StructuredAddress) =>
+      update({
+        street: parts.line1,
+        city: parts.city,
+        state: parts.state,
+        zip: parts.zip,
+      }),
+  )
 
   return (
     <div className={cn('grid gap-3', className)}>
       <div className="space-y-1.5">
         <Label htmlFor={`${idPrefix}-street`} className={labelClass}>Street Address {req}</Label>
         <Input
+          ref={setStreetInputRef}
           id={`${idPrefix}-street`}
           value={value.street}
           onChange={(e) => update({ street: e.target.value })}
           placeholder="1234 Main St"
           aria-invalid={!!errors?.street}
+          autoComplete="off"
         />
         {errors?.street && <p className="text-xs text-destructive">{errors.street}</p>}
       </div>
