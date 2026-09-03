@@ -31,8 +31,20 @@
 --   min() on timestamp getTime(), never string compare on projected dates.
 --   task_791 item (4) rewire brief (helios): booking-calendar.tsx
 --   pickInitialViewDate rewrites to `slots[0].slot_start_at` (already
---   sorted) — no min() at all. Legacy `s.date` projection stays available
---   for row-render but MUST NOT be used for ordering.
+--   sorted) — no min() at all. Render layer derives the display date
+--   from slot_start_at directly; no separate string date field is
+--   returned from the function. Removing the projection makes the trap
+--   unrepresentable rather than documented (kratos j1fzy: comments have
+--   no readers at runtime; REMOVE-CLASS > DETECT).
+
+-- ─── extensions ───────────────────────────────────────────────────────
+-- btree_gist gives gist a uuid equality operator class, needed by the
+-- vendor_appointment_no_overlap exclusion (vendor_id WITH = on a uuid
+-- column). Not installed on prod as of 2026-09-03 (kratos-verified
+-- against pg_available_extensions vs pg_extension); without this the
+-- migration dies at apply-time (out-of-band step hephaestus owns via
+-- Supabase management API), which is the worst place to find it.
+create extension if not exists btree_gist with schema extensions;
 
 -- ─── profiles.timezone (net-new per kratos Q1) ────────────────────────
 alter table public.profiles
@@ -223,8 +235,7 @@ create or replace function public.vendor_availability_slots(
   p_to_date    date
 ) returns table (
   slot_start_at   timestamptz,
-  slot_end_at     timestamptz,
-  slot_date       date          -- projection for legacy row-render ONLY, NOT for ordering
+  slot_end_at     timestamptz
 )
 language plpgsql
 security definer
@@ -283,8 +294,7 @@ begin
   )
   select
     e.slot_start_at,
-    e.slot_end_at,
-    e.day as slot_date
+    e.slot_end_at
   from expanded e
   where not exists (
     -- exception window overlap
@@ -314,10 +324,12 @@ $$;
 
 comment on function public.vendor_availability_slots(uuid, date, date) is
   'Homeowner-facing availability read. Returns timestamptz slot bounds '
-  'ordered ASC. Downstream MUST consume this order or min() on '
-  'slot_start_at.getTime(); MUST NOT sort or min() on slot_date (see '
-  'apollo PR588 note 3 — YYYY-MM-DD lex-order invariant is enforced by '
-  'neither types nor zod and breaks silently on wire-up).';
+  'ordered ASC. No sortable date-string projection is returned — the '
+  'YYYY-MM-DD lex-order trap apollo flagged in PR588 note 3 is made '
+  'unrepresentable at this boundary rather than warned against, so a '
+  'future frontend edit cannot reintroduce silent mis-ordering by '
+  'sorting a projected date field. Render layer derives display dates '
+  'from slot_start_at directly.';
 
 revoke all on function public.vendor_availability_slots(uuid, date, date) from public;
 grant execute on function public.vendor_availability_slots(uuid, date, date)
