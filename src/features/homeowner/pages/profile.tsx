@@ -257,6 +257,13 @@ export function HomeownerProfilePage() {
                     className="h-9"
                   />
                 </div>
+                {/* idPrefix MUST stay distinct from the dialog fieldset's "addr" (L462).
+                    Setting this to "addr" puts two data-testid="addr-street" nodes in the
+                    DOM whenever the dialog is open, and the walkers use querySelector /
+                    .locator(...).first(), which take the first match silently — green walk
+                    against the wrong fieldset. Dialog mounts EXACTLY during the (d)/(e)
+                    walk window (Radix unmount-on-close), so the overlap IS the window
+                    under test. Kratos 9mqu0 2026-09-05. */}
                 <AddressFieldset
                   idPrefix="profile-addr"
                   labelSize="sm"
@@ -458,6 +465,10 @@ export function HomeownerProfilePage() {
                 onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
               />
             </div>
+            {/* Apollo task_757 (d)/(e) walkers select these fieldset testids
+                (addr-street/city/state/zip). See the comment at the primary
+                fieldset (grep 'idPrefix="profile-addr"') for the prefix-
+                distinctness invariant this depends on. Kratos 9mqu0. */}
             <AddressFieldset
               idPrefix="addr"
               required={false}
