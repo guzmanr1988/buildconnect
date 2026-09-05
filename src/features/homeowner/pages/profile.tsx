@@ -257,7 +257,7 @@ export function HomeownerProfilePage() {
                     className="h-9"
                   />
                 </div>
-                {/* idPrefix MUST stay distinct from the dialog fieldset's "addr" (L462).
+                {/* idPrefix MUST stay distinct from the dialog fieldset's "addr" (grep 'idPrefix="addr"').
                     Setting this to "addr" puts two data-testid="addr-street" nodes in the
                     DOM whenever the dialog is open, and the walkers use querySelector /
                     .locator(...).first(), which take the first match silently — green walk
