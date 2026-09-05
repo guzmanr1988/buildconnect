@@ -53,6 +53,7 @@ export function AddressFieldset({
         <Label htmlFor={`${idPrefix}-street`} className={labelClass}>Street Address {req}</Label>
         <Input
           id={`${idPrefix}-street`}
+          data-testid={`${idPrefix}-street`}
           value={value.street}
           onChange={(e) => update({ street: e.target.value })}
           placeholder="1234 Main St"
@@ -65,6 +66,7 @@ export function AddressFieldset({
           <Label htmlFor={`${idPrefix}-city`} className={labelClass}>City {req}</Label>
           <Input
             id={`${idPrefix}-city`}
+            data-testid={`${idPrefix}-city`}
             value={value.city}
             onChange={(e) => update({ city: e.target.value })}
             placeholder="Miami"
@@ -76,6 +78,7 @@ export function AddressFieldset({
           <Label htmlFor={`${idPrefix}-state`} className={labelClass}>State {req}</Label>
           <Input
             id={`${idPrefix}-state`}
+            data-testid={`${idPrefix}-state`}
             value={value.state}
             onChange={(e) => update({ state: e.target.value.toUpperCase().slice(0, 2) })}
             placeholder="FL"
@@ -89,6 +92,7 @@ export function AddressFieldset({
         <Label htmlFor={`${idPrefix}-zip`} className={labelClass}>ZIP Code {req}</Label>
         <Input
           id={`${idPrefix}-zip`}
+          data-testid={`${idPrefix}-zip`}
           value={value.zip}
           onChange={(e) => update({ zip: e.target.value.replace(/\D/g, '').slice(0, 5) })}
           placeholder="33101"

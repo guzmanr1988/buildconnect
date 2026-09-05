@@ -330,6 +330,7 @@ export function HomeownerProfilePage() {
                 {additionalAddresses.map((addr) => (
                   <div
                     key={addr.id}
+                    data-testid={`profile-additional-address-${addr.id}`}
                     className="flex items-start justify-between gap-3 rounded-lg border bg-card/50 p-3"
                   >
                     <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -340,7 +341,10 @@ export function HomeownerProfilePage() {
                           {addr.street}, {addr.city}{addr.state ? `, ${addr.state}` : ''}{addr.zip ? ` ${addr.zip}` : ''}
                         </p>
                         {addr.folio && (
-                          <p className="text-xs text-muted-foreground truncate">Folio {addr.folio}</p>
+                          <p
+                            data-testid={`profile-additional-address-folio-${addr.id}`}
+                            className="text-xs text-muted-foreground truncate"
+                          >Folio {addr.folio}</p>
                         )}
                       </div>
                     </div>
@@ -448,6 +452,7 @@ export function HomeownerProfilePage() {
               <Label htmlFor="addr-label">Label</Label>
               <Input
                 id="addr-label"
+                data-testid="addr-label"
                 placeholder="e.g. Guest House"
                 value={addressForm.label}
                 onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
@@ -469,7 +474,11 @@ export function HomeownerProfilePage() {
             <Button variant="outline" onClick={() => setAddressDialogOpen(false)} disabled={savingAddress}>
               Cancel
             </Button>
-            <Button onClick={handleSaveAddress} disabled={savingAddress}>
+            <Button
+              onClick={handleSaveAddress}
+              disabled={savingAddress}
+              data-testid="addr-form-save"
+            >
               {savingAddress ? 'Saving…' : editingAddressId ? 'Save Changes' : 'Add Property'}
             </Button>
           </DialogFooter>
