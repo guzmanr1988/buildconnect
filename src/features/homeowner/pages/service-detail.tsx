@@ -1423,6 +1423,12 @@ export function ServiceDetailPage() {
   const pitchedOmitApplies = pitchedOmittedTriggered && !isRepairMode
   const allRequiredDone = completedRequired === requiredGroups.length
 
+  // task_839: all-optional services (no required groups) must have at least one
+  // selection to proceed. Gate: true when zero selections + all-optional.
+  const zeroSelectionsBlocksAllOptional =
+    requiredGroups.length === 0 &&
+    Object.values(selections).every((arr) => !arr || arr.length === 0)
+
   // Per-material picker-satisfied predicate — single source of truth reused
   // by (a) colorSelected / roofingColorGateBlocks CTA gate, (b) the step-
   // wizard state below (getRoofingStepMeta + roofingActiveStep), and (c)
@@ -1708,8 +1714,30 @@ export function ServiceDetailPage() {
   // is incomplete when the per-material picker is unsatisfied even if a
   // material was picked, so the pulsing accent + Next cue stay on step 2 until
   // Rod actually finishes the material config.
+  // task_839: for all-optional services (no required groups), return a synthetic
+  // wizardActiveStep when zero selections exist. This gives the progress bar
+  // and label an honest answer: 0% completion + "Choose items to continue".
   const wizardActiveStep = (() => {
     if (!isWizardService(serviceId) || wizardVisibleGroups.length === 0) return null
+
+    // For all-optional services: check if any selections exist across all groups.
+    // If zero selections and all groups are optional, return synthetic step to
+    // signal incomplete state at the predicate level (not just via CTA gating).
+    const hasRequiredGroups = requiredGroups.length > 0
+    if (!hasRequiredGroups) {
+      const totalSelections = Object.values(selections).reduce((sum, arr) => sum + (arr?.length ?? 0), 0)
+      if (totalSelections === 0) {
+        // Synthetic step: all-optional service with zero selections. Render as
+        // "Choose items to continue" at 0% progress.
+        return {
+          group: { id: 'all-optional-zero', label: 'Choose items to continue', required: false },
+          index: 1,
+          total: wizardVisibleGroups.length,
+          isZeroSelectionPlaceholder: true
+        }
+      }
+    }
+
     const idx = wizardVisibleGroups.findIndex((g) => {
       if (!g.required) return false
       const selected = selections[g.id] ?? []
@@ -4472,7 +4500,7 @@ export function ServiceDetailPage() {
               added && 'bg-green-600 hover:bg-green-700',
               roofingColorGateBlocks && 'opacity-50 pointer-events-none cursor-not-allowed'
             )}
-            disabled={!allRequiredDone || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)}
+            disabled={!allRequiredDone || zeroSelectionsBlocksAllOptional || !addressKey || !isProjectPermitValid(projectPermit, projectPermitWaiver) || !isProjectAssociationValid(projectAssociation ?? null) || (serviceId === 'pool' && !isPoolSurveyValid(poolSurvey ?? null)) || added || alreadyInCart || (pitchedOmitApplies && !flatOnlyAck && !isAddonOnlyMode) || !pergolasStructuresAllAssigned || roofingColorGateBlocks || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('solar_prep') && solarPanelCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('extra_plywood') && plywoodSheetCount === null) || (serviceId === 'roofing' && (selections['addons'] ?? []).includes('insulation') && atticInsulationSqft === null)}
             onClick={async () => {
               const addonQuantities = (ledCount || bubblerCount || laminarJets || waterfalls)
                 ? { ledCount, bubblerCount, laminarJets, waterfalls }
