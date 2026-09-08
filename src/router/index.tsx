@@ -59,6 +59,7 @@ import VendorHomeownerDetail from '@/features/vendor/pages/homeowner-detail'
 import VendorReportsPage from '@/features/vendor/pages/reports'
 import VendorPermitsPage from '@/features/vendor/pages/permits'
 import VendorFinancingPage from '@/features/vendor/pages/financing'
+import VendorAvailabilityPage from '@/features/vendor/pages/availability'
 
 // Admin (default exports)
 import OverviewPage from '@/features/admin/pages/overview'
@@ -179,6 +180,8 @@ export const router = createBrowserRouter([
           // Ship #278 — per-homeowner detail (Sold Projects + Documents).
           { path: 'homeowners/:homeownerId', element: <VendorHomeownerDetail />, handle: { title: 'Vendor · Homeowner' } },
           { path: 'calendar', element: <VendorCalendar />, handle: { title: 'Vendor · Calendar' } },
+          // task_791 item (3) — contractor sets recurring hours + time off; feeds real availability into the homeowner booking calendar (item 4 rewire, same PR).
+          { path: 'availability', element: <VendorAvailabilityPage />, handle: { title: 'Vendor · Availability' } },
           { path: 'catalog', element: <VendorCatalog />, handle: { title: 'Vendor · Products' } },
           // BUG-001: /vendor/products was used in older deep-links; redirect to canonical /vendor/catalog
           { path: 'products', element: <Navigate to="/vendor/catalog" replace /> },

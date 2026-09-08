@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { maybeBackfillLegacyApprovals } from '@/lib/legacy-completed-approval-backfill'
 import { toast } from 'sonner'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2, CreditCard } from 'lucide-react'
+import { LayoutDashboard, Inbox, CalendarDays, Package, Landmark, MessageCircle, User, Menu, PanelLeftClose, PanelLeft, Inbox as InboxIcon, BadgeCheck, UsersRound, KeyRound, Home as HomeIcon, RotateCcw, CheckCircle2, X as XIcon, Settings2, FileText, FileCheck2, CreditCard, Clock } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Logo } from '@/components/shared/logo'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -36,6 +36,7 @@ const navItems = [
   // internal-team config).
   { to: '/vendor/homeowners', icon: HomeIcon, label: 'Homeowners' },
   { to: '/vendor/calendar', icon: CalendarDays, label: 'Calendar' },
+  { to: '/vendor/availability', icon: Clock, label: 'Availability' },
   { to: '/vendor/catalog', icon: Package, label: 'Products' },
   { to: '/vendor/banking', icon: Landmark, label: 'Banking' },
   { to: '/vendor/financing', icon: CreditCard, label: 'Financing' },
