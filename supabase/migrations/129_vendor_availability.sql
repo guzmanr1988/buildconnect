@@ -156,19 +156,35 @@ create index vendor_appointment_vendor_range_idx
   on public.vendor_appointment
     using gist (vendor_id, tstzrange(starts_at, ends_at, '[)'));
 
--- Overlap exclusion — a vendor cannot have two overlapping appointments,
--- EXCEPT expired holds (which no longer block per Q4 predicate).
+-- Overlap exclusion — a vendor cannot have two overlapping appointments.
+-- No partial WHERE: PG requires index predicates be IMMUTABLE and now() is
+-- STABLE, so a "skip expired holds" clause is unrepresentable here.
+-- Expired homeowner_hold rows do NOT stay in the table — the hold-insert
+-- caller reaps them (DELETE) in the same txn before INSERT. See the
+-- DELETE RLS policy below and the table comment for the protocol.
+-- Reads are unaffected: the availability function excludes expired holds
+-- at query time (predicate on hold_expires_at > now()) so a slot shows
+-- free the instant its hold lapses, not the next insert attempt.
 alter table public.vendor_appointment
   add constraint vendor_appointment_no_overlap
     exclude using gist (
       vendor_id with =,
       tstzrange(starts_at, ends_at, '[)') with &&
-    ) where (kind <> 'homeowner_hold' or hold_expires_at > now());
+    );
 
 comment on table public.vendor_appointment is
   'Concrete booked / held / vendor-blocked windows for a contractor. '
-  'kind=homeowner_hold rows carry hold_expires_at; the availability '
-  'function ignores them once expired (predicate, not cron).';
+  'PRESENCE in this table = the reservation — an expired homeowner_hold '
+  'row still holds its (starts_at, ends_at) slot at the DB level because '
+  'the overlap-exclusion constraint (no partial WHERE, index predicates '
+  'require IMMUTABLE) applies unconditionally. Callers inserting a new '
+  'hold MUST first delete that vendor''s expired holds in the same txn: '
+  '  delete from vendor_appointment '
+  '   where kind=''homeowner_hold'' and hold_expires_at<now() '
+  '     and vendor_id=$1; '
+  'A DELETE RLS policy scoped to expired holds is provided below so any '
+  'authenticated caller can reap. The availability read function already '
+  'filters expired holds at query time — reaper only fixes writes.';
 
 -- ─── updated_at auto-stamp triggers (function from migration 011) ─────
 create trigger vendor_schedule_updated_at
@@ -334,3 +350,44 @@ comment on function public.vendor_availability_slots(uuid, date, date) is
 revoke all on function public.vendor_availability_slots(uuid, date, date) from public;
 grant execute on function public.vendor_availability_slots(uuid, date, date)
   to authenticated;
+
+-- ─── reap_expired_holds(...) SECURITY DEFINER function ────────────────
+-- Caller-side reaper for the write path. The overlap-exclusion constraint
+-- on vendor_appointment is unconditional (no partial WHERE — index
+-- predicates require IMMUTABLE, now() is STABLE), so an expired
+-- homeowner_hold still holds its (starts_at, ends_at) slot in the index.
+-- Callers inserting a new hold call this function first in the same txn
+-- to garbage-collect that vendor's expired holds so the new INSERT does
+-- not collide with a dead row.
+--
+-- SECURITY DEFINER is preferred over an open DELETE RLS policy: the
+-- table's access model routes homeowner scheduling through SECURITY
+-- DEFINER functions only, and a policy whose safety rests entirely on
+-- one WHERE clause is one edit away from deleting real bookings.
+--
+-- `search_path` is pinned to public, pg_temp per SECURITY DEFINER
+-- hardening — an unpinned search_path is a privilege-escalation vector.
+-- EXECUTE is granted to authenticated only; revoked from public.
+
+create or replace function public.reap_expired_holds(p_vendor_id uuid)
+returns void
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  delete from public.vendor_appointment
+   where kind = 'homeowner_hold'
+     and hold_expires_at < now()
+     and vendor_id = p_vendor_id;
+$$;
+
+comment on function public.reap_expired_holds(uuid) is
+  'Vendor-scoped reaper: deletes expired homeowner_hold rows for the '
+  'given vendor. Callers running the hold-insert path invoke this in '
+  'the same txn as the new hold INSERT so the overlap-exclusion '
+  'constraint checks against live reservations only. Availability '
+  'reads (vendor_availability_slots) already exclude expired holds '
+  'at query time — this fixes the WRITE side.';
+
+revoke all on function public.reap_expired_holds(uuid) from public;
+grant execute on function public.reap_expired_holds(uuid) to authenticated;
