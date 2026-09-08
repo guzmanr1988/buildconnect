@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { geocodeAddress } from '@/lib/satellite-measure/geocode'
 import { getParcelByLatLng, geometryToGoogleMapsPaths } from '@/lib/parcel'
 import { applyAreaWaste } from '@/lib/area-waste'
+import { usePlacesAutocomplete } from '@/hooks/use-places-autocomplete'
+import { useFeatureFlagsStore } from '@/stores/feature-flags-store'
 import type { MeasurementResult, FallbackReason, SatelliteMeasureProps } from '@/lib/satellite-measure/types'
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string
@@ -79,6 +81,14 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
   const [extraPolygons, setExtraPolygons] = useState<ExtraPolygon[]>([])
   const [addingExtra, setAddingExtra] = useState(false)
   const [extraVertexCount, setExtraVertexCount] = useState(0)
+
+  // Address autocomplete
+  const googleMapsEnabled = useFeatureFlagsStore((s) => s.getFlag('googleMapsPlatform'))
+  const setAddressInputRef = usePlacesAutocomplete(
+    googleMapsEnabled,
+    MAPS_KEY,
+    (formatted) => setAddress(formatted),
+  )
 
   // Cancel in-flight parcel fetch + drop overlay on unmount.
   useEffect(() => {
@@ -642,6 +652,7 @@ export function PolygonDraw({ serviceCategory, initialAddress, onMeasure, onFall
             <div className="relative flex-1">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={setAddressInputRef}
                 id="poly-address"
                 data-satellite-input="address"
                 className="pl-9"
