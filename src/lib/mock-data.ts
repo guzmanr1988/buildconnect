@@ -124,23 +124,9 @@ export const MOCK_SETTINGS: AppSettings = {
   financing_enabled: true,
 }
 
-// ─── Available time slots (for calendar) ───
-// Dynamically generated relative to today so slots are always in the future.
-// Generates days 3-14 from today with staggered time windows.
-function generateAvailableSlots(): { date: string; times: string[] }[] {
-  const now = new Date()
-  const allTimes = [
-    ['09:00', '10:00', '11:00', '14:00', '15:00'],
-    ['09:00', '10:00', '13:00', '14:00'],
-    ['10:00', '11:00', '14:00', '15:00', '16:00'],
-    ['09:00', '11:00', '14:00'],
-    ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00'],
-  ]
-  return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(now)
-    d.setDate(now.getDate() + 3 + i)
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    return { date: dateStr, times: allTimes[i % allTimes.length] }
-  })
-}
-export const MOCK_AVAILABLE_SLOTS = generateAvailableSlots()
+// Booking-calendar availability now comes from the real Supabase RPC
+// vendor_availability_slots(vendor_id, from_date, to_date) — see
+// task_791 migration 129 and src/features/homeowner/pages/booking-
+// calendar.tsx. The previous MOCK_AVAILABLE_SLOTS + generateAvailable
+// Slots() browser-side generator was removed as part of the same PR
+// that wired the real RPC read and the reap+INSERT write path.
