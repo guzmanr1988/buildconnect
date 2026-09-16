@@ -933,9 +933,9 @@ export default function AdminFinancingPage() {
                       className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <CardContent className="space-y-3 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
                               <span onClick={(e) => e.stopPropagation()}>
                                 <Checkbox
                                   checked={selectedIds.has(lender.id)}
@@ -945,14 +945,14 @@ export default function AdminFinancingPage() {
                                   aria-label={`Select ${lender.name}`}
                                 />
                               </span>
-                              <span className="font-medium">{lender.name}</span>
+                              <span className="font-medium truncate block min-w-0">{lender.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {categoryBadge(lender.category)}
                               {statusBadge(lender.active)}
                             </div>
                             {lender.contact_email && (
-                              <div className="text-xs text-muted-foreground">{lender.contact_email}</div>
+                              <div className="text-xs text-muted-foreground truncate">{lender.contact_email}</div>
                             )}
                           </div>
                           <span onClick={(e) => e.stopPropagation()}>
