@@ -1,0 +1,110 @@
+# PR visibility gate: run `npm run build` on every PR to main.
+#
+# WHY THIS EXISTS (2026-09-16, task_1789574272705_527, kratos 4y482 ruling). The
+# only paths-scoped PR workflow on this repo before this file was
+# quote-protection.yml — its trigger is intentionally narrow (homeowner + shared
+# lib/stores + package files + this workflow's self-ref). PRs whose changed
+# files sit outside that allowlist match zero PR-time workflows and merge with
+# `checks_state=none`. PR#618 (fix/task-116, admin/financing.tsx mobile card
+# truncate) is the concrete instance: outside quote-protection's surface by
+# design, so no PR-time build ran, so `mergeStateStatus=CLEAN` was a pass over
+# an empty set of configured checks. Its own deploy would have caught a type
+# error post-merge; the merge gate itself would not have.
+#
+# THIS WORKFLOW SITS BENEATH quote-protection.yml, NOT INSIDE IT. Its trigger
+# is unrestricted `pull_request: branches: [main]` with no `paths` filter. The
+# job runs `tsc -b && vite build` (the same command deploy.yml runs post-merge)
+# so a type or bundle error is caught before merge. Do NOT widen
+# quote-protection.yml's allowlist to close the same class — quote-protection
+# is scoped by intent to the Solar-API-to-cart pricing chain, and broadening it
+# dilutes what its regression baselines are measuring. The floor and the
+# focused gate are separate signals.
+#
+# VISIBILITY, NOT ENFORCEMENT, IN THIS PR. As of merge time, main protection on
+# guzmanr1988/buildconnect has `required_pull_request_reviews` (1 approval,
+# code-owner, dismiss-stale) and NO `required_status_checks`, with
+# `enforce_admins:false`. Landing this workflow moves `checks_state` from
+# `none` to `pass|fail` on every future PR — it does NOT gate merge on the
+# result. Adding this job's context to `required_status_checks` is a separate
+# step, deferred until this workflow has run green across a few PRs and the
+# operator confirms no open PR is stranded. `safe-merge --admin` retains the
+# path under REVIEW_REQUIRED-UNSATISFIABLE + `enforce_admins:false`, so making
+# it required later does not lock the fleet out; that fact belongs in the
+# follow-up PR's body so no one refuses step 3 out of fear of a lock.
+#
+# NEGATIVE-ARM REQUIREMENT (kratos cytkn 2026-09-16). A CI job only ever
+# observed passing is indistinguishable from one that reports success
+# unconditionally. Before this workflow is trusted as a merge-blocker, a
+# scratch PR containing a deliberate type error MUST open and show this check
+# goes RED. The fixture path must sit INSIDE this workflow's scope (all paths)
+# but OUTSIDE quote-protection.yml's allowlist — a fixture both jobs would
+# catch does not tell you which one went red. `src/features/admin/**` or
+# `src/features/rep/**` or `src/pages/**` are canonical choices. Precedent:
+# helios's orion-crm pr-checks.yml (2026-09-09, kratos 6p48u), proven RED with
+# a TS2741 fixture before the branch protection rule was updated.
+#
+# NOT deploy.yml with pull_request added. deploy.yml runs
+# `cloudflare/wrangler-action pages deploy` on push to main. Adding
+# `pull_request` there would deploy every PR head to production. This is a
+# separate workflow with NO CLOUDFLARE_* secrets and no wrangler step: it
+# builds only, then stops. VITE_* secrets are reused because they are baked
+# into a public bundle by design (see deploy.yml block on
+# VITE_STRIPE_PUBLISHABLE_KEY) — reusing them here does not widen their
+# exposure. Omitting CLOUDFLARE_* is what keeps this workflow unable to
+# deploy even if `npm run build` were maliciously modified: the credential to
+# publish is absent from the environment.
+#
+# `concurrency` groups per PR so pushes to the same PR cancel superseded runs.
+# It does NOT collide with the `deploy-main` concurrency group used by
+# deploy.yml (different group name).
+
+name: pr-checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # VITE_ vars ship in the built JS bundle to every buildsales.net /
+      # apex visitor — they are BY DESIGN public. Same secrets, same purpose,
+      # same exposure as deploy.yml. CLOUDFLARE_* deliberately absent.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_DEMO_MODE: ${{ secrets.VITE_DEMO_MODE }}
+      VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v4
+        with:
+          # Default checkout for pull_request is refs/pull/N/merge — the
+          # merge commit GitHub computes for this PR against target base.
+          # That is what we want: build the code that WOULD LAND on main,
+          # not the head alone. If the merge would conflict, the checkout
+          # step itself fails, which is the correct RED for that state.
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Build (tsc -b && vite build)
+        # Same command deploy.yml runs post-merge (package.json "build"
+        # script). If a PR breaks the build, it fails here rather than
+        # after the merge event.
+        run: npm run build
