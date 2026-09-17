@@ -13,8 +13,10 @@ import {
   RefreshCw,
   Calendar,
   Pencil,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -243,8 +245,8 @@ export default function BankingPage() {
       toast.error('Account numbers do not match')
       return
     }
-    toast.success(`${bankForm.bankName} linked (mock)`, {
-      description: 'Tranche-2: wire to Plaid/Stripe Financial Connections.',
+    toast.warning('NOT ACTIVE YET — no bank was linked.', {
+      description: 'Banking & Payouts is a preview UI. No connection was created and no data was stored.',
     })
     setBankForm({ bankName: '', routing: '', account: '', confirmAccount: '', accountType: '' })
   }
@@ -254,8 +256,8 @@ export default function BankingPage() {
       toast.error('Enter a valid deposit amount')
       return
     }
-    toast.success(`Deposit recorded: $${Number(depositForm.amount).toLocaleString()} (mock)`, {
-      description: depositForm.reference ? `Ref: ${depositForm.reference}` : 'Tranche-2: post to Supabase deposits table.',
+    toast.warning('NOT ACTIVE YET — no deposit was recorded.', {
+      description: 'Banking & Payouts is a preview UI. Nothing was posted to any account or ledger.',
     })
     setDepositForm({ amount: '', reference: '', date: '', note: '' })
   }
@@ -265,9 +267,8 @@ export default function BankingPage() {
       toast.error('Select vendor and enter a valid payout amount')
       return
     }
-    const vendor = MOCK_VENDORS.find((v) => v.id === disbursementForm.vendorId)
-    toast.success(`Payout sent: $${Number(disbursementForm.amount).toLocaleString()} → ${vendor?.company ?? 'Vendor'} (mock)`, {
-      description: 'Tranche-2: ACH via Stripe payouts API.',
+    toast.warning('NOT ACTIVE YET — no payout was sent.', {
+      description: 'Banking & Payouts is a preview UI. No money moved and no vendor was paid.',
     })
     setDisbursementForm({ vendorId: '', amount: '', memo: '' })
   }
@@ -277,8 +278,8 @@ export default function BankingPage() {
       toast.error('Enter employee name and valid amount')
       return
     }
-    toast.success(`Salary sent: ${salaryForm.employeeName} $${Number(salaryForm.amount).toLocaleString()} (mock)`, {
-      description: 'Tranche-2: wire to payroll provider.',
+    toast.warning('NOT ACTIVE YET — no salary was sent.', {
+      description: 'Banking & Payouts is a preview UI. No money moved and no employee was paid.',
     })
     setSalaryForm({ employeeName: '', role: '', amount: '', period: '' })
   }
@@ -303,7 +304,9 @@ export default function BankingPage() {
         totalPaid: 0,
       },
     ])
-    toast.success(`Auto-payment "${newAP.name}" added`)
+    toast.warning('NOT ACTIVE YET — auto-payment schedule is preview-only.', {
+      description: `"${newAP.name}" was added to the on-screen list. Nothing was scheduled and no money will move.`,
+    })
     setNewAP({ name: '', description: '', frequency: '', day: '', amount: '' })
   }
 
@@ -329,6 +332,20 @@ export default function BankingPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Banking & Payouts" description="Manage platform finances, deposits, and vendor payouts" />
+
+      <Alert
+        variant="destructive"
+        role="alert"
+        aria-live="polite"
+        data-testid="banking-not-active-banner"
+        className="border-2"
+      >
+        <AlertTriangle className="h-5 w-5" />
+        <AlertTitle className="text-base">NOT ACTIVE YET — Banking &amp; Payouts is a preview UI.</AlertTitle>
+        <AlertDescription>
+          No screen on this page moves real money. Bank linking, deposits, payouts, salaries, and auto-payments are all previews — no bank is contacted, no ledger is updated, no vendor or employee is paid. Real transfers ship behind an explicit switch Rodolfo turns on himself; this notice will be removed only when that switch is live.
+        </AlertDescription>
+      </Alert>
 
       <Tabs defaultValue="overview">
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
