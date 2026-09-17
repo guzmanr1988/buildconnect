@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Settings, Wrench, Eye, Layers,
   Banknote, Save, CheckCircle, Bell, Shield, Clock, MapPin, Building2,
@@ -101,13 +102,32 @@ export default function SettingsPage() {
         homeownerPayoutFeeBps: ext.homeownerPayoutFeeBps,
         showMarginOnProjectReport: ext.showMarginOnProjectReport,
       })
-    } catch {
-      // platform_settings save failure is non-fatal for the rest of the
-      // form (which is still local-state-only); toast stays positive but
-      // the row will simply re-fetch on next page load.
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      // Revert local ext to DB truth so the toggles stop asserting a state
+      // the row does not hold. Load-bearing: without this, a rejected write
+      // (e.g. RLS 42501) leaves the Switch visually ON while the DB stays
+      // OFF, and the UI keeps making a claim that is not true until the
+      // next page load resyncs.
+      const db = platformSettings.data
+      if (db) {
+        setExt((p) => ({
+          ...p,
+          stripeEnabled: db.stripeEnabled,
+          applicationFeeBps: db.applicationFeeBps,
+          homeownerPayoutFeeBps: db.homeownerPayoutFeeBps,
+          showMarginOnProjectReport: db.showMarginOnProjectReport,
+        }))
+      }
+      const message = err instanceof Error ? err.message : 'Save failed'
+      const denied = message.includes('42501') || message.toLowerCase().includes('policy')
+      toast.error('Platform settings not saved', {
+        description: denied
+          ? 'Your account does not have permission to change these values. Toggle reverted.'
+          : `${message}. Toggle reverted.`,
+      })
     }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
   }
 
   const toggles: { key: keyof AppSettings; label: string; description: string; icon: React.ElementType }[] = [
