@@ -33,9 +33,9 @@
 //     verification_method?: 'financial_connections' | 'microdeposits'
 //   }
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno'
+import { secretKey } from '../_shared/keys.ts'
 
 type Purpose = 'membership' | 'commissions' | 'both'
 
@@ -62,7 +62,7 @@ function isValidPurpose(v: unknown): v is Purpose {
   return v === 'membership' || v === 'commissions' || v === 'both'
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
@@ -84,7 +84,7 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = secretKey()
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
@@ -170,13 +170,20 @@ serve(async (req: Request) => {
   }
 
   // Derive display fields from Stripe PaymentMethod object.
-  const kind = paymentMethod.type as string
-  if (kind !== 'card' && kind !== 'us_bank_account') {
+  // Stripe Link is enabled on SetupIntents created with payment_method_types
+  // including 'link'; Link-confirmed cards typically come back as type='card'
+  // (Link is a tokenization/autofill layer over saved cards), but if Stripe
+  // ever returns a bare type='link' PM we map it to kind='card' for storage —
+  // payment_methods.kind CHECK only admits 'card' | 'us_bank_account', and
+  // user-facing semantics ("saved card") match either way.
+  const stripeType = paymentMethod.type as string
+  if (stripeType !== 'card' && stripeType !== 'us_bank_account' && stripeType !== 'link') {
     return jsonResponse(400, {
       error: 'unsupported_payment_method_type',
-      type: kind,
+      type: stripeType,
     })
   }
+  const kind: 'card' | 'us_bank_account' = stripeType === 'us_bank_account' ? 'us_bank_account' : 'card'
 
   let last4: string | null = null
   let brand: string | null = null
@@ -186,20 +193,12 @@ serve(async (req: Request) => {
   let routingLast4: string | null = null
   let holder: string | null = null
 
-  // card.funding = 'credit' | 'debit' | 'prepaid' | 'unknown' — Stripe derives
-  // this from the BIN post-tokenization. We do NOT ask the user; auto-detect
-  // and stamp it into SetupIntent.metadata.buildconnect_card_funding for
-  // downstream reporting (queryable via Stripe API forever, no DB migration
-  // needed under freeze).
-  let cardFunding: string | null = null
-
   if (kind === 'card' && paymentMethod.card) {
     last4 = paymentMethod.card.last4
     brand = paymentMethod.card.brand
     expMonth = paymentMethod.card.exp_month
     expYear = paymentMethod.card.exp_year
     holder = paymentMethod.billing_details?.name ?? null
-    cardFunding = paymentMethod.card.funding ?? null
   } else if (kind === 'us_bank_account' && paymentMethod.us_bank_account) {
     last4 = paymentMethod.us_bank_account.last4
     bankName = paymentMethod.us_bank_account.bank_name ?? null
@@ -271,23 +270,6 @@ serve(async (req: Request) => {
       error: 'payment_method_upsert_failed',
       detail: upsertErr.message,
     })
-  }
-
-  // Best-effort stamp of card.funding into SetupIntent.metadata for reporting.
-  // Non-critical: if this fails, the primary upsert already committed and we
-  // still return success. Card funding is queryable directly off the
-  // PaymentMethod later if this write is lost.
-  if (cardFunding && !setupIntent.metadata?.buildconnect_card_funding) {
-    try {
-      await stripe.setupIntents.update(setupIntent.id, {
-        metadata: {
-          ...(setupIntent.metadata ?? {}),
-          buildconnect_card_funding: cardFunding,
-        },
-      })
-    } catch (_e) {
-      // Swallow — reporting metadata is non-load-bearing for the flow.
-    }
   }
 
   return jsonResponse(200, {

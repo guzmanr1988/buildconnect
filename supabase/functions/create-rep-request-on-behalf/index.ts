@@ -32,6 +32,7 @@ import {
   bucketToWindow,
   type VisitWindowBucket,
 } from '../_shared/rep-request/index.ts'
+import { secretKey, publishableKey } from '../_shared/keys.ts'
 
 interface CreateOnBehalfPayload {
   homeowner_id: string
@@ -62,8 +63,8 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+  const serviceKey = secretKey()
+  const anonKey = publishableKey()
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || ''
 
   const authHeader = req.headers.get('Authorization') || ''

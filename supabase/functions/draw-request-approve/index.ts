@@ -24,6 +24,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { secretKey } from '../_shared/keys.ts'
 
 const DISPUTE_WINDOW_HOURS = 48
 
@@ -64,7 +65,7 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = secretKey()
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })

@@ -40,6 +40,7 @@ import {
   bucketToWindow,
   type VisitWindowBucket,
 } from '../_shared/rep-request/index.ts'
+import { secretKey, publishableKey } from '../_shared/keys.ts'
 
 interface CreateRepRequestPayload {
   address: {
@@ -50,12 +51,30 @@ interface CreateRepRequestPayload {
     zip: string
   }
   contact_phone: string
-  visit_window_picks: Array<{
+  // PHASE-2 calendar (mig 108): single ISO datetime homeowner picked at intake.
+  // When present, populates rep_requests.requested_visit_at + appointment_status
+  // defaults to 'proposed'. Synthesizes a minimal requested_visit_times entry
+  // for back-compat with rep clients that still read the bucket array.
+  requested_visit_at?: string
+  // PHASE-1 bucket model (mig 101 path) — kept for back-compat. If
+  // requested_visit_at is provided AND visit_window_picks is empty/absent,
+  // a single synthesized window is generated. If both are provided, both are
+  // written; visit_window_picks expansion still runs for back-compat reads.
+  visit_window_picks?: Array<{
     bucket: VisitWindowBucket
     iso_date: string // YYYY-MM-DD in homeowner's local frame; service_tz overlay applied
   }>
   description?: string
   access_notes?: string
+  // TIER-1 cards-on-file (mig 111): optional saved-PM branch. When present,
+  // this uuid references a public.payment_methods row (caller-owned, status=
+  // 'active', purpose='service_pay_in'); the Stripe PI is created with
+  // customer + payment_method + confirm:true (on-session, user is interacting
+  // on Step 3 "Pay $250" button). When NULL/absent, the legacy fresh-
+  // PaymentElement path is preserved (automatic_payment_methods, FE confirms
+  // with Stripe.js). Alt-input branch per Q4 contract lock — NOT a contract
+  // change. Back-compat preserved for any FE not on the cards-on-file path.
+  payment_method_id?: string
 }
 
 serve(async (req) => {
@@ -68,8 +87,8 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+  const serviceKey = secretKey()
+  const anonKey = publishableKey()
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || ''
 
   if (!stripeKey) {
@@ -137,11 +156,14 @@ serve(async (req) => {
 
   // Validate payload shape (minimal — full validation deferred to FE + DB
   // CHECKs; here we catch the structural failures cheaply).
-  const { address, contact_phone, visit_window_picks } = payload
+  // Phase-2 calendar OR Phase-1 buckets must be provided (at least one path).
+  const { address, contact_phone, visit_window_picks, requested_visit_at, payment_method_id } = payload
+  const hasCalendar = typeof requested_visit_at === 'string' && requested_visit_at.length > 0
+  const hasBuckets = Array.isArray(visit_window_picks) && visit_window_picks.length > 0
   if (
     !address || !address.line1 || !address.city || !address.state || !address.zip ||
     !contact_phone ||
-    !Array.isArray(visit_window_picks) || visit_window_picks.length === 0
+    (!hasCalendar && !hasBuckets)
   ) {
     return new Response(JSON.stringify({ error: 'invalid_payload' }), {
       status: 400,
@@ -157,21 +179,103 @@ serve(async (req) => {
     })
   }
 
-  // Expand the categorical picks into canonical VisitWindow rows.
-  const requestedWindows = []
-  for (const pick of visit_window_picks) {
-    const window = bucketToWindow(pick.bucket, pick.iso_date, serviceTz)
-    if (!window) {
-      return new Response(JSON.stringify({ error: 'invalid_visit_window', detail: `bucket=${pick.bucket} date=${pick.iso_date} does not match the bucket's allowed day-of-week` }), {
+  // TIER-1 cards-on-file saved-PM branch — look up & validate before any DB
+  // INSERT so an invalid PM short-circuits with no orphan rep_requests row.
+  // Resolves to { stripeCustomerId, stripePaymentMethodId } when present, or
+  // null (legacy fresh-PaymentElement path).
+  let savedPm: { stripeCustomerId: string; stripePaymentMethodId: string } | null = null
+  if (payment_method_id) {
+    if (typeof payment_method_id !== 'string' || payment_method_id.length < 8) {
+      return new Response(JSON.stringify({ error: 'invalid_payment_method_id' }), {
         status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       })
     }
+    const { data: pmRow, error: pmErr } = await admin
+      .from('payment_methods')
+      .select('id, user_id, stripe_customer_id, stripe_payment_method_id, status, purpose')
+      .eq('id', payment_method_id)
+      .maybeSingle()
+    if (pmErr) {
+      return new Response(JSON.stringify({ error: 'payment_method_lookup_failed', detail: pmErr.message }), {
+        status: 500,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (!pmRow || pmRow.user_id !== homeownerId) {
+      return new Response(JSON.stringify({ error: 'payment_method_not_found' }), {
+        status: 404,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (pmRow.status !== 'active') {
+      return new Response(JSON.stringify({ error: 'payment_method_inactive', detail: `status=${pmRow.status}` }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (pmRow.purpose !== 'service_pay_in' && pmRow.purpose !== 'both') {
+      return new Response(JSON.stringify({ error: 'payment_method_purpose_mismatch', detail: `purpose=${pmRow.purpose}` }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    savedPm = {
+      stripeCustomerId: pmRow.stripe_customer_id,
+      stripePaymentMethodId: pmRow.stripe_payment_method_id,
+    }
+  }
+
+  // Validate Phase-2 calendar datetime if provided.
+  let calendarIso: string | null = null
+  if (hasCalendar) {
+    const parsed = new Date(requested_visit_at!)
+    if (Number.isNaN(parsed.getTime())) {
+      return new Response(JSON.stringify({ error: 'invalid_requested_visit_at', detail: 'not a valid ISO datetime' }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (parsed.getTime() <= Date.now()) {
+      return new Response(JSON.stringify({ error: 'invalid_requested_visit_at', detail: 'must be in the future' }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      })
+    }
+    calendarIso = parsed.toISOString()
+  }
+
+  // Expand the categorical picks into canonical VisitWindow rows (Phase-1).
+  // If Phase-2 calendar is provided without buckets, synthesize one bucket
+  // entry from the calendar datetime so requested_visit_times (NOT NULL)
+  // satisfies the column constraint and reps reading the old shape still
+  // see a window.
+  const requestedWindows = []
+  if (hasBuckets) {
+    for (const pick of visit_window_picks!) {
+      const window = bucketToWindow(pick.bucket, pick.iso_date, serviceTz)
+      if (!window) {
+        return new Response(JSON.stringify({ error: 'invalid_visit_window', detail: `bucket=${pick.bucket} date=${pick.iso_date} does not match the bucket's allowed day-of-week` }), {
+          status: 400,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        })
+      }
+      requestedWindows.push({
+        window_start_utc: window.window_start_utc,
+        window_end_utc: window.window_end_utc,
+        service_tz: serviceTz,
+        bucket_label: pick.bucket,
+      })
+    }
+  } else {
+    // Calendar-only: synthesize a 1-hour window centered on the picked time
+    // so the legacy requested_visit_times JSONB column stays populated.
+    const startMs = new Date(calendarIso!).getTime()
     requestedWindows.push({
-      window_start_utc: window.window_start_utc,
-      window_end_utc: window.window_end_utc,
+      window_start_utc: new Date(startMs).toISOString(),
+      window_end_utc: new Date(startMs + 60 * 60 * 1000).toISOString(),
       service_tz: serviceTz,
-      bucket_label: pick.bucket,
+      bucket_label: 'calendar_pick',
     })
   }
 
@@ -185,6 +289,9 @@ serve(async (req) => {
       address,
       contact_phone,
       requested_visit_times: requestedWindows,
+      // Phase-2 calendar — null when caller is bucket-only (legacy intake).
+      requested_visit_at: calendarIso,
+      // appointment_status defaults to 'proposed' via mig 108 column default.
       description: payload.description ?? null,
       access_notes: payload.access_notes ?? null,
       status: 'pending_payment',
@@ -217,20 +324,46 @@ serve(async (req) => {
 
   let pi: Stripe.PaymentIntent
   try {
-    pi = await stripe.paymentIntents.create(
-      {
-        amount: VISIT_FEE_CENTS,
-        currency: 'usd',
-        capture_method: 'automatic',
-        description: 'BuildConnect Concierge — Rep Visit',
-        metadata: {
-          rep_request_id: repRequestId,
-          homeowner_id: homeownerId,
-        },
-        automatic_payment_methods: { enabled: true },
-      },
-      { idempotencyKey }
-    )
+    // Branch on saved-PM presence:
+    //  - savedPm present: Tier-1 cards-on-file path. PI created with customer
+    //    + payment_method + confirm:true; on-session (user is interacting on
+    //    Step 3 "Pay $250" button). 3DS challenge surfaces via pi.next_action,
+    //    FE handles via stripe.handleNextAction() if status='requires_action'.
+    //  - savedPm null: legacy fresh-PaymentElement path. automatic_payment_
+    //    methods enabled; FE confirms with Stripe.js.
+    const piParams: Stripe.PaymentIntentCreateParams = savedPm
+      ? {
+          amount: VISIT_FEE_CENTS,
+          currency: 'usd',
+          capture_method: 'automatic',
+          description: 'BuildConnect Concierge — Rep Visit',
+          metadata: {
+            rep_request_id: repRequestId,
+            homeowner_id: homeownerId,
+          },
+          customer: savedPm.stripeCustomerId,
+          payment_method: savedPm.stripePaymentMethodId,
+          // Tier-1 cards-on-file is cards-only by contract. Restricting
+          // payment_method_types here both (a) matches the FE Step-3 surface
+          // (no PaymentElement, saved-PM card list) and (b) prevents a Stripe
+          // Link wallet PM (brand='link', type='link') from silently entering
+          // this path and 502'ing with the cryptic redirect/return_url error.
+          payment_method_types: ['card'],
+          confirm: true,
+          off_session: false,
+        }
+      : {
+          amount: VISIT_FEE_CENTS,
+          currency: 'usd',
+          capture_method: 'automatic',
+          description: 'BuildConnect Concierge — Rep Visit',
+          metadata: {
+            rep_request_id: repRequestId,
+            homeowner_id: homeownerId,
+          },
+          automatic_payment_methods: { enabled: true },
+        }
+    pi = await stripe.paymentIntents.create(piParams, { idempotencyKey })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('stripe paymentIntents.create failed', msg)
@@ -267,6 +400,12 @@ serve(async (req) => {
       rep_request_id: repRequestId,
       client_secret: pi.client_secret,
       amount_cents: VISIT_FEE_CENTS,
+      // Tier-1 cards-on-file surface: tell the FE whether the saved-PM charge
+      // already succeeded server-side (no FE confirm needed) vs. needs 3DS
+      // next-action handling. Legacy fresh-PaymentElement path always returns
+      // requires_payment_method here — FE confirms with Stripe.js as before.
+      payment_intent_status: pi.status,
+      requires_action: pi.status === 'requires_action',
     }),
     { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
   )

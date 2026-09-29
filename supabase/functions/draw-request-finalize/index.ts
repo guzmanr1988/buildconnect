@@ -18,6 +18,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { secretKey } from '../_shared/keys.ts'
 
 const PLATFORM_COMMISSION_PCT = 10
 
@@ -54,7 +55,7 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = secretKey()
   if (token !== serviceRoleKey) {
     return jsonResponse(401, { error: 'service_role_required' })
   }
@@ -122,15 +123,24 @@ serve(async (req: Request) => {
   let totalVendorPayout = 0
 
   for (const c of candidates) {
-    // Atomic status-bump (conditional UPDATE guards against double-finalize race)
-    const { data: bumped, error: bumpErr } = await admin
+    // Atomic status-bump. Race-safety lives in the SQL WHERE clause: if another
+    // finalize already transitioned status=approved → paid, this UPDATE matches 0
+    // rows (not an error — just a no-op at the DB layer). Detecting "did this
+    // invocation actually transition" from the supabase-js response is unreliable:
+    //  - .select().maybeSingle() returns null because the post-RETURNING re-filter
+    //    on .eq(status,approved) doesn't match the just-bumped row (now 'paid').
+    //  - {count:'exact'} does not surface a populated count field on .update() in
+    //    supabase-js v2 (verified empirically — apollo walker 02:20Z).
+    // Production-grade race-safety on the ledger side is delegated to a UNIQUE
+    // index on commission_ledger.draw_request_id (DDL request to hephaestus): a
+    // duplicate ledger INSERT from a race-lost invocation fails at the DB layer
+    // and lands in the structured ledgerErr branch below.
+    const { error: bumpErr } = await admin
       .from('draw_requests')
       .update({ status: 'paid', paid_at: nowIso })
       .eq('id', c.id)
       .eq('status', 'approved')
-      .select('id')
-      .maybeSingle()
-    if (bumpErr || !bumped) continue
+    if (bumpErr) continue
 
     // commission_ledger INSERT (Option A additive: draw_request_id FK + per-draw row)
     const { error: ledgerErr } = await admin

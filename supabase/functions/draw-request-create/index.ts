@@ -28,6 +28,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { secretKey } from '../_shared/keys.ts'
 
 const PLATFORM_COMMISSION_PCT = 10
 const DISPUTE_WINDOW_HOURS = 48
@@ -75,7 +76,7 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = secretKey()
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
@@ -136,10 +137,13 @@ serve(async (req: Request) => {
     }
   }
 
-  // Sent-project ownership + lead sold-active gate (Rod #1)
+  // Sent-project ownership + sold-gate (Rod #1)
+  // Deployed schema: sold-gate lives on sent_projects.status='sold' (migration 018
+  // enum: pending|approved|declined|sold|expired). No FK to leads — leads table
+  // exists as separate fixture lane but is not the sold-gate substrate.
   const { data: spRow, error: spErr } = await admin
     .from('sent_projects')
-    .select('id, vendor_id, homeowner_id, lead_id, status')
+    .select('id, vendor_id, homeowner_id, status')
     .eq('id', body.sent_project_id)
     .maybeSingle()
   if (spErr) return jsonResponse(500, { error: 'sent_project_lookup_failed' })
@@ -147,16 +151,8 @@ serve(async (req: Request) => {
   if (spRow.vendor_id !== vendorId) {
     return jsonResponse(403, { error: 'vendor_not_owner_of_sent_project' })
   }
-
-  // Lead sold-active check (Rod #1)
-  const { data: leadRow, error: leadErr } = await admin
-    .from('leads')
-    .select('id, status')
-    .eq('id', spRow.lead_id)
-    .maybeSingle()
-  if (leadErr) return jsonResponse(500, { error: 'lead_lookup_failed' })
-  if (!leadRow || leadRow.status !== 'sold-active') {
-    return jsonResponse(403, { error: 'lead_not_sold_active', current_status: leadRow?.status ?? null })
+  if (spRow.status !== 'sold') {
+    return jsonResponse(403, { error: 'sent_project_not_sold', current_status: spRow.status })
   }
 
   // Financing application (project_id wire-up — helios D-deliverable required for non-null match)

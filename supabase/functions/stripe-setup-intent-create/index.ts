@@ -54,9 +54,9 @@
 //   GET and writes the payment_methods row. We do NOT trust the client to
 //   self-report success — server re-reads Stripe to confirm before persisting.
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@17.7.0?target=deno'
+import { secretKey } from '../_shared/keys.ts'
 
 type Kind = 'card' | 'us_bank_account'
 type Purpose = 'membership' | 'commissions' | 'both'
@@ -88,7 +88,7 @@ function isValidPurpose(v: unknown): v is Purpose {
   return v === 'membership' || v === 'commissions' || v === 'both'
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
@@ -113,7 +113,7 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = secretKey()
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
@@ -223,15 +223,19 @@ serve(async (req: Request) => {
   const minuteBucket = Math.floor(Date.now() / 60_000)
   const idempotencyKey = `si:${caller.id}:${body.purpose}:${body.kind}:${minuteBucket}`
 
+  // Tier-1 cards-only contract: pm_types is locked to the requested kind.
+  // Earlier deployed drift allowed 'link' in the card branch — that caused
+  // Stripe to tokenize raw card entries as Link wallets (pm.type=card with
+  // card.brand=link, card.last4=0000), which the cards-only list filter then
+  // hid from the user. Dropping 'link' here restores the contract: card saves
+  // come back as real cards with proper brand+last4. ACH stays kind-locked.
+  const allowedTypes = [body.kind]
+
   try {
-    // Card-tab PMC narrows the iframe to card-only AND disables Link "Save my
-    // information" / wallets. Bank-tab keeps payment_method_types narrowing
-    // (PMC and payment_method_types are mutually exclusive per Stripe API).
-    // If STRIPE_PMC_CARD_ONLY_NO_LINK is unset, fall back to previous behavior.
-    const cardPmc = Deno.env.get('STRIPE_PMC_CARD_ONLY_NO_LINK')
     // deno-lint-ignore no-explicit-any
     const setupIntentParams: any = {
       customer: stripeCustomerId,
+      payment_method_types: allowedTypes,
       usage: 'off_session', // we'll charge later for membership / commission
       metadata: {
         buildconnect_user_id: caller.id,
@@ -239,11 +243,6 @@ serve(async (req: Request) => {
         buildconnect_kind: body.kind,
         buildconnect_origin: 'stripe-setup-intent-create',
       },
-    }
-    if (body.kind === 'card' && cardPmc) {
-      setupIntentParams.payment_method_configuration = cardPmc
-    } else {
-      setupIntentParams.payment_method_types = [body.kind]
     }
 
     if (body.kind === 'us_bank_account') {

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { secretKey, publishableKey } from '../_shared/keys.ts'
 
 const STATUS_BY_ACTION = {
   accept: 'approved',
@@ -41,7 +42,7 @@ serve(async (req) => {
     // Vendor JWT client — RLS enforces vendor can only update own sent_projects rows.
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
+      publishableKey(),
       { global: { headers: { Authorization: authHeader } } }
     )
 
@@ -73,7 +74,7 @@ serve(async (req) => {
       const notifyResp = await fetch(HERMES_NOTIFY_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          Authorization: `Bearer ${secretKey()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
