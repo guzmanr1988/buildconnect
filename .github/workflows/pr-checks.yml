@@ -100,6 +100,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      # Public-grant lint (task_1792501411627_671): from 2026-10-30 Supabase no longer auto-grants new public tables to
+      # anon/authenticated/service_role, so a new migration's public CREATE TABLE needs a GRANT in the same file or a
+      # `-- no-api-grant: <table> <reason>` line. Reads only files the PR adds; its arms run first. No deps, before npm ci.
+      - name: Migration public-grant lint arms
+        run: node scripts/verify-migration-public-grant-lint.mjs
+      - name: Migration public-grant lint (new public table needs a GRANT)
+        run: node scripts/migration-public-grant-lint.mjs --pr-merge
+
       - name: Install dependencies (npm ci)
         run: npm ci
 
