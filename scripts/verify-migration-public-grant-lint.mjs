@@ -34,6 +34,7 @@ ok(F(T + '/* GRANT SELECT ON public.widgets TO authenticated; */').length === 1,
 ok(F(T + "DO $$ BEGIN RAISE NOTICE 'GRANT SELECT ON public.widgets TO authenticated'; END $$;").length === 1, 'GRANT only in a string literal caught');
 ok(F(T + "DO $$ BEGIN EXECUTE format('GRANT SELECT ON public.%I TO authenticated', 'widgets'); END $$;").some((x) => x.includes('inside a string')), 'GRANT via EXECUTE format caught, message names the string');
 ok(F(T + 'GRANT SELECT ON public.widgets TO PUBLIC;').length === 1, 'grant to PUBLIC does not count (documented)');
+ok(F(T + 'REVOKE ALL ON public.widgets FROM PUBLIC, anon, authenticated;').length === 1, 'REVOKE alone (no GRANT, no marker) caught: service_role is closed out too');
 ok(F(T + 'GRANT SELECT ON public.widgets TO some_other_role;').length === 1, 'grant to a non-API role caught');
 ok(F(T + 'GRANT SELECT ON public.gadgets TO authenticated;').length === 1, 'GRANT on a different table caught');
 ok(F(T + 'GRANT SELECT ON ops_backup.widgets TO authenticated;').length === 1, 'GRANT on another schema same name caught');

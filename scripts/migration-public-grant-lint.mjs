@@ -21,6 +21,9 @@
  * Opt-out, for a table that must stay off the API on purpose: a line `-- no-api-grant: <table> <reason>` (table
  * with or without `public.`; the reason is what the reviewer reads). `-- no-api-grant: * <reason>` exempts every
  * table in the file, the dynamic-SQL finding included.
+ * A REVOKE alone does not count: after 2026-10-30 a new table with no GRANT is closed to service_role too, so a
+ * table kept off the API on purpose says so with the marker (measured 2026-10-20: build-credit and build-leads both
+ * have REVOKE-only tables, e.g. secrets / tax vaults, that relied on the old service_role auto-grant).
  *
  * Documented LOWs: a REVOKE after the GRANT is not tracked (the GRANT still counts); a grant to PUBLIC does not
  * count (name the Supabase role); ALTER DEFAULT PRIVILEGES does not count; ALTER TABLE ... SET SCHEMA public is not
